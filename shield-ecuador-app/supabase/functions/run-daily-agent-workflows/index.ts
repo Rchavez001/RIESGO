@@ -30,11 +30,25 @@ serve(async (req) => {
 
     const dueAgents = (configs ?? []).filter((config) => isDue(config.trigger_time, config.timezone, now))
 
+    const AGENT_FUNCTION_MAP: Record<string, string> = {
+      'incident-investigator': 'run-incident-investigator',
+      'question-auditor': 'audit-generated-questions',
+    }
+
     const results: Array<Record<string, unknown>> = []
     for (const config of dueAgents) {
-      const functionName = config.agent_code === 'incident-investigator'
-        ? 'run-incident-investigator'
-        : 'audit-generated-questions'
+      const functionName = AGENT_FUNCTION_MAP[config.agent_code]
+
+      if (!functionName) {
+        console.warn(`No edge function mapped for agent_code: ${config.agent_code}`)
+        results.push({
+          agent_code: config.agent_code,
+          function_name: null,
+          error: 'No hay funcion implementada para este agente.',
+          data: null,
+        })
+        continue
+      }
 
       const invokeResult = await supabase.functions.invoke(functionName, {
         body: { triggered_by: 'scheduler-dispatcher' },

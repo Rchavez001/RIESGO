@@ -25,6 +25,7 @@ Componentes principales:
 Funciones Supabase incluidas:
 
 - `calculate-risk`: calcula y guarda el resultado de riesgo.
+- `complete-kata`: evalua katas en servidor, registra puntos y actualiza cinturon.
 - `generate-recommendations`: genera recomendaciones con IA.
 - `analyze-email`: analiza correos sospechosos.
 - `run-incident-investigator`: investiga incidentes y genera preguntas.
@@ -206,6 +207,8 @@ Orden esperado:
 003_seed_data.sql
 004_admin_center.sql
 005_security_hardening.sql
+...
+016_business_sectors_catalog.sql
 ```
 
 Si falla una migracion:
@@ -237,6 +240,7 @@ agent_configs
 agent_provider_assignments
 incident_investigations
 agent_runs
+business_sectors
 ```
 
 ### 4.4 Verificar RLS
@@ -263,6 +267,7 @@ agent_configs
 agent_provider_assignments
 incident_investigations
 agent_runs
+business_sectors
 ```
 
 No desactives RLS para "probar rapido"; eso rompe el modelo de seguridad.
@@ -411,6 +416,12 @@ Desde la raiz del proyecto:
 
 ```bash
 supabase functions deploy calculate-risk
+supabase functions deploy complete-kata
+supabase functions deploy secure-register-user
+supabase functions deploy get-private-profile
+supabase functions deploy ask-sensei
+supabase functions deploy get-ranking
+supabase functions deploy vuln-scanner-ai
 supabase functions deploy generate-recommendations
 supabase functions deploy analyze-email
 supabase functions deploy run-incident-investigator
@@ -421,7 +432,7 @@ supabase functions deploy run-daily-agent-workflows
 Tambien puedes desplegarlas todas con un script manual:
 
 ```bash
-for fn in calculate-risk generate-recommendations analyze-email run-incident-investigator audit-generated-questions run-daily-agent-workflows; do
+for fn in calculate-risk complete-kata secure-register-user get-private-profile ask-sensei get-ranking vuln-scanner-ai generate-recommendations analyze-email run-incident-investigator audit-generated-questions run-daily-agent-workflows; do
   supabase functions deploy "$fn"
 done
 ```
@@ -431,6 +442,12 @@ En PowerShell:
 ```powershell
 $functions = @(
   "calculate-risk",
+  "complete-kata",
+  "secure-register-user",
+  "get-private-profile",
+  "ask-sensei",
+  "get-ranking",
+  "vuln-scanner-ai",
   "generate-recommendations",
   "analyze-email",
   "run-incident-investigator",
@@ -658,17 +675,23 @@ Agrega en Redirect URLs:
 
 ```text
 http://localhost:3000
+http://localhost:3000/auth/callback
+http://127.0.0.1:3000/auth/callback
 https://URL_DE_CLOUD_RUN
+https://URL_DE_CLOUD_RUN/auth/callback
 ```
 
 Ejemplo:
 
 ```text
 http://localhost:3000
+http://localhost:3000/auth/callback
 https://ciber-dojo-frontend-xxxxxx-uc.a.run.app
+https://ciber-dojo-frontend-xxxxxx-uc.a.run.app/auth/callback
+https://cyberdojo-61855290194.us-central1.run.app/auth/callback
 ```
 
-Aunque hoy la app usa email/password sin OAuth, dejar bien estas URLs evita problemas futuros con confirmaciones, magic links u OAuth.
+La app usa email/password y magic link. Para magic link configura Email Auth con SMTP real de produccion, frecuencia minima de reenvio de 60 segundos o mas y expiracion de OTP/magic link de 900 segundos.
 
 ## 17. Variables y secretos en produccion
 
@@ -904,6 +927,12 @@ Desde raiz del proyecto:
 supabase link --project-ref wbbcjiqzbzswxsmwjqlw
 supabase db push
 supabase functions deploy calculate-risk
+supabase functions deploy complete-kata
+supabase functions deploy secure-register-user
+supabase functions deploy get-private-profile
+supabase functions deploy ask-sensei
+supabase functions deploy get-ranking
+supabase functions deploy vuln-scanner-ai
 supabase functions deploy generate-recommendations
 supabase functions deploy analyze-email
 supabase functions deploy run-incident-investigator

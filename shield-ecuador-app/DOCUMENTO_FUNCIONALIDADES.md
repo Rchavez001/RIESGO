@@ -1,8 +1,4 @@
-# Shield Ecuador - Documento de Funcionalidades
-
-## 1. Resumen del proyecto
-
-Shield Ecuador es una aplicacion web orientada a MIPYMEs ecuatorianas para evaluar riesgo de ciberseguridad con una experiencia tipo "Cyber Dojo". El sistema combina:
+usuarios no informaticos ecuatorianos para formar con un lenguje no informatico sobre la ciberseguridad a traves de un juego o entrenamiento tipo Dojo de Karate donde al ir contestando bien las preguntas de seguridad informatica va subiendo de cinturon. El sistema combina:
 
 - frontend en React + TypeScript;
 - autenticacion y base de datos en Supabase;
@@ -22,6 +18,7 @@ El enfoque funcional actual gira alrededor de cuatro ejes:
 La aplicacion permite:
 
 - iniciar sesion con correo y contrasena;
+- iniciar sesion con magic link enviado por correo;
 - registrar nuevos usuarios;
 - cerrar sesion;
 - mantener la sesion activa al recargar;
@@ -32,23 +29,45 @@ Durante el registro se recopilan estos datos:
 - nombre completo;
 - correo electronico;
 - contrasena;
-- tipo de negocio.
+- sector/tipo de negocio;
+- autorizacion de tratamiento de datos.
 
-Tipos de negocio disponibles:
+Los sectores disponibles ya no viven como lista fija en el frontend. Se leen desde `business_sectors`, solo si `active = true`.
 
-- comerciante;
-- restaurante;
-- ferreteria;
-- farmacia;
-- agricultor;
-- pescador;
-- otro.
+Sectores iniciales sembrados por migracion:
+
+- `comerciante`: Comerciante;
+- `restaurante`: Restaurante / Comida;
+- `ferreteria`: Ferreteria;
+- `farmacia`: Farmacia;
+- `agricultor`: Agricultor;
+- `pescador`: Pescador;
+- `otro`: Otro.
 
 Comportamientos adicionales:
 
+- el boton `COMENZAR ENTRENAMIENTO` lleva al flujo de ingreso por correo;
 - muestra mensajes de error traducidos para login invalido o correo ya registrado;
-- exige tipo de negocio en registro;
+- el magic link usa Supabase Auth `signInWithOtp` con `shouldCreateUser = false`, mensaje neutral y callback `/auth/callback`;
+- si el usuario es nuevo o no recibe enlace, la misma pantalla ofrece `Crear cuenta` sin revelar si el correo existe;
+- exige sector de negocio en registro;
+- valida el sector en `secure-register-user` contra `business_sectors`;
 - crea perfil en la tabla `users` despues del alta en Supabase Auth.
+
+### 2.1.1 Mantenimiento de sectores
+
+El administrador puede mantener sectores desde el admin interno:
+
+- crear un nuevo sector;
+- editar codigo interno, nombre visible, orden y estado;
+- inhabilitar un sector para que no aparezca en nuevos registros;
+- guardar cambios mediante `save_business_sector`.
+
+Cuando cambia el codigo interno de un sector, la funcion SQL actualiza:
+
+- `business_sectors.code`;
+- `users.business_type`;
+- `alerts.target_business_types`.
 
 ## 2.2 Carga inicial y control de acceso
 
@@ -96,7 +115,10 @@ Permite:
 Cuando se completa un kata:
 
 - se inserta un registro en `kata_completions`;
-- se suman puntos al usuario en `users.total_points`;
+- se invoca la Edge Function `complete-kata`;
+- el servidor valida las respuestas contra `katas.steps`;
+- se recalcula `users.total_points` desde `kata_completions.points_earned`;
+- si aprueba, se actualiza el cinturon desde servidor;
 - se refresca el perfil del usuario;
 - la interfaz cambia el estado visual a completado.
 
@@ -134,19 +156,18 @@ Capacidades del flujo:
 Al finalizar el cuestionario:
 
 - el frontend invoca la Edge Function `calculate-risk`;
-- recibe puntaje total, nivel de riesgo, cinturon y detalle por vector;
+- recibe puntaje total de riesgo, nivel de riesgo y detalle por vector;
 - guarda la evaluacion en la tabla `evaluations`;
 - actualiza el perfil del usuario con:
-  - cinturon;
   - nivel de riesgo;
-  - puntos totales;
+  - fecha de ultima evaluacion;
   - fecha de ultima evaluacion.
 
 Nota importante:
 
-- actualmente el frontend reemplaza `users.total_points` por `result.totalScore` al evaluar;
-- en cambio los katas suman puntos adicionales sobre `total_points`;
-- esto mezcla "puntaje de riesgo" con "puntos del dojo", por lo que hay una inconsistencia funcional en la semantica del campo.
+- `calculate-risk` guarda el puntaje de riesgo en `evaluations.total_score`;
+- `users.total_points` queda reservado para puntos de gamificacion;
+- la suma de puntos se controla desde `complete-kata`, no desde el navegador.
 
 ## 2.6 Pantalla de resultados
 
@@ -187,6 +208,8 @@ Responsabilidades:
 - asignar cinturon;
 - identificar el vector mas debil;
 - devolver un resumen listo para la interfaz.
+- guardar la evaluacion en `evaluations`;
+- actualizar `users.current_risk_level` y `users.last_evaluation_at`.
 
 Reglas de salida actuales:
 
@@ -198,9 +221,28 @@ Reglas de salida actuales:
 
 Observacion:
 
-- el esquema de base de datos acepta `black`, pero la funcion nunca asigna cinturon negro.
+- la funcion ya no debe escribir `users.total_points`, porque ese campo representa puntos de gamificacion.
+- la funcion tampoco debe reemplazar el cinturon gamificado del usuario; la progresion de cinturones se maneja con katas.
 
-### 3.2 Funcion Edge: `generate-recommendations`
+### 3.2 Funcion Edge: `complete-kata`
+
+Responsabilidades:
+
+- validar sesion del usuario;
+- cargar la kata activa por `kata_code`;
+- evaluar `selected_answers` contra `katas.steps`;
+- aprobar con umbral de 75%;
+- insertar o actualizar `kata_completions`;
+- recalcular `users.total_points` como suma de puntos ganados;
+- actualizar `users.belt` al siguiente cinturon si aprueba.
+
+Motivo:
+
+- evita que el frontend escriba directamente `users.belt`;
+- evita manipulacion de puntos desde el navegador;
+- mantiene separados los puntos del dojo y el puntaje de riesgo.
+
+### 3.3 Funcion Edge: `generate-recommendations`
 
 Capacidad backend disponible para:
 
@@ -230,7 +272,7 @@ Estado actual:
 - la funcion existe en backend;
 - no se encontraron invocaciones desde el frontend actual.
 
-### 3.3 Funcion Edge: `analyze-email`
+### 3.4 Funcion Edge: `analyze-email`
 
 Capacidad backend disponible para analizar correos sospechosos.
 
@@ -373,9 +415,9 @@ Se encontraron capacidades modeladas en backend pero no conectadas completamente
 
 ### 7.3 Riesgos o inconsistencias funcionales detectadas
 
-- `total_points` se usa tanto para puntaje del dojo como para puntaje de riesgo;
+- revisar historicos antiguos donde `total_points` pudo haber sido usado como puntaje de riesgo;
 - el CTA de katas recomendados no lleva a recomendaciones reales;
-- existe definicion de cinturon `black`, pero no se entrega nunca;
+- la progresion completa de cinturones requiere tener aplicada la migracion `015_align_belt_progression_and_points.sql`;
 - `supabase/config.toml` referencia `seed.sql`, pero los datos sembrados reales estan en `migrations/003_seed_data.sql`;
 - el frontend no refleja varias capacidades backend ya construidas.
 

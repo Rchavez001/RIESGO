@@ -83,7 +83,10 @@ serve(async (req) => {
                 question_id: 'string',
                 status: 'approved|rejected',
                 notes: 'string',
-                suggested_improvement: 'string'
+                suggested_improvement: 'string',
+                corrected_question_text: 'string optional',
+                corrected_options: 'array optional',
+                corrected_explanation: 'string optional'
               }
             ]
           }
@@ -97,28 +100,69 @@ serve(async (req) => {
 
     let approved = 0
     let rejected = 0
+    const autoActivateApproved = config.extra_settings?.auto_activate_approved !== false
 
     for (const audit of audits) {
       const status = audit.status === 'approved' ? 'approved' : 'rejected'
       if (status === 'approved') approved += 1
       else rejected += 1
 
+      const question = pendingQuestions.find((item) => item.id === audit.question_id)
+      const hasCorrectedQuestion = typeof audit.corrected_question_text === 'string' && audit.corrected_question_text.trim()
+      const hasCorrectedOptions = Array.isArray(audit.corrected_options) && audit.corrected_options.length > 0
+      const hasCorrectedExplanation = typeof audit.corrected_explanation === 'string' && audit.corrected_explanation.trim()
+      const hasCorrection = Boolean(hasCorrectedQuestion || hasCorrectedOptions || hasCorrectedExplanation || audit.suggested_improvement)
+      const now = new Date().toISOString()
+      const correctedPayload = hasCorrection ? {
+        question_text: hasCorrectedQuestion ? audit.corrected_question_text.trim() : question?.question_text,
+        options: hasCorrectedOptions ? audit.corrected_options : question?.options,
+        explanation: hasCorrectedExplanation ? audit.corrected_explanation.trim() : null,
+        suggested_improvement: audit.suggested_improvement ?? null,
+      } : null
+
+      const updatePayload: Record<string, unknown> = {
+        audit_status: status,
+        audit_notes: audit.notes ?? audit.suggested_improvement ?? null,
+        reviewed_at: now,
+        audit_reviewed_at: now,
+        audit_provider: aiResponse.providerKey,
+        audit_model: aiResponse.modelName,
+        audit_replaced_content: hasCorrection,
+        audit_original_payload: question ? {
+          id: question.id,
+          branch: question.branch,
+          question_text: question.question_text,
+          options: question.options,
+          generated_from_incident_id: question.generated_from_incident_id,
+        } : null,
+        audit_corrected_payload: correctedPayload,
+        active: status === 'approved' && autoActivateApproved,
+        source_type: status === 'approved' ? 'audited_generated' : 'incident_investigation',
+      }
+
+      if (status === 'approved' && hasCorrectedQuestion) {
+        updatePayload.question_text = audit.corrected_question_text.trim()
+      }
+      if (status === 'approved' && hasCorrectedOptions) {
+        updatePayload.options = audit.corrected_options
+      }
+      if (status === 'approved' && hasCorrectedExplanation) {
+        updatePayload.explanation = audit.corrected_explanation.trim()
+      }
+
       await supabase
         .from('questions')
-        .update({
-          audit_status: status,
-          audit_notes: audit.notes ?? audit.suggested_improvement ?? null,
-          reviewed_at: new Date().toISOString(),
-          active: status === 'approved',
-          source_type: status === 'approved' ? 'audited_generated' : 'incident_investigation',
-        })
+        .update(updatePayload)
         .eq('id', audit.question_id)
         .eq('audit_status', 'pending')
 
       if (status === 'approved') {
-        const question = pendingQuestions.find((item) => item.id === audit.question_id)
         if (question?.generated_from_incident_id) {
-          await upsertIncidentAlert(question.generated_from_incident_id, question.id, question.question_text)
+          await upsertIncidentAlert(
+            question.generated_from_incident_id,
+            question.id,
+            hasCorrectedQuestion ? audit.corrected_question_text.trim() : question.question_text,
+          )
 
           await supabase
             .from('incident_investigations')
@@ -139,6 +183,7 @@ serve(async (req) => {
           approved,
           rejected,
           provider_key: aiResponse.providerKey,
+          model_name: aiResponse.modelName,
         },
       })
       .eq('id', runRecord?.id)
@@ -153,6 +198,7 @@ serve(async (req) => {
       approved,
       rejected,
       provider_key: aiResponse.providerKey,
+      model_name: aiResponse.modelName,
     })
   } catch (error) {
     console.error('Error in audit-generated-questions:', error)
@@ -244,7 +290,7 @@ async function runWithFallback(
     if (!provider.active) continue
     try {
       const content = await callProvider(provider.provider_key, provider.model_name, promptTemplate, payload)
-      return { content, providerKey: provider.provider_key }
+      return { content, providerKey: provider.provider_key, modelName: provider.model_name }
     } catch (error) {
       lastError = error as Error
     }

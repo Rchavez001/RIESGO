@@ -128,9 +128,7 @@ serve(async (req) => {
     if (evaluationError) throw evaluationError
 
     const { error: userUpdateError } = await supabase.from('users').update({
-      belt: result.belt,
       current_risk_level: result.riskLevel,
-      total_points: result.totalScore,
       last_evaluation_at: new Date().toISOString(),
     }).eq('id', userId)
     if (userUpdateError) throw userUpdateError

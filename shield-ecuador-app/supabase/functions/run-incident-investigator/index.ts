@@ -94,7 +94,7 @@ serve(async (req) => {
       target_date: targetDate,
       incident_feed: incidentFeed,
       instructions: {
-        max_questions_per_run: config.extra_settings?.max_questions_per_run ?? 5,
+        max_questions_per_run: config.extra_settings?.max_questions_per_run ?? 10,
         response_format: {
           incidents: [
             {

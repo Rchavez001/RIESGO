@@ -26,11 +26,19 @@ supabase db push
 # 1. supabase/migrations/001_initial_schema.sql
 # 2. supabase/migrations/002_rls_policies.sql
 # 3. supabase/migrations/003_seed_data.sql
+# ...
+# 16. supabase/migrations/016_business_sectors_catalog.sql
 ```
 
 ### Deploy Edge Functions
 ```bash
 supabase functions deploy calculate-risk
+supabase functions deploy complete-kata
+supabase functions deploy secure-register-user
+supabase functions deploy get-private-profile
+supabase functions deploy ask-sensei
+supabase functions deploy get-ranking
+supabase functions deploy vuln-scanner-ai
 supabase functions deploy generate-recommendations
 supabase functions deploy analyze-email
 supabase functions deploy run-incident-investigator
@@ -41,6 +49,18 @@ supabase functions deploy run-daily-agent-workflows
 supabase secrets set DEEPSEEK_API_KEY=tu_key
 supabase secrets set ANTHROPIC_API_KEY=tu_key
 ```
+
+### Configurar Magic Link
+
+En Supabase Auth URL Configuration agrega estas Redirect URLs:
+
+```text
+http://localhost:3000/auth/callback
+http://127.0.0.1:3000/auth/callback
+https://cyberdojo-61855290194.us-central1.run.app/auth/callback
+```
+
+En Email Auth usa SMTP real, frecuencia minima de reenvio de 60 segundos o mas y expiracion OTP/magic link de 900 segundos.
 
 ---
 
@@ -89,7 +109,8 @@ shield-ecuador-app/
 │   │   ├── 002_rls_policies.sql     ← Row Level Security
 │   │   └── 003_seed_data.sql        ← Preguntas, katas, datos
 │   └── functions/
-│       ├── calculate-risk/          ← Calcula puntaje y cinturón
+│       ├── calculate-risk/          ← Calcula puntaje de riesgo
+│       ├── complete-kata/           ← Evalua katas, puntos y cinturones
 │       ├── generate-recommendations/← Llama a AI para recomendaciones
 │       └── analyze-email/           ← Detecta phishing en correos
 └── frontend/
