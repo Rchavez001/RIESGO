@@ -1,0 +1,28 @@
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*clave*
+*Clave*
+
+# Local provider state
+.gcloud-config/
+supabase/.temp/
+
+# Runtime logs and archives
+*.log
+frontend.zip
+tmp_*.json

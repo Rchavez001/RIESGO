@@ -1,0 +1,12 @@
+{
+  "name": "cyberdojo-central-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/tpotService.test.js"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}

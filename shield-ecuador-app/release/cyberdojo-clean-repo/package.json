@@ -1,0 +1,26 @@
+{
+  "name": "shield-ecuador-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "frontend:install": "npm --prefix frontend install",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:dev": "npm --prefix frontend run start:dev",
+    "frontend:start": "npm --prefix frontend start",
+    "admin:start": "npm --prefix central-admin-app start",
+    "admin:test": "npm --prefix central-admin-app test",
+    "build": "npm --prefix frontend run build",
+    "test": "npm --prefix central-admin-app test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.4.0"
+  }
+}
