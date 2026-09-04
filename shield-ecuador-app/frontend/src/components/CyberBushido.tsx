@@ -1,13 +1,61 @@
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
-import { Bot, CheckCircle2, Home, ListChecks, LogOut, Medal, Menu, ShieldCheck, Swords, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
+import { Bot, CheckCircle2, Home, ListChecks, LogOut, Medal, Menu, Play, ShieldCheck, Swords, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
 
-export const SENSEI_IMAGE_SRC = '/cyber-sensei.png'
+export const SENSEI_IMAGE_SRC = '/sensei-de-pie.png'
+
+export function KataIcon({ size = 24, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4 20 20 4" />
+      <circle cx="12" cy="9" r="1.6" />
+      <path d="M12 10.6 11 15" />
+      <path d="M11 12 8.5 15.5" />
+      <path d="M11.5 11 14 10" />
+      <path d="M11 15 15 17.5 17 20" />
+      <path d="M11 15 6.5 19.5" />
+    </svg>
+  )
+}
+
+const WARRIOR_IMAGES = [
+  '/kata-blanco.png',
+  '/kata-amarillo.png',
+  '/kata-azul.png',
+  '/kata-negro.png',
+  '/kata-negro-2.png',
+  '/kata-negro-3.png',
+  '/kata-negro-4.png',
+  '/kata-negro-5.png',
+] as const
+
+const THREAT_IMAGES = [
+  '/amenaza-hacker.png',
+  '/amenaza-virus.png',
+  '/amenaza-malware.png',
+  '/amenaza-phishing.png',
+  '/amenaza-ciberdelincuentes.png',
+  '/amenaza-estafas.png',
+  '/amenaza-ransomware.png',
+  '/amenaza-troyanos.png',
+] as const
 
 export const pageVariants = {
   initial: { opacity: 0, x: -20 },
@@ -125,6 +173,17 @@ export function CyberSensei({
   messageJP: string
   mode?: 'idle' | 'celebrate' | 'award'
 }) {
+  const [warriorIndex, setWarriorIndex] = useState(0)
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) return
+    const id = window.setInterval(() => {
+      setWarriorIndex((i) => (i + 1) % WARRIOR_IMAGES.length)
+    }, 1500)
+    return () => window.clearInterval(id)
+  }, [])
+
   return (
     <div className={`sensei-wrap sensei-${mode}`}>
       <motion.div
@@ -144,7 +203,14 @@ export function CyberSensei({
           : { y: [-10, 4, -10], scale: [1, 1.025, 1], filter: ['drop-shadow(0 0 34px rgba(0,240,255,.28))', 'drop-shadow(0 0 54px rgba(245,197,24,.36))', 'drop-shadow(0 0 34px rgba(0,240,255,.28))'] }}
         transition={{ repeat: Infinity, duration: mode === 'idle' ? 4 : 2.8, ease: 'easeInOut' }}
       >
-        <img src={SENSEI_IMAGE_SRC} alt="Sensei digital de Ciber Dojo" />
+        <motion.img
+          key={warriorIndex}
+          src={WARRIOR_IMAGES[warriorIndex]}
+          alt="Guerrera del Ciber Dojo"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        />
       </motion.div>
       {mode !== 'idle' && (
         <div className="sensei-energy" aria-hidden="true">
@@ -179,7 +245,7 @@ export function DojoCompletionCelebration({
     playSound(perfect ? 'success' : 'strike')
   }, [perfect, playSound])
 
-  return (
+  return createPortal(
     <motion.div className="dojo-victory-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <div className="dojo-victory-confetti" aria-hidden="true">
         {Array.from({ length: 34 }).map((_, index) => (
@@ -229,7 +295,8 @@ export function DojoCompletionCelebration({
           </div>
         </div>
       </motion.article>
-    </motion.div>
+    </motion.div>,
+    document.body
   )
 }
 
@@ -254,7 +321,7 @@ export function BeltAwardCelebration({
     playSound('belt')
   }, [playSound])
 
-  return (
+  return createPortal(
     <motion.div className="dojo-victory-overlay belt-award-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <div className="dojo-victory-confetti belt-confetti" aria-hidden="true">
         {Array.from({ length: 44 }).map((_, index) => (
@@ -306,7 +373,8 @@ export function BeltAwardCelebration({
           )}
         </div>
       </motion.article>
-    </motion.div>
+    </motion.div>,
+    document.body
   )
 }
 
@@ -376,6 +444,17 @@ export function DojoShell({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { notify } = useToast()
   const { enabled: audioEnabled, toggleAudio, playSound } = useDojoAudio()
+  const [tick, setTick] = useState(0)
+  const threatIndex = tick % THREAT_IMAGES.length
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) return
+    const id = window.setInterval(() => {
+      setTick((t) => t + 1)
+    }, 1500)
+    return () => window.clearInterval(id)
+  }, [])
 
   const nav = [
     { to: '/dashboard', label: 'Dashboard', icon: Home },
@@ -437,13 +516,16 @@ export function DojoShell({
           </nav>
           <div className="sidebar-sensei-card">
             <div className="mono-label">SENSEI DEL DOJO</div>
-            <motion.div
-              className="sidebar-sensei"
-              animate={{ y: [-3, 4, -3], filter: ['drop-shadow(0 0 10px rgba(0,240,255,.28))', 'drop-shadow(0 0 18px rgba(0,240,255,.52))', 'drop-shadow(0 0 10px rgba(0,240,255,.28))'] }}
-              transition={{ repeat: Infinity, duration: 5.5, ease: 'easeInOut' }}
-            >
-              <img src={SENSEI_IMAGE_SRC} alt="Sensei digital de Ciber Dojo" />
-            </motion.div>
+            <div className="sidebar-threat">
+              <motion.img
+                key={threatIndex}
+                src={THREAT_IMAGES[threatIndex]}
+                alt="Amenaza digital"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
           </div>
           <div className="sidebar-rank">
             <div className="mono-label">GUERRERO</div>
@@ -452,7 +534,7 @@ export function DojoShell({
             <XPBar current={xp} max={5000} belt={belt} />
           </div>
           <NavLink to="/dojos" className="train-now btn-katana" onClick={() => setSidebarOpen(false)}>
-            <Swords size={16} />
+            <Play size={16} />
             ENTRENAR AHORA
           </NavLink>
           <div className="sidebar-footer-actions">
@@ -543,14 +625,6 @@ function WisdomQuoteOverlay() {
       const loadedQuotes = !error && data?.length ? data as WisdomQuote[] : fallbackWisdomQuotes
       setQuotes(loadedQuotes)
       setQuote(pickQuote(loadedQuotes))
-      // Show quote only once per session (when user enters)
-      const seen = sessionStorage.getItem('ciberdojo_seen_wisdom')
-      window.setTimeout(() => {
-        if (active && !seen) {
-          setOpen(true)
-          try { sessionStorage.setItem('ciberdojo_seen_wisdom', '1') } catch (e) {}
-        }
-      }, 650)
     }
 
     void loadQuote()

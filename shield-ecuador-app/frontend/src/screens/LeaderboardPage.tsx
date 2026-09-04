@@ -59,8 +59,7 @@ export function LeaderboardPage() {
   function beltLabel(belt: string) {
     const map: Record<string, string> = {
       white: 'blanco', yellow: 'amarillo', orange: 'naranja',
-      green: 'verde', blue: 'azul', purple: 'morado',
-      red: 'rojo', black: 'negro', brown: 'marron',
+      green: 'verde', blue: 'azul', brown: 'marron', black: 'negro',
     }
     return map[belt.toLowerCase()] ?? belt
   }

@@ -41,9 +41,8 @@ const beltExamMap: Record<string, string> = {
   amarillo: 'EXAM_AMARILLO_NARANJA',
   naranja: 'EXAM_NARANJA_VERDE',
   verde: 'EXAM_VERDE_AZUL',
-  azul: 'EXAM_AZUL_MORADO',
-  morado: 'EXAM_MORADO_ROJO',
-  rojo: 'EXAM_ROJO_NEGRO',
+  azul: 'EXAM_AZUL_MARRON',
+  marron: 'EXAM_MARRON_NEGRO',
 }
 
 export function DojoDetailPage() {
