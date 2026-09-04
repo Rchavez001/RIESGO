@@ -249,9 +249,10 @@ const S = {
   drawer: {
     position: 'fixed' as const,
     bottom: 0,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: 'min(100vw, 480px)',
+    left: 0,
+    right: 0,
+    margin: '0 auto',
+    maxWidth: 480,
     background: 'linear-gradient(160deg, #0d1b2a 0%, #0a1628 100%)',
     borderTop: '1px solid rgba(0,200,232,0.22)',
     borderLeft: '1px solid rgba(0,200,232,0.10)',
