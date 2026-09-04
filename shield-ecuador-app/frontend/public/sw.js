@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shield-ecuador-pwa-v2'
+const CACHE_NAME = 'shield-ecuador-pwa-v3'
 const APP_SHELL = ['/', '/index.html', '/manifest.json']
 
 self.addEventListener('install', (event) => {
@@ -15,18 +15,21 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+// Network-first: always try to fetch the latest version so app updates show up
+// immediately after a new deploy. Only fall back to the cache when offline.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
+  if (!event.request.url.startsWith(self.location.origin)) return
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached
-
-      return fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         const responseClone = response.clone()
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone))
         return response
-      }).catch(() => caches.match('/index.html'))
-    })
+      })
+      .catch(() =>
+        caches.match(event.request).then((cached) => cached || caches.match('/index.html'))
+      )
   )
 })
