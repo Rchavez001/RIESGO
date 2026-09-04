@@ -1,0 +1,2822 @@
+[
+  {
+    "id": "dojo-phishing-manual-01",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 1,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "¿Qué señal debe hacerte desconfiar de inmediato de un mensaje digital?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Que llegue en horario laboral",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La urgencia artificial es una táctica clásica para que actúes sin pensar y entregues datos o hagas clic en un enlace falso."
+      },
+      {
+        "valor": "B",
+        "texto": "Que te pida actuar “ahora mismo” o tu cuenta será bloqueada",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La urgencia artificial es una táctica clásica para que actúes sin pensar y entregues datos o hagas clic en un enlace falso."
+      },
+      {
+        "valor": "C",
+        "texto": "Que tenga un logo conocido",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La urgencia artificial es una táctica clásica para que actúes sin pensar y entregues datos o hagas clic en un enlace falso."
+      },
+      {
+        "valor": "D",
+        "texto": "Que tenga más de una imagen",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La urgencia artificial es una táctica clásica para que actúes sin pensar y entregues datos o hagas clic en un enlace falso."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "Que te pida actuar “ahora mismo” o tu cuenta será bloqueada",
+    "explanation": "La urgencia artificial es una táctica clásica para que actúes sin pensar y entregues datos o hagas clic en un enlace falso.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-02",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 2,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Si un correo dice venir de una institución importante, pero tiene faltas graves de ortografía y frases raras, lo más prudente es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Responder para preguntar si es real",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La mala redacción y los errores de escritura son señales frecuentes de fraude y conviene confirmar siempre por la vía oficial."
+      },
+      {
+        "valor": "B",
+        "texto": "Abrir el archivo “por si acaso”",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La mala redacción y los errores de escritura son señales frecuentes de fraude y conviene confirmar siempre por la vía oficial."
+      },
+      {
+        "valor": "C",
+        "texto": "Desconfiar y verificar por un canal oficial",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La mala redacción y los errores de escritura son señales frecuentes de fraude y conviene confirmar siempre por la vía oficial."
+      },
+      {
+        "valor": "D",
+        "texto": "Reenviarlo a tus contactos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La mala redacción y los errores de escritura son señales frecuentes de fraude y conviene confirmar siempre por la vía oficial."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "Desconfiar y verificar por un canal oficial",
+    "explanation": "La mala redacción y los errores de escritura son señales frecuentes de fraude y conviene confirmar siempre por la vía oficial.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-03",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 3,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Si alguien te contacta sin previo aviso para pedir datos personales o bancarios, la acción más segura es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Dar solo una parte de la información",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Cuando el contacto es inesperado, la verificación independiente por canales oficiales corta muchas estafas antes de que empiecen."
+      },
+      {
+        "valor": "B",
+        "texto": "Verificar por el sitio o teléfono oficial de la entidad",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Cuando el contacto es inesperado, la verificación independiente por canales oficiales corta muchas estafas antes de que empiecen."
+      },
+      {
+        "valor": "C",
+        "texto": "Seguir la conversación para entender mejor",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Cuando el contacto es inesperado, la verificación independiente por canales oficiales corta muchas estafas antes de que empiecen."
+      },
+      {
+        "valor": "D",
+        "texto": "Mandar una foto del documento y luego borrarla",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Cuando el contacto es inesperado, la verificación independiente por canales oficiales corta muchas estafas antes de que empiecen."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "Verificar por el sitio o teléfono oficial de la entidad",
+    "explanation": "Cuando el contacto es inesperado, la verificación independiente por canales oficiales corta muchas estafas antes de que empiecen.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-04",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 4,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Te llega un mensaje: “Ganaste un premio, entra aquí para cobrarlo”. ¿Qué es lo más probable?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Una promoción real",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los premios no solicitados y los supuestos beneficios económicos son anzuelos típicos para robar datos o dinero."
+      },
+      {
+        "valor": "B",
+        "texto": "Un aviso del banco",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los premios no solicitados y los supuestos beneficios económicos son anzuelos típicos para robar datos o dinero."
+      },
+      {
+        "valor": "C",
+        "texto": "Un intento de estafa",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los premios no solicitados y los supuestos beneficios económicos son anzuelos típicos para robar datos o dinero."
+      },
+      {
+        "valor": "D",
+        "texto": "Una actualización del sistema",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los premios no solicitados y los supuestos beneficios económicos son anzuelos típicos para robar datos o dinero."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 2",
+    "answer_text": "Un intento de estafa",
+    "explanation": "Los premios no solicitados y los supuestos beneficios económicos son anzuelos típicos para robar datos o dinero.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-05",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 5,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "¿Qué dato no debes compartir nunca con nadie?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Tu provincia",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los códigos de verificación y las contraseñas son personales; compartirlos puede abrir la puerta al robo de la cuenta."
+      },
+      {
+        "valor": "B",
+        "texto": "El color de tu móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los códigos de verificación y las contraseñas son personales; compartirlos puede abrir la puerta al robo de la cuenta."
+      },
+      {
+        "valor": "C",
+        "texto": "Un código de verificación o tu contraseña",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los códigos de verificación y las contraseñas son personales; compartirlos puede abrir la puerta al robo de la cuenta."
+      },
+      {
+        "valor": "D",
+        "texto": "El modelo de tu teclado",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los códigos de verificación y las contraseñas son personales; compartirlos puede abrir la puerta al robo de la cuenta."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 2",
+    "answer_text": "Un código de verificación o tu contraseña",
+    "explanation": "Los códigos de verificación y las contraseñas son personales; compartirlos puede abrir la puerta al robo de la cuenta.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-06",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 6,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Si dudas de un mensaje, ¿qué acción es la más peligrosa?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Dejarlo sin abrir",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Un solo clic puede llevarte a una web falsa o descargar un archivo malicioso."
+      },
+      {
+        "valor": "B",
+        "texto": "Borrarlo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Un solo clic puede llevarte a una web falsa o descargar un archivo malicioso."
+      },
+      {
+        "valor": "C",
+        "texto": "Hacer clic en el enlace “para ver de qué trata”",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Un solo clic puede llevarte a una web falsa o descargar un archivo malicioso."
+      },
+      {
+        "valor": "D",
+        "texto": "Buscar el nombre de la entidad en Internet",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Un solo clic puede llevarte a una web falsa o descargar un archivo malicioso."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 2",
+    "answer_text": "Hacer clic en el enlace “para ver de qué trata”",
+    "explanation": "Un solo clic puede llevarte a una web falsa o descargar un archivo malicioso.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-07",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 7,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Un correo dice ser de tu banco y te pide iniciar sesión desde un enlace. ¿Qué debes hacer?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Entrar rápido para evitar el bloqueo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Es más seguro entrar por la aplicación o la dirección oficial que pulsar un enlace recibido por correo o mensaje."
+      },
+      {
+        "valor": "B",
+        "texto": "Abrir el enlace desde el correo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Es más seguro entrar por la aplicación o la dirección oficial que pulsar un enlace recibido por correo o mensaje."
+      },
+      {
+        "valor": "C",
+        "texto": "Ir tú mismo a la aplicación o a la web oficial del banco",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Es más seguro entrar por la aplicación o la dirección oficial que pulsar un enlace recibido por correo o mensaje."
+      },
+      {
+        "valor": "D",
+        "texto": "Reenviar el correo al grupo familiar",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Es más seguro entrar por la aplicación o la dirección oficial que pulsar un enlace recibido por correo o mensaje."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 3",
+    "answer_text": "Ir tú mismo a la aplicación o a la web oficial del banco",
+    "explanation": "Es más seguro entrar por la aplicación o la dirección oficial que pulsar un enlace recibido por correo o mensaje.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-08",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 8,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Recibes un correo con una “factura pendiente” de algo que no reconoces. ¿Qué haces primero?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Abres el archivo para revisar",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los adjuntos inesperados son una vía habitual de infección o engaño en campañas de phishing."
+      },
+      {
+        "valor": "B",
+        "texto": "Pagas cuanto antes",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los adjuntos inesperados son una vía habitual de infección o engaño en campañas de phishing."
+      },
+      {
+        "valor": "C",
+        "texto": "No abres el archivo y verificas si realmente esperabas esa factura",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los adjuntos inesperados son una vía habitual de infección o engaño en campañas de phishing."
+      },
+      {
+        "valor": "D",
+        "texto": "Contestás pidiendo más datos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los adjuntos inesperados son una vía habitual de infección o engaño en campañas de phishing."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 3",
+    "answer_text": "No abres el archivo y verificas si realmente esperabas esa factura",
+    "explanation": "Los adjuntos inesperados son una vía habitual de infección o engaño en campañas de phishing.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-09",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 9,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "¿Qué detalle conviene revisar con cuidado en un correo sospechoso?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Solo el color del logo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Muchas estafas imitan el diseño real, pero fallan en el remitente o en la dirección del enlace."
+      },
+      {
+        "valor": "B",
+        "texto": "El dominio del remitente y la dirección real a la que apunta el enlace",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Muchas estafas imitan el diseño real, pero fallan en el remitente o en la dirección del enlace."
+      },
+      {
+        "valor": "C",
+        "texto": "Solo el tamaño de la letra",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Muchas estafas imitan el diseño real, pero fallan en el remitente o en la dirección del enlace."
+      },
+      {
+        "valor": "D",
+        "texto": "El fondo de pantalla del móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Muchas estafas imitan el diseño real, pero fallan en el remitente o en la dirección del enlace."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 3",
+    "answer_text": "El dominio del remitente y la dirección real a la que apunta el enlace",
+    "explanation": "Muchas estafas imitan el diseño real, pero fallan en el remitente o en la dirección del enlace.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-10",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 10,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Si un correo amenaza con cerrar tu cuenta en pocos minutos si no haces clic, lo más probable es que:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Sea un trámite normal",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La presión de tiempo busca que reacciones con miedo en lugar de verificar si la comunicación es auténtica."
+      },
+      {
+        "valor": "B",
+        "texto": "Sea una urgencia verdadera",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La presión de tiempo busca que reacciones con miedo en lugar de verificar si la comunicación es auténtica."
+      },
+      {
+        "valor": "C",
+        "texto": "Sea un intento de manipularte",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La presión de tiempo busca que reacciones con miedo en lugar de verificar si la comunicación es auténtica."
+      },
+      {
+        "valor": "D",
+        "texto": "Sea un mensaje automático útil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La presión de tiempo busca que reacciones con miedo en lugar de verificar si la comunicación es auténtica."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Sea un intento de manipularte",
+    "explanation": "La presión de tiempo busca que reacciones con miedo en lugar de verificar si la comunicación es auténtica.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-11",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 11,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "¿Cuál es la mejor forma de comprobar si un correo de una institución es real?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Responder al mismo correo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La comprobación debe hacerse por un canal independiente y oficial, no por el mismo mensaje sospechoso."
+      },
+      {
+        "valor": "B",
+        "texto": "Confiar si lleva logotipos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La comprobación debe hacerse por un canal independiente y oficial, no por el mismo mensaje sospechoso."
+      },
+      {
+        "valor": "C",
+        "texto": "Llamar o escribir usando los datos oficiales publicados por la institución",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La comprobación debe hacerse por un canal independiente y oficial, no por el mismo mensaje sospechoso."
+      },
+      {
+        "valor": "D",
+        "texto": "Abrir el archivo para confirmar",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La comprobación debe hacerse por un canal independiente y oficial, no por el mismo mensaje sospechoso."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Llamar o escribir usando los datos oficiales publicados por la institución",
+    "explanation": "La comprobación debe hacerse por un canal independiente y oficial, no por el mismo mensaje sospechoso.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-12",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 12,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Un documento adjunto te pide “habilitar contenido” para verlo. ¿Qué conviene hacer?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Habilitarlo para comprobar si es importante",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Este tipo de petición puede ser una trampa para ejecutar software malicioso en el equipo."
+      },
+      {
+        "valor": "B",
+        "texto": "Cerrar el archivo y tratarlo como sospechoso",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Este tipo de petición puede ser una trampa para ejecutar software malicioso en el equipo."
+      },
+      {
+        "valor": "C",
+        "texto": "Compartirlo por WhatsApp",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Este tipo de petición puede ser una trampa para ejecutar software malicioso en el equipo."
+      },
+      {
+        "valor": "D",
+        "texto": "Imprimirlo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Este tipo de petición puede ser una trampa para ejecutar software malicioso en el equipo."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Cerrar el archivo y tratarlo como sospechoso",
+    "explanation": "Este tipo de petición puede ser una trampa para ejecutar software malicioso en el equipo.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-13",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 13,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Si ya escribiste tu contraseña en una página sospechosa, lo más urgente es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Esperar a ver si pasa algo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Si una clave quedó expuesta, debes reemplazarla cuanto antes y añadir una segunda barrera de acceso."
+      },
+      {
+        "valor": "B",
+        "texto": "Cambiar la contraseña desde otro dispositivo seguro y activar la autenticación de dos factores",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Si una clave quedó expuesta, debes reemplazarla cuanto antes y añadir una segunda barrera de acceso."
+      },
+      {
+        "valor": "C",
+        "texto": "Borrar el historial del navegador y listo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Si una clave quedó expuesta, debes reemplazarla cuanto antes y añadir una segunda barrera de acceso."
+      },
+      {
+        "valor": "D",
+        "texto": "Enviar un mensaje al supuesto remitente",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Si una clave quedó expuesta, debes reemplazarla cuanto antes y añadir una segunda barrera de acceso."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Cambiar la contraseña desde otro dispositivo seguro y activar la autenticación de dos factores",
+    "explanation": "Si una clave quedó expuesta, debes reemplazarla cuanto antes y añadir una segunda barrera de acceso.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-14",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 14,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "¿Qué es el smishing?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Un robo físico del móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El smishing es un engaño que llega por mensaje de texto y suele incluir enlaces o instrucciones falsas."
+      },
+      {
+        "valor": "B",
+        "texto": "Un fraude por mensaje de texto para robar datos o dinero",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "El smishing es un engaño que llega por mensaje de texto y suele incluir enlaces o instrucciones falsas."
+      },
+      {
+        "valor": "C",
+        "texto": "Un error del teclado",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El smishing es un engaño que llega por mensaje de texto y suele incluir enlaces o instrucciones falsas."
+      },
+      {
+        "valor": "D",
+        "texto": "Una forma de mejorar la señal",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El smishing es un engaño que llega por mensaje de texto y suele incluir enlaces o instrucciones falsas."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Un fraude por mensaje de texto para robar datos o dinero",
+    "explanation": "El smishing es un engaño que llega por mensaje de texto y suele incluir enlaces o instrucciones falsas.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-15",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 15,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Recibes un mensaje sobre un paquete, multa o premio con un enlace acortado. ¿Qué conviene hacer?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Pulsar para salir de dudas",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En smishing, el enlace suele ser la puerta de entrada al fraude o a una web falsa."
+      },
+      {
+        "valor": "B",
+        "texto": "Entrar solo si el mensaje es corto",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En smishing, el enlace suele ser la puerta de entrada al fraude o a una web falsa."
+      },
+      {
+        "valor": "C",
+        "texto": "No usar ese enlace y revisar la gestión por la web o aplicación oficial",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "En smishing, el enlace suele ser la puerta de entrada al fraude o a una web falsa."
+      },
+      {
+        "valor": "D",
+        "texto": "Responder “¿quién eres?”",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En smishing, el enlace suele ser la puerta de entrada al fraude o a una web falsa."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "No usar ese enlace y revisar la gestión por la web o aplicación oficial",
+    "explanation": "En smishing, el enlace suele ser la puerta de entrada al fraude o a una web falsa.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-16",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 16,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Un contacto te pide por WhatsApp el código que te acaba de llegar “para ayudarte”. ¿Qué haces?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Se lo envías si lo conoces",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Ese código puede servir para tomar el control de tu cuenta y dejarte fuera."
+      },
+      {
+        "valor": "B",
+        "texto": "Se lo envías solo una vez",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Ese código puede servir para tomar el control de tu cuenta y dejarte fuera."
+      },
+      {
+        "valor": "C",
+        "texto": "No lo compartes nunca",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Ese código puede servir para tomar el control de tu cuenta y dejarte fuera."
+      },
+      {
+        "valor": "D",
+        "texto": "Lo pones en una foto",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Ese código puede servir para tomar el control de tu cuenta y dejarte fuera."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 6",
+    "answer_text": "No lo compartes nunca",
+    "explanation": "Ese código puede servir para tomar el control de tu cuenta y dejarte fuera.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-17",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 17,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Un supuesto hijo o familiar te escribe desde un número nuevo diciendo que está en apuros y necesita dinero ya. ¿Cuál es la reacción más segura?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Enviar algo pequeño para ayudar",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Este fraude explota la urgencia emocional; la recomendación es confirmar por una vía distinta antes de enviar dinero."
+      },
+      {
+        "valor": "B",
+        "texto": "Pedirle el número de cuenta",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Este fraude explota la urgencia emocional; la recomendación es confirmar por una vía distinta antes de enviar dinero."
+      },
+      {
+        "valor": "C",
+        "texto": "Verificar su identidad por otra vía antes de hacer nada",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Este fraude explota la urgencia emocional; la recomendación es confirmar por una vía distinta antes de enviar dinero."
+      },
+      {
+        "valor": "D",
+        "texto": "Reenviar el mensaje a toda la familia",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Este fraude explota la urgencia emocional; la recomendación es confirmar por una vía distinta antes de enviar dinero."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 6",
+    "answer_text": "Verificar su identidad por otra vía antes de hacer nada",
+    "explanation": "Este fraude explota la urgencia emocional; la recomendación es confirmar por una vía distinta antes de enviar dinero.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-18",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 18,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Si un mensaje de texto te pide llamar a un número para “reactivar” tu cuenta, lo mejor es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Llamar rápido para no perder acceso",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En muchas estafas el número del mensaje pertenece al delincuente que suplanta a una empresa."
+      },
+      {
+        "valor": "B",
+        "texto": "Llamar solo si el mensaje llega de madrugada",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En muchas estafas el número del mensaje pertenece al delincuente que suplanta a una empresa."
+      },
+      {
+        "valor": "C",
+        "texto": "No usar ese número y buscar el contacto oficial por tu cuenta",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "En muchas estafas el número del mensaje pertenece al delincuente que suplanta a una empresa."
+      },
+      {
+        "valor": "D",
+        "texto": "Pedir a otra persona que llame",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En muchas estafas el número del mensaje pertenece al delincuente que suplanta a una empresa."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 6",
+    "answer_text": "No usar ese número y buscar el contacto oficial por tu cuenta",
+    "explanation": "En muchas estafas el número del mensaje pertenece al delincuente que suplanta a una empresa.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-19",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 19,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "Un supuesto empleado del banco te llama y te pide el código que te llegó al móvil. ¿Qué debes hacer?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Dárselo para verificar la identidad",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En vishing, el objetivo suele ser conseguir códigos y claves para entrar en tus cuentas o vaciarlas."
+      },
+      {
+        "valor": "B",
+        "texto": "Colgar y llamar tú al número oficial del banco",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "En vishing, el objetivo suele ser conseguir códigos y claves para entrar en tus cuentas o vaciarlas."
+      },
+      {
+        "valor": "C",
+        "texto": "Dictarlo despacio para no equivocarte",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En vishing, el objetivo suele ser conseguir códigos y claves para entrar en tus cuentas o vaciarlas."
+      },
+      {
+        "valor": "D",
+        "texto": "Enviarlo por mensaje de texto",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "En vishing, el objetivo suele ser conseguir códigos y claves para entrar en tus cuentas o vaciarlas."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 7",
+    "answer_text": "Colgar y llamar tú al número oficial del banco",
+    "explanation": "En vishing, el objetivo suele ser conseguir códigos y claves para entrar en tus cuentas o vaciarlas.",
+    "editable": true
+  },
+  {
+    "id": "dojo-phishing-manual-20",
+    "branch": "dojo-phishing",
+    "dojo_id": "dojo-phishing",
+    "order_num": 20,
+    "iso_control": "ISO 27001 A.6.3",
+    "question_text": "¿Qué frase es más típica de una llamada fraudulenta?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "“Verifique con calma en su oficina virtual”",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El miedo y la presión son herramientas de manipulación muy usadas en vishing y suplantación telefónica."
+      },
+      {
+        "valor": "B",
+        "texto": "“No haga nada sin revisar primero”",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El miedo y la presión son herramientas de manipulación muy usadas en vishing y suplantación telefónica."
+      },
+      {
+        "valor": "C",
+        "texto": "“Tiene que decidir ahora mismo o perderá su dinero”",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "El miedo y la presión son herramientas de manipulación muy usadas en vishing y suplantación telefónica."
+      },
+      {
+        "valor": "D",
+        "texto": "“Le llamamos para recordarle la política de privacidad”",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El miedo y la presión son herramientas de manipulación muy usadas en vishing y suplantación telefónica."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata final",
+    "answer_text": "“Tiene que decidir ahora mismo o perderá su dinero”",
+    "explanation": "El miedo y la presión son herramientas de manipulación muy usadas en vishing y suplantación telefónica.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-01",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 1,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Es buena idea usar la misma contraseña para el correo, el banco y las redes sociales?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Sí, así no la olvidas",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Si reutilizas la misma clave, una sola filtración puede comprometer varias cuentas a la vez."
+      },
+      {
+        "valor": "B",
+        "texto": "Sí, si es larga",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Si reutilizas la misma clave, una sola filtración puede comprometer varias cuentas a la vez."
+      },
+      {
+        "valor": "C",
+        "texto": "No, cada cuenta importante debe tener una diferente",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Si reutilizas la misma clave, una sola filtración puede comprometer varias cuentas a la vez."
+      },
+      {
+        "valor": "D",
+        "texto": "Solo si la cambias una vez al año",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Si reutilizas la misma clave, una sola filtración puede comprometer varias cuentas a la vez."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "No, cada cuenta importante debe tener una diferente",
+    "explanation": "Si reutilizas la misma clave, una sola filtración puede comprometer varias cuentas a la vez.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-02",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 2,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Cuál de estas contraseñas sería la más segura?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "01011990",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las contraseñas fuertes combinan longitud, variedad de caracteres y ausencia de datos personales fáciles de adivinar."
+      },
+      {
+        "valor": "B",
+        "texto": "Maria123",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las contraseñas fuertes combinan longitud, variedad de caracteres y ausencia de datos personales fáciles de adivinar."
+      },
+      {
+        "valor": "C",
+        "texto": "CasaAzulLluvia9",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Las contraseñas fuertes combinan longitud, variedad de caracteres y ausencia de datos personales fáciles de adivinar."
+      },
+      {
+        "valor": "D",
+        "texto": "12345678",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las contraseñas fuertes combinan longitud, variedad de caracteres y ausencia de datos personales fáciles de adivinar."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "CasaAzulLluvia9",
+    "explanation": "Las contraseñas fuertes combinan longitud, variedad de caracteres y ausencia de datos personales fáciles de adivinar.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-03",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 3,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Por qué es mala idea usar nombres de hijos, cumpleaños o fechas importantes como contraseña?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Porque son demasiado largas",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los datos personales conocidos o previsibles reducen mucho la seguridad de una clave."
+      },
+      {
+        "valor": "B",
+        "texto": "Porque son difíciles de escribir",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los datos personales conocidos o previsibles reducen mucho la seguridad de una clave."
+      },
+      {
+        "valor": "C",
+        "texto": "Porque suelen ser fáciles de adivinar",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los datos personales conocidos o previsibles reducen mucho la seguridad de una clave."
+      },
+      {
+        "valor": "D",
+        "texto": "Porque no las acepta ningún sistema",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los datos personales conocidos o previsibles reducen mucho la seguridad de una clave."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "Porque suelen ser fáciles de adivinar",
+    "explanation": "Los datos personales conocidos o previsibles reducen mucho la seguridad de una clave.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-04",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 4,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si te cuesta recordar muchas contraseñas distintas, la opción más segura es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Apuntarlas en una red social",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Un gestor ayuda a guardar claves de forma más segura y a no reutilizar la misma en todos los servicios."
+      },
+      {
+        "valor": "B",
+        "texto": "Usar un gestor de contraseñas",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Un gestor ayuda a guardar claves de forma más segura y a no reutilizar la misma en todos los servicios."
+      },
+      {
+        "valor": "C",
+        "texto": "Repetir siempre la misma",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Un gestor ayuda a guardar claves de forma más segura y a no reutilizar la misma en todos los servicios."
+      },
+      {
+        "valor": "D",
+        "texto": "Decírselas a una persona de confianza",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Un gestor ayuda a guardar claves de forma más segura y a no reutilizar la misma en todos los servicios."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 2",
+    "answer_text": "Usar un gestor de contraseñas",
+    "explanation": "Un gestor ayuda a guardar claves de forma más segura y a no reutilizar la misma en todos los servicios.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-05",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 5,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Con qué frecuencia conviene revisar y cambiar las contraseñas importantes?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Nunca",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "INCIBE recomienda actualizarlas regularmente para reducir el riesgo si una clave ha quedado expuesta."
+      },
+      {
+        "valor": "B",
+        "texto": "Solo cuando cambias de móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "INCIBE recomienda actualizarlas regularmente para reducir el riesgo si una clave ha quedado expuesta."
+      },
+      {
+        "valor": "C",
+        "texto": "Periódicamente",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "INCIBE recomienda actualizarlas regularmente para reducir el riesgo si una clave ha quedado expuesta."
+      },
+      {
+        "valor": "D",
+        "texto": "Cada diez años",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "INCIBE recomienda actualizarlas regularmente para reducir el riesgo si una clave ha quedado expuesta."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 2",
+    "answer_text": "Periódicamente",
+    "explanation": "INCIBE recomienda actualizarlas regularmente para reducir el riesgo si una clave ha quedado expuesta.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-06",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 6,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si una cuenta permite activar autenticación de dos factores, ¿qué conviene hacer?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Ignorarla porque molesta",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La recomendación es usar esta protección en todas las cuentas que lo permitan, especialmente las más sensibles."
+      },
+      {
+        "valor": "B",
+        "texto": "Activarla, sobre todo en correo, redes y banca en línea",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La recomendación es usar esta protección en todas las cuentas que lo permitan, especialmente las más sensibles."
+      },
+      {
+        "valor": "C",
+        "texto": "Activarla solo en juegos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La recomendación es usar esta protección en todas las cuentas que lo permitan, especialmente las más sensibles."
+      },
+      {
+        "valor": "D",
+        "texto": "Activarla y luego compartir los códigos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La recomendación es usar esta protección en todas las cuentas que lo permitan, especialmente las más sensibles."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 2",
+    "answer_text": "Activarla, sobre todo en correo, redes y banca en línea",
+    "explanation": "La recomendación es usar esta protección en todas las cuentas que lo permitan, especialmente las más sensibles.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-07",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 7,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Qué es la autenticación de dos factores?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Cambiar dos veces el fondo del móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Esta medida añade una segunda capa, como un código temporal o una aplicación de autenticación."
+      },
+      {
+        "valor": "B",
+        "texto": "Tener dos cuentas bancarias",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Esta medida añade una segunda capa, como un código temporal o una aplicación de autenticación."
+      },
+      {
+        "valor": "C",
+        "texto": "Añadir una segunda prueba de identidad además de la contraseña",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Esta medida añade una segunda capa, como un código temporal o una aplicación de autenticación."
+      },
+      {
+        "valor": "D",
+        "texto": "Usar dos antivirus",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Esta medida añade una segunda capa, como un código temporal o una aplicación de autenticación."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 3",
+    "answer_text": "Añadir una segunda prueba de identidad además de la contraseña",
+    "explanation": "Esta medida añade una segunda capa, como un código temporal o una aplicación de autenticación.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-08",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 8,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si alguien averigua tu contraseña pero no tiene el segundo factor, ¿qué ocurre normalmente?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Entra igual sin problema",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La autenticación de dos factores está pensada precisamente para dificultar el acceso no autorizado cuando una clave se filtra."
+      },
+      {
+        "valor": "B",
+        "texto": "Le resulta más difícil acceder",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La autenticación de dos factores está pensada precisamente para dificultar el acceso no autorizado cuando una clave se filtra."
+      },
+      {
+        "valor": "C",
+        "texto": "La cuenta se borra sola",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La autenticación de dos factores está pensada precisamente para dificultar el acceso no autorizado cuando una clave se filtra."
+      },
+      {
+        "valor": "D",
+        "texto": "El teléfono deja de funcionar",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La autenticación de dos factores está pensada precisamente para dificultar el acceso no autorizado cuando una clave se filtra."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 3",
+    "answer_text": "Le resulta más difícil acceder",
+    "explanation": "La autenticación de dos factores está pensada precisamente para dificultar el acceso no autorizado cuando una clave se filtra.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-09",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 9,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Debes compartir un código de verificación con quien te lo pida por teléfono o mensaje?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Sí, si dice ser del banco",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los códigos temporales son personales y compartirlos puede permitir el robo de tu cuenta."
+      },
+      {
+        "valor": "B",
+        "texto": "Solo si te llama con tu nombre",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los códigos temporales son personales y compartirlos puede permitir el robo de tu cuenta."
+      },
+      {
+        "valor": "C",
+        "texto": "Nunca",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los códigos temporales son personales y compartirlos puede permitir el robo de tu cuenta."
+      },
+      {
+        "valor": "D",
+        "texto": "Solo una vez",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los códigos temporales son personales y compartirlos puede permitir el robo de tu cuenta."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 3",
+    "answer_text": "Nunca",
+    "explanation": "Los códigos temporales son personales y compartirlos puede permitir el robo de tu cuenta.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-10",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 10,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "En el móvil, ¿qué tipo de bloqueo es más seguro que dejarlo sin protección?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Ninguno",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Proteger el acceso al dispositivo es una defensa básica para evitar que terceros accedan a tu información."
+      },
+      {
+        "valor": "B",
+        "texto": "Un código o sistema de desbloqueo seguro",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Proteger el acceso al dispositivo es una defensa básica para evitar que terceros accedan a tu información."
+      },
+      {
+        "valor": "C",
+        "texto": "Solo bajar el brillo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Proteger el acceso al dispositivo es una defensa básica para evitar que terceros accedan a tu información."
+      },
+      {
+        "valor": "D",
+        "texto": "Ponerlo en silencio",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Proteger el acceso al dispositivo es una defensa básica para evitar que terceros accedan a tu información."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Un código o sistema de desbloqueo seguro",
+    "explanation": "Proteger el acceso al dispositivo es una defensa básica para evitar que terceros accedan a tu información.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-11",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 11,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Desde dónde conviene instalar aplicaciones en el móvil?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Desde cualquier enlace recibido",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las fuentes oficiales reducen el riesgo de instalar aplicaciones manipuladas o con código malicioso."
+      },
+      {
+        "valor": "B",
+        "texto": "Desde tiendas oficiales y fuentes confiables",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Las fuentes oficiales reducen el riesgo de instalar aplicaciones manipuladas o con código malicioso."
+      },
+      {
+        "valor": "C",
+        "texto": "Desde grupos de mensajería",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las fuentes oficiales reducen el riesgo de instalar aplicaciones manipuladas o con código malicioso."
+      },
+      {
+        "valor": "D",
+        "texto": "Desde archivos que te envíe un desconocido",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las fuentes oficiales reducen el riesgo de instalar aplicaciones manipuladas o con código malicioso."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Desde tiendas oficiales y fuentes confiables",
+    "explanation": "Las fuentes oficiales reducen el riesgo de instalar aplicaciones manipuladas o con código malicioso.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-12",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 12,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Antes de instalar una aplicación, ¿qué conviene revisar?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Solo el color del icono",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Revisar permisos ayuda a detectar aplicaciones que piden accesos excesivos para lo que supuestamente hacen."
+      },
+      {
+        "valor": "B",
+        "texto": "Los permisos que solicita",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Revisar permisos ayuda a detectar aplicaciones que piden accesos excesivos para lo que supuestamente hacen."
+      },
+      {
+        "valor": "C",
+        "texto": "El nombre de la batería",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Revisar permisos ayuda a detectar aplicaciones que piden accesos excesivos para lo que supuestamente hacen."
+      },
+      {
+        "valor": "D",
+        "texto": "El volumen del teléfono",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Revisar permisos ayuda a detectar aplicaciones que piden accesos excesivos para lo que supuestamente hacen."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Los permisos que solicita",
+    "explanation": "Revisar permisos ayuda a detectar aplicaciones que piden accesos excesivos para lo que supuestamente hacen.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-13",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 13,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si una aplicación muy simple pide acceder a contactos, mensajes, micrófono y cámara, lo más sensato es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Aceptarlo todo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los permisos desproporcionados son una señal de riesgo, sobre todo si la función de la aplicación no los justifica."
+      },
+      {
+        "valor": "B",
+        "texto": "Desconfiar y revisar si realmente necesitas instalarla",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los permisos desproporcionados son una señal de riesgo, sobre todo si la función de la aplicación no los justifica."
+      },
+      {
+        "valor": "C",
+        "texto": "Pasarla a otra persona",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los permisos desproporcionados son una señal de riesgo, sobre todo si la función de la aplicación no los justifica."
+      },
+      {
+        "valor": "D",
+        "texto": "Reiniciar el móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los permisos desproporcionados son una señal de riesgo, sobre todo si la función de la aplicación no los justifica."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Desconfiar y revisar si realmente necesitas instalarla",
+    "explanation": "Los permisos desproporcionados son una señal de riesgo, sobre todo si la función de la aplicación no los justifica.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-14",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 14,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Mantener el sistema operativo y las aplicaciones al día sirve para:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Solo cambiar el diseño",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las actualizaciones y parches corrigen problemas conocidos y mejoran la protección del dispositivo."
+      },
+      {
+        "valor": "B",
+        "texto": "Corregir fallos y cerrar vulnerabilidades de seguridad",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Las actualizaciones y parches corrigen problemas conocidos y mejoran la protección del dispositivo."
+      },
+      {
+        "valor": "C",
+        "texto": "Gastar más batería",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las actualizaciones y parches corrigen problemas conocidos y mejoran la protección del dispositivo."
+      },
+      {
+        "valor": "D",
+        "texto": "Borrar tus contactos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las actualizaciones y parches corrigen problemas conocidos y mejoran la protección del dispositivo."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Corregir fallos y cerrar vulnerabilidades de seguridad",
+    "explanation": "Las actualizaciones y parches corrigen problemas conocidos y mejoran la protección del dispositivo.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-15",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 15,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si pierdes un teléfono Android, ¿qué puedes hacer con la herramienta oficial si estaba preparada?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Nada",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Android permite localizar, proteger y borrar un dispositivo perdido de forma remota si estaba configurado antes."
+      },
+      {
+        "valor": "B",
+        "texto": "Buscarlo, protegerlo o borrar sus datos a distancia",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Android permite localizar, proteger y borrar un dispositivo perdido de forma remota si estaba configurado antes."
+      },
+      {
+        "valor": "C",
+        "texto": "Solo cambiar el fondo de pantalla",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Android permite localizar, proteger y borrar un dispositivo perdido de forma remota si estaba configurado antes."
+      },
+      {
+        "valor": "D",
+        "texto": "Únicamente apagarlo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Android permite localizar, proteger y borrar un dispositivo perdido de forma remota si estaba configurado antes."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Buscarlo, protegerlo o borrar sus datos a distancia",
+    "explanation": "Android permite localizar, proteger y borrar un dispositivo perdido de forma remota si estaba configurado antes.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-16",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 16,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si pierdes un iPhone y tenías activada la función adecuada, ¿qué conviene hacer?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Esperar varios días",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Apple recomienda usar Buscar y activar el modo perdido para bloquear el equipo y proteger la información personal."
+      },
+      {
+        "valor": "B",
+        "texto": "Marcarlo como perdido desde Buscar",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Apple recomienda usar Buscar y activar el modo perdido para bloquear el equipo y proteger la información personal."
+      },
+      {
+        "valor": "C",
+        "texto": "Publicar la pérdida en redes sociales y nada más",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Apple recomienda usar Buscar y activar el modo perdido para bloquear el equipo y proteger la información personal."
+      },
+      {
+        "valor": "D",
+        "texto": "Compartir tu contraseña para que te ayuden",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Apple recomienda usar Buscar y activar el modo perdido para bloquear el equipo y proteger la información personal."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 6",
+    "answer_text": "Marcarlo como perdido desde Buscar",
+    "explanation": "Apple recomienda usar Buscar y activar el modo perdido para bloquear el equipo y proteger la información personal.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-17",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 17,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si un mensaje te pide activar la “instalación desde orígenes desconocidos”, ¿qué debes pensar primero?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Que es una actualización normal",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Permitir instalaciones fuera de las tiendas oficiales aumenta el riesgo de cargar programas maliciosos."
+      },
+      {
+        "valor": "B",
+        "texto": "Que puede ser peligroso",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Permitir instalaciones fuera de las tiendas oficiales aumenta el riesgo de cargar programas maliciosos."
+      },
+      {
+        "valor": "C",
+        "texto": "Que mejorará la señal",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Permitir instalaciones fuera de las tiendas oficiales aumenta el riesgo de cargar programas maliciosos."
+      },
+      {
+        "valor": "D",
+        "texto": "Que es obligatorio",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Permitir instalaciones fuera de las tiendas oficiales aumenta el riesgo de cargar programas maliciosos."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 6",
+    "answer_text": "Que puede ser peligroso",
+    "explanation": "Permitir instalaciones fuera de las tiendas oficiales aumenta el riesgo de cargar programas maliciosos.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-18",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 18,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "¿Qué debe pasar con el antivirus o herramienta de seguridad del dispositivo?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Debe estar desactivado para que vaya más rápido",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La protección antimalware ayuda más cuando está correctamente configurada y al día frente a nuevas amenazas."
+      },
+      {
+        "valor": "B",
+        "texto": "Debe estar activo y actualizado",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La protección antimalware ayuda más cuando está correctamente configurada y al día frente a nuevas amenazas."
+      },
+      {
+        "valor": "C",
+        "texto": "Solo sirve en ordenadores antiguos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La protección antimalware ayuda más cuando está correctamente configurada y al día frente a nuevas amenazas."
+      },
+      {
+        "valor": "D",
+        "texto": "Se usa una vez al año",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La protección antimalware ayuda más cuando está correctamente configurada y al día frente a nuevas amenazas."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 6",
+    "answer_text": "Debe estar activo y actualizado",
+    "explanation": "La protección antimalware ayuda más cuando está correctamente configurada y al día frente a nuevas amenazas.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-19",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 19,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Para proteger mejor tus redes sociales, lo ideal es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Misma contraseña en todas y sin más medidas",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Contraseñas diferentes y una segunda verificación reducen el riesgo de secuestro de cuentas."
+      },
+      {
+        "valor": "B",
+        "texto": "Contraseña distinta y autenticación de dos factores",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Contraseñas diferentes y una segunda verificación reducen el riesgo de secuestro de cuentas."
+      },
+      {
+        "valor": "C",
+        "texto": "Solo cambiar la foto de perfil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Contraseñas diferentes y una segunda verificación reducen el riesgo de secuestro de cuentas."
+      },
+      {
+        "valor": "D",
+        "texto": "Cerrar la app una vez al mes",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Contraseñas diferentes y una segunda verificación reducen el riesgo de secuestro de cuentas."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 7",
+    "answer_text": "Contraseña distinta y autenticación de dos factores",
+    "explanation": "Contraseñas diferentes y una segunda verificación reducen el riesgo de secuestro de cuentas.",
+    "editable": true
+  },
+  {
+    "id": "dojo-passwords-manual-20",
+    "branch": "dojo-passwords",
+    "dojo_id": "dojo-passwords",
+    "order_num": 20,
+    "iso_control": "ISO 27001 A.5.17",
+    "question_text": "Si notas que alguien ha entrado en tu cuenta de red social, la mejor secuencia es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "No decir nada",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Esa es la reacción recomendada para cortar el abuso, proteger a tus contactos y dejar constancia del caso."
+      },
+      {
+        "valor": "B",
+        "texto": "Cambiar la contraseña, avisar a tus contactos, notificar a la plataforma y denunciar",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Esa es la reacción recomendada para cortar el abuso, proteger a tus contactos y dejar constancia del caso."
+      },
+      {
+        "valor": "C",
+        "texto": "Abrir otra cuenta y olvidarte",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Esa es la reacción recomendada para cortar el abuso, proteger a tus contactos y dejar constancia del caso."
+      },
+      {
+        "valor": "D",
+        "texto": "Responder al atacante",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Esa es la reacción recomendada para cortar el abuso, proteger a tus contactos y dejar constancia del caso."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata final",
+    "answer_text": "Cambiar la contraseña, avisar a tus contactos, notificar a la plataforma y denunciar",
+    "explanation": "Esa es la reacción recomendada para cortar el abuso, proteger a tus contactos y dejar constancia del caso.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-01",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 1,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Qué es el malware?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Un cargador del móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Malware es el nombre general de los programas creados para infiltrarse, robar datos o dañar equipos y redes."
+      },
+      {
+        "valor": "B",
+        "texto": "Un programa malicioso que busca dañar, espiar o robar",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Malware es el nombre general de los programas creados para infiltrarse, robar datos o dañar equipos y redes."
+      },
+      {
+        "valor": "C",
+        "texto": "Un modo de ahorro de energía",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Malware es el nombre general de los programas creados para infiltrarse, robar datos o dañar equipos y redes."
+      },
+      {
+        "valor": "D",
+        "texto": "Una copia de seguridad",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Malware es el nombre general de los programas creados para infiltrarse, robar datos o dañar equipos y redes."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "Un programa malicioso que busca dañar, espiar o robar",
+    "explanation": "Malware es el nombre general de los programas creados para infiltrarse, robar datos o dañar equipos y redes.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-02",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 2,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Qué hace normalmente el ransomware?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Mejora la velocidad del equipo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El ransomware cifra la información o impide el acceso a ella y luego exige un rescate."
+      },
+      {
+        "valor": "B",
+        "texto": "Ordena tus carpetas",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El ransomware cifra la información o impide el acceso a ella y luego exige un rescate."
+      },
+      {
+        "valor": "C",
+        "texto": "Bloquea o cifra archivos y pide dinero",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "El ransomware cifra la información o impide el acceso a ella y luego exige un rescate."
+      },
+      {
+        "valor": "D",
+        "texto": "Cambia el idioma del sistema",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El ransomware cifra la información o impide el acceso a ella y luego exige un rescate."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "Bloquea o cifra archivos y pide dinero",
+    "explanation": "El ransomware cifra la información o impide el acceso a ella y luego exige un rescate.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-03",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 3,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Cuál es una vía muy frecuente de entrada del ransomware?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Un correo fraudulento con enlace o archivo",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Muchos ataques empiezan con correos falsos que llevan adjuntos o enlaces maliciosos."
+      },
+      {
+        "valor": "B",
+        "texto": "Cargar bien la batería",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Muchos ataques empiezan con correos falsos que llevan adjuntos o enlaces maliciosos."
+      },
+      {
+        "valor": "C",
+        "texto": "Borrar fotos antiguas",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Muchos ataques empiezan con correos falsos que llevan adjuntos o enlaces maliciosos."
+      },
+      {
+        "valor": "D",
+        "texto": "Apagar el Wi‑Fi de casa",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Muchos ataques empiezan con correos falsos que llevan adjuntos o enlaces maliciosos."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 1",
+    "answer_text": "Un correo fraudulento con enlace o archivo",
+    "explanation": "Muchos ataques empiezan con correos falsos que llevan adjuntos o enlaces maliciosos.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-04",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 4,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Descargar programas pirateados o desde páginas poco confiables:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Reduce el riesgo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las descargas no confiables son un canal habitual para introducir software malicioso en el dispositivo."
+      },
+      {
+        "valor": "B",
+        "texto": "Es una buena práctica",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las descargas no confiables son un canal habitual para introducir software malicioso en el dispositivo."
+      },
+      {
+        "valor": "C",
+        "texto": "Puede exponerte a malware",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Las descargas no confiables son un canal habitual para introducir software malicioso en el dispositivo."
+      },
+      {
+        "valor": "D",
+        "texto": "Solo afecta a empresas",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las descargas no confiables son un canal habitual para introducir software malicioso en el dispositivo."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 1,
+    "kata_label": "Kata 2",
+    "answer_text": "Puede exponerte a malware",
+    "explanation": "Las descargas no confiables son un canal habitual para introducir software malicioso en el dispositivo.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-05",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 5,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Si encuentras una memoria externa desconocida en un lugar público, ¿qué conviene hacer?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Conectarla para ver de quién es",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los dispositivos extraíbles pueden usarse para propagar ransomware u otro malware."
+      },
+      {
+        "valor": "B",
+        "texto": "No conectarla a tus equipos",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los dispositivos extraíbles pueden usarse para propagar ransomware u otro malware."
+      },
+      {
+        "valor": "C",
+        "texto": "Pasársela a un amigo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los dispositivos extraíbles pueden usarse para propagar ransomware u otro malware."
+      },
+      {
+        "valor": "D",
+        "texto": "Conectarla solo cinco minutos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los dispositivos extraíbles pueden usarse para propagar ransomware u otro malware."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 2",
+    "answer_text": "No conectarla a tus equipos",
+    "explanation": "Los dispositivos extraíbles pueden usarse para propagar ransomware u otro malware.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-06",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 6,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Puede una red insegura facilitar la propagación de ransomware?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "No, nunca",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "EcuCERT advierte que las conexiones no seguras pueden favorecer la propagación del ransomware."
+      },
+      {
+        "valor": "B",
+        "texto": "Sí",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "EcuCERT advierte que las conexiones no seguras pueden favorecer la propagación del ransomware."
+      },
+      {
+        "valor": "C",
+        "texto": "Solo si el equipo es nuevo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "EcuCERT advierte que las conexiones no seguras pueden favorecer la propagación del ransomware."
+      },
+      {
+        "valor": "D",
+        "texto": "Solo con teléfonos muy antiguos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "EcuCERT advierte que las conexiones no seguras pueden favorecer la propagación del ransomware."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 2",
+    "answer_text": "Sí",
+    "explanation": "EcuCERT advierte que las conexiones no seguras pueden favorecer la propagación del ransomware.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-07",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 7,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Si ves una nota de rescate o archivos bloqueados en un equipo de trabajo o personal, lo primero es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Seguir usándolo normalmente",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Aislar el sistema ayuda a frenar la propagación a otros equipos o cuentas conectadas."
+      },
+      {
+        "valor": "B",
+        "texto": "Aislarlo de la red",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Aislar el sistema ayuda a frenar la propagación a otros equipos o cuentas conectadas."
+      },
+      {
+        "valor": "C",
+        "texto": "Pagar enseguida",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Aislar el sistema ayuda a frenar la propagación a otros equipos o cuentas conectadas."
+      },
+      {
+        "valor": "D",
+        "texto": "Publicarlo en redes sociales",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Aislar el sistema ayuda a frenar la propagación a otros equipos o cuentas conectadas."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 3",
+    "answer_text": "Aislarlo de la red",
+    "explanation": "Aislar el sistema ayuda a frenar la propagación a otros equipos o cuentas conectadas.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-08",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 8,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Es recomendable pagar el rescate porque “así recuperas antes los archivos”?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Sí, siempre",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "No hay garantía de recuperación y, además, pagar incentiva a los delincuentes."
+      },
+      {
+        "valor": "B",
+        "texto": "Sí, si es poca cantidad",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "No hay garantía de recuperación y, además, pagar incentiva a los delincuentes."
+      },
+      {
+        "valor": "C",
+        "texto": "No",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "No hay garantía de recuperación y, además, pagar incentiva a los delincuentes."
+      },
+      {
+        "valor": "D",
+        "texto": "Solo si lo piden por llamada",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "No hay garantía de recuperación y, además, pagar incentiva a los delincuentes."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 2,
+    "kata_label": "Kata 3",
+    "answer_text": "No",
+    "explanation": "No hay garantía de recuperación y, además, pagar incentiva a los delincuentes.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-09",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 9,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Si sospechas ransomware, ¿qué dice EcuCERT sobre apagar el equipo de inmediato?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Que siempre hay que apagarlo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "EcuCERT recomienda no apagarlo de forma precipitada para no perder evidencias temporales útiles para la investigación."
+      },
+      {
+        "valor": "B",
+        "texto": "Que conviene aislarlo y documentarlo antes de apagarlo",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "EcuCERT recomienda no apagarlo de forma precipitada para no perder evidencias temporales útiles para la investigación."
+      },
+      {
+        "valor": "C",
+        "texto": "Que hay que reiniciarlo varias veces",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "EcuCERT recomienda no apagarlo de forma precipitada para no perder evidencias temporales útiles para la investigación."
+      },
+      {
+        "valor": "D",
+        "texto": "Que da igual",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "EcuCERT recomienda no apagarlo de forma precipitada para no perder evidencias temporales útiles para la investigación."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 3",
+    "answer_text": "Que conviene aislarlo y documentarlo antes de apagarlo",
+    "explanation": "EcuCERT recomienda no apagarlo de forma precipitada para no perder evidencias temporales útiles para la investigación.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-10",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 10,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Qué ayuda mucho a recuperarte de un ransomware sin depender del delincuente?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Tener varias fotos del equipo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las copias de seguridad frecuentes y fuera del equipo afectado mejoran mucho la capacidad de recuperación."
+      },
+      {
+        "valor": "B",
+        "texto": "Tener copias de seguridad recientes y separadas",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Las copias de seguridad frecuentes y fuera del equipo afectado mejoran mucho la capacidad de recuperación."
+      },
+      {
+        "valor": "C",
+        "texto": "Cambiar el tono del móvil",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las copias de seguridad frecuentes y fuera del equipo afectado mejoran mucho la capacidad de recuperación."
+      },
+      {
+        "valor": "D",
+        "texto": "Usar siempre el mismo usuario",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Las copias de seguridad frecuentes y fuera del equipo afectado mejoran mucho la capacidad de recuperación."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Tener copias de seguridad recientes y separadas",
+    "explanation": "Las copias de seguridad frecuentes y fuera del equipo afectado mejoran mucho la capacidad de recuperación.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-11",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 11,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Qué es una copia de seguridad?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Un fondo de pantalla nuevo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Una copia de seguridad sirve para recuperar la información si el dispositivo se pierde, falla o sufre un ataque."
+      },
+      {
+        "valor": "B",
+        "texto": "Una copia de archivos importantes guardada en otro lugar",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Una copia de seguridad sirve para recuperar la información si el dispositivo se pierde, falla o sufre un ataque."
+      },
+      {
+        "valor": "C",
+        "texto": "Un antivirus",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Una copia de seguridad sirve para recuperar la información si el dispositivo se pierde, falla o sufre un ataque."
+      },
+      {
+        "valor": "D",
+        "texto": "Un reinicio del teléfono",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Una copia de seguridad sirve para recuperar la información si el dispositivo se pierde, falla o sufre un ataque."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "Una copia de archivos importantes guardada en otro lugar",
+    "explanation": "Una copia de seguridad sirve para recuperar la información si el dispositivo se pierde, falla o sufre un ataque.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-12",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 12,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Dónde debería guardarse una copia de seguridad para que sea útil?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Solo en la memoria del mismo equipo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Debe estar separada del dispositivo original para que realmente te ayude si este falla o queda cifrado."
+      },
+      {
+        "valor": "B",
+        "texto": "En otro lugar, como disco externo o nube",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Debe estar separada del dispositivo original para que realmente te ayude si este falla o queda cifrado."
+      },
+      {
+        "valor": "C",
+        "texto": "En una nota pegada al monitor",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Debe estar separada del dispositivo original para que realmente te ayude si este falla o queda cifrado."
+      },
+      {
+        "valor": "D",
+        "texto": "Solo en una foto",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Debe estar separada del dispositivo original para que realmente te ayude si este falla o queda cifrado."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 3,
+    "kata_label": "Kata 4",
+    "answer_text": "En otro lugar, como disco externo o nube",
+    "explanation": "Debe estar separada del dispositivo original para que realmente te ayude si este falla o queda cifrado.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-13",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 13,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Con qué criterio conviene hacer copias de seguridad?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Solo una vez en la vida",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Lo recomendable es hacerlas con frecuencia y comprobar periódicamente que se pueden usar."
+      },
+      {
+        "valor": "B",
+        "texto": "Frecuentemente y revisando que funcionen",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Lo recomendable es hacerlas con frecuencia y comprobar periódicamente que se pueden usar."
+      },
+      {
+        "valor": "C",
+        "texto": "Solo después de una estafa",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Lo recomendable es hacerlas con frecuencia y comprobar periódicamente que se pueden usar."
+      },
+      {
+        "valor": "D",
+        "texto": "Solo si el móvil es nuevo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Lo recomendable es hacerlas con frecuencia y comprobar periódicamente que se pueden usar."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Frecuentemente y revisando que funcionen",
+    "explanation": "Lo recomendable es hacerlas con frecuencia y comprobar periódicamente que se pueden usar.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-14",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 14,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Por qué no conviene retrasar las actualizaciones del sistema y los programas?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Porque quitan espacio sin motivo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los parches de seguridad corrigen vulnerabilidades que los atacantes suelen aprovechar en software desactualizado."
+      },
+      {
+        "valor": "B",
+        "texto": "Porque pueden cerrar fallos de seguridad conocidos",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Los parches de seguridad corrigen vulnerabilidades que los atacantes suelen aprovechar en software desactualizado."
+      },
+      {
+        "valor": "C",
+        "texto": "Porque borran las fotos",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los parches de seguridad corrigen vulnerabilidades que los atacantes suelen aprovechar en software desactualizado."
+      },
+      {
+        "valor": "D",
+        "texto": "Porque cambian el idioma",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Los parches de seguridad corrigen vulnerabilidades que los atacantes suelen aprovechar en software desactualizado."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Porque pueden cerrar fallos de seguridad conocidos",
+    "explanation": "Los parches de seguridad corrigen vulnerabilidades que los atacantes suelen aprovechar en software desactualizado.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-15",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 15,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "En el móvil, si es posible, ¿qué ajuste de seguridad es útil dejar activado?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Actualizaciones automáticas de aplicaciones",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Activar las actualizaciones automáticas ayuda a no quedarse atrás frente a errores ya corregidos."
+      },
+      {
+        "valor": "B",
+        "texto": "Sonido al máximo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Activar las actualizaciones automáticas ayuda a no quedarse atrás frente a errores ya corregidos."
+      },
+      {
+        "valor": "C",
+        "texto": "Luz de pantalla permanente",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Activar las actualizaciones automáticas ayuda a no quedarse atrás frente a errores ya corregidos."
+      },
+      {
+        "valor": "D",
+        "texto": "Modo avión semanal",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Activar las actualizaciones automáticas ayuda a no quedarse atrás frente a errores ya corregidos."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 5",
+    "answer_text": "Actualizaciones automáticas de aplicaciones",
+    "explanation": "Activar las actualizaciones automáticas ayuda a no quedarse atrás frente a errores ya corregidos.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-16",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 16,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Antes de un cambio importante, reinicio o restauración del teléfono, lo más prudente es:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Quitar la funda",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Tener respaldo previo evita perder información si algo sale mal o si necesitas borrar y recuperar el dispositivo."
+      },
+      {
+        "valor": "B",
+        "texto": "Hacer una copia de seguridad",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Tener respaldo previo evita perder información si algo sale mal o si necesitas borrar y recuperar el dispositivo."
+      },
+      {
+        "valor": "C",
+        "texto": "Bajar el volumen",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Tener respaldo previo evita perder información si algo sale mal o si necesitas borrar y recuperar el dispositivo."
+      },
+      {
+        "valor": "D",
+        "texto": "Cambiar el fondo",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Tener respaldo previo evita perder información si algo sale mal o si necesitas borrar y recuperar el dispositivo."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 4,
+    "kata_label": "Kata 6",
+    "answer_text": "Hacer una copia de seguridad",
+    "explanation": "Tener respaldo previo evita perder información si algo sale mal o si necesitas borrar y recuperar el dispositivo.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-17",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 17,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "¿Cuál de estas puede ser una señal de infección?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Que el equipo vaya más lento sin motivo",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "La lentitud anormal figura entre los síntomas frecuentes de un equipo comprometido."
+      },
+      {
+        "valor": "B",
+        "texto": "Que la batería esté cargada",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La lentitud anormal figura entre los síntomas frecuentes de un equipo comprometido."
+      },
+      {
+        "valor": "C",
+        "texto": "Que la fecha sea correcta",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La lentitud anormal figura entre los síntomas frecuentes de un equipo comprometido."
+      },
+      {
+        "valor": "D",
+        "texto": "Que el ratón funcione",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "La lentitud anormal figura entre los síntomas frecuentes de un equipo comprometido."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 6",
+    "answer_text": "Que el equipo vaya más lento sin motivo",
+    "explanation": "La lentitud anormal figura entre los síntomas frecuentes de un equipo comprometido.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-18",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 18,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Si tus contactos reciben mensajes o correos tuyos que tú no enviaste, eso puede indicar:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Que la conexión va bien",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El envío no autorizado de mensajes es una de las señales clásicas de compromiso."
+      },
+      {
+        "valor": "B",
+        "texto": "Que una cuenta o un equipo pudo verse comprometido",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "El envío no autorizado de mensajes es una de las señales clásicas de compromiso."
+      },
+      {
+        "valor": "C",
+        "texto": "Que cambió el teclado",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El envío no autorizado de mensajes es una de las señales clásicas de compromiso."
+      },
+      {
+        "valor": "D",
+        "texto": "Que falta memoria",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "El envío no autorizado de mensajes es una de las señales clásicas de compromiso."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 6",
+    "answer_text": "Que una cuenta o un equipo pudo verse comprometido",
+    "explanation": "El envío no autorizado de mensajes es una de las señales clásicas de compromiso.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-19",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 19,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Si ves archivos bloqueados y una nota de rescate, lo más probable es que estés ante:",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Una actualización normal",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Ese patrón —archivos inaccesibles y exigencia de pago— es típico del ransomware."
+      },
+      {
+        "valor": "B",
+        "texto": "Un problema de batería",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Ese patrón —archivos inaccesibles y exigencia de pago— es típico del ransomware."
+      },
+      {
+        "valor": "C",
+        "texto": "Un ransomware",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Ese patrón —archivos inaccesibles y exigencia de pago— es típico del ransomware."
+      },
+      {
+        "valor": "D",
+        "texto": "Una copia de seguridad",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Ese patrón —archivos inaccesibles y exigencia de pago— es típico del ransomware."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata 7",
+    "answer_text": "Un ransomware",
+    "explanation": "Ese patrón —archivos inaccesibles y exigencia de pago— es típico del ransomware.",
+    "editable": true
+  },
+  {
+    "id": "dojo-backups-manual-20",
+    "branch": "dojo-backups",
+    "dojo_id": "dojo-backups",
+    "order_num": 20,
+    "iso_control": "ISO 27001 A.8.13",
+    "question_text": "Si ya diste datos de acceso en una página falsa, ¿desde dónde deberías cambiar la contraseña?",
+    "question_type": "escenario",
+    "options": [
+      {
+        "valor": "A",
+        "texto": "Desde el mismo sitio sospechoso",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Lo más seguro es cortar la exposición y cambiar credenciales desde un equipo o conexión de confianza."
+      },
+      {
+        "valor": "B",
+        "texto": "Desde otro dispositivo o entorno seguro",
+        "correcta": true,
+        "puntaje_riesgo": 0,
+        "explicacion_para_usuario": "Lo más seguro es cortar la exposición y cambiar credenciales desde un equipo o conexión de confianza."
+      },
+      {
+        "valor": "C",
+        "texto": "Desde un mensaje reenviado",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Lo más seguro es cortar la exposición y cambiar credenciales desde un equipo o conexión de confianza."
+      },
+      {
+        "valor": "D",
+        "texto": "Desde una red pública cualquiera",
+        "correcta": false,
+        "puntaje_riesgo": 4,
+        "explicacion_para_usuario": "Lo más seguro es cortar la exposición y cambiar credenciales desde un equipo o conexión de confianza."
+      }
+    ],
+    "active": true,
+    "source_type": "manual",
+    "audit_status": "approved",
+    "difficulty": 5,
+    "kata_label": "Kata final",
+    "answer_text": "Desde otro dispositivo o entorno seguro",
+    "explanation": "Lo más seguro es cortar la exposición y cambiar credenciales desde un equipo o conexión de confianza.",
+    "editable": true
+  }
+]

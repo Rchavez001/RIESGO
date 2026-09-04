@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ciber Dojo Central Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" class="central-app">
+      <aside class="rail">
+        <div class="brand">
+          <span class="brand-mark">CD</span>
+          <div>
+            <strong>Ciber Dojo</strong>
+            <em>Central Admin</em>
+          </div>
+        </div>
+
+        <!-- Forgot password modal -->
+        <div id="forgotPasswordModal" class="modal hidden">
+          <div class="modal-content">
+            <h3>Recuperar contraseña</h3>
+            <p>Ingresa el correo asociado para recibir instrucciones.</p>
+            <input id="forgotEmail" type="email" placeholder="correo@empresa.com" />
+            <div class="modal-actions">
+              <button id="forgotSend" class="btn primary">Enviar</button>
+              <button id="forgotCancel" class="btn secondary">Cancelar</button>
+            </div>
+            <div id="forgotStatus" class="muted"></div>
+          </div>
+        </div>
+
+        <div class="admin-sensei">
+          <img src="./cyber-sensei.png" alt="Sensei digital de Ciber Dojo" />
+          <span>Sensei del Dojo</span>
+        </div>
+
+        <nav class="nav" aria-label="Secciones">
+          <button class="nav-item active" data-panel="overview">Resumen</button>
+          <button class="nav-item" data-panel="dojos">Dojos y progreso</button>
+          <button class="nav-item" data-panel="questions">Preguntas</button>
+          <button class="nav-item" data-panel="ai">IA y auditoria</button>
+          <button class="nav-item" data-panel="newsAgent">Agente noticias</button>
+          <button class="nav-item" data-panel="newsAlerts">Alertas IA</button>
+          <button class="nav-item" data-panel="senseiStats">Sensei IA</button>
+          <button class="nav-item" data-panel="threatIntel">Inteligencia de Amenazas</button>
+          <button class="nav-item" data-panel="openQuestions">Preguntas abiertas</button>
+          <button class="nav-item" data-panel="users">Usuarios</button>
+          <button class="nav-item" data-panel="ads">Propaganda</button>
+        </nav>
+
+        <div class="rail-card">
+          <span class="label">Ambiente</span>
+          <strong>Cloud Run</strong>
+          <p>Aplicacion separada para configurar el producto Ciber Dojo.</p>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <span class="eyebrow">CONSOLA CENTRAL DE CONFIGURACION</span>
+              <h1>Administrador de Ciber Dojo</h1>
+            <p>Gestiona dojos, bancos de preguntas, reglas de avance, inteligencia artificial, revision de respuestas, usuarios y propaganda.</p>
+          </div>
+          <div class="top-actions">
+            <button id="showWisdom" class="btn secondary">Frase dojo</button>
+            <button id="forgotPassword" class="btn secondary">¿Olvidó contraseña?</button>
+            <button id="saveAll" class="btn secondary">Guardar borrador</button>
+            <button id="publishAll" class="btn primary">Publicar configuracion</button>
+          </div>
+        </header>
+
+        <section id="overview" class="panel active">
+          <div class="metric-grid">
+            <article class="metric">
+              <span>Dojos activos</span>
+              <strong id="metricDojos">0</strong>
+            </article>
+            <article class="metric">
+              <span>Preguntas objetivo</span>
+              <strong id="metricQuestions">0</strong>
+            </article>
+            <article class="metric">
+              <span>Usuarios activos</span>
+              <strong id="metricUsers">0</strong>
+            </article>
+            <article class="metric">
+              <span>Campanas activas</span>
+              <strong id="metricAds">0</strong>
+            </article>
+          </div>
+
+          <div class="split">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <span class="label">REGLA DE PROGRESO</span>
+                  <h2>Cinturones y katas</h2>
+                </div>
+              </div>
+              <div id="progressionPreview" class="progression-preview"></div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <span class="label">FLUJO DE INTELIGENCIA ARTIFICIAL</span>
+                  <h2>Orden de consulta y revision</h2>
+                </div>
+              </div>
+              <div class="flow">
+                <div>IA 1</div>
+                <span></span>
+                <div>IA 2</div>
+                <span></span>
+                <div>IA 3</div>
+                <span></span>
+                <div>Revisor</div>
+              </div>
+              <p class="muted">Si una inteligencia artificial demora demasiado, se consulta la siguiente. La revision puede mejorar la pregunta y la respuesta.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="dojos" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">N DOJOS CONFIGURABLES</span>
+              <h2>Dojos tematicos</h2>
+            </div>
+            <button id="addDojo" class="btn primary">Agregar dojo</button>
+          </div>
+
+          <div class="dojo-layout">
+            <div id="dojoList" class="dojo-list"></div>
+            <article class="card editor">
+              <div class="card-head">
+                <div>
+                  <span class="label">EDITOR</span>
+                  <h2 id="dojoEditorTitle">Selecciona un dojo</h2>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <label>
+                  Nombre del dojo
+                  <input id="dojoName" type="text" />
+                </label>
+                <label>
+                  Tema
+                  <input id="dojoTheme" type="text" />
+                </label>
+                <label>
+                  Control ISO principal
+                  <input id="dojoIso" type="text" />
+                </label>
+                <label>
+                  Estado
+                  <select id="dojoStatus">
+                    <option value="activo">Activo</option>
+                    <option value="borrador">Borrador</option>
+                    <option value="pausado">Pausado</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="rule-grid">
+                <div>
+                  <strong>20</strong>
+                  <span>preguntas manuales</span>
+                </div>
+                <div>
+                  <strong>30</strong>
+                  <span>preguntas IA intercaladas</span>
+                </div>
+                <div>
+                  <strong>50</strong>
+                  <span>total por dojo</span>
+                </div>
+              </div>
+
+              <h3>Regla de avance por katas</h3>
+              <div id="kataRules" class="kata-rules"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="questions" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">BANCO DE PREGUNTAS</span>
+              <h2>20 manuales + 30 generadas por IA</h2>
+              <p class="muted">Dojo seleccionado: <strong id="questionDojoName">-</strong></p>
+            </div>
+            <div class="toolbar-actions">
+              <button id="saveQuestions" class="btn secondary">Guardar preguntas</button>
+              <button id="generateQuestionPlan" class="btn primary">Generar plan 50 preguntas</button>
+            </div>
+          </div>
+
+          <div class="question-grid">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <span class="label">MANUALES</span>
+                  <h2>20 ingresadas por equipo</h2>
+                </div>
+              </div>
+              <div id="manualQuestions" class="question-list"></div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <span class="label">IA</span>
+                  <h2>30 generadas y auditadas</h2>
+                </div>
+              </div>
+              <div id="aiQuestions" class="question-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="newsAgent" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">AGENTE IA DE NOTICIAS</span>
+              <h2>Fuentes, horario y katas generadas</h2>
+              <p class="muted">Ultima ejecucion: <strong id="newsAgentLastRun">Pendiente</strong></p>
+            </div>
+            <div class="toolbar-actions">
+              <button id="saveNewsAgent" class="btn secondary">Guardar agente</button>
+              <button id="runNewsAgent" class="btn primary">Ejecutar ahora</button>
+            </div>
+          </div>
+
+          <div class="split">
+            <article class="card">
+              <h2>Configuracion</h2>
+              <div class="form-grid compact">
+                <label class="check-row">
+                  <input id="newsAgentActive" type="checkbox" />
+                  Agente activo
+                </label>
+                <label>
+                  Hora de activacion
+                  <input id="newsAgentTime" type="time" />
+                </label>
+              </div>
+              <label>
+                Paginas principales donde buscar noticias
+                <textarea id="newsAgentUrls" rows="7"></textarea>
+              </label>
+              <label>
+                Instrucciones para el agente de inteligencia artificial
+                <textarea id="newsAgentPrompt" rows="5"></textarea>
+              </label>
+            </article>
+
+            <article class="card">
+              <h2>Simulaciones KATAS generadas</h2>
+              <div id="generatedKatas" class="generated-katas"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="newsAlerts" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">ALERTAS DE SEGURIDAD IA</span>
+              <h2>Preguntas y alertas generadas con fecha y hora</h2>
+              <p class="muted">Última revisión: <strong id="newsAlertsLastRun">Pendiente</strong></p>
+            </div>
+            <div class="toolbar-actions">
+              <button id="forceNewsReview" class="btn primary">Forzar revisión IA</button>
+            </div>
+          </div>
+
+          <div class="split">
+            <article class="card">
+              <h2>Historial de alertas</h2>
+              <div id="newsAlertList" class="alert-list"></div>
+            </article>
+            <article class="card">
+              <h2>Preguntas IA generadas</h2>
+              <div id="newsQuestionList" class="question-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="ai" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">CONFIGURACION DE IA</span>
+              <h2>Orden de consulta, tiempos y revision</h2>
+            </div>
+            <button id="testAiFlow" class="btn secondary">Probar algoritmo</button>
+          </div>
+
+          <div class="ai-layout">
+            <article class="card">
+              <h2>Cadena de consulta</h2>
+              <div id="aiProviders" class="ai-provider-list"></div>
+              <button id="addAiProvider" class="btn secondary full">Agregar IA</button>
+            </article>
+
+            <article class="card">
+              <h2>Instrucciones de la inteligencia artificial</h2>
+              <label>
+                Instrucciones para generar preguntas
+                <textarea id="generatorPrompt" rows="8"></textarea>
+              </label>
+              <label>
+                Instrucciones para revisar y mejorar preguntas
+                <textarea id="auditorPrompt" rows="8"></textarea>
+              </label>
+            </article>
+          </div>
+        </section>
+
+        <section id="senseiStats" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">CONSULTAS DEL SENSEI IA</span>
+              <h2>Utilidad, sentimiento y temas consultados</h2>
+            </div>
+            <button id="refreshSenseiStats" class="btn secondary">Actualizar</button>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric">
+              <span>Consultas</span>
+              <strong id="senseiMetricTotal">0</strong>
+            </article>
+            <article class="metric">
+              <span>Fuera de alcance</span>
+              <strong id="senseiMetricOut">0</strong>
+            </article>
+            <article class="metric">
+              <span>Ayudo</span>
+              <strong id="senseiMetricHelpful">0</strong>
+            </article>
+            <article class="metric">
+              <span>Sentimiento positivo</span>
+              <strong id="senseiMetricPositive">0</strong>
+            </article>
+          </div>
+
+          <div class="split">
+            <article class="card">
+              <h2>Ultimas consultas</h2>
+              <div id="senseiConsultationList" class="question-list"></div>
+            </article>
+            <article class="card">
+              <h2>Resumen diario</h2>
+              <div id="senseiDailyStats" class="topic-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="threatIntel" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">T-POT / HONEYPOT / SIEM</span>
+              <h2>Inteligencia de Amenazas</h2>
+              <p>Vista ejecutiva para entender amenazas, sensores, IOCs y analisis defensivo auditado.</p>
+            </div>
+          </div>
+
+          <div class="threat-hero">
+            <strong>Operacion guiada para principiantes</strong>
+            <span>Empieza en el Dashboard, revisa Alertas y usa Análisis IA solo cuando necesites una interpretacion auditada.</span>
+          </div>
+
+          <nav class="threat-nav" aria-label="Navegacion de inteligencia de amenazas">
+            <button class="active" data-threat-view="dashboard">Dashboard</button>
+            <button data-threat-view="alerts">Alertas</button>
+            <button data-threat-view="ai">Analisis IA</button>
+            <button data-threat-view="reports">Reportes</button>
+            <button data-threat-view="config">Configuracion</button>
+          </nav>
+
+          <div id="tpotStatus" class="status-strip">Sin consultar.</div>
+          <div id="threatDrilldown" class="threat-drilldown hidden"></div>
+          <div id="tpotContent" class="tpot-content"></div>
+        </section>
+
+        <section id="openQuestions" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">PREGUNTAS ABIERTAS</span>
+              <h2>Validacion de tema y respuesta con IA</h2>
+            </div>
+            <button id="simulateOpenQuestion" class="btn primary">Simular pregunta</button>
+          </div>
+
+          <div class="split">
+            <article class="card">
+              <h2>Regla de decision</h2>
+              <div class="decision-list">
+                <div>1. Estudiante envia pregunta abierta.</div>
+                <div>2. IA clasifica si es tema de ciberseguridad.</div>
+                <div>3. Si aplica, responde usando la inteligencia artificial disponible.</div>
+                <div>4. Otra revision valida y puede mejorar la respuesta.</div>
+                <div>5. Se registra tema, tipo e inquietud para estadistica.</div>
+              </div>
+            </article>
+            <article class="card">
+              <h2>Temas detectados</h2>
+              <div id="topicStats" class="topic-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="users" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">USUARIOS</span>
+              <h2>Estadistica y bajas</h2>
+            </div>
+            <button id="bulkSuspend" class="btn danger">Dar de baja seleccionados</button>
+          </div>
+          <div class="card">
+            <table class="user-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Usuario</th>
+                  <th>Dojo</th>
+                  <th>Avance</th>
+                  <th>Preguntas</th>
+                  <th>Inquietud principal</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="ads" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">PROPAGANDA Y VENTANAS EMERGENTES</span>
+              <h2>Campanas configurables</h2>
+            </div>
+            <button id="addCampaign" class="btn primary">Agregar campana</button>
+          </div>
+
+          <div class="ads-layout">
+            <div id="campaignList" class="campaign-list"></div>
+            <article class="card">
+              <h2>Editor de propaganda</h2>
+              <div class="form-grid">
+                <label>
+                  Nombre
+                  <input id="adName" type="text" />
+                </label>
+                <label>
+                  Momento
+                  <select id="adMoment">
+                    <option value="inicio">Al inicio</option>
+                    <option value="sesion">En cualquier momento de la sesion</option>
+                    <option value="salida">Al salir</option>
+                  </select>
+                </label>
+                <label>
+                  Duracion en segundos
+                  <input id="adDuration" type="number" />
+                </label>
+                <label>
+                  Vigencia
+                  <select id="adValidity">
+                    <option value="sesiones">Por X sesiones</option>
+                    <option value="meses">Por X meses</option>
+                    <option value="indefinido">Indefinido</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                Mensaje
+                <textarea id="adMessage" rows="5"></textarea>
+              </label>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div id="wisdomModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="wisdomTitle">
+      <div class="modal-backdrop"></div>
+      <article class="modal-card">
+        <div class="card-head">
+          <div>
+            <span id="wisdomSource" class="label">Sabiduria oriental</span>
+            <h2 id="wisdomTitle">Aplicacion al Ciber Dojo</h2>
+          </div>
+          <button id="closeWisdom" class="btn secondary">Cerrar</button>
+        </div>
+        <blockquote id="wisdomQuote"></blockquote>
+        <p id="wisdomCyber"></p>
+      </article>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
