@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Loader, Shield } from 'lucide-react'
 import { KanjiBackground, NeonButton, ScanlineOverlay } from '../components/CyberBushido'
@@ -308,7 +309,7 @@ export function LoginScreen() {
           </NeonButton>
         </form>
 
-        {showDataConsent && (
+        {showDataConsent && createPortal(
           <div className="consent-modal" role="dialog" aria-modal="true" aria-labelledby="consent-title">
             <div className="consent-backdrop" />
             <div className="consent-card glass-panel">
@@ -333,7 +334,8 @@ export function LoginScreen() {
                 </NeonButton>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </ScanlineOverlay>
