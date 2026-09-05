@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CheckCircle2, Loader, XCircle } from 'lucide-react'
-import { BeltAwardCelebration, BeltBadge, NeonButton, SectionHeader } from '../components/CyberBushido'
+import { BeltAwardCelebration, BeltBadge, KataRewardVideo, NeonButton, SectionHeader } from '../components/CyberBushido'
 import { beltPath, BeltLevel } from '../data/ciberDojo'
 import { useAuth } from '../contexts/AuthContext'
 import { useDojoStore } from '../store/dojoStore'
@@ -51,6 +51,7 @@ export function KataExamPage() {
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([])
   const [saving, setSaving] = useState(false)
   const [showCelebrate, setShowCelebrate] = useState(false)
+  const [pendingReward, setPendingReward] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -126,22 +127,14 @@ export function KataExamPage() {
 
       if (completeError) throw completeError
 
+      setSaving(false)
+
       if (data?.passed) {
         if (refreshProfile) await refreshProfile()
         const { setBelt } = useDojoStore.getState()
         setBelt(awardedBelt as any)
         setShowCelebrate(true)
         try { playCelebrateSound() } catch (e) {}
-        await new Promise((r) => window.setTimeout(r, 2800))
-      }
-
-      setSaving(false)
-      if (data?.passed) {
-        // hide celebration and navigate after a short pause
-        window.setTimeout(() => {
-          setShowCelebrate(false)
-          navigate('/dojos')
-        }, 900)
       } else {
         navigate('/dojos')
       }
@@ -154,6 +147,11 @@ export function KataExamPage() {
 
   function continueAfterAward() {
     setShowCelebrate(false)
+    setPendingReward(true)
+  }
+
+  function resolvePendingReward() {
+    setPendingReward(false)
     navigate('/dojos')
   }
 
@@ -232,6 +230,9 @@ function playCelebrateSound() {
           total={total}
           onContinue={continueAfterAward}
         />
+      )}
+      {pendingReward && (
+        <KataRewardVideo src="/kata-victoria.mp4" onClose={resolvePendingReward} />
       )}
       <div className="exam-layout">
         <aside className="exam-side glass-panel">
