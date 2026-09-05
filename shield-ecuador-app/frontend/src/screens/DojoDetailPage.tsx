@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CheckCircle2, ChevronLeft, ChevronRight, Loader, Shield, Swords, XCircle } from 'lucide-react'
-import { DojoCompletionCelebration, NeonButton, SectionHeader, WARRIOR_IMAGES } from '../components/CyberBushido'
+import { DojoCompletionCelebration, KataRewardVideo, NeonButton, SectionHeader, WARRIOR_IMAGES } from '../components/CyberBushido'
 import { dojoModules } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
 
@@ -76,6 +76,7 @@ export function DojoDetailPage() {
   const [loadingQuestions, setLoadingQuestions] = useState(true)
   const [correctAnswers, setCorrectAnswers] = useState(0)
   const [showCompletion, setShowCompletion] = useState(false)
+  const [pendingReward, setPendingReward] = useState<'continue' | 'exam' | null>(null)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
 
   const question = questions[questionIndex] ?? fallbackQuestion
@@ -183,6 +184,13 @@ export function DojoDetailPage() {
     navigate('/dojos')
   }
 
+  function resolvePendingReward() {
+    const action = pendingReward
+    setPendingReward(null)
+    if (action === 'exam') goToBeltExam()
+    else goToDojos()
+  }
+
   if (loadingQuestions) {
     return (
       <div className="cyber-page grid place-items-center min-h-96">
@@ -201,9 +209,12 @@ export function DojoDetailPage() {
           perfect={correctAnswers === questions.length}
           correct={correctAnswers}
           total={questions.length}
-          onContinue={goToDojos}
-          onExam={beltExamMap[dojo.requiredBelt] ? goToBeltExam : undefined}
+          onContinue={() => { setShowCompletion(false); setPendingReward('continue') }}
+          onExam={beltExamMap[dojo.requiredBelt] ? () => { setShowCompletion(false); setPendingReward('exam') } : undefined}
         />
+      )}
+      {pendingReward && (
+        <KataRewardVideo src="/kata-victoria.mp4" onClose={resolvePendingReward} />
       )}
       <SectionHeader eyebrow={`KATA #${String(dojo.number).padStart(3, '0')} - ${dojo.isoControl}`} title={dojo.title} kanji="門" />
       <div className="combat-layout combat-animate">

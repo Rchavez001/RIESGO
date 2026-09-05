@@ -1526,6 +1526,45 @@ code { font-family: var(--font-mono); }
   backdrop-filter: blur(12px);
 }
 
+.kata-reward-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 3, 11, .72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.kata-reward-video-wrap {
+  position: relative;
+  max-width: min(92vw, 640px);
+  line-height: 0;
+}
+.kata-reward-video {
+  display: block;
+  width: 100%;
+  max-height: 80vh;
+  border-radius: 20px;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.55);
+}
+.kata-reward-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(3, 7, 17, 0.55);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.kata-reward-close:active { transform: scale(0.9); }
+
 .dojo-victory-card,
 .belt-award-card {
   position: relative;
