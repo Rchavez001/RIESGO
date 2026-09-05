@@ -151,7 +151,7 @@ export function SenseiConsultPage() {
         </section>
 
         <aside className="sensei-feedback-panel glass-panel">
-          <img src="/sensei-meditacion.png" alt="Sensei IA de Ciber Dojo" className="sensei-consult-photo" />
+          <img src="/sensei-meditacion.jpg" alt="Sensei IA de Ciber Dojo" className="sensei-consult-photo" />
           <h2>Despues de responder</h2>
           <p>El Sensei registra la consulta para que Central Admin vea temas frecuentes, respuestas utiles y sentimiento del alumno.</p>
 

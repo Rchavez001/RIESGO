@@ -178,7 +178,7 @@ export function LandingPage() {
           <div ref={senseiRef} className="lp-sensei-col">
             <div className="lp-sensei-photo-wrap">
               <img
-                src="/sensei-de-pie.png"
+                src="/sensei-de-pie.jpg"
                 alt="Sensei del Ciber Dojo"
                 className="lp-sensei-photo"
               />
@@ -222,7 +222,7 @@ export function LandingPage() {
           <div className="lp-section-label">{'// TÉCNICAS DE COMBATE DIGITAL'}</div>
           <div className="lp-battle-wrap">
             <img
-              src="/sensei-batalla.png"
+              src="/sensei-batalla.jpg"
               alt="6 técnicas del sensei para derrotar amenazas digitales"
               className="lp-battle-img"
             />

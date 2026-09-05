@@ -13,11 +13,8 @@ import { KataExamPage } from './screens/KataExamPage'
 import { KataExamPage as DevKata } from './screens/KataExamPage'
 import { LeaderboardPage } from './screens/LeaderboardPage'
 import { ProfilePage } from './screens/ProfilePage'
-import { AdminCenterScreen } from './screens/AdminCenterScreen'
-import { TenantAdminPage } from './screens/TenantAdminPage'
 import { SenseiConsultPage } from './screens/SenseiConsultPage'
 import { ResetPasswordPage } from './screens/ResetPasswordPage'
-import { VulnScannerPage } from './screens/VulnScannerPage'
 import { AuthCallbackPage } from './screens/AuthCallbackPage'
 import { DojoShell } from './components/CyberBushido'
 import { AdminShell } from './components/AdminShell'
@@ -27,6 +24,11 @@ import { DojoAudioProvider } from './contexts/DojoAudioContext'
 import { DojoWebGLBackdrop } from './components/DojoWebGLBackdrop'
 import { useDojoStore } from './store/dojoStore'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
+
+// Lazy-loaded: heavy, infrequently-used screens kept out of the initial bundle.
+const AdminCenterScreen = React.lazy(() => import('./screens/AdminCenterScreen').then((m) => ({ default: m.AdminCenterScreen })))
+const TenantAdminPage = React.lazy(() => import('./screens/TenantAdminPage').then((m) => ({ default: m.TenantAdminPage })))
+const VulnScannerPage = React.lazy(() => import('./screens/VulnScannerPage').then((m) => ({ default: m.VulnScannerPage })))
 
 function LoadingScreen() {
   return (
@@ -95,7 +97,11 @@ function AdminOnlyRoute() {
 
 function AdminRoute() {
   const { userProfile } = useAuth()
-  return <AdminCenterScreen currentUser={userProfile} onBackToApp={() => window.history.back()} />
+  return (
+    <React.Suspense fallback={<LoadingScreen />}>
+      <AdminCenterScreen currentUser={userProfile} onBackToApp={() => window.history.back()} />
+    </React.Suspense>
+  )
 }
 
 function TenantAdminRoute() {
@@ -107,7 +113,9 @@ function TenantAdminRoute() {
 
   return (
     <PageTransition>
-      <TenantAdminPage />
+      <React.Suspense fallback={<LoadingScreen />}>
+        <TenantAdminPage />
+      </React.Suspense>
     </PageTransition>
   )
 }
@@ -130,7 +138,7 @@ function AppRoutes() {
           <Route path="/dojo/:id" element={<PageTransition><DojoDetailPage /></PageTransition>} />
           <Route path="/kata/:code" element={<PageTransition><KataExamPage /></PageTransition>} />
           <Route path="/sensei" element={<PageTransition><SenseiConsultPage /></PageTransition>} />
-          <Route path="/escaner" element={<PageTransition><VulnScannerPage /></PageTransition>} />
+          <Route path="/escaner" element={<PageTransition><React.Suspense fallback={<LoadingScreen />}><VulnScannerPage /></React.Suspense></PageTransition>} />
           <Route path="/ranking" element={<PageTransition><LeaderboardPage /></PageTransition>} />
           <Route path="/perfil" element={<PageTransition><ProfilePage /></PageTransition>} />
           <Route element={<AdminOnlyRoute />}>
