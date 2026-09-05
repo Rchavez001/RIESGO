@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CheckCircle2, Loader, Shield, Swords, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader, Shield, Swords, XCircle } from 'lucide-react'
 import { DojoCompletionCelebration, NeonButton, SectionHeader, WARRIOR_IMAGES } from '../components/CyberBushido'
 import { dojoModules } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
@@ -49,7 +49,17 @@ export function DojoDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const dojo = useMemo(() => dojoModules.find((item) => item.id === id) ?? dojoModules[0], [id])
-  const heroImage = useMemo(() => WARRIOR_IMAGES[stableSeed(dojo.id) % WARRIOR_IMAGES.length], [dojo.id])
+  const [heroIndex, setHeroIndex] = useState(() => {
+    const saved = Number(localStorage.getItem('ciberdojo_hero_index'))
+    return Number.isInteger(saved) && saved >= 0 && saved < WARRIOR_IMAGES.length ? saved : 0
+  })
+  const heroImage = WARRIOR_IMAGES[heroIndex]
+
+  function selectHero(index: number) {
+    const wrapped = ((index % WARRIOR_IMAGES.length) + WARRIOR_IMAGES.length) % WARRIOR_IMAGES.length
+    setHeroIndex(wrapped)
+    try { localStorage.setItem('ciberdojo_hero_index', String(wrapped)) } catch (_) {}
+  }
   const fallbackQuestion = useMemo<DojoQuestion>(() => dojo.questions[0] ?? {
     prompt: 'Este kata esta en preparacion. Que debe hacer un guerrero digital antes de avanzar?',
     options: ['Improvisar', 'Documentar controles y validar evidencias', 'Desactivar alertas', 'Compartir claves'],
@@ -199,8 +209,54 @@ export function DojoDetailPage() {
       <div className="combat-layout combat-animate">
         <aside className="combat-panel">
           <div className="mono-label">TU PERSONAJE</div>
-          <div className="fighter">
-            <img src={heroImage} alt="Tu guerrero" />
+          <div className="fighter-picker">
+            <button
+              type="button"
+              className="fighter-nav-btn"
+              aria-label="Personaje anterior"
+              onClick={() => selectHero(heroIndex - 1)}
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <motion.div
+              className="fighter"
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.5}
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -40) selectHero(heroIndex + 1)
+                else if (info.offset.x > 40) selectHero(heroIndex - 1)
+              }}
+            >
+              <motion.img
+                key={heroIndex}
+                src={heroImage}
+                alt="Tu guerrero"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+              />
+            </motion.div>
+            <button
+              type="button"
+              className="fighter-nav-btn"
+              aria-label="Siguiente personaje"
+              onClick={() => selectHero(heroIndex + 1)}
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+          <div className="fighter-dots" role="tablist" aria-label="Elegir personaje">
+            {WARRIOR_IMAGES.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                className={`fighter-dot ${index === heroIndex ? 'active' : ''}`}
+                aria-label={`Personaje ${index + 1}`}
+                aria-current={index === heroIndex}
+                onClick={() => selectHero(index)}
+              />
+            ))}
           </div>
           <div className="mono-label">HP</div>
           <div className="hp-track"><div className="hp-fill" style={{ width: `${heroHp}%` }} /></div>
