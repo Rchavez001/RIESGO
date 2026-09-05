@@ -142,7 +142,7 @@ serve(async (req) => {
 })
 
 function getNextBelt(current: string) {
-  const path = ["white", "yellow", "orange", "green", "blue", "purple", "red", "black"]
+  const path = ["white", "yellow", "orange", "green", "blue", "brown", "black"]
   const index = path.indexOf(current)
   if (index < 0) return "yellow"
   return path[Math.min(index + 1, path.length - 1)]
