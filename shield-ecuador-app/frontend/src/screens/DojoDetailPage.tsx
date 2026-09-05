@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CheckCircle2, Loader, Shield, Swords, XCircle } from 'lucide-react'
-import { DojoCompletionCelebration, NeonButton, SectionHeader } from '../components/CyberBushido'
+import { DojoCompletionCelebration, NeonButton, SectionHeader, WARRIOR_IMAGES } from '../components/CyberBushido'
 import { dojoModules } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
 
@@ -49,6 +49,7 @@ export function DojoDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const dojo = useMemo(() => dojoModules.find((item) => item.id === id) ?? dojoModules[0], [id])
+  const heroImage = useMemo(() => WARRIOR_IMAGES[stableSeed(dojo.id) % WARRIOR_IMAGES.length], [dojo.id])
   const fallbackQuestion = useMemo<DojoQuestion>(() => dojo.questions[0] ?? {
     prompt: 'Este kata esta en preparacion. Que debe hacer un guerrero digital antes de avanzar?',
     options: ['Improvisar', 'Documentar controles y validar evidencias', 'Desactivar alertas', 'Compartir claves'],
@@ -198,7 +199,9 @@ export function DojoDetailPage() {
       <div className="combat-layout combat-animate">
         <aside className="combat-panel">
           <div className="mono-label">TU PERSONAJE</div>
-          <div className="fighter">戦士</div>
+          <div className="fighter">
+            <img src={heroImage} alt="Tu guerrero" />
+          </div>
           <div className="mono-label">HP</div>
           <div className="hp-track"><div className="hp-fill" style={{ width: `${heroHp}%` }} /></div>
           <div className="mono-label">CHI</div>
@@ -250,7 +253,9 @@ export function DojoDetailPage() {
 
         <aside className="combat-panel">
           <div className="mono-label">ADVERSARIO</div>
-          <div className="fighter glow-red">{dojo.kanji}</div>
+          <div className="fighter glow-red">
+            <img src={dojo.enemyImage} alt={dojo.enemy} />
+          </div>
           <h3 className="font-bold text-xl">{dojo.enemy}</h3>
           <div className="mono-label mt-4">HP ENEMIGO</div>
           <div className="hp-track"><div className="hp-fill enemy" style={{ width: `${enemyHp}%` }} /></div>

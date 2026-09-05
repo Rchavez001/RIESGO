@@ -31,6 +31,7 @@ export const dojoModules = [
     status: 'available' as KataStatus,
     xp: 150,
     enemy: 'Estafador de mensajes',
+    enemyImage: '/amenaza-hacker.jpg',
     questions: [
       {
         prompt: 'Una persona usa la misma contrasena para correo, banco y sistema de ventas. Que haces primero?',
@@ -52,6 +53,7 @@ export const dojoModules = [
     status: 'available' as KataStatus,
     xp: 210,
     enemy: 'Correo falso',
+    enemyImage: '/amenaza-phishing.jpg',
     questions: [
       {
         prompt: 'Recibes un correo urgente con enlace acortado para pagar una factura. Cual es la accion correcta?',
@@ -73,6 +75,7 @@ export const dojoModules = [
     status: 'completed' as KataStatus,
     xp: 180,
     enemy: 'Inventario fantasma',
+    enemyImage: '/amenaza-troyanos.jpg',
     questions: [],
   },
   {
@@ -87,6 +90,7 @@ export const dojoModules = [
     status: 'locked' as KataStatus,
     xp: 320,
     enemy: 'Intruso escondido',
+    enemyImage: '/amenaza-ciberdelincuentes.jpg',
     questions: [],
   },
   {
@@ -101,6 +105,7 @@ export const dojoModules = [
     status: 'available' as KataStatus,
     xp: 260,
     enemy: 'Secuestrador de archivos',
+    enemyImage: '/amenaza-ransomware.jpg',
     questions: [],
   },
   {
@@ -115,6 +120,7 @@ export const dojoModules = [
     status: 'locked' as KataStatus,
     xp: 520,
     enemy: 'Alerta roja',
+    enemyImage: '/amenaza-malware.jpg',
     questions: [],
   },
   {
@@ -129,6 +135,7 @@ export const dojoModules = [
     status: 'locked' as KataStatus,
     xp: 600,
     enemy: 'Complacencia digital',
+    enemyImage: '/amenaza-estafas.jpg',
     questions: [
       {
         prompt: 'Ya dominas los fundamentos y varios companeros te piden ayuda. Notas que el personal nuevo evita el entrenamiento porque "no da tiempo". Que haces como referente del dojo?',

@@ -35,7 +35,7 @@ export function KataIcon({ size = 24, className = '' }: { size?: number; classNa
   )
 }
 
-const WARRIOR_IMAGES = [
+export const WARRIOR_IMAGES = [
   '/kata-blanco.jpg',
   '/kata-amarillo.jpg',
   '/kata-azul.jpg',
