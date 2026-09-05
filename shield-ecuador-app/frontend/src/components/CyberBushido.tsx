@@ -300,6 +300,34 @@ export function DojoCompletionCelebration({
   )
 }
 
+export function KataRewardVideo({ src, onClose }: { src: string; onClose: () => void }) {
+  const [closing, setClosing] = useState(false)
+
+  return createPortal(
+    <motion.div
+      className="kata-reward-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: closing ? 0 : 1 }}
+      transition={{ duration: 0.4 }}
+      onAnimationComplete={() => { if (closing) onClose() }}
+    >
+      <div className="kata-reward-video-wrap">
+        <button type="button" className="kata-reward-close" aria-label="Cerrar video" onClick={() => setClosing(true)}>
+          <X size={18} />
+        </button>
+        <video
+          src={src}
+          className="kata-reward-video"
+          autoPlay
+          playsInline
+          onEnded={() => setClosing(true)}
+        />
+      </div>
+    </motion.div>,
+    document.body
+  )
+}
+
 export function BeltAwardCelebration({
   currentBelt,
   awardedBelt,
