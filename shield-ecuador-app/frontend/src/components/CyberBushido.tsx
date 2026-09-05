@@ -302,6 +302,16 @@ export function DojoCompletionCelebration({
 
 export function KataRewardVideo({ src, onClose }: { src: string; onClose: () => void }) {
   const [closing, setClosing] = useState(false)
+  const videoRef = React.useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.play().catch(() => {
+      video.muted = true
+      video.play().catch(() => {})
+    })
+  }, [])
 
   return createPortal(
     <motion.div
@@ -316,9 +326,9 @@ export function KataRewardVideo({ src, onClose }: { src: string; onClose: () => 
           <X size={18} />
         </button>
         <video
+          ref={videoRef}
           src={src}
           className="kata-reward-video"
-          autoPlay
           playsInline
           onEnded={() => setClosing(true)}
         />
