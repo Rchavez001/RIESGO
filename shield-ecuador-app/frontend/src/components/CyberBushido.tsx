@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
 
-export const SENSEI_IMAGE_SRC = '/sensei-de-pie.png'
+export const SENSEI_IMAGE_SRC = '/sensei-de-pie.jpg'
 
 export function KataIcon({ size = 24, className = '' }: { size?: number; className?: string }) {
   return (
@@ -36,25 +36,25 @@ export function KataIcon({ size = 24, className = '' }: { size?: number; classNa
 }
 
 const WARRIOR_IMAGES = [
-  '/kata-blanco.png',
-  '/kata-amarillo.png',
-  '/kata-azul.png',
-  '/kata-negro.png',
-  '/kata-negro-2.png',
-  '/kata-negro-3.png',
-  '/kata-negro-4.png',
-  '/kata-negro-5.png',
+  '/kata-blanco.jpg',
+  '/kata-amarillo.jpg',
+  '/kata-azul.jpg',
+  '/kata-negro.jpg',
+  '/kata-negro-2.jpg',
+  '/kata-negro-3.jpg',
+  '/kata-negro-4.jpg',
+  '/kata-negro-5.jpg',
 ] as const
 
 const THREAT_IMAGES = [
-  '/amenaza-hacker.png',
-  '/amenaza-virus.png',
-  '/amenaza-malware.png',
-  '/amenaza-phishing.png',
-  '/amenaza-ciberdelincuentes.png',
-  '/amenaza-estafas.png',
-  '/amenaza-ransomware.png',
-  '/amenaza-troyanos.png',
+  '/amenaza-hacker.jpg',
+  '/amenaza-virus.jpg',
+  '/amenaza-malware.jpg',
+  '/amenaza-phishing.jpg',
+  '/amenaza-ciberdelincuentes.jpg',
+  '/amenaza-estafas.jpg',
+  '/amenaza-ransomware.jpg',
+  '/amenaza-troyanos.jpg',
 ] as const
 
 export const pageVariants = {
@@ -426,6 +426,34 @@ export function KataCard({
   )
 }
 
+// Isolated so the 1.5s image cycle only re-renders this small box, not the whole sidebar.
+function SidebarThreatCarousel() {
+  const [tick, setTick] = useState(0)
+  const threatIndex = tick % THREAT_IMAGES.length
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) return
+    const id = window.setInterval(() => {
+      setTick((t) => t + 1)
+    }, 1500)
+    return () => window.clearInterval(id)
+  }, [])
+
+  return (
+    <div className="sidebar-threat">
+      <motion.img
+        key={threatIndex}
+        src={THREAT_IMAGES[threatIndex]}
+        alt="Amenaza digital"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+      />
+    </div>
+  )
+}
+
 export function DojoShell({
   children,
   userName,
@@ -444,17 +472,6 @@ export function DojoShell({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { notify } = useToast()
   const { enabled: audioEnabled, toggleAudio, playSound } = useDojoAudio()
-  const [tick, setTick] = useState(0)
-  const threatIndex = tick % THREAT_IMAGES.length
-
-  useEffect(() => {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduceMotion) return
-    const id = window.setInterval(() => {
-      setTick((t) => t + 1)
-    }, 1500)
-    return () => window.clearInterval(id)
-  }, [])
 
   const nav = [
     { to: '/dashboard', label: 'Dashboard', icon: Home },
@@ -516,16 +533,7 @@ export function DojoShell({
           </nav>
           <div className="sidebar-sensei-card">
             <div className="mono-label">SENSEI DEL DOJO</div>
-            <div className="sidebar-threat">
-              <motion.img
-                key={threatIndex}
-                src={THREAT_IMAGES[threatIndex]}
-                alt="Amenaza digital"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              />
-            </div>
+            <SidebarThreatCarousel />
           </div>
           <div className="sidebar-rank">
             <div className="mono-label">GUERRERO</div>
