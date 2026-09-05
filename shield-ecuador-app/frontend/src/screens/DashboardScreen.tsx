@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { Activity, Award, Flame, Gauge, Play } from 'lucide-react'
@@ -66,7 +67,7 @@ export function DashboardScreen() {
         </NeonButton>
       </div>
 
-      {showGreeting && (
+      {showGreeting && createPortal(
         <motion.div className="wisdom-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <button className="wisdom-backdrop" aria-label="Cerrar" onClick={() => setShowGreeting(false)} />
           <motion.article
@@ -87,7 +88,8 @@ export function DashboardScreen() {
               </div>
             </div>
           </motion.article>
-        </motion.div>
+        </motion.div>,
+        document.body
       )}
 
       <div className="dashboard-grid">
