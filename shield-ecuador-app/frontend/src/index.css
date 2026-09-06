@@ -2973,7 +2973,7 @@ code { font-family: var(--font-mono); }
   position: relative;
   flex-shrink: 0;
   z-index: 6;
-  width: clamp(180px, 24vw, 264px);
+  width: clamp(144px, 22.5vw, 198px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -2986,7 +2986,7 @@ code { font-family: var(--font-mono); }
     100% 64%, 78% 68%, 84% 90%, 61% 80%, 50% 100%, 39% 80%,
     16% 90%, 22% 68%, 0% 64%, 18% 50%, 0% 36%, 22% 32%, 16% 10%, 39% 20%
   );
-  animation: signupBadgePulse 1.8s ease-in-out infinite, signupBadgeFlashTilt 4.5s ease-in-out infinite;
+  animation: signupBadgePulse 1.8s ease-in-out infinite, signupBadgeAppear 0.7s ease-out both;
 }
 .lp-signup-badge::after {
   content: '';
@@ -2994,9 +2994,8 @@ code { font-family: var(--font-mono); }
   inset: 0;
   background: #fff;
   clip-path: inherit;
-  opacity: 0;
   pointer-events: none;
-  animation: signupBadgeFlashPop 4.5s ease-in-out infinite;
+  animation: signupBadgeFlashOut 1s ease-out both;
 }
 .lp-signup-badge:focus-visible {
   outline: 3px solid var(--neon-cyan);
@@ -3012,26 +3011,30 @@ code { font-family: var(--font-mono); }
   color: #2a0a00;
   text-align: center;
   text-shadow: 0 1px 0 rgba(255,255,255,.5);
-  transform: rotate(9deg);
+  transform: rotate(6deg);
   padding: 0 10px;
+  animation: signupBadgeTextReveal 1s ease-out both;
 }
 @keyframes signupBadgePulse {
   0%, 100% { filter: drop-shadow(0 0 10px rgba(245,197,24,.55)) drop-shadow(0 0 0 rgba(230,57,10,0)); }
   50% { filter: drop-shadow(0 0 26px rgba(245,197,24,.95)) drop-shadow(0 0 14px rgba(230,57,10,.55)); }
 }
-@keyframes signupBadgeFlashTilt {
-  0%, 88%, 100% { transform: rotate(-9deg); }
-  91% { transform: rotate(10deg); }
-  94% { transform: rotate(-7deg); }
-  97% { transform: rotate(-9deg); }
+@keyframes signupBadgeAppear {
+  0% { transform: rotate(-6deg) scale(0.4); }
+  60% { transform: rotate(-6deg) scale(1.08); }
+  100% { transform: rotate(-6deg) scale(1); }
 }
-@keyframes signupBadgeFlashPop {
-  0%, 88%, 100% { opacity: 0; }
-  90% { opacity: .85; }
-  93% { opacity: 0; }
+@keyframes signupBadgeFlashOut {
+  0% { opacity: 1; }
+  50% { opacity: .92; }
+  100% { opacity: 0; }
+}
+@keyframes signupBadgeTextReveal {
+  0%, 50% { opacity: 0; }
+  100% { opacity: 1; }
 }
 @media (max-width: 540px) {
-  .lp-signup-badge { width: clamp(150px, 42vw, 200px); }
+  .lp-signup-badge { width: clamp(126px, 38vw, 168px); }
 }
 
 .lp-sensei-bubble {
