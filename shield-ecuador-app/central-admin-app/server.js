@@ -35,13 +35,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if ((req.url || '').startsWith('/api/rest/v1/') || (req.url || '').startsWith('/api/auth/v1/')) {
+  if (
+    (req.url || '').startsWith('/api/rest/v1/') ||
+    (req.url || '').startsWith('/api/auth/v1/') ||
+    (req.url || '').startsWith('/api/storage/v1/')
+  ) {
     proxySupabase(req, res);
     return;
   }
 
   if ((req.url || '').startsWith('/api/admin/tpot')) {
     handleTpotApi(req, res);
+    return;
+  }
+
+  if ((req.url || '').startsWith('/api/whoami')) {
+    sendJson(res, 200, { actor: adminUser || 'central-admin' });
     return;
   }
 

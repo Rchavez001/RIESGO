@@ -1,41 +1,8 @@
 const STORAGE_KEY = "ciber-dojo-central-admin-v2";
 
-const wisdomQuotes = [
-  {
-    source: "El arte de la guerra - Sun Tzu",
-    quote: "Conoce al enemigo y conocete a ti mismo; en cien batallas no correras peligro.",
-    cyber: "Antes de entrenar, identifica tus equipos, cuentas y datos importantes. Una buena defensa empieza sabiendo que debes proteger.",
-  },
-  {
-    source: "El arte de la guerra - Sun Tzu",
-    quote: "Toda guerra se basa en el engano.",
-    cyber: "Los mensajes falsos, la suplantacion y los enlaces falsos explotan la confianza. Verifica quien te escribe y no actues por apuro.",
-  },
-  {
-    source: "El arte de la guerra - Sun Tzu",
-    quote: "La victoria se decide antes de la batalla.",
-    cyber: "Copias de seguridad probadas, verificacion en dos pasos, actualizaciones y pasos claros de respuesta reducen el dano antes de que ocurra un problema.",
-  },
-  {
-    source: "Bushido - El Codigo del Samurai",
-    quote: "La rectitud es el poder de decidir una conducta correcta.",
-    cyber: "En ciberseguridad, rectitud significa reportar incidentes rapido, no ocultar errores y seguir controles aunque parezcan incomodos.",
-  },
-  {
-    source: "Bushido - El Codigo del Samurai",
-    quote: "El coraje verdadero vive cuando se hace lo correcto.",
-    cyber: "Ante una alerta, el coraje operativo es detener una accion riesgosa, escalar evidencia y proteger los datos antes que la comodidad.",
-  },
-  {
-    source: "Bushido - El Codigo del Samurai",
-    quote: "La disciplina convierte la intencion en habito.",
-    cyber: "Practicar katas de mensajes falsos, contrasenas, copias de seguridad y respuesta ante problemas convierte las reglas en habitos diarios.",
-  },
-];
-
 const baseState = {
   selectedDojoId: "dojo-phishing",
-  selectedCampaignId: "ad-1",
+  selectedCampaignId: null,
   dojos: [
     {
       id: "dojo-phishing",
@@ -106,26 +73,9 @@ const baseState = {
     { name: "Archivos bloqueados y copias de seguridad", count: 16 },
     { name: "Uso seguro de WhatsApp", count: 11 },
   ],
-  campaigns: [
-    {
-      id: "ad-1",
-      name: "Plan de verificacion en dos pasos",
-      moment: "inicio",
-      duration: 12,
-      validity: "meses",
-      message: "Activa el paquete de soporte para configurar la verificacion en dos pasos en tu negocio.",
-      active: true,
-    },
-    {
-      id: "ad-2",
-      name: "Curso contra mensajes falsos",
-      moment: "sesion",
-      duration: 8,
-      validity: "sesiones",
-      message: "Refuerza a tu equipo con el curso rapido contra mensajes falsos.",
-      active: true,
-    },
-  ],
+  campaigns: [],
+  campaignSettings: { max_image_kb: 500, max_image_width: 1920, max_image_height: 1920 },
+  campaignAudit: [],
   questionsByDojo: {},
   newsAlerts: [],
 };
@@ -142,8 +92,11 @@ function init() {
   renderAll();
   void loadQuestionsFromSupabase();
   void loadNewsAlertsFromSupabase();
+  void loadActor();
+  void loadCampaignsFromSupabase();
+  void loadCampaignSettingsFromSupabase();
+  void loadCampaignAuditFromSupabase();
   startNewsAgentScheduler();
-  window.setTimeout(showWisdomPopup, 500);
 }
 
 function loadState() {
@@ -161,6 +114,10 @@ function mergeState(base, saved) {
   merged.newsAgent = { ...base.newsAgent, ...(saved.newsAgent || {}) };
   merged.questionsByDojo = saved.questionsByDojo || {};
   merged.newsAlerts = saved.newsAlerts || [];
+  merged.campaigns = [];
+  merged.campaignAudit = [];
+  merged.campaignSettings = base.campaignSettings;
+  merged.selectedCampaignId = null;
   return merged;
 }
 
@@ -193,8 +150,9 @@ function bindActions() {
   $("#simulateOpenQuestion").addEventListener("click", simulateOpenQuestion);
   $("#bulkSuspend").addEventListener("click", suspendSelectedUsers);
   $("#addCampaign").addEventListener("click", addCampaign);
-  $("#showWisdom").addEventListener("click", showWisdomPopup);
-  $("#closeWisdom").addEventListener("click", closeWisdomPopup);
+  $("#saveCampaign").addEventListener("click", saveCampaign);
+  $("#saveAdsSettings").addEventListener("click", saveCampaignSettings);
+  $("#adImageFile").addEventListener("change", handleCampaignImageSelected);
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
   $("#forceNewsReview").addEventListener("click", runNewsAgent);
@@ -215,9 +173,6 @@ function bindActions() {
     $(`#${id}`).addEventListener("input", updateSelectedDojoFromForm);
   });
 
-  ["adName", "adMoment", "adDuration", "adValidity", "adMessage"].forEach((id) => {
-    $(`#${id}`).addEventListener("input", updateSelectedCampaignFromForm);
-  });
 }
 
 function renderAll() {
@@ -854,30 +809,232 @@ function renderUsers() {
   `).join("");
 }
 
+const SUPABASE_PROJECT_URL = "https://wbbcjiqzbzswxsmwjqlw.supabase.co";
+const CAMPAIGN_STATUS_LABEL = { activa: "activa", suspendida: "suspendida", eliminada: "eliminada" };
+const CAMPAIGN_STATUS_BADGE = { activa: "ai", suspendida: "audit", eliminada: "danger" };
+let pendingCampaignImage = null;
+
+async function loadActor() {
+  try {
+    const response = await fetch("/api/whoami");
+    const data = await response.json();
+    state.actor = data.actor || "central-admin";
+  } catch (error) {
+    state.actor = "central-admin";
+  }
+}
+
+async function loadCampaignsFromSupabase() {
+  try {
+    const rows = await supabaseRest("central_admin_campaigns?select=*&order=created_at.desc");
+    state.campaigns = Array.isArray(rows) ? rows : [];
+    renderCampaigns();
+  } catch (error) {
+    console.warn("No se pudieron cargar las campanas:", error);
+    notify("No se pudieron cargar las campanas de propaganda.");
+  }
+}
+
+async function loadCampaignSettingsFromSupabase() {
+  try {
+    const rows = await supabaseRest("central_admin_campaign_settings?select=*&id=eq.1");
+    if (Array.isArray(rows) && rows[0]) state.campaignSettings = rows[0];
+    renderCampaignSettingsForm();
+  } catch (error) {
+    console.warn("No se pudieron cargar los limites de imagen:", error);
+  }
+}
+
+async function loadCampaignAuditFromSupabase() {
+  try {
+    const rows = await supabaseRest(
+      "central_admin_campaign_audit?select=id,actor,action,details,created_at,campaign:central_admin_campaigns(name)&order=created_at.desc&limit=50"
+    );
+    state.campaignAudit = Array.isArray(rows) ? rows : [];
+    renderCampaignAudit();
+  } catch (error) {
+    console.warn("No se pudo cargar la auditoria de campanas:", error);
+  }
+}
+
+function renderCampaignSettingsForm() {
+  const settings = state.campaignSettings;
+  $("#adsMaxKb").value = settings.max_image_kb;
+  $("#adsMaxWidth").value = settings.max_image_width;
+  $("#adsMaxHeight").value = settings.max_image_height;
+}
+
+async function saveCampaignSettings() {
+  const maxKb = Number($("#adsMaxKb").value);
+  const maxWidth = Number($("#adsMaxWidth").value);
+  const maxHeight = Number($("#adsMaxHeight").value);
+  const statusEl = $("#adsSettingsStatus");
+
+  if (!maxKb || !maxWidth || !maxHeight || maxKb <= 0 || maxWidth <= 0 || maxHeight <= 0) {
+    statusEl.textContent = "Ingresa valores mayores a 0.";
+    return;
+  }
+
+  try {
+    const rows = await supabaseRest("central_admin_campaign_settings?id=eq.1", {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        max_image_kb: maxKb,
+        max_image_width: maxWidth,
+        max_image_height: maxHeight,
+        updated_by: state.actor || "central-admin",
+      }),
+    });
+    if (Array.isArray(rows) && rows[0]) state.campaignSettings = rows[0];
+    statusEl.textContent = "Limites guardados.";
+    notify("Limites de imagen actualizados.");
+  } catch (error) {
+    console.warn("No se pudieron guardar los limites:", error);
+    statusEl.textContent = "No se pudo guardar. Intenta de nuevo.";
+  }
+}
+
+function handleCampaignImageSelected(event) {
+  const file = event.target.files && event.target.files[0];
+  const statusEl = $("#adImageStatus");
+  const previewWrap = $("#adImagePreviewWrap");
+  const previewImg = $("#adImagePreview");
+  statusEl.textContent = "";
+
+  if (!file) {
+    pendingCampaignImage = null;
+    return;
+  }
+
+  const settings = state.campaignSettings;
+  const maxBytes = settings.max_image_kb * 1024;
+
+  if (file.size > maxBytes) {
+    statusEl.textContent = `La imagen pesa ${(file.size / 1024).toFixed(0)}KB. El maximo permitido es ${settings.max_image_kb}KB.`;
+    event.target.value = "";
+    pendingCampaignImage = null;
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const probe = new Image();
+  probe.onload = () => {
+    if (probe.naturalWidth > settings.max_image_width || probe.naturalHeight > settings.max_image_height) {
+      statusEl.textContent = `La imagen mide ${probe.naturalWidth}x${probe.naturalHeight}px. El maximo permitido es ${settings.max_image_width}x${settings.max_image_height}px.`;
+      event.target.value = "";
+      pendingCampaignImage = null;
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+
+    pendingCampaignImage = { file, previewUrl: objectUrl };
+    previewImg.src = objectUrl;
+    previewWrap.classList.remove("hidden");
+    statusEl.textContent = `Lista para subir: ${(file.size / 1024).toFixed(0)}KB, ${probe.naturalWidth}x${probe.naturalHeight}px.`;
+  };
+  probe.onerror = () => {
+    statusEl.textContent = "No se pudo leer la imagen. Intenta con otro archivo.";
+    pendingCampaignImage = null;
+  };
+  probe.src = objectUrl;
+}
+
+async function uploadCampaignImage(file) {
+  const safeExt = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+
+  const response = await fetch(`/api/storage/v1/object/campaign-ads/${filename}`, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error(`${response.status} ${await response.text()}`);
+  }
+
+  return `${SUPABASE_PROJECT_URL}/storage/v1/object/public/campaign-ads/${filename}`;
+}
+
 function renderCampaigns() {
-  $("#campaignList").innerHTML = state.campaigns.map((campaign) => `
-    <button class="campaign-row ${campaign.id === state.selectedCampaignId ? "active" : ""}" data-id="${esc(campaign.id)}">
-      <div>
-        <strong>${esc(campaign.name)}</strong>
-        <div class="muted">${esc(campaign.moment)} - ${campaign.duration}s - ${esc(campaign.validity)}</div>
-      </div>
-      <span class="badge ${campaign.active ? "ai" : "audit"}">${campaign.active ? "activa" : "pausada"}</span>
-    </button>
-  `).join("");
+  const list = $("#campaignList");
+  if (state.campaigns.length === 0) {
+    list.innerHTML = `<p class="muted">Todavia no hay campanas. Usa "Agregar campana" para crear la primera.</p>`;
+  } else {
+    list.innerHTML = state.campaigns.map((campaign) => `
+      <button class="campaign-row ${campaign.id === state.selectedCampaignId ? "active" : ""}" data-id="${esc(campaign.id)}">
+        <div>
+          <strong>${esc(campaign.name)}</strong>
+          <div class="muted">${esc(campaign.moment)} - ${campaign.duration_seconds}s - ${esc(campaign.validity_type)}</div>
+        </div>
+        <span class="badge ${CAMPAIGN_STATUS_BADGE[campaign.status] || "audit"}">${CAMPAIGN_STATUS_LABEL[campaign.status] || campaign.status}</span>
+      </button>
+    `).join("");
+  }
 
   $$(".campaign-row").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedCampaignId = button.dataset.id;
+      pendingCampaignImage = null;
       renderCampaigns();
     });
   });
 
   const campaign = getSelectedCampaign();
-  $("#adName").value = campaign.name;
-  $("#adMoment").value = campaign.moment;
-  $("#adDuration").value = campaign.duration;
-  $("#adValidity").value = campaign.validity;
-  $("#adMessage").value = campaign.message;
+  const previewWrap = $("#adImagePreviewWrap");
+  const previewImg = $("#adImagePreview");
+  $("#adImageFile").value = "";
+  $("#adImageStatus").textContent = "";
+
+  if (campaign) {
+    $("#adName").value = campaign.name;
+    $("#adMoment").value = campaign.moment;
+    $("#adDuration").value = campaign.duration_seconds;
+    $("#adValidity").value = campaign.validity_type;
+    $("#adStatus").value = campaign.status;
+    $("#adLink").value = campaign.link_url || "";
+    $("#adMessage").value = campaign.message;
+    if (campaign.image_url) {
+      previewImg.src = campaign.image_url;
+      previewWrap.classList.remove("hidden");
+    } else {
+      previewWrap.classList.add("hidden");
+    }
+  } else {
+    $("#adName").value = "";
+    $("#adMoment").value = "inicio";
+    $("#adDuration").value = 10;
+    $("#adValidity").value = "indefinido";
+    $("#adStatus").value = "activa";
+    $("#adLink").value = "";
+    $("#adMessage").value = "";
+    previewWrap.classList.add("hidden");
+  }
+}
+
+function renderCampaignAudit() {
+  const container = $("#campaignAuditLog");
+  if (state.campaignAudit.length === 0) {
+    container.innerHTML = `<p class="muted">Todavia no hay cambios registrados.</p>`;
+    return;
+  }
+
+  const actionLabel = { creada: "creo", actualizada: "actualizo", estado_cambiado: "cambio el estado de" };
+
+  container.innerHTML = state.campaignAudit.map((entry) => {
+    const campaignName = entry.campaign && entry.campaign.name ? entry.campaign.name : "(campana eliminada)";
+    const when = new Date(entry.created_at).toLocaleString("es-EC");
+    const detail = entry.action === "estado_cambiado" && entry.details
+      ? ` de "${esc(entry.details.from || "")}" a "${esc(entry.details.to || "")}"`
+      : "";
+    return `
+      <div class="progress-row">
+        <strong>${esc(entry.actor)}</strong> ${actionLabel[entry.action] || entry.action} <strong>${esc(campaignName)}</strong>${detail}
+        <div class="muted">${when}</div>
+      </div>
+    `;
+  }).join("");
 }
 
 function addDojo() {
@@ -906,19 +1063,9 @@ function addAiProvider() {
 }
 
 function addCampaign() {
-  const id = `ad-${Date.now()}`;
-  state.campaigns.push({
-    id,
-    name: "Nueva propaganda",
-    moment: "inicio",
-    duration: 10,
-    validity: "indefinido",
-    message: "Mensaje pendiente de configurar.",
-    active: true,
-  });
-  state.selectedCampaignId = id;
-  persist("Campana agregada.");
-  renderAll();
+  state.selectedCampaignId = null;
+  pendingCampaignImage = null;
+  renderCampaigns();
 }
 
 function updateSelectedDojoFromForm() {
@@ -931,15 +1078,87 @@ function updateSelectedDojoFromForm() {
   renderDojos();
 }
 
-function updateSelectedCampaignFromForm() {
-  const campaign = getSelectedCampaign();
-  campaign.name = $("#adName").value;
-  campaign.moment = $("#adMoment").value;
-  campaign.duration = Number($("#adDuration").value);
-  campaign.validity = $("#adValidity").value;
-  campaign.message = $("#adMessage").value;
-  renderMetrics();
-  renderCampaigns();
+async function saveCampaign() {
+  const name = $("#adName").value.trim();
+  const message = $("#adMessage").value.trim();
+
+  if (!name || !message) {
+    notify("Completa al menos el nombre y el mensaje de la campana.");
+    return;
+  }
+
+  const existing = getSelectedCampaign();
+  const payload = {
+    name,
+    moment: $("#adMoment").value,
+    duration_seconds: Number($("#adDuration").value) || 10,
+    validity_type: $("#adValidity").value,
+    status: $("#adStatus").value,
+    link_url: $("#adLink").value.trim() || null,
+    message,
+  };
+
+  try {
+    if (pendingCampaignImage) {
+      payload.image_url = await uploadCampaignImage(pendingCampaignImage.file);
+    }
+
+    if (existing) {
+      const previousStatus = existing.status;
+      const rows = await supabaseRest(`central_admin_campaigns?id=eq.${existing.id}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      const updated = Array.isArray(rows) && rows[0] ? rows[0] : { ...existing, ...payload };
+      state.campaigns = state.campaigns.map((campaign) => (campaign.id === updated.id ? updated : campaign));
+
+      if (previousStatus !== updated.status) {
+        await logCampaignAudit(updated.id, "estado_cambiado", { from: previousStatus, to: updated.status });
+      }
+      await logCampaignAudit(updated.id, "actualizada", payload);
+      notify("Campana actualizada.");
+    } else {
+      const rows = await supabaseRest("central_admin_campaigns", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      const created = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      if (created) {
+        state.campaigns.unshift(created);
+        state.selectedCampaignId = created.id;
+        await logCampaignAudit(created.id, "creada", payload);
+      }
+      notify("Campana creada.");
+    }
+
+    pendingCampaignImage = null;
+    renderCampaigns();
+    renderMetrics();
+    void loadCampaignAuditFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo guardar la campana:", error);
+    notify("No se pudo guardar la campana. Intenta de nuevo.");
+  }
+}
+
+async function logCampaignAudit(campaignId, action, details) {
+  try {
+    const response = await fetch("/api/rest/v1/central_admin_campaign_audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({
+        campaign_id: campaignId,
+        actor: state.actor || "central-admin",
+        action,
+        details: details || {},
+      }),
+    });
+    if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+  } catch (error) {
+    console.warn("No se pudo registrar la auditoria:", error);
+  }
 }
 
 function testAiFlow() {
@@ -963,24 +1182,12 @@ function suspendSelectedUsers() {
   renderMetrics();
 }
 
-function showWisdomPopup() {
-  const quote = wisdomQuotes[Math.floor(Math.random() * wisdomQuotes.length)];
-  $("#wisdomSource").textContent = quote.source;
-  $("#wisdomQuote").textContent = quote.quote;
-  $("#wisdomCyber").textContent = quote.cyber;
-  $("#wisdomModal").classList.add("active");
-}
-
-function closeWisdomPopup() {
-  $("#wisdomModal").classList.remove("active");
-}
-
 function getSelectedDojo() {
   return state.dojos.find((dojo) => dojo.id === state.selectedDojoId) || state.dojos[0];
 }
 
 function getSelectedCampaign() {
-  return state.campaigns.find((campaign) => campaign.id === state.selectedCampaignId) || state.campaigns[0];
+  return state.campaigns.find((campaign) => campaign.id === state.selectedCampaignId) || null;
 }
 
 function sourceDomain(url) {
