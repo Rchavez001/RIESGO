@@ -1,6 +1,6 @@
 import React from 'react'
 
-type DojoSound = 'tap' | 'strike' | 'success' | 'belt'
+type DojoSound = 'tap' | 'strike' | 'success' | 'belt' | 'ad-in' | 'ad-out'
 
 type DojoAudioContextValue = {
   enabled: boolean
@@ -51,6 +51,18 @@ export function DojoAudioProvider({ children }: { children: React.ReactNode }) {
       playTone(audio, gain, now, 392, 0.12, 0.035, 'sine')
       playTone(audio, gain, now + 0.08, 587, 0.16, 0.04, 'sine')
       playTone(audio, gain, now + 0.18, 784, 0.22, 0.035, 'triangle')
+      return
+    }
+
+    if (sound === 'ad-in') {
+      playTone(audio, gain, now, 660, 0.09, 0.03, 'sine')
+      playTone(audio, gain, now + 0.06, 990, 0.14, 0.032, 'sine')
+      return
+    }
+
+    if (sound === 'ad-out') {
+      playTone(audio, gain, now, 520, 0.12, 0.026, 'sine')
+      playTone(audio, gain, now + 0.05, 300, 0.18, 0.02, 'triangle')
       return
     }
 
