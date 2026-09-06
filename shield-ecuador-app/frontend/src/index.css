@@ -2804,6 +2804,10 @@ code { font-family: var(--font-mono); }
   overflow-wrap: break-word;
   text-shadow: 0 0 80px rgba(0,180,216,0.12);
 }
+.lp-t1-accent {
+  color: var(--katana-red);
+  text-shadow: 0 0 24px rgba(198,40,40,0.6), 0 0 54px rgba(198,40,40,0.3);
+}
 .lp-t2 {
   font-size: clamp(52px, 9vw, 108px);
   color: var(--text-primary);
@@ -2971,9 +2975,9 @@ code { font-family: var(--font-mono); }
 .lp-signup-badge {
   position: absolute;
   top: 50%;
-  right: clamp(-58px, -11vw, -16px);
+  right: clamp(-20px, -3vw, 8px);
   z-index: 6;
-  width: clamp(88px, 16vw, 198px);
+  width: clamp(110px, 20vw, 248px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -3006,8 +3010,8 @@ code { font-family: var(--font-mono); }
   z-index: 1;
   font-family: var(--font-impact);
   font-weight: 400;
-  font-size: clamp(13px, 2.1vw, 20px);
-  line-height: 1.15;
+  font-size: clamp(16px, 2.6vw, 24px);
+  line-height: 1.1;
   color: #2a0a00;
   text-align: center;
   text-shadow: 0 1px 0 rgba(255,255,255,.5);
@@ -3034,7 +3038,7 @@ code { font-family: var(--font-mono); }
   100% { opacity: 1; }
 }
 @media (max-width: 540px) {
-  .lp-signup-badge { width: clamp(72px, 24vw, 100px); right: clamp(-30px, -8vw, -10px); }
+  .lp-signup-badge { width: clamp(90px, 30vw, 125px); right: clamp(-8px, -2vw, 6px); }
 }
 
 .lp-sensei-bubble {
