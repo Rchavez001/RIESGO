@@ -610,6 +610,7 @@ export function DojoShell({
               )
             })}
           </div>
+          <CampaignAdOverlay />
           <WisdomQuoteOverlay />
           {children}
         </main>
@@ -625,6 +626,72 @@ export function SectionHeader({ eyebrow, title, kanji }: { eyebrow: string; titl
       <p>{eyebrow}</p>
       <h1>{title}</h1>
     </div>
+  )
+}
+
+type CampaignAd = {
+  id: string
+  image_url: string | null
+  link_url: string | null
+  message: string
+  duration_seconds: number
+}
+
+function CampaignAdOverlay() {
+  const [ad, setAd] = React.useState<CampaignAd | null>(null)
+  const [closing, setClosing] = React.useState(false)
+
+  React.useEffect(() => {
+    let active = true
+
+    async function loadAd() {
+      const { data, error } = await supabase
+        .from('central_admin_campaigns')
+        .select('id, image_url, link_url, message, duration_seconds')
+        .eq('moment', 'inicio')
+        .eq('status', 'activa')
+        .not('image_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (!active || error || !data?.length) return
+      setAd(data[0] as CampaignAd)
+    }
+
+    void loadAd()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (!ad) return
+    const dismissTimer = window.setTimeout(() => setClosing(true), Math.max(1, ad.duration_seconds) * 1000)
+    return () => window.clearTimeout(dismissTimer)
+  }, [ad])
+
+  React.useEffect(() => {
+    if (!closing) return
+    const removeTimer = window.setTimeout(() => setAd(null), 700)
+    return () => window.clearTimeout(removeTimer)
+  }, [closing])
+
+  if (!ad || !ad.image_url) return null
+
+  const image = <img src={ad.image_url} alt={ad.message} />
+
+  return createPortal(
+    <div className={`campaign-ad-overlay ${closing ? 'is-closing' : ''}`}>
+      {ad.link_url ? (
+        <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="campaign-ad-card">
+          {image}
+        </a>
+      ) : (
+        <div className="campaign-ad-card">{image}</div>
+      )}
+    </div>,
+    document.body
   )
 }
 

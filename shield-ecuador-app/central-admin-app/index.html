@@ -65,7 +65,6 @@
             <p>Gestiona dojos, bancos de preguntas, reglas de avance, inteligencia artificial, revision de respuestas, usuarios y propaganda.</p>
           </div>
           <div class="top-actions">
-            <button id="showWisdom" class="btn secondary">Frase dojo</button>
             <button id="forgotPassword" class="btn secondary">¿Olvidó contraseña?</button>
             <button id="saveAll" class="btn secondary">Guardar borrador</button>
             <button id="publishAll" class="btn primary">Publicar configuracion</button>
@@ -449,6 +448,29 @@
             <button id="addCampaign" class="btn primary">Agregar campana</button>
           </div>
 
+          <article class="card">
+            <h2>Limites de imagen para toda subida</h2>
+            <p class="muted">Estos limites aplican a cualquier imagen que se suba en una campana. En la pantalla del usuario, la imagen se muestra al 10% del tamano de su pantalla.</p>
+            <div class="form-grid compact">
+              <label>
+                Peso maximo (KB)
+                <input id="adsMaxKb" type="number" min="1" />
+              </label>
+              <label>
+                Ancho maximo (px)
+                <input id="adsMaxWidth" type="number" min="1" />
+              </label>
+              <label>
+                Alto maximo (px)
+                <input id="adsMaxHeight" type="number" min="1" />
+              </label>
+            </div>
+            <div class="modal-actions">
+              <button id="saveAdsSettings" class="btn secondary">Guardar limites</button>
+              <span id="adsSettingsStatus" class="muted"></span>
+            </div>
+          </article>
+
           <div class="ads-layout">
             <div id="campaignList" class="campaign-list"></div>
             <article class="card">
@@ -468,7 +490,7 @@
                 </label>
                 <label>
                   Duracion en segundos
-                  <input id="adDuration" type="number" />
+                  <input id="adDuration" type="number" min="1" />
                 </label>
                 <label>
                   Vigencia
@@ -478,29 +500,43 @@
                     <option value="indefinido">Indefinido</option>
                   </select>
                 </label>
+                <label>
+                  Estado
+                  <select id="adStatus">
+                    <option value="activa">Activa</option>
+                    <option value="suspendida">Suspendida</option>
+                    <option value="eliminada">Eliminada</option>
+                  </select>
+                </label>
+                <label>
+                  Enlace al hacer clic
+                  <input id="adLink" type="url" placeholder="https://..." />
+                </label>
               </div>
               <label>
                 Mensaje
-                <textarea id="adMessage" rows="5"></textarea>
+                <textarea id="adMessage" rows="3"></textarea>
               </label>
+              <label>
+                Imagen de la campana
+                <input id="adImageFile" type="file" accept="image/png,image/jpeg,image/webp" />
+              </label>
+              <div id="adImagePreviewWrap" class="ad-image-preview hidden">
+                <img id="adImagePreview" alt="Vista previa de la propaganda" />
+              </div>
+              <p id="adImageStatus" class="muted"></p>
+              <div class="modal-actions">
+                <button id="saveCampaign" class="btn primary">Guardar campana</button>
+              </div>
             </article>
           </div>
+
+          <article class="card">
+            <h2>Historial de cambios (auditoria)</h2>
+            <div id="campaignAuditLog" class="progression-preview"></div>
+          </article>
         </section>
       </main>
-    </div>
-    <div id="wisdomModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="wisdomTitle">
-      <div class="modal-backdrop"></div>
-      <article class="modal-card">
-        <div class="card-head">
-          <div>
-            <span id="wisdomSource" class="label">Sabiduria oriental</span>
-            <h2 id="wisdomTitle">Aplicacion al Ciber Dojo</h2>
-          </div>
-          <button id="closeWisdom" class="btn secondary">Cerrar</button>
-        </div>
-        <blockquote id="wisdomQuote"></blockquote>
-        <p id="wisdomCyber"></p>
-      </article>
     </div>
     <script src="./app.js"></script>
   </body>

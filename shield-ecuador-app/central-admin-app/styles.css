@@ -557,6 +557,30 @@ textarea:focus {
   color: #92400e;
 }
 
+.badge.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.ad-image-preview {
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--soft);
+}
+
+.ad-image-preview.hidden {
+  display: none;
+}
+
+.ad-image-preview img {
+  max-width: 240px;
+  max-height: 160px;
+  border-radius: 6px;
+  display: block;
+}
+
 .ai-provider {
   display: grid;
   grid-template-columns: 1fr 120px 110px;
