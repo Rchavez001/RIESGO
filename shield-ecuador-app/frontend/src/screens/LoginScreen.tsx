@@ -22,7 +22,9 @@ export function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, loading: authLoading, signIn, signInWithMagicLink, signUp } = useAuth()
-  const [mode, setMode] = useState<Mode>('login')
+  const [mode, setMode] = useState<Mode>(() => (
+    new URLSearchParams(location.search).get('mode') === 'register' ? 'register' : 'login'
+  ))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')

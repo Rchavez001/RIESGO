@@ -2827,6 +2827,20 @@ code { font-family: var(--font-mono); }
   -webkit-text-stroke: 2px var(--katana-red);
   text-shadow: 0 0 40px rgba(198,40,40,0.30);
 }
+.lp-t3.lp-t3--long {
+  font-size: clamp(30px, 6.4vw, 62px);
+  letter-spacing: -0.01em;
+}
+
+.lp-t-connector {
+  font-family: var(--font-heading);
+  font-size: clamp(16px, 2vw, 20px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: block;
+  margin: 4px 0;
+}
 
 /* ── Tagline ───────────────────────────────────────────────── */
 .lp-tagline {
@@ -2929,6 +2943,53 @@ code { font-family: var(--font-mono); }
   filter: drop-shadow(0 0 32px rgba(0,180,216,0.25));
   display: block;
 }
+.lp-signup-badge {
+  position: absolute;
+  top: -8%;
+  right: -12%;
+  z-index: 6;
+  width: clamp(96px, 15vw, 132px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: radial-gradient(circle at 32% 28%, #fff6c9, #f5c518 42%, #e6390a 100%);
+  clip-path: polygon(
+    50% 0%, 61% 20%, 84% 10%, 78% 32%, 100% 36%, 82% 50%,
+    100% 64%, 78% 68%, 84% 90%, 61% 80%, 50% 100%, 39% 80%,
+    16% 90%, 22% 68%, 0% 64%, 18% 50%, 0% 36%, 22% 32%, 16% 10%, 39% 20%
+  );
+  animation: signupBadgePulse 1.8s ease-in-out infinite, signupBadgeWobble 4.2s ease-in-out infinite;
+}
+.lp-signup-badge:focus-visible {
+  outline: 3px solid var(--neon-cyan);
+  outline-offset: 4px;
+}
+.lp-signup-badge span {
+  font-family: var(--font-impact);
+  font-weight: 400;
+  font-size: clamp(13px, 1.7vw, 16px);
+  line-height: 1;
+  color: #2a0a00;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255,255,255,.5);
+  transform: rotate(9deg);
+  padding: 0 8px;
+}
+@keyframes signupBadgePulse {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(245,197,24,.55)) drop-shadow(0 0 0 rgba(230,57,10,0)); }
+  50% { filter: drop-shadow(0 0 26px rgba(245,197,24,.95)) drop-shadow(0 0 14px rgba(230,57,10,.55)); }
+}
+@keyframes signupBadgeWobble {
+  0%, 100% { transform: rotate(-9deg); }
+  50% { transform: rotate(-4deg); }
+}
+@media (max-width: 540px) {
+  .lp-signup-badge { top: -6%; right: -4%; width: clamp(84px, 22vw, 104px); }
+}
+
 .lp-sensei-bubble {
   position: absolute;
   bottom: 12px;
