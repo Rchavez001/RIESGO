@@ -141,14 +141,16 @@ export function LandingPage() {
               <div className="lp-headline-top">
                 <span ref={line1Ref} className="lp-t1">APRENDE <span className="lp-t1-accent">GRATIS</span> A</span>
                 <span ref={line2Ref} className="lp-t2"><em>DEFENDERTE</em></span>
-                <button
-                  type="button"
-                  className="lp-signup-badge"
-                  onClick={() => navigate('/login?mode=register')}
-                  aria-label="Inscribete gratis"
-                >
-                  <span>INSCRÍBETE</span>
-                </button>
+                {!user && (
+                  <button
+                    type="button"
+                    className="lp-signup-badge"
+                    onClick={() => navigate('/login?mode=register')}
+                    aria-label="Inscribete gratis"
+                  >
+                    <span>INSCRÍBETE</span>
+                  </button>
+                )}
               </div>
               <span ref={lineConnectorRef} className="lp-t-connector">DE LOS</span>
               <span ref={line3Ref} className="lp-t3 lp-t3--medium">
