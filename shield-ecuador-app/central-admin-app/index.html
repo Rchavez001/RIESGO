@@ -47,6 +47,7 @@
           <button class="nav-item" data-panel="threatIntel">Inteligencia de Amenazas</button>
           <button class="nav-item" data-panel="openQuestions">Preguntas abiertas</button>
           <button class="nav-item" data-panel="users">Usuarios</button>
+          <button class="nav-item" data-panel="occupations">Ocupaciones</button>
           <button class="nav-item" data-panel="ads">Propaganda</button>
         </nav>
 
@@ -436,6 +437,49 @@
               </thead>
               <tbody id="userRows"></tbody>
             </table>
+          </div>
+        </section>
+
+        <section id="occupations" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">REGISTRO DE USUARIOS</span>
+              <h2>Ocupaciones y sectores</h2>
+            </div>
+            <button id="addOccupation" class="btn primary">Agregar ocupacion</button>
+          </div>
+          <p class="muted">Esta lista aparece en "A que te dedicas" cuando alguien se registra. Solo las ocupaciones activas se muestran a los usuarios.</p>
+          <div class="ads-layout">
+            <div id="occupationList" class="campaign-list"></div>
+            <article class="card">
+              <h2>Editor de ocupacion</h2>
+              <div class="form-grid compact">
+                <label>
+                  Ocupacion / Profesion
+                  <input id="occLabel" type="text" placeholder="Ej: Contador/a" />
+                </label>
+                <label>
+                  Sector / Industria
+                  <input id="occIndustry" type="text" placeholder="Ej: Administracion, Finanzas y Oficina" />
+                </label>
+                <label>
+                  Orden
+                  <input id="occOrder" type="number" min="0" />
+                </label>
+                <label>
+                  Estado
+                  <select id="occStatus">
+                    <option value="activa">Activa</option>
+                    <option value="inactiva">Inactiva</option>
+                  </select>
+                </label>
+              </div>
+              <div class="modal-actions">
+                <button id="saveOccupation" class="btn primary">Guardar</button>
+                <button id="deleteOccupation" class="btn danger">Eliminar</button>
+              </div>
+              <p id="occupationStatus" class="muted"></p>
+            </article>
           </div>
         </section>
 

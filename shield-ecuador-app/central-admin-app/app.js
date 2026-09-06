@@ -76,6 +76,8 @@ const baseState = {
   campaigns: [],
   campaignSettings: { max_image_kb: 500, max_image_width: 1920, max_image_height: 1920 },
   campaignAudit: [],
+  occupations: [],
+  selectedOccupationCode: null,
   questionsByDojo: {},
   newsAlerts: [],
 };
@@ -96,6 +98,7 @@ function init() {
   void loadCampaignsFromSupabase();
   void loadCampaignSettingsFromSupabase();
   void loadCampaignAuditFromSupabase();
+  void loadOccupationsFromSupabase();
   startNewsAgentScheduler();
 }
 
@@ -118,6 +121,8 @@ function mergeState(base, saved) {
   merged.campaignAudit = [];
   merged.campaignSettings = base.campaignSettings;
   merged.selectedCampaignId = null;
+  merged.occupations = [];
+  merged.selectedOccupationCode = null;
   return merged;
 }
 
@@ -149,6 +154,9 @@ function bindActions() {
   $("#testAiFlow").addEventListener("click", testAiFlow);
   $("#simulateOpenQuestion").addEventListener("click", simulateOpenQuestion);
   $("#bulkSuspend").addEventListener("click", suspendSelectedUsers);
+  $("#addOccupation").addEventListener("click", addOccupation);
+  $("#saveOccupation").addEventListener("click", saveOccupation);
+  $("#deleteOccupation").addEventListener("click", deleteOccupation);
   $("#addCampaign").addEventListener("click", addCampaign);
   $("#saveCampaign").addEventListener("click", saveCampaign);
   $("#saveAdsSettings").addEventListener("click", saveCampaignSettings);
@@ -1188,6 +1196,143 @@ function getSelectedDojo() {
 
 function getSelectedCampaign() {
   return state.campaigns.find((campaign) => campaign.id === state.selectedCampaignId) || null;
+}
+
+async function loadOccupationsFromSupabase() {
+  try {
+    const rows = await supabaseRest("business_sectors?select=code,label,industry,active,display_order&order=display_order.asc");
+    state.occupations = Array.isArray(rows) ? rows : [];
+    renderOccupations();
+  } catch (error) {
+    console.warn("No se pudieron cargar las ocupaciones:", error);
+    notify("No se pudieron cargar las ocupaciones.");
+  }
+}
+
+function getSelectedOccupation() {
+  return state.occupations.find((item) => item.code === state.selectedOccupationCode) || null;
+}
+
+function slugifyOccupationCode(label) {
+  const normalized = label
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return normalized.slice(0, 40) || `ocupacion_${Date.now()}`;
+}
+
+function renderOccupations() {
+  const list = $("#occupationList");
+  if (state.occupations.length === 0) {
+    list.innerHTML = `<p class="muted">Todavia no hay ocupaciones cargadas.</p>`;
+  } else {
+    list.innerHTML = state.occupations.map((item) => `
+      <button class="campaign-row ${item.code === state.selectedOccupationCode ? "active" : ""}" data-code="${esc(item.code)}">
+        <div>
+          <strong>${esc(item.label)}</strong>
+          <div class="muted">${esc(item.industry || "Sin sector")}</div>
+        </div>
+        <span class="badge ${item.active ? "ai" : "audit"}">${item.active ? "activa" : "inactiva"}</span>
+      </button>
+    `).join("");
+
+    $$("#occupationList .campaign-row").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.selectedOccupationCode = button.dataset.code;
+        renderOccupations();
+      });
+    });
+  }
+
+  const occupation = getSelectedOccupation();
+  const statusEl = $("#occupationStatus");
+  if (statusEl) statusEl.textContent = "";
+
+  if (occupation) {
+    $("#occLabel").value = occupation.label;
+    $("#occIndustry").value = occupation.industry || "";
+    $("#occOrder").value = occupation.display_order;
+    $("#occStatus").value = occupation.active ? "activa" : "inactiva";
+  } else {
+    $("#occLabel").value = "";
+    $("#occIndustry").value = "";
+    $("#occOrder").value = state.occupations.length > 0
+      ? Math.max(...state.occupations.map((item) => item.display_order || 0)) + 10
+      : 10;
+    $("#occStatus").value = "activa";
+  }
+}
+
+function addOccupation() {
+  state.selectedOccupationCode = null;
+  renderOccupations();
+}
+
+async function saveOccupation() {
+  const label = $("#occLabel").value.trim();
+  const industry = $("#occIndustry").value.trim();
+  const displayOrder = Number($("#occOrder").value) || 100;
+  const active = $("#occStatus").value === "activa";
+  const statusEl = $("#occupationStatus");
+
+  if (!label) {
+    statusEl.textContent = "Ingresa el nombre de la ocupacion.";
+    return;
+  }
+
+  const existing = getSelectedOccupation();
+  const payload = { label, industry: industry || null, display_order: displayOrder, active };
+
+  try {
+    if (existing) {
+      const rows = await supabaseRest(`business_sectors?code=eq.${existing.code}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      const updated = Array.isArray(rows) && rows[0] ? rows[0] : { ...existing, ...payload };
+      state.occupations = state.occupations.map((item) => (item.code === updated.code ? updated : item));
+      notify("Ocupacion actualizada.");
+    } else {
+      const code = slugifyOccupationCode(label);
+      const rows = await supabaseRest("business_sectors", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ code, ...payload }),
+      });
+      const created = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      if (created) {
+        state.occupations.push(created);
+        state.selectedOccupationCode = created.code;
+      }
+      notify("Ocupacion agregada.");
+    }
+
+    renderOccupations();
+  } catch (error) {
+    console.warn("No se pudo guardar la ocupacion:", error);
+    statusEl.textContent = "No se pudo guardar. Revisa que el nombre no este repetido.";
+  }
+}
+
+async function deleteOccupation() {
+  const occupation = getSelectedOccupation();
+  if (!occupation) return;
+  if (!window.confirm(`Eliminar "${occupation.label}" de la lista de ocupaciones?`)) return;
+
+  try {
+    await supabaseRest(`business_sectors?code=eq.${occupation.code}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    state.occupations = state.occupations.filter((item) => item.code !== occupation.code);
+    state.selectedOccupationCode = null;
+    renderOccupations();
+    notify("Ocupacion eliminada.");
+  } catch (error) {
+    console.warn("No se pudo eliminar la ocupacion:", error);
+    notify("No se pudo eliminar la ocupacion.");
+  }
 }
 
 function sourceDomain(url) {

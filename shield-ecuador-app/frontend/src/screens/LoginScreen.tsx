@@ -9,13 +9,10 @@ import { supabase } from '../lib/supabase'
 type Mode = 'login' | 'register'
 
 const FALLBACK_BUSINESS_SECTORS = [
-  { code: 'comerciante', label: 'Comerciante' },
-  { code: 'restaurante', label: 'Restaurante / Comida' },
-  { code: 'ferreteria', label: 'Ferreteria' },
-  { code: 'farmacia', label: 'Farmacia' },
-  { code: 'agricultor', label: 'Agricultor' },
-  { code: 'pescador', label: 'Pescador' },
-  { code: 'otro', label: 'Otro' },
+  { code: 'comerciante', label: 'Comerciante', industry: 'Comercio y Ventas' },
+  { code: 'agricultor', label: 'Agricultor/a', industry: 'Agropecuario y Pesca' },
+  { code: 'pescador', label: 'Pescador/a', industry: 'Agropecuario y Pesca' },
+  { code: 'otro', label: 'Otro', industry: null },
 ]
 
 export function LoginScreen() {
@@ -65,7 +62,7 @@ export function LoginScreen() {
     async function loadBusinessSectors() {
       const { data, error } = await supabase
         .from('business_sectors')
-        .select('code,label')
+        .select('code,label,industry')
         .eq('active', true)
         .order('display_order')
 
@@ -296,7 +293,15 @@ export function LoginScreen() {
               <label>TIPO DE NEGOCIO</label>
               <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} required>
                 <option value="">Seleccione...</option>
-                {businessSectors.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+                {groupBusinessSectorsByIndustry(businessSectors).map(([industry, items]) => (
+                  industry
+                    ? (
+                      <optgroup key={industry} label={industry}>
+                        {items.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+                      </optgroup>
+                    )
+                    : items.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)
+                ))}
               </select>
             </div>
           )}
@@ -346,4 +351,20 @@ export function LoginScreen() {
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+
+function groupBusinessSectorsByIndustry<T extends { industry?: string | null }>(items: T[]): [string | null, T[]][] {
+  const groups: [string | null, T[]][] = []
+
+  items.forEach((item) => {
+    const industry = item.industry || null
+    const lastGroup = groups[groups.length - 1]
+    if (lastGroup && lastGroup[0] === industry) {
+      lastGroup[1].push(item)
+    } else {
+      groups.push([industry, [item]])
+    }
+  })
+
+  return groups
 }
