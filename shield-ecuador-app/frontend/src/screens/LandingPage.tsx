@@ -26,6 +26,7 @@ export function LandingPage() {
   const eyebrowRef  = useRef<HTMLDivElement>(null)
   const line1Ref    = useRef<HTMLSpanElement>(null)
   const line2Ref    = useRef<HTMLSpanElement>(null)
+  const lineConnectorRef = useRef<HTMLSpanElement>(null)
   const line3Ref    = useRef<HTMLSpanElement>(null)
   const taglineRef  = useRef<HTMLParagraphElement>(null)
   const ctaRef      = useRef<HTMLDivElement>(null)
@@ -47,13 +48,13 @@ export function LandingPage() {
 
     const targets = [
       cornersRef.current, hudRef.current, eyebrowRef.current,
-      line1Ref.current, line2Ref.current, line3Ref.current,
+      line1Ref.current, line2Ref.current, lineConnectorRef.current, line3Ref.current,
       taglineRef.current, ctaRef.current, senseiRef.current,
       statsRef.current, beltRef.current, featRef.current,
     ]
 
     gsap.set(targets, { autoAlpha: 0 })
-    gsap.set([line1Ref.current, line2Ref.current, line3Ref.current], { y: 80, skewX: -4 })
+    gsap.set([line1Ref.current, line2Ref.current, lineConnectorRef.current, line3Ref.current], { y: 80, skewX: -4 })
     gsap.set([eyebrowRef.current, taglineRef.current], { y: 24 })
     gsap.set(ctaRef.current, { y: 30 })
     gsap.set(senseiRef.current, { scale: 0.9, x: 30 })
@@ -66,7 +67,8 @@ export function LandingPage() {
       .to(eyebrowRef.current, { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.1')
       .to(line1Ref.current,   { autoAlpha: 1, y: 0, skewX: 0, duration: 0.55 }, '-=0.1')
       .to(line2Ref.current,   { autoAlpha: 1, y: 0, skewX: 0, duration: 0.55 }, '-=0.38')
-      .to(line3Ref.current,   { autoAlpha: 1, y: 0, skewX: 0, duration: 0.55 }, '-=0.38')
+      .to(lineConnectorRef.current, { autoAlpha: 1, y: 0, skewX: 0, duration: 0.35 }, '-=0.3')
+      .to(line3Ref.current,   { autoAlpha: 1, y: 0, skewX: 0, duration: 0.55 }, '-=0.25')
       .to(taglineRef.current, { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.15')
       .to(ctaRef.current,     { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.15')
       .to(senseiRef.current,  { autoAlpha: 1, scale: 1, x: 0, duration: 0.75, ease: 'back.out(1.2)' }, '-=0.5')
@@ -136,9 +138,10 @@ export function LandingPage() {
             </div>
 
             <h1 className="lp-title">
-              <span ref={line1Ref} className="lp-t1">FORJA</span>
-              <span ref={line2Ref} className="lp-t2">TU <em>ARMADURA</em></span>
-              <span ref={line3Ref} className="lp-t3">DIGITAL</span>
+              <span ref={line1Ref} className="lp-t1">APRENDE A</span>
+              <span ref={line2Ref} className="lp-t2"><em>DEFENDERTE</em></span>
+              <span ref={lineConnectorRef} className="lp-t-connector">DE LOS</span>
+              <span ref={line3Ref} className="lp-t3 lp-t3--long">CIBERDELINCUENTES</span>
             </h1>
 
             <p ref={taglineRef} className="lp-tagline">
@@ -177,6 +180,14 @@ export function LandingPage() {
           {/* Right: real sensei photo (standing) */}
           <div ref={senseiRef} className="lp-sensei-col">
             <div className="lp-sensei-photo-wrap">
+              <button
+                type="button"
+                className="lp-signup-badge"
+                onClick={() => navigate('/login?mode=register')}
+                aria-label="Inscribete gratis"
+              >
+                <span>¡INSCRÍBETE!</span>
+              </button>
               <img
                 src="/sensei-de-pie.jpg"
                 alt="Sensei del Ciber Dojo"
