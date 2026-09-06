@@ -76,7 +76,9 @@ export function DashboardScreen() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.28 }}
           >
-            <img src={SENSEI_IMAGE_SRC} alt="Sensei digital" />
+            <div className="wisdom-portrait" style={{ '--portrait': `url(${SENSEI_IMAGE_SRC})` } as React.CSSProperties}>
+              <img src={SENSEI_IMAGE_SRC} alt="Sensei digital" />
+            </div>
             <div>
               <span className="mono-label">師範 · SENSEI</span>
               <h2>Prepárate, guerrero</h2>

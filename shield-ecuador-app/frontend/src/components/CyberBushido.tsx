@@ -777,12 +777,14 @@ function WisdomQuoteOverlay() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.28 }}
           >
-            <motion.img
-              src={SENSEI_IMAGE_SRC}
-              alt="Sensei digital"
-              animate={{ y: [-5, 5, -5] }}
-              transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
-            />
+            <div className="wisdom-portrait" style={{ '--portrait': `url(${SENSEI_IMAGE_SRC})` } as React.CSSProperties}>
+              <motion.img
+                src={SENSEI_IMAGE_SRC}
+                alt="Sensei digital"
+                animate={{ y: [-5, 5, -5] }}
+                transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
+              />
+            </div>
             <div>
               <span className="mono-label">{quote.source_title}</span>
               <h2>Sabiduria aplicada a ciberseguridad</h2>

@@ -526,14 +526,36 @@ code { font-family: var(--font-mono); }
   clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px));
 }
 
-.wisdom-card img {
+.wisdom-portrait {
+  position: relative;
   width: 100%;
   aspect-ratio: 4 / 5;
+  isolation: isolate;
+  border-radius: 18px;
+  box-shadow: inset 0 0 46px rgba(0,240,255,.16);
+}
+
+.wisdom-portrait::before {
+  content: '';
+  position: absolute;
+  inset: -26%;
+  z-index: 0;
+  background-image: var(--portrait);
+  background-size: cover;
+  background-position: center 48%;
+  filter: blur(36px) saturate(1.5) brightness(.85);
+  transform: scale(1.12);
+}
+
+.wisdom-portrait img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   object-position: center 48%;
-  border: 1px solid rgba(245,197,24,.24);
-  box-shadow: 0 0 40px rgba(0,240,255,.18);
-  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+  -webkit-mask-image: radial-gradient(ellipse 80% 84% at center, #000 58%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 84% at center, #000 58%, transparent 100%);
 }
 
 .wisdom-card h2 {
