@@ -138,8 +138,8 @@ export function LandingPage() {
             </div>
 
             <h1 className="lp-title">
-              <span ref={line1Ref} className="lp-t1">APRENDE A</span>
-              <div className="lp-t2-row">
+              <div className="lp-headline-top">
+                <span ref={line1Ref} className="lp-t1">APRENDE A</span>
                 <span ref={line2Ref} className="lp-t2"><em>DEFENDERTE</em></span>
                 <button
                   type="button"
@@ -147,7 +147,7 @@ export function LandingPage() {
                   onClick={() => navigate('/login?mode=register')}
                   aria-label="Inscribete gratis"
                 >
-                  <span>¡INSCRÍBETE!</span>
+                  <span>INSCRÍBETE<br />GRATIS</span>
                 </button>
               </div>
               <span ref={lineConnectorRef} className="lp-t-connector">DE LOS</span>
