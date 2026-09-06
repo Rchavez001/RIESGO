@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
 import { Bot, CheckCircle2, Home, ListChecks, LogOut, Medal, Menu, Play, ShieldCheck, Swords, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
@@ -639,7 +639,8 @@ type CampaignAd = {
 
 function CampaignAdOverlay() {
   const [ad, setAd] = React.useState<CampaignAd | null>(null)
-  const [closing, setClosing] = React.useState(false)
+  const [visible, setVisible] = React.useState(false)
+  const { playSound } = useDojoAudio()
 
   React.useEffect(() => {
     let active = true
@@ -656,6 +657,8 @@ function CampaignAdOverlay() {
 
       if (!active || error || !data?.length) return
       setAd(data[0] as CampaignAd)
+      setVisible(true)
+      playSound('ad-in')
     }
 
     void loadAd()
@@ -663,33 +666,44 @@ function CampaignAdOverlay() {
     return () => {
       active = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   React.useEffect(() => {
-    if (!ad) return
-    const dismissTimer = window.setTimeout(() => setClosing(true), Math.max(1, ad.duration_seconds) * 1000)
+    if (!ad || !visible) return
+    const dismissTimer = window.setTimeout(() => {
+      playSound('ad-out')
+      setVisible(false)
+    }, Math.max(1, ad.duration_seconds) * 1000)
     return () => window.clearTimeout(dismissTimer)
-  }, [ad])
-
-  React.useEffect(() => {
-    if (!closing) return
-    const removeTimer = window.setTimeout(() => setAd(null), 700)
-    return () => window.clearTimeout(removeTimer)
-  }, [closing])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ad, visible])
 
   if (!ad || !ad.image_url) return null
 
   const image = <img src={ad.image_url} alt={ad.message} />
 
   return createPortal(
-    <div className={`campaign-ad-overlay ${closing ? 'is-closing' : ''}`}>
-      {ad.link_url ? (
-        <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="campaign-ad-card">
-          {image}
-        </a>
-      ) : (
-        <div className="campaign-ad-card">{image}</div>
-      )}
+    <div className="campaign-ad-position">
+      <AnimatePresence onExitComplete={() => setAd(null)}>
+        {visible && (
+          <motion.div
+            className="campaign-ad-overlay"
+            initial={{ opacity: 0, scale: 0.5, y: -16, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.35, rotate: 10, y: 24, filter: 'blur(20px)' }}
+            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {ad.link_url ? (
+              <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="campaign-ad-card">
+                {image}
+              </a>
+            ) : (
+              <div className="campaign-ad-card">{image}</div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>,
     document.body
   )
