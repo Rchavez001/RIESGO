@@ -139,9 +139,25 @@ export function LandingPage() {
 
             <h1 className="lp-title">
               <span ref={line1Ref} className="lp-t1">APRENDE A</span>
-              <span ref={line2Ref} className="lp-t2"><em>DEFENDERTE</em></span>
+              <div className="lp-t2-row">
+                <span ref={line2Ref} className="lp-t2"><em>DEFENDERTE</em></span>
+                <button
+                  type="button"
+                  className="lp-signup-badge"
+                  onClick={() => navigate('/login?mode=register')}
+                  aria-label="Inscribete gratis"
+                >
+                  <span>¡INSCRÍBETE!</span>
+                </button>
+              </div>
               <span ref={lineConnectorRef} className="lp-t-connector">DE LOS</span>
-              <span ref={line3Ref} className="lp-t3 lp-t3--long">CIBERDELINCUENTES</span>
+              <span ref={line3Ref} className="lp-t3 lp-t3--medium">
+                {'CIBERATAQUES'.split('').map((char, index) => (
+                  <span key={index} className="lp-t3-letter" style={{ animationDelay: `${index * 0.3}s` }}>
+                    {char}
+                  </span>
+                ))}
+              </span>
             </h1>
 
             <p ref={taglineRef} className="lp-tagline">
@@ -180,14 +196,6 @@ export function LandingPage() {
           {/* Right: real sensei photo (standing) */}
           <div ref={senseiRef} className="lp-sensei-col">
             <div className="lp-sensei-photo-wrap">
-              <button
-                type="button"
-                className="lp-signup-badge"
-                onClick={() => navigate('/login?mode=register')}
-                aria-label="Inscribete gratis"
-              >
-                <span>¡INSCRÍBETE!</span>
-              </button>
               <img
                 src="/sensei-de-pie.jpg"
                 alt="Sensei del Ciber Dojo"
