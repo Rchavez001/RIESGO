@@ -146,6 +146,16 @@ function bindNavigation() {
         renderQuestions();
         renderNewsAlerts();
       }
+      if (button.dataset.panel === "reports") {
+        ["sectorChart", "campaignChart"].forEach((id) => {
+          const chart = ensureChart(id);
+          if (chart) chart.resize();
+        });
+        if (!$("#sectorDrilldownCard").classList.contains("hidden")) {
+          const drilldownChart = ensureChart("sectorDrilldownChart");
+          if (drilldownChart) drilldownChart.resize();
+        }
+      }
     });
   });
 }
@@ -167,6 +177,7 @@ function bindActions() {
   $("#adImageFile").addEventListener("change", handleCampaignImageSelected);
   $("#adTargetAll").addEventListener("change", (e) => setTargetAllUI(e.target.checked));
   $("#runReport").addEventListener("click", runReport);
+  $("#closeDrilldown").addEventListener("click", closeDrilldown);
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
   $("#forceNewsReview").addEventListener("click", runNewsAgent);
@@ -1260,6 +1271,12 @@ function setTargetAllUI(targetAll) {
 }
 
 const REPORT_PERIOD_DAYS = { quincenal: 15, mensual: 30, trimestral: 90 };
+const ALL_SECTORS_LABEL = "Sin sector (todos)";
+const VIVID_PALETTE = [
+  "#00E5FF", "#FF3D71", "#FFC107", "#7C4DFF", "#00E676",
+  "#FF6D00", "#F50057", "#1DE9B6", "#D500F9", "#2979FF",
+  "#FFD600", "#00BFA5",
+];
 
 function reportPeriodRange() {
   const periodKey = $("#reportPeriod") ? $("#reportPeriod").value : "trimestral";
@@ -1269,12 +1286,46 @@ function reportPeriodRange() {
   return { start, end };
 }
 
+function ensureChart(elId) {
+  if (typeof echarts === "undefined") return null;
+  const dom = document.getElementById(elId);
+  if (!dom) return null;
+  return echarts.getInstanceByDom(dom) || echarts.init(dom);
+}
+
+function bar3DOption(categories, values, valueLabel) {
+  return {
+    tooltip: { formatter: (p) => `${p.name}<br/>${valueLabel}: <strong>${p.value[2]}</strong>` },
+    xAxis3D: { type: "category", data: categories, axisLabel: { color: "#8AA0BB", interval: 0 } },
+    yAxis3D: { type: "category", data: [valueLabel || ""], show: false },
+    zAxis3D: { type: "value", axisLabel: { color: "#8AA0BB" }, name: valueLabel, nameTextStyle: { color: "#8AA0BB" } },
+    grid3D: {
+      boxWidth: 100,
+      boxDepth: 45,
+      viewControl: { alpha: 22, beta: 30, distance: 190, autoRotate: true, autoRotateSpeed: 6 },
+      light: { main: { intensity: 1.3, shadow: true }, ambient: { intensity: 0.4 } },
+    },
+    series: [{
+      type: "bar3D",
+      data: categories.map((name, i) => ({
+        name,
+        value: [i, 0, values[i]],
+        itemStyle: { color: VIVID_PALETTE[i % VIVID_PALETTE.length], opacity: 0.95 },
+      })),
+      shading: "lambert",
+      barSize: 26,
+      emphasis: { itemStyle: { color: "#ffffff" } },
+    }],
+  };
+}
+
 async function runReport() {
   const { start, end } = reportPeriodRange();
   const startIso = start.toISOString();
   const endIso = end.toISOString();
   const rangeEl = $("#reportRange");
   if (rangeEl) rangeEl.textContent = `Del ${start.toLocaleDateString("es-EC")} al ${end.toLocaleDateString("es-EC")}`;
+  closeDrilldown();
 
   try {
     const [entries, impressions, campaigns] = await Promise.all([
@@ -1283,26 +1334,117 @@ async function runReport() {
       supabaseRest("central_admin_campaigns?select=id,name,created_at&order=created_at.asc"),
     ]);
 
-    renderSectorEntriesReport(Array.isArray(entries) ? entries : []);
-    renderCampaignImpressionsReport(Array.isArray(campaigns) ? campaigns : [], Array.isArray(impressions) ? impressions : []);
+    const entryRows = Array.isArray(entries) ? entries : [];
+    const impressionRows = Array.isArray(impressions) ? impressions : [];
+    const campaignRows = Array.isArray(campaigns) ? campaigns : [];
+
+    renderSectorEntriesReport(entryRows);
+    renderSectorChart(entryRows);
+    renderCampaignImpressionsReport(campaignRows, impressionRows);
+    renderCampaignChart(campaignRows, impressionRows);
   } catch (error) {
     console.warn("No se pudo generar el reporte:", error);
     notify("No se pudo generar el reporte.");
   }
 }
 
-function renderSectorEntriesReport(entries) {
+function sectorEntryCounts(entries) {
   const counts = new Map();
   entries.forEach((row) => {
-    const sector = row.sector || "Sin sector (todos)";
+    const sector = row.sector || ALL_SECTORS_LABEL;
     counts.set(sector, (counts.get(sector) || 0) + 1);
   });
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+}
 
-  const rows = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+function renderSectorEntriesReport(entries) {
+  const rows = sectorEntryCounts(entries);
   const tbody = $("#reportSectorRows");
   tbody.innerHTML = rows.length === 0
     ? `<tr><td colspan="2" class="muted">Sin ingresos registrados en este periodo.</td></tr>`
     : rows.map(([sector, count]) => `<tr><td>${esc(sector)}</td><td>${count}</td></tr>`).join("");
+}
+
+function renderSectorChart(entries) {
+  const rows = sectorEntryCounts(entries);
+  const chart = ensureChart("sectorChart");
+  if (!chart) return;
+
+  if (rows.length === 0) {
+    chart.clear();
+    return;
+  }
+
+  chart.setOption(bar3DOption(rows.map(([s]) => s), rows.map(([, c]) => c), "Ingresos"), true);
+  chart.off("click");
+  chart.on("click", (params) => {
+    if (params.componentType === "series" && params.name) void showSectorDrilldown(params.name);
+  });
+}
+
+async function showSectorDrilldown(sectorLabel) {
+  const { start, end } = reportPeriodRange();
+  const isAll = sectorLabel === ALL_SECTORS_LABEL;
+  const sectorFilter = isAll ? "sector=is.null" : `sector=eq.${encodeURIComponent(sectorLabel)}`;
+
+  try {
+    const [impressions, campaigns] = await Promise.all([
+      supabaseRest(`campaign_impressions?select=campaign_id&${sectorFilter}&shown_at=gte.${encodeURIComponent(start.toISOString())}&shown_at=lte.${encodeURIComponent(end.toISOString())}&limit=5000`),
+      supabaseRest("central_admin_campaigns?select=id,name,created_at&order=created_at.asc"),
+    ]);
+
+    const counts = new Map();
+    (impressions || []).forEach((row) => counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1));
+
+    const rows = (campaigns || [])
+      .map((c) => ({ ...c, count: counts.get(c.id) || 0 }))
+      .filter((c) => c.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    $("#sectorDrilldownTitle").textContent = `Propaganda mostrada en: ${sectorLabel}`;
+    $("#sectorDrilldownCard").classList.remove("hidden");
+
+    const chart = ensureChart("sectorDrilldownChart");
+    if (chart) {
+      if (rows.length === 0) chart.clear();
+      else chart.setOption(bar3DOption(rows.map((r) => r.name), rows.map((r) => r.count), "Veces mostrada"), true);
+    }
+
+    const tbody = $("#reportDrilldownRows");
+    tbody.innerHTML = rows.length === 0
+      ? `<tr><td colspan="3" class="muted">Sin propaganda mostrada en este sector durante el periodo.</td></tr>`
+      : rows.map((r) => `
+        <tr>
+          <td>${esc(r.name)}</td>
+          <td>${new Date(r.created_at).toLocaleDateString("es-EC")}</td>
+          <td>${r.count}</td>
+        </tr>
+      `).join("");
+
+    $("#sectorDrilldownCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    console.warn("No se pudo cargar el detalle del sector:", error);
+    notify("No se pudo cargar el detalle del sector.");
+  }
+}
+
+function closeDrilldown() {
+  const card = $("#sectorDrilldownCard");
+  if (card) card.classList.add("hidden");
+}
+
+function renderCampaignChart(campaigns, impressions) {
+  const counts = new Map();
+  impressions.forEach((row) => counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1));
+  const chart = ensureChart("campaignChart");
+  if (!chart) return;
+
+  if (campaigns.length === 0) {
+    chart.clear();
+    return;
+  }
+
+  chart.setOption(bar3DOption(campaigns.map((c) => c.name), campaigns.map((c) => counts.get(c.id) || 0), "Veces mostrada"), true);
 }
 
 function renderCampaignImpressionsReport(campaigns, impressions) {

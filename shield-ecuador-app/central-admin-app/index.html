@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ciber Dojo Central Admin</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
   </head>
   <body>
     <div id="app" class="central-app">
@@ -614,22 +616,38 @@
             </div>
           </article>
 
-          <div class="ads-layout">
-            <article class="card">
-              <h2>Ingresos a la aplicacion por sector</h2>
-              <table class="user-table">
-                <thead><tr><th>Sector</th><th>Ingresos</th></tr></thead>
-                <tbody id="reportSectorRows"></tbody>
-              </table>
-            </article>
-            <article class="card">
-              <h2>Veces que se mostro cada propaganda</h2>
-              <table class="user-table">
-                <thead><tr><th>Campana</th><th>Creada</th><th>Mostrada</th></tr></thead>
-                <tbody id="reportCampaignRows"></tbody>
-              </table>
-            </article>
-          </div>
+          <article class="card">
+            <div class="card-heading">
+              <h2>Accesos a la aplicacion por sector</h2>
+              <span class="muted">Click en una barra para ver que propaganda se desplego en ese sector</span>
+            </div>
+            <div id="sectorChart" class="report-chart-3d"></div>
+            <table class="user-table">
+              <thead><tr><th>Sector</th><th>Ingresos</th></tr></thead>
+              <tbody id="reportSectorRows"></tbody>
+            </table>
+          </article>
+
+          <article id="sectorDrilldownCard" class="card hidden">
+            <div class="card-heading">
+              <h2 id="sectorDrilldownTitle">Propaganda mostrada en el sector</h2>
+              <button id="closeDrilldown" class="btn secondary">Ver todos los sectores</button>
+            </div>
+            <div id="sectorDrilldownChart" class="report-chart-3d"></div>
+            <table class="user-table">
+              <thead><tr><th>Campana</th><th>Auspiciante desde</th><th>Veces mostrada en el sector</th></tr></thead>
+              <tbody id="reportDrilldownRows"></tbody>
+            </table>
+          </article>
+
+          <article class="card">
+            <h2>Veces que se mostro cada propaganda (todos los sectores)</h2>
+            <div id="campaignChart" class="report-chart-3d"></div>
+            <table class="user-table">
+              <thead><tr><th>Campana</th><th>Creada</th><th>Mostrada</th></tr></thead>
+              <tbody id="reportCampaignRows"></tbody>
+            </table>
+          </article>
         </section>
       </main>
     </div>

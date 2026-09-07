@@ -683,7 +683,11 @@ function CampaignAdOverlay() {
       setAd(campaign)
       setVisible(true)
       playSound('ad-in')
-      await supabase.from('campaign_impressions').insert({ campaign_id: campaign.id, user_id: userProfile!.id })
+      await supabase.from('campaign_impressions').insert({
+        campaign_id: campaign.id,
+        user_id: userProfile!.id,
+        sector: userProfile!.sector ?? null,
+      })
     }
 
     void loadAd()
