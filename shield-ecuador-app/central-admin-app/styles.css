@@ -562,6 +562,47 @@ textarea:focus {
   color: #991b1b;
 }
 
+.sector-target-box {
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--soft);
+}
+.sector-target-box > .label {
+  display: block;
+  margin-bottom: 8px;
+}
+.sector-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #1f2937;
+  padding: 4px 0;
+}
+.sector-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+.sector-check-all {
+  font-weight: 800;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+}
+.sector-check-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px 16px;
+}
+.sector-check-list.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .ad-image-preview {
   margin: 10px 0;
   border: 1px solid var(--line);

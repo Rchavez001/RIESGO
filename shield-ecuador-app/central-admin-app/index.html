@@ -49,6 +49,7 @@
           <button class="nav-item" data-panel="users">Usuarios</button>
           <button class="nav-item" data-panel="occupations">Ocupaciones</button>
           <button class="nav-item" data-panel="ads">Propaganda</button>
+          <button class="nav-item" data-panel="reports">Reportes</button>
         </nav>
 
         <div class="rail-card">
@@ -561,6 +562,14 @@
                 Mensaje
                 <textarea id="adMessage" rows="3"></textarea>
               </label>
+              <div class="sector-target-box">
+                <span class="label">Sectores a los que se dirige</span>
+                <label class="sector-check sector-check-all">
+                  <input id="adTargetAll" type="checkbox" />
+                  Todos los sectores
+                </label>
+                <div id="adSectorList" class="sector-check-list"></div>
+              </div>
               <label>
                 Imagen de la campana
                 <input id="adImageFile" type="file" accept="image/png,image/jpeg,image/webp" />
@@ -579,6 +588,48 @@
             <h2>Historial de cambios (auditoria)</h2>
             <div id="campaignAuditLog" class="progression-preview"></div>
           </article>
+        </section>
+
+        <section id="reports" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">REPORTES</span>
+              <h2>Ingresos por sector y desempeno de propaganda</h2>
+            </div>
+          </div>
+          <article class="card">
+            <div class="form-grid compact">
+              <label>
+                Periodo
+                <select id="reportPeriod">
+                  <option value="quincenal">Quincenal (15 dias)</option>
+                  <option value="mensual">Mensual</option>
+                  <option value="trimestral" selected>Trimestral</option>
+                </select>
+              </label>
+            </div>
+            <div class="modal-actions">
+              <button id="runReport" class="btn primary">Generar reporte</button>
+              <span id="reportRange" class="muted"></span>
+            </div>
+          </article>
+
+          <div class="ads-layout">
+            <article class="card">
+              <h2>Ingresos a la aplicacion por sector</h2>
+              <table class="user-table">
+                <thead><tr><th>Sector</th><th>Ingresos</th></tr></thead>
+                <tbody id="reportSectorRows"></tbody>
+              </table>
+            </article>
+            <article class="card">
+              <h2>Veces que se mostro cada propaganda</h2>
+              <table class="user-table">
+                <thead><tr><th>Campana</th><th>Creada</th><th>Mostrada</th></tr></thead>
+                <tbody id="reportCampaignRows"></tbody>
+              </table>
+            </article>
+          </div>
         </section>
       </main>
     </div>

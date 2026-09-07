@@ -59,6 +59,7 @@ serve(async (req) => {
       phone: await decryptOrFallback(profile.phone_encrypted, null),
       full_name: await decryptOrFallback(profile.full_name_encrypted, profile.full_name),
       business_type: profile.business_type,
+      sector: profile.sector,
       role: profile.role,
       belt: profile.belt,
       total_points: profile.total_points,

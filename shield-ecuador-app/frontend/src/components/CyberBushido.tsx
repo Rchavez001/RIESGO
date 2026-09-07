@@ -7,6 +7,7 @@ import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
+import { useAuth } from '../contexts/AuthContext'
 
 export const SENSEI_IMAGE_SRC = '/sensei-de-pie.jpg'
 
@@ -610,6 +611,7 @@ export function DojoShell({
               )
             })}
           </div>
+          <AppEntryLogger />
           <CampaignAdOverlay />
           <WisdomQuoteOverlay />
           {children}
@@ -629,6 +631,32 @@ export function SectionHeader({ eyebrow, title, kanji }: { eyebrow: string; titl
   )
 }
 
+function AppEntryLogger() {
+  const { userProfile } = useAuth()
+
+  React.useEffect(() => {
+    if (!userProfile?.id) return
+    let active = true
+
+    async function logEntry() {
+      if (!active) return
+      await supabase.from('app_entry_log').insert({
+        user_id: userProfile!.id,
+        sector: userProfile!.sector ?? null,
+      })
+    }
+
+    void logEntry()
+
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.id])
+
+  return null
+}
+
 type CampaignAd = {
   id: string
   image_url: string | null
@@ -641,24 +669,21 @@ function CampaignAdOverlay() {
   const [ad, setAd] = React.useState<CampaignAd | null>(null)
   const [visible, setVisible] = React.useState(false)
   const { playSound } = useDojoAudio()
+  const { userProfile } = useAuth()
 
   React.useEffect(() => {
+    if (!userProfile?.id) return
     let active = true
 
     async function loadAd() {
-      const { data, error } = await supabase
-        .from('central_admin_campaigns')
-        .select('id, image_url, link_url, message, duration_seconds')
-        .eq('moment', 'inicio')
-        .eq('status', 'activa')
-        .not('image_url', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
+      const { data, error } = await supabase.rpc('get_next_campaign_for_user', { p_moment: 'inicio' })
 
-      if (!active || error || !data?.length) return
-      setAd(data[0] as CampaignAd)
+      if (!active || error || !data || !data.image_url) return
+      const campaign = data as CampaignAd
+      setAd(campaign)
       setVisible(true)
       playSound('ad-in')
+      await supabase.from('campaign_impressions').insert({ campaign_id: campaign.id, user_id: userProfile!.id })
     }
 
     void loadAd()
@@ -667,7 +692,7 @@ function CampaignAdOverlay() {
       active = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [userProfile?.id])
 
   React.useEffect(() => {
     if (!ad || !visible) return

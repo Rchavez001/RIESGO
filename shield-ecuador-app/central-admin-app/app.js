@@ -76,6 +76,7 @@ const baseState = {
   campaigns: [],
   campaignSettings: { max_image_kb: 500, max_image_width: 1920, max_image_height: 1920 },
   campaignAudit: [],
+  availableSectors: [],
   occupations: [],
   selectedOccupationCode: null,
   questionsByDojo: {},
@@ -99,6 +100,8 @@ function init() {
   void loadCampaignSettingsFromSupabase();
   void loadCampaignAuditFromSupabase();
   void loadOccupationsFromSupabase();
+  void loadAvailableSectorsFromSupabase();
+  void runReport();
   startNewsAgentScheduler();
 }
 
@@ -123,6 +126,7 @@ function mergeState(base, saved) {
   merged.selectedCampaignId = null;
   merged.occupations = [];
   merged.selectedOccupationCode = null;
+  merged.availableSectors = [];
   return merged;
 }
 
@@ -161,6 +165,8 @@ function bindActions() {
   $("#saveCampaign").addEventListener("click", saveCampaign);
   $("#saveAdsSettings").addEventListener("click", saveCampaignSettings);
   $("#adImageFile").addEventListener("change", handleCampaignImageSelected);
+  $("#adTargetAll").addEventListener("change", (e) => setTargetAllUI(e.target.checked));
+  $("#runReport").addEventListener("click", runReport);
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
   $("#forceNewsReview").addEventListener("click", runNewsAgent);
@@ -1003,6 +1009,8 @@ function renderCampaigns() {
     $("#adStatus").value = campaign.status;
     $("#adLink").value = campaign.link_url || "";
     $("#adMessage").value = campaign.message;
+    renderSectorCheckboxes(campaign.target_sectors);
+    setTargetAllUI(campaign.target_all !== false);
     if (campaign.image_url) {
       previewImg.src = campaign.image_url;
       previewWrap.classList.remove("hidden");
@@ -1017,6 +1025,8 @@ function renderCampaigns() {
     $("#adStatus").value = "activa";
     $("#adLink").value = "";
     $("#adMessage").value = "";
+    renderSectorCheckboxes([]);
+    setTargetAllUI(true);
     previewWrap.classList.add("hidden");
   }
 }
@@ -1096,6 +1106,7 @@ async function saveCampaign() {
   }
 
   const existing = getSelectedCampaign();
+  const targetAll = $("#adTargetAll").checked;
   const payload = {
     name,
     moment: $("#adMoment").value,
@@ -1104,6 +1115,8 @@ async function saveCampaign() {
     status: $("#adStatus").value,
     link_url: $("#adLink").value.trim() || null,
     message,
+    target_all: targetAll,
+    target_sectors: targetAll ? [] : getTargetSectorsFromForm(),
   };
 
   try {
@@ -1211,6 +1224,103 @@ async function loadOccupationsFromSupabase() {
 
 function getSelectedOccupation() {
   return state.occupations.find((item) => item.code === state.selectedOccupationCode) || null;
+}
+
+async function loadAvailableSectorsFromSupabase() {
+  try {
+    const rows = await supabaseRest("business_sectors?select=industry&active=eq.true&industry=not.is.null&order=industry.asc");
+    const unique = Array.from(new Set((rows || []).map((row) => row.industry).filter(Boolean)));
+    state.availableSectors = unique;
+    renderSectorCheckboxes();
+  } catch (error) {
+    console.warn("No se pudieron cargar los sectores:", error);
+  }
+}
+
+function renderSectorCheckboxes(selectedSectors) {
+  const container = $("#adSectorList");
+  if (!container) return;
+  const selected = new Set(selectedSectors || []);
+
+  container.innerHTML = state.availableSectors.map((sector) => `
+    <label class="sector-check">
+      <input type="checkbox" value="${esc(sector)}" ${selected.has(sector) ? "checked" : ""} />
+      ${esc(sector)}
+    </label>
+  `).join("");
+}
+
+function getTargetSectorsFromForm() {
+  return $$("#adSectorList input[type='checkbox']:checked").map((input) => input.value);
+}
+
+function setTargetAllUI(targetAll) {
+  $("#adTargetAll").checked = targetAll;
+  $("#adSectorList").classList.toggle("disabled", targetAll);
+}
+
+const REPORT_PERIOD_DAYS = { quincenal: 15, mensual: 30, trimestral: 90 };
+
+function reportPeriodRange() {
+  const periodKey = $("#reportPeriod") ? $("#reportPeriod").value : "trimestral";
+  const days = REPORT_PERIOD_DAYS[periodKey] || REPORT_PERIOD_DAYS.trimestral;
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
+async function runReport() {
+  const { start, end } = reportPeriodRange();
+  const startIso = start.toISOString();
+  const endIso = end.toISOString();
+  const rangeEl = $("#reportRange");
+  if (rangeEl) rangeEl.textContent = `Del ${start.toLocaleDateString("es-EC")} al ${end.toLocaleDateString("es-EC")}`;
+
+  try {
+    const [entries, impressions, campaigns] = await Promise.all([
+      supabaseRest(`app_entry_log?select=sector,entered_at&entered_at=gte.${encodeURIComponent(startIso)}&entered_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
+      supabaseRest(`campaign_impressions?select=campaign_id,shown_at&shown_at=gte.${encodeURIComponent(startIso)}&shown_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
+      supabaseRest("central_admin_campaigns?select=id,name,created_at&order=created_at.asc"),
+    ]);
+
+    renderSectorEntriesReport(Array.isArray(entries) ? entries : []);
+    renderCampaignImpressionsReport(Array.isArray(campaigns) ? campaigns : [], Array.isArray(impressions) ? impressions : []);
+  } catch (error) {
+    console.warn("No se pudo generar el reporte:", error);
+    notify("No se pudo generar el reporte.");
+  }
+}
+
+function renderSectorEntriesReport(entries) {
+  const counts = new Map();
+  entries.forEach((row) => {
+    const sector = row.sector || "Sin sector (todos)";
+    counts.set(sector, (counts.get(sector) || 0) + 1);
+  });
+
+  const rows = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  const tbody = $("#reportSectorRows");
+  tbody.innerHTML = rows.length === 0
+    ? `<tr><td colspan="2" class="muted">Sin ingresos registrados en este periodo.</td></tr>`
+    : rows.map(([sector, count]) => `<tr><td>${esc(sector)}</td><td>${count}</td></tr>`).join("");
+}
+
+function renderCampaignImpressionsReport(campaigns, impressions) {
+  const counts = new Map();
+  impressions.forEach((row) => {
+    counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1);
+  });
+
+  const tbody = $("#reportCampaignRows");
+  tbody.innerHTML = campaigns.length === 0
+    ? `<tr><td colspan="3" class="muted">Todavia no hay campanas.</td></tr>`
+    : campaigns.map((campaign) => `
+      <tr>
+        <td>${esc(campaign.name)}</td>
+        <td>${new Date(campaign.created_at).toLocaleDateString("es-EC")}</td>
+        <td>${counts.get(campaign.id) || 0}</td>
+      </tr>
+    `).join("");
 }
 
 function slugifyOccupationCode(label) {

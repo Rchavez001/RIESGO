@@ -31,7 +31,7 @@ serve(async (req) => {
     const businessType = normalizeBusinessType(body.business_type)
     const consent = body.data_processing_authorized === true
 
-    await validateRegistration({ email, password, fullName, businessType, consent })
+    const sector = await validateRegistration({ email, password, fullName, businessType, consent })
 
     const keyVersion = getKeyVersion()
     const emailEncrypted = await encryptString(email, keyVersion)
@@ -80,6 +80,7 @@ serve(async (req) => {
       full_name: null,
       full_name_encrypted: fullNameEncrypted,
       business_type: businessType,
+      sector,
       location_city: null,
       location_province: null,
       pii_key_version: keyVersion,
@@ -124,12 +125,14 @@ async function validateRegistration(input: { email: string; password: string; fu
 
   const { data, error } = await supabase
     .from("business_sectors")
-    .select("code")
+    .select("code, industry")
     .eq("code", input.businessType)
     .eq("active", true)
     .maybeSingle()
 
   if (error || !data) throw new Error("invalid_business_type")
+
+  return data.industry ?? null
 }
 
 function normalizeEmail(value: unknown) {

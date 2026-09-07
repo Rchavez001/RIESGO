@@ -17,6 +17,7 @@ export interface UserProfile {
   phone?: string
   full_name?: string
   business_type?: string
+  sector?: string | null
   role: 'user' | 'admin' | 'analyst'
   belt: string
   total_points: number
