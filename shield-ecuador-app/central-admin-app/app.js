@@ -1296,23 +1296,30 @@ function ensureChart(elId) {
 function bar3DOption(categories, values, valueLabel) {
   return {
     tooltip: { formatter: (p) => `${p.name}<br/>${valueLabel}: <strong>${p.value[2]}</strong>` },
-    xAxis3D: { type: "category", data: categories, axisLabel: { color: "#8AA0BB", interval: 0 } },
+    xAxis3D: { type: "category", data: categories, axisLabel: { color: "#EAF6FF", interval: 0, fontSize: 13 } },
     yAxis3D: { type: "category", data: [valueLabel || ""], show: false },
-    zAxis3D: { type: "value", axisLabel: { color: "#8AA0BB" }, name: valueLabel, nameTextStyle: { color: "#8AA0BB" } },
+    zAxis3D: { type: "value", axisLabel: { color: "#EAF6FF" }, name: valueLabel, nameTextStyle: { color: "#EAF6FF" } },
     grid3D: {
       boxWidth: 100,
       boxDepth: 45,
       viewControl: { alpha: 22, beta: 30, distance: 190, autoRotate: true, autoRotateSpeed: 6 },
-      light: { main: { intensity: 1.3, shadow: true }, ambient: { intensity: 0.4 } },
+      light: { main: { intensity: 1.1 }, ambient: { intensity: 0.9 } },
+      axisLine: { lineStyle: { color: "#3a4a63" } },
+      splitLine: { lineStyle: { color: "#1f2c40" } },
     },
     series: [{
       type: "bar3D",
       data: categories.map((name, i) => ({
         name,
         value: [i, 0, values[i]],
-        itemStyle: { color: VIVID_PALETTE[i % VIVID_PALETTE.length], opacity: 0.95 },
+        itemStyle: {
+          color: VIVID_PALETTE[i % VIVID_PALETTE.length],
+          opacity: 1,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,.55)",
+        },
       })),
-      shading: "lambert",
+      shading: "color",
       barSize: 26,
       emphasis: { itemStyle: { color: "#ffffff" } },
     }],
