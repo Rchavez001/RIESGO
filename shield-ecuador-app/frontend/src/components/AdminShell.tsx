@@ -1,10 +1,7 @@
 import React, { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  Activity, AlertTriangle, Bot, Brain, Building2, FileQuestion,
-  LayoutDashboard, LogOut, Menu, Shield, Swords, X,
-} from 'lucide-react'
+import { LayoutDashboard, LogOut, Menu, Shield, Swords, X } from 'lucide-react'
 import './adminshell.css'
 
 interface AdminShellProps {
@@ -18,29 +15,13 @@ const NAV_SECTIONS = [
   {
     group: 'PRINCIPAL',
     items: [
-      { to: '/admin', tab: '', label: 'Panel General', icon: LayoutDashboard },
-    ],
-  },
-  {
-    group: 'GESTIÓN DE CONTENIDO',
-    items: [
-      { to: '/admin?tab=questions', tab: 'questions', label: 'Preguntas', icon: FileQuestion },
-      { to: '/admin?tab=sectors', tab: 'sectors', label: 'Sectores', icon: Building2 },
-    ],
-  },
-  {
-    group: 'INTELIGENCIA ARTIFICIAL',
-    items: [
-      { to: '/admin?tab=providers', tab: 'providers', label: 'IA Providers', icon: Brain },
-      { to: '/admin?tab=agents', tab: 'agents', label: 'Agentes', icon: Bot },
-      { to: '/admin?tab=incidents', tab: 'incidents', label: 'Incidentes', icon: AlertTriangle },
-      { to: '/admin?tab=audit-report', tab: 'audit-report', label: 'Auditoría IA', icon: Activity },
+      { to: '/admin', tab: '', label: 'Panel de administracion', icon: LayoutDashboard, external: true },
     ],
   },
   {
     group: 'APLICACIÓN USUARIO',
     items: [
-      { to: '/dashboard', tab: '', label: 'Ver como usuario', icon: Swords },
+      { to: '/dashboard', tab: '', label: 'Ver como usuario', icon: Swords, external: false },
     ],
   },
 ]
@@ -73,17 +54,24 @@ export function AdminShell({ children, userName, userEmail, onSignOut }: AdminSh
           {NAV_SECTIONS.map((section) => (
             <div key={section.group} className="adm-nav-group">
               <span className="adm-nav-group-label">{section.group}</span>
-              {section.items.map(({ to, tab: itemTab, label, icon: Icon }) => (
-                <NavLink
-                  key={to + itemTab}
-                  to={to}
-                  end
-                  className={() => `adm-nav-item${isActive(to, itemTab) ? ' active' : ''}`}
-                  onClick={() => setOpen(false)}
-                >
-                  <Icon size={15} />
-                  {label}
-                </NavLink>
+              {section.items.map(({ to, tab: itemTab, label, icon: Icon, external }) => (
+                external ? (
+                  <a key={to} href={to} className="adm-nav-item" onClick={() => setOpen(false)}>
+                    <Icon size={15} />
+                    {label}
+                  </a>
+                ) : (
+                  <NavLink
+                    key={to + itemTab}
+                    to={to}
+                    end
+                    className={() => `adm-nav-item${isActive(to, itemTab) ? ' active' : ''}`}
+                    onClick={() => setOpen(false)}
+                  >
+                    <Icon size={15} />
+                    {label}
+                  </NavLink>
+                )
               ))}
             </div>
           ))}

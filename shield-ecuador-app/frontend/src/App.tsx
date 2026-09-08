@@ -26,7 +26,6 @@ import { useDojoStore } from './store/dojoStore'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 
 // Lazy-loaded: heavy, infrequently-used screens kept out of the initial bundle.
-const AdminCenterScreen = React.lazy(() => import('./screens/AdminCenterScreen').then((m) => ({ default: m.AdminCenterScreen })))
 const TenantAdminPage = React.lazy(() => import('./screens/TenantAdminPage').then((m) => ({ default: m.TenantAdminPage })))
 const VulnScannerPage = React.lazy(() => import('./screens/VulnScannerPage').then((m) => ({ default: m.VulnScannerPage })))
 
@@ -83,25 +82,15 @@ function ProtectedShell() {
 
 function DashboardOrAdminRedirect() {
   const { userProfile, loading } = useAuth()
-  if (loading) return null
-  if (userProfile?.role === 'admin') return <Navigate to="/admin" replace />
+
+  React.useEffect(() => {
+    if (!loading && userProfile?.role === 'admin') {
+      window.location.href = '/admin'
+    }
+  }, [loading, userProfile])
+
+  if (loading || userProfile?.role === 'admin') return null
   return <PageTransition><DashboardScreen /></PageTransition>
-}
-
-function AdminOnlyRoute() {
-  const { userProfile, loading } = useAuth()
-  if (loading) return <LoadingScreen />
-  if (userProfile?.role !== 'admin') return <Navigate to="/dashboard" replace />
-  return <Outlet />
-}
-
-function AdminRoute() {
-  const { userProfile } = useAuth()
-  return (
-    <React.Suspense fallback={<LoadingScreen />}>
-      <AdminCenterScreen currentUser={userProfile} onBackToApp={() => window.history.back()} />
-    </React.Suspense>
-  )
 }
 
 function TenantAdminRoute() {
@@ -141,9 +130,6 @@ function AppRoutes() {
           <Route path="/escaner" element={<PageTransition><React.Suspense fallback={<LoadingScreen />}><VulnScannerPage /></React.Suspense></PageTransition>} />
           <Route path="/ranking" element={<PageTransition><LeaderboardPage /></PageTransition>} />
           <Route path="/perfil" element={<PageTransition><ProfilePage /></PageTransition>} />
-          <Route element={<AdminOnlyRoute />}>
-            <Route path="/admin" element={<PageTransition><AdminRoute /></PageTransition>} />
-          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
