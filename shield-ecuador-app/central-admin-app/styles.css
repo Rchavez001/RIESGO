@@ -662,7 +662,8 @@ textarea:focus {
   display: none;
 }
 
-#sectorDrilldownCard.hidden {
+#sectorDrilldownCard.hidden,
+#sectorBreakdownCard.hidden {
   display: none;
 }
 

@@ -77,6 +77,7 @@ const baseState = {
   campaignSettings: { max_image_kb: 500, max_image_width: 1920, max_image_height: 1920 },
   campaignAudit: [],
   availableSectors: [],
+  lastEntryRows: [],
   occupations: [],
   selectedOccupationCode: null,
   questionsByDojo: {},
@@ -147,10 +148,14 @@ function bindNavigation() {
         renderNewsAlerts();
       }
       if (button.dataset.panel === "reports") {
-        ["sectorChart", "campaignChart"].forEach((id) => {
+        ["topChart", "campaignChart"].forEach((id) => {
           const chart = ensureChart(id);
           if (chart) chart.resize();
         });
+        if (!$("#sectorBreakdownCard").classList.contains("hidden")) {
+          const breakdownChart = ensureChart("sectorChart");
+          if (breakdownChart) breakdownChart.resize();
+        }
         if (!$("#sectorDrilldownCard").classList.contains("hidden")) {
           const drilldownChart = ensureChart("sectorDrilldownChart");
           if (drilldownChart) drilldownChart.resize();
@@ -177,6 +182,7 @@ function bindActions() {
   $("#adImageFile").addEventListener("change", handleCampaignImageSelected);
   $("#adTargetAll").addEventListener("change", (e) => setTargetAllUI(e.target.checked));
   $("#runReport").addEventListener("click", runReport);
+  $("#closeSectorBreakdown").addEventListener("click", closeSectorBreakdown);
   $("#closeDrilldown").addEventListener("click", closeDrilldown);
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
@@ -1333,6 +1339,7 @@ async function runReport() {
   const rangeEl = $("#reportRange");
   if (rangeEl) rangeEl.textContent = `Del ${start.toLocaleDateString("es-EC")} al ${end.toLocaleDateString("es-EC")}`;
   closeDrilldown();
+  closeSectorBreakdown();
 
   try {
     const [entries, impressions, campaigns] = await Promise.all([
@@ -1344,15 +1351,51 @@ async function runReport() {
     const entryRows = Array.isArray(entries) ? entries : [];
     const impressionRows = Array.isArray(impressions) ? impressions : [];
     const campaignRows = Array.isArray(campaigns) ? campaigns : [];
+    state.lastEntryRows = entryRows;
 
+    renderTopChart(entryRows);
     renderSectorEntriesReport(entryRows);
-    renderSectorChart(entryRows);
     renderCampaignImpressionsReport(campaignRows, impressionRows);
     renderCampaignChart(campaignRows, impressionRows);
   } catch (error) {
     console.warn("No se pudo generar el reporte:", error);
     notify("No se pudo generar el reporte.");
   }
+}
+
+function renderTopChart(entries) {
+  const withSector = entries.filter((row) => row.sector).length;
+  const withoutSector = entries.length - withSector;
+  const chart = ensureChart("topChart");
+  if (!chart) return;
+
+  if (entries.length === 0) {
+    chart.clear();
+    return;
+  }
+
+  chart.setOption(bar3DOption(["Con sector", "Sin sector"], [withSector, withoutSector], "Ingresos"), true);
+  chart.off("click");
+  chart.on("click", (params) => {
+    if (params.componentType !== "series" || !params.name) return;
+    if (params.name === "Con sector") {
+      showSectorBreakdown();
+    } else {
+      void showSectorDrilldown(ALL_SECTORS_LABEL);
+    }
+  });
+}
+
+function showSectorBreakdown() {
+  $("#sectorBreakdownCard").classList.remove("hidden");
+  renderSectorChart(state.lastEntryRows || []);
+  $("#sectorBreakdownCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeSectorBreakdown() {
+  const card = $("#sectorBreakdownCard");
+  if (card) card.classList.add("hidden");
+  closeDrilldown();
 }
 
 function sectorEntryCounts(entries) {
