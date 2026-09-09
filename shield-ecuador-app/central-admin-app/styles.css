@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
 
 :root {
   --bg-void: #040912;
@@ -25,7 +25,23 @@
   --font-heading: 'Rajdhani', sans-serif;
   --font-mono: 'Share Tech Mono', monospace;
   --font-impact: 'Bebas Neue', sans-serif;
+  --font-display: 'Noto Serif JP', serif;
 }
+
+.kanji-bg {
+  position: absolute;
+  right: 5%;
+  top: -28px;
+  font-family: var(--font-display);
+  font-size: clamp(6rem, 13vw, 11rem);
+  font-weight: 900;
+  color: rgba(198, 40, 40, 0.055);
+  user-select: none;
+  pointer-events: none;
+  line-height: 1;
+  z-index: 0;
+}
+
 
 * {
   box-sizing: border-box;
@@ -82,14 +98,11 @@ button {
   place-items: center;
   width: 56px;
   height: 56px;
-  border-radius: 8px;
-  background: var(--torii-red);
-  color: #fff;
-  box-shadow: 0 0 18px rgba(198, 40, 40, 0.45);
-  font-weight: 900;
-  font-size: 21px;
-  font-family: var(--font-impact);
-  letter-spacing: 0.04em;
+  color: var(--torii-red);
+  font-size: 38px;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(198, 40, 40, 0.55);
+  filter: drop-shadow(0 0 12px rgba(198, 40, 40, 0.42));
 }
 
 .brand strong,
@@ -198,6 +211,23 @@ button {
   margin-bottom: 20px;
 }
 
+.topbar-heading {
+  position: relative;
+  overflow: hidden;
+  padding-top: 4px;
+  min-width: 0;
+}
+
+.topbar-heading > *:not(.kanji-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+.topbar-heading .kanji-bg {
+  right: -10px;
+  top: -34px;
+}
+
 .eyebrow,
 .label {
   display: block;
@@ -218,11 +248,13 @@ p {
 
 .topbar h1 {
   margin: 4px 0 6px;
-  font-family: var(--font-impact);
-  font-weight: 400;
-  font-size: 42px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.15;
   letter-spacing: 0.01em;
   color: var(--ink);
+  text-shadow: 0 0 22px rgba(0, 180, 216, 0.22), 0 12px 30px rgba(0, 0, 0, 0.5);
 }
 
 .topbar p,
@@ -662,9 +694,16 @@ textarea:focus {
   display: none;
 }
 
+#campaignDetailCard.hidden,
 #sectorDrilldownCard.hidden,
-#sectorBreakdownCard.hidden {
+#sectorBreakdownCard.hidden,
+#biBackBtn.hidden {
   display: none;
+}
+
+.bi-back {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .report-chart-3d {
@@ -848,6 +887,185 @@ textarea:focus {
   font-weight: 800;
 }
 
+.report-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(95, 179, 179, 0.14), rgba(79, 124, 172, 0.1) 45%, rgba(217, 164, 65, 0.09)),
+    rgba(255, 255, 255, 0.025);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.38), inset 0 0 32px rgba(95, 179, 179, 0.08);
+}
+
+.report-hero h2 {
+  margin-bottom: 4px;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 0.98;
+}
+
+.report-control-card {
+  border-color: rgba(217, 164, 65, 0.26);
+  background:
+    linear-gradient(135deg, rgba(217, 164, 65, 0.08), transparent 34%),
+    var(--panel);
+}
+
+.bi-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+  min-height: 48px;
+  align-items: center;
+}
+
+.bi-crumb {
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  padding: 0 14px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.bi-crumb span {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(95, 179, 179, 0.16);
+  color: #bfe4e4;
+  font-family: var(--font-mono);
+}
+
+.bi-crumb.active {
+  color: #fff;
+  border-color: rgba(95, 179, 179, 0.52);
+  background: linear-gradient(135deg, rgba(95, 179, 179, 0.18), rgba(79, 124, 172, 0.14));
+  box-shadow: 0 0 24px rgba(95, 179, 179, 0.13);
+}
+
+.bi-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.bi-kpi {
+  position: relative;
+  overflow: hidden;
+  min-height: 126px;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015)),
+    var(--bg-surface);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+}
+
+.bi-kpi::after {
+  content: "";
+  position: absolute;
+  right: -24px;
+  top: -24px;
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  opacity: 0.22;
+  background: currentColor;
+  filter: blur(2px);
+}
+
+.bi-kpi span,
+.bi-kpi em {
+  display: block;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.bi-kpi span {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bi-kpi strong {
+  display: block;
+  margin: 8px 0 4px;
+  color: #fff;
+  font-family: var(--font-impact);
+  font-size: 46px;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+}
+
+.bi-kpi.cyan { color: #5fb3b3; border-color: rgba(95, 179, 179, 0.34); }
+.bi-kpi.green { color: #6ea672; border-color: rgba(110, 166, 114, 0.32); }
+.bi-kpi.violet { color: #7b8fa1; border-color: rgba(123, 143, 161, 0.34); }
+.bi-kpi.pink { color: #4f7cac; border-color: rgba(79, 124, 172, 0.34); }
+.bi-kpi.amber { color: #d9a441; border-color: rgba(217, 164, 65, 0.34); }
+
+.bi-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(95, 179, 179, 0.2);
+  background:
+    linear-gradient(145deg, rgba(95, 179, 179, 0.07), transparent 34%),
+    linear-gradient(315deg, rgba(217, 164, 65, 0.05), transparent 35%),
+    var(--panel);
+}
+
+.bi-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(95, 179, 179, 0.22), transparent 24%, transparent 76%, rgba(217, 164, 65, 0.16));
+  opacity: 0.2;
+}
+
+.bi-card .card-heading {
+  position: relative;
+  z-index: 1;
+  align-items: start;
+  gap: 14px;
+}
+
+.report-chart-3d {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 420px;
+  min-height: 360px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+    radial-gradient(circle at 50% 0%, rgba(95, 179, 179, 0.1), transparent 42%),
+    rgba(0, 0, 0, 0.14);
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.clickable-row:hover {
+  background: rgba(95, 179, 179, 0.09);
+  color: #fff;
+}
+
 @media (max-width: 1180px) {
   .central-app,
   .dojo-layout,
@@ -868,6 +1086,33 @@ textarea:focus {
 
   .rail {
     min-height: auto;
+  }
+
+  .report-chart-3d {
+    height: 360px;
+  }
+}
+
+@media (max-width: 720px) {
+  .report-hero h2 {
+    font-size: 32px;
+  }
+
+  .bi-card .card-heading {
+    display: grid;
+  }
+
+  .bi-card .card-heading .btn {
+    width: 100%;
+  }
+
+  .report-chart-3d {
+    height: 330px;
+    min-height: 300px;
+  }
+
+  .bi-kpi strong {
+    font-size: 38px;
   }
 }
 .tpot-tabs,

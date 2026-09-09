@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/c/Users/aps-ecuador/.claude/skills/gstack/browse/dist/browse goto *)",
+      "Bash(/c/Users/aps-ecuador/.claude/skills/gstack/browse/dist/browse viewport *)",
+      "Bash(curl -s http://localhost:9333/json/version)",
+      "Bash(curl -s -u \"REDACTED:REDACTED\" \"http://localhost:3100/api/rest/v1/business_sectors?select=code,label,industry,active&order=display_order.asc&limit=6\")",
+      "Bash(curl -s -u \"REDACTED:REDACTED\" \"http://localhost:3100/api/rest/v1/business_sectors?select=code&active=eq.true\")",
+      "Bash(python -c \"import sys,json;print\\(len\\(json.load\\(sys.stdin\\)\\)\\)\")",
+      "Bash(curl -s -u REDACTED:REDACTED -X POST http://localhost:3100/api/rest/v1/rpc/save_business_sector -H 'Content-Type: application/json' -d '{\"original_code\":\"\",\"sector_code\":\"prueba_temp\",\"sector_label\":\"Prueba temporal\",\"sector_active\":true,\"sector_display_order\":9998,\"sector_industry\":\"Prueba\"}')",
+      "Bash(curl -s -u \"REDACTED:REDACTED\" -X DELETE \"http://localhost:3100/api/rest/v1/business_sectors?code=eq.prueba_temp\" -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -u REDACTED:REDACTED -X POST http://localhost:3100/api/rest/v1/business_sectors -H 'Content-Type: application/json' -H 'Prefer: return=representation' -d '{\"code\":\"prueba_temp\",\"label\":\"Prueba temporal\",\"industry\":\"Prueba\",\"active\":true,\"display_order\":9998}')"
+    ]
+  }
+}

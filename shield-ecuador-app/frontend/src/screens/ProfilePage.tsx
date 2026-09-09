@@ -28,7 +28,7 @@ export function ProfilePage() {
                 <BeltBadge level={item.level} showKanji />
                 <div className="flex-1">
                   <strong>{item.iso}</strong>
-                  <p>{item.xp} XP requeridos</p>
+                   <p>{item.level === 'blanco' ? 'Aquí comienza tu aprendizaje.' : 'Aprueba el kata del cinturón anterior: al menos 4 de 5 casos.'}</p>
                 </div>
               </div>
             ))}

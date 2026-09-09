@@ -133,6 +133,10 @@ No se registran payloads completos, contrasenas, tokens, claves ni datos descifr
 El navegador llama a `/api/rest/v1/...` y `/api/auth/v1/...`.
 El servidor Node actua como proxy y usa `SUPABASE_SERVICE_ROLE_KEY` solo como variable de entorno de Cloud Run.
 
+Desde una revision posterior de este documento (2026-09-08), el panel admin tambien es accesible en `/admin` del mismo dominio que la app de usuarios, mediante un segundo proxy en `frontend/static-server.js` que reenvia la peticion completa (incluyendo el header `Authorization` de Basic Auth) hacia el servicio `cyberdojo-admin`. Esto no cambia el modelo de seguridad descrito arriba — la proteccion de Basic Auth sigue viviendo en el servicio admin, el frontend solo reenvia — pero implica que cualquier cambio a las credenciales de Basic Auth debe hacerse en el servicio `cyberdojo-admin`, no en `cyberdojo`. Ver `ARQUITECTURA_CYBER_DOJO.md` seccion 2 para el detalle tecnico completo.
+
+**Brechas de RLS detectadas en esta revision** (no presentes en la version anterior de este documento): las tablas `sponsors`, `ai_configs` y `recommendations_cache` no tienen Row Level Security habilitado en ninguna de las 21 migraciones de Supabase, y `domains_whitelist`/`katas` no tienen una politica de escritura para admin declarada en SQL (solo lectura publica). Ver `BASE_DE_DATOS.md` seccion 9 para el detalle completo y la recomendacion de confirmar si esto es intencional.
+
 ## Recomendaciones pendientes
 
 - Rotar inmediatamente la service role key que estuvo expuesta en frontend historico.

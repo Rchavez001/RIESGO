@@ -30,11 +30,10 @@ const baseState = {
     { belt: "Blanco", color: "#eeeeee", percent: 20, kata: "Kata 1", exam: "Examen fundamentos" },
     { belt: "Amarillo", color: "#f5c518", percent: 15, kata: "Kata 2", exam: "Examen reglas basicas" },
     { belt: "Naranja", color: "#f97316", percent: 10, kata: "Kata 3", exam: "Examen equipos y cuentas" },
-    { belt: "Verde", color: "#22c55e", percent: 5, kata: "Kata 4", exam: "Examen acceso" },
-    { belt: "Azul", color: "#3b82f6", percent: 5, kata: "Kata 5", exam: "Examen proteccion de informacion" },
-    { belt: "Morado", color: "#a855f7", percent: 5, kata: "Kata 6", exam: "Examen cuidado de equipos" },
-    { belt: "Rojo", color: "#e63946", percent: 5, kata: "Kata 7", exam: "Examen respuesta ante problemas" },
-    { belt: "Negro", color: "#111827", percent: 35, kata: "Kata final", exam: "Revision integral" },
+    { belt: "Verde", color: "#22c55e", percent: 10, kata: "Kata 4", exam: "Examen acceso" },
+    { belt: "Azul", color: "#3b82f6", percent: 10, kata: "Kata 5", exam: "Examen proteccion de informacion" },
+    { belt: "Marrón", color: "#8b5a2b", percent: 10, kata: "Kata 6", exam: "Examen casos ciberdelito Ecuador" },
+    { belt: "Negro", color: "#111827", percent: 25, kata: "Kata final", exam: "Revision integral" },
   ],
   aiProviders: [
     { name: "DeepSeek", timeoutMs: 1800, order: 1 },
@@ -78,6 +77,9 @@ const baseState = {
   campaignAudit: [],
   availableSectors: [],
   lastEntryRows: [],
+  lastImpressionRows: [],
+  lastCampaignRows: [],
+  reportDrillPath: [],
   occupations: [],
   selectedOccupationCode: null,
   questionsByDojo: {},
@@ -148,18 +150,10 @@ function bindNavigation() {
         renderNewsAlerts();
       }
       if (button.dataset.panel === "reports") {
-        ["topChart", "campaignChart"].forEach((id) => {
+        ["topChart"].forEach((id) => {
           const chart = ensureChart(id);
           if (chart) chart.resize();
         });
-        if (!$("#sectorBreakdownCard").classList.contains("hidden")) {
-          const breakdownChart = ensureChart("sectorChart");
-          if (breakdownChart) breakdownChart.resize();
-        }
-        if (!$("#sectorDrilldownCard").classList.contains("hidden")) {
-          const drilldownChart = ensureChart("sectorDrilldownChart");
-          if (drilldownChart) drilldownChart.resize();
-        }
       }
     });
   });
@@ -182,12 +176,11 @@ function bindActions() {
   $("#adImageFile").addEventListener("change", handleCampaignImageSelected);
   $("#adTargetAll").addEventListener("change", (e) => setTargetAllUI(e.target.checked));
   $("#runReport").addEventListener("click", runReport);
-  $("#closeSectorBreakdown").addEventListener("click", closeSectorBreakdown);
-  $("#closeDrilldown").addEventListener("click", closeDrilldown);
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
   $("#forceNewsReview").addEventListener("click", runNewsAgent);
   $("#forgotPassword").addEventListener("click", openForgotPasswordModal);
+  $("#logoutBtn").addEventListener("click", logout);
   $("#refreshSenseiStats").addEventListener("click", loadSenseiStats);
   $$(".threat-nav button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -496,7 +489,7 @@ function runNewsAgent() {
 
   nextAi.forEach((question, index) => {
     const domain = sourceDomain(sources[index % sources.length]);
-    question.text = `Segun una noticia revisada en ${domain}, un atacante explota ${topicForIndex(index)}. Que control reduce mejor el riesgo en ${dojo.name}?`;
+    question.text = `Segun una noticia revisada en ${explainDomain(domain)}, un atacante explota ${topicForIndex(index)}. Que control reduce mejor el riesgo en ${dojo.name}?`;
     question.answer = answerForIndex(index);
     question.explanation = `La respuesta conecta el incidente con ${dojo.iso}, priorizando prevencion, deteccion y respuesta medible.`;
     question.status = "pendiente";
@@ -533,7 +526,7 @@ function runNewsAgent() {
   state.newsAlerts = state.newsAlerts.slice(0, 20);
   state.generatedKatas = state.generatedKatas.slice(0, 8);
   state.newsAgent.lastRun = alertTime;
-  persist("Agente ejecutado: preguntas IA y katas generadas como borrador.");
+  persist("Agente ejecutado: preguntas y katas generadas en borrador local (sin sobrescribir base de datos).");
   void saveNewsAlertToSupabase(alertEntry).then((saved) => {
     if (saved) {
       alertEntry.persisted = true;
@@ -541,7 +534,9 @@ function runNewsAgent() {
       renderNewsAlerts();
     }
   });
-  void saveQuestionsToSupabase(bank, dojo);
+  // NOTA DE SEGURIDAD OPERATIVA:
+  // No se invoca automáticamente saveQuestionsToSupabase(bank, dojo) para evitar
+  // que texto generado por plantillas fijas en JS destruya preguntas curriculares reales en Postgres.
   renderAll();
 }
 
@@ -1199,6 +1194,21 @@ async function logCampaignAudit(campaignId, action, details) {
   }
 }
 
+function logout() {
+  if (!window.confirm("¿Salir de la consola de administracion?")) return;
+  try {
+    const xhr = new XMLHttpRequest();
+    // Sending deliberately wrong credentials to the same Basic Auth realm makes the browser
+    // discard the previously cached valid credentials for this origin.
+    xhr.open("GET", window.location.origin + "/", true, "logout", "logout-" + Date.now());
+    xhr.onloadend = () => { window.location.href = "/logged-out"; };
+    xhr.onerror = () => { window.location.href = "/logged-out"; };
+    xhr.send();
+  } catch (e) {
+    window.location.href = "/logged-out";
+  }
+}
+
 function testAiFlow() {
   const ordered = [...state.aiProviders].sort((a, b) => a.order - b.order);
   notify(`Algoritmo probado: ${ordered.map((ia) => `${ia.name} (${ia.timeoutMs}ms)`).join(" -> ")} -> auditor.`);
@@ -1278,11 +1288,13 @@ function setTargetAllUI(targetAll) {
 
 const REPORT_PERIOD_DAYS = { quincenal: 15, mensual: 30, trimestral: 90 };
 const ALL_SECTORS_LABEL = "Sin sector (todos)";
-const VIVID_PALETTE = [
-  "#00E5FF", "#FF3D71", "#FFC107", "#7C4DFF", "#00E676",
-  "#FF6D00", "#F50057", "#1DE9B6", "#D500F9", "#2979FF",
-  "#FFD600", "#00BFA5",
-];
+const REPORT_LEVELS = {
+  summary: "Resumen",
+  sectors: "Sectores",
+  campaigns: "Campanas",
+  campaignSectors: "Campana por sector",
+  detail: "Detalle diario",
+};
 
 function reportPeriodRange() {
   const periodKey = $("#reportPeriod") ? $("#reportPeriod").value : "trimestral";
@@ -1299,37 +1311,27 @@ function ensureChart(elId) {
   return echarts.getInstanceByDom(dom) || echarts.init(dom);
 }
 
-function bar3DOption(categories, values, valueLabel) {
-  return {
-    tooltip: { formatter: (p) => `${p.name}<br/>${valueLabel}: <strong>${p.value[2]}</strong>` },
-    xAxis3D: { type: "category", data: categories, axisLabel: { color: "#EAF6FF", interval: 0, fontSize: 13 } },
-    yAxis3D: { type: "category", data: [valueLabel || ""], show: false },
-    zAxis3D: { type: "value", axisLabel: { color: "#EAF6FF" }, name: valueLabel, nameTextStyle: { color: "#EAF6FF" } },
-    grid3D: {
-      boxWidth: 100,
-      boxDepth: 45,
-      viewControl: { alpha: 22, beta: 30, distance: 190, autoRotate: true, autoRotateSpeed: 6 },
-      light: { main: { intensity: 1.1 }, ambient: { intensity: 0.9 } },
-      axisLine: { lineStyle: { color: "#3a4a63" } },
-      splitLine: { lineStyle: { color: "#1f2c40" } },
-    },
-    series: [{
-      type: "bar3D",
-      data: categories.map((name, i) => ({
-        name,
-        value: [i, 0, values[i]],
-        itemStyle: {
-          color: VIVID_PALETTE[i % VIVID_PALETTE.length],
-          opacity: 1,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,.55)",
-        },
-      })),
-      shading: "color",
-      barSize: 26,
-      emphasis: { itemStyle: { color: "#ffffff" } },
-    }],
-  };
+function renderReportKpis(entries = [], impressions = [], campaigns = []) {
+  const withSector = entries.filter((row) => row.sector).length;
+  const activeSectors = new Set(entries.filter((row) => row.sector).map((row) => row.sector)).size;
+  const campaignCounts = campaignImpressionRows(campaigns, impressions);
+  const topCampaign = campaignCounts[0];
+  const kpis = [
+    { label: "Ingresos totales", value: entries.length, accent: "cyan" },
+    { label: "Ingresos con sector", value: withSector, accent: "green" },
+    { label: "Sectores activos", value: activeSectors, accent: "violet" },
+    { label: "Impresiones", value: impressions.length, accent: "pink" },
+    { label: "Campana lider", value: topCampaign ? topCampaign.name : "-", detail: topCampaign ? `${topCampaign.count} vistas` : "Sin datos", accent: "amber" },
+  ];
+  const container = $("#reportKpis");
+  if (!container) return;
+  container.innerHTML = kpis.map((item) => `
+    <article class="bi-kpi ${esc(item.accent)}">
+      <span>${esc(item.label)}</span>
+      <strong>${esc(String(item.value))}</strong>
+      <em>${esc(item.detail || "Periodo seleccionado")}</em>
+    </article>
+  `).join("");
 }
 
 async function runReport() {
@@ -1338,13 +1340,12 @@ async function runReport() {
   const endIso = end.toISOString();
   const rangeEl = $("#reportRange");
   if (rangeEl) rangeEl.textContent = `Del ${start.toLocaleDateString("es-EC")} al ${end.toLocaleDateString("es-EC")}`;
-  closeDrilldown();
-  closeSectorBreakdown();
+  setReportPath([{ level: "summary", label: REPORT_LEVELS.summary }]);
 
   try {
     const [entries, impressions, campaigns] = await Promise.all([
       supabaseRest(`app_entry_log?select=sector,entered_at&entered_at=gte.${encodeURIComponent(startIso)}&entered_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
-      supabaseRest(`campaign_impressions?select=campaign_id,shown_at&shown_at=gte.${encodeURIComponent(startIso)}&shown_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
+      supabaseRest(`campaign_impressions?select=campaign_id,sector,shown_at&shown_at=gte.${encodeURIComponent(startIso)}&shown_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
       supabaseRest("central_admin_campaigns?select=id,name,created_at&order=created_at.asc"),
     ]);
 
@@ -1352,50 +1353,15 @@ async function runReport() {
     const impressionRows = Array.isArray(impressions) ? impressions : [];
     const campaignRows = Array.isArray(campaigns) ? campaigns : [];
     state.lastEntryRows = entryRows;
+    state.lastImpressionRows = impressionRows;
+    state.lastCampaignRows = campaignRows;
 
-    renderTopChart(entryRows);
-    renderSectorEntriesReport(entryRows);
-    renderCampaignImpressionsReport(campaignRows, impressionRows);
-    renderCampaignChart(campaignRows, impressionRows);
+    renderReportKpis(entryRows, impressionRows, campaignRows);
+    renderTopChart();
   } catch (error) {
     console.warn("No se pudo generar el reporte:", error);
     notify("No se pudo generar el reporte.");
   }
-}
-
-function renderTopChart(entries) {
-  const withSector = entries.filter((row) => row.sector).length;
-  const withoutSector = entries.length - withSector;
-  const chart = ensureChart("topChart");
-  if (!chart) return;
-
-  if (entries.length === 0) {
-    chart.clear();
-    return;
-  }
-
-  chart.setOption(bar3DOption(["Con sector", "Sin sector"], [withSector, withoutSector], "Ingresos"), true);
-  chart.off("click");
-  chart.on("click", (params) => {
-    if (params.componentType !== "series" || !params.name) return;
-    if (params.name === "Con sector") {
-      showSectorBreakdown();
-    } else {
-      void showSectorDrilldown(ALL_SECTORS_LABEL);
-    }
-  });
-}
-
-function showSectorBreakdown() {
-  $("#sectorBreakdownCard").classList.remove("hidden");
-  renderSectorChart(state.lastEntryRows || []);
-  $("#sectorBreakdownCard").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function closeSectorBreakdown() {
-  const card = $("#sectorBreakdownCard");
-  if (card) card.classList.add("hidden");
-  closeDrilldown();
 }
 
 function sectorEntryCounts(entries) {
@@ -1407,112 +1373,368 @@ function sectorEntryCounts(entries) {
   return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
 }
 
-function renderSectorEntriesReport(entries) {
-  const rows = sectorEntryCounts(entries);
-  const tbody = $("#reportSectorRows");
-  tbody.innerHTML = rows.length === 0
-    ? `<tr><td colspan="2" class="muted">Sin ingresos registrados en este periodo.</td></tr>`
-    : rows.map(([sector, count]) => `<tr><td>${esc(sector)}</td><td>${count}</td></tr>`).join("");
+function campaignImpressionRows(campaigns, impressions) {
+  const counts = new Map();
+  impressions.forEach((row) => counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1));
+  return (campaigns || [])
+    .map((c) => ({ ...c, count: counts.get(c.id) || 0 }))
+    .sort((a, b) => b.count - a.count);
 }
 
-function renderSectorChart(entries) {
-  const rows = sectorEntryCounts(entries);
-  const chart = ensureChart("sectorChart");
-  if (!chart) return;
+function filterImpressionsBySector(impressions, sectorLabel) {
+  const isAll = sectorLabel === ALL_SECTORS_LABEL;
+  return (impressions || []).filter((row) => isAll ? !row.sector : row.sector === sectorLabel);
+}
 
+function groupImpressionsByDay(impressions) {
+  const counts = new Map();
+  impressions.forEach((row) => {
+    const dateKey = row.shown_at ? new Date(row.shown_at).toISOString().slice(0, 10) : "Sin fecha";
+    counts.set(dateKey, (counts.get(dateKey) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function formatReportDate(dateKey) {
+  if (!dateKey || dateKey === "Sin fecha") return "Sin fecha";
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString("es-EC");
+}
+
+function setReportPath(path = []) {
+  state.reportDrillPath = path;
+  const el = $("#reportBreadcrumb");
+  if (!el) return;
+  el.innerHTML = path.map((item, index) => `
+    <button class="bi-crumb ${index === path.length - 1 ? "active" : ""}" data-index="${index}">
+      <span>${index + 1}</span>${esc(item.label)}
+    </button>
+  `).join("");
+  $$("#reportBreadcrumb .bi-crumb").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = path[Number(button.dataset.index)];
+      if (item && typeof item.action === "function") item.action();
+    });
+  });
+
+  const backBtn = $("#biBackBtn");
+  if (backBtn) {
+    if (path.length > 1) {
+      backBtn.classList.remove("hidden");
+      backBtn.onclick = () => {
+        const previous = path[path.length - 2];
+        if (previous && typeof previous.action === "function") previous.action();
+      };
+    } else {
+      backBtn.classList.add("hidden");
+      backBtn.onclick = null;
+    }
+  }
+}
+
+function reportRowsToTable(headers, rows) {
+  const head = $("#reportDetailHead");
+  const body = $("#reportDetailRows");
+  if (!head || !body) return;
+  head.innerHTML = `<tr>${headers.map((header) => `<th>${esc(header)}</th>`).join("")}</tr>`;
+  body.innerHTML = rows.length === 0
+    ? `<tr><td colspan="${headers.length}" class="muted">Sin datos para este nivel del reporte.</td></tr>`
+    : rows.map((row) => `
+      <tr class="clickable-row">
+        ${row.cells.map((cell) => `<td>${esc(cell)}</td>`).join("")}
+      </tr>
+    `).join("");
+  $$("#reportDetailRows .clickable-row").forEach((tr, index) => {
+    const row = rows[index];
+    if (row && typeof row.action === "function") tr.addEventListener("click", row.action);
+  });
+}
+
+function biBar3DOption(rows, valueLabel, options = {}) {
+  const values = rows.map((row) => row.value);
+  const max = Math.max(...values, 1);
+  const palette = ["#FF2800", "#1F51FF", "#39FF14", "#FF2800", "#1F51FF", "#39FF14", "#FF2800", "#1F51FF"];
+  return {
+    backgroundColor: "transparent",
+    tooltip: {
+      borderWidth: 0,
+      backgroundColor: "rgba(5, 12, 24, 0.95)",
+      textStyle: { color: "#F4F7FB", fontSize: 13 },
+      formatter: (p) => `${p.name}<br/>${valueLabel}: <strong>${p.value[2]}</strong><br/><span style="color:#A8B7C7">Click para profundizar</span>`,
+    },
+    xAxis3D: {
+      type: "category",
+      data: rows.map((row) => row.name),
+      axisLabel: { color: "#D8E2EF", interval: 0, fontSize: 12, margin: 12 },
+      axisLine: { lineStyle: { color: "rgba(143, 166, 188, .55)" } },
+    },
+    yAxis3D: { type: "category", data: [valueLabel || ""], show: false },
+    zAxis3D: {
+      type: "value",
+      axisLabel: { color: "#A8B7C7" },
+      name: valueLabel,
+      nameTextStyle: { color: "#F4F7FB", fontWeight: 700 },
+    },
+    grid3D: {
+      boxWidth: options.boxWidth || 132,
+      boxDepth: options.boxDepth || 48,
+      boxHeight: 76,
+      viewControl: {
+        alpha: 23,
+        beta: 32,
+        distance: options.distance || 205,
+        autoRotate: true,
+        autoRotateSpeed: 2.5,
+      },
+      light: {
+        main: { intensity: 1.35, shadow: true, shadowQuality: "high" },
+        ambient: { intensity: 0.72 },
+      },
+      postEffect: {
+        enable: true,
+        bloom: { enable: true, bloomIntensity: 0.11 },
+        screenSpaceAmbientOcclusion: { enable: true, intensity: 0.9, radius: 3 },
+      },
+      axisLine: { lineStyle: { color: "rgba(168, 183, 199, .34)" } },
+      splitLine: { lineStyle: { color: "rgba(255,255,255,.07)" } },
+      axisPointer: { show: true, lineStyle: { color: "#D9A441" } },
+    },
+    series: [{
+      type: "bar3D",
+      data: rows.map((row, i) => ({
+        name: row.name,
+        value: [i, 0, row.value],
+        meta: row.meta,
+        itemStyle: {
+          color: palette[i % palette.length],
+          opacity: 1,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,.52)",
+        },
+      })),
+      shading: "realistic",
+      bevelSize: 0.28,
+      bevelSmoothness: 3,
+      barSize: options.barSize || Math.max(13, Math.min(30, 390 / Math.max(rows.length, 1))),
+      label: {
+        show: true,
+        formatter: (p) => p.value[2] > 0 ? String(p.value[2]) : "",
+        color: "#FFFFFF",
+        fontWeight: 900,
+        distance: 2,
+      },
+      emphasis: {
+        label: { show: true, color: "#FFFFFF", fontSize: 16 },
+        itemStyle: { color: "#F7D774" },
+      },
+      animationDurationUpdate: 650,
+      animationEasingUpdate: "cubicOut",
+    }],
+    visualMap: {
+      show: false,
+      min: 0,
+      max,
+      inRange: { color: palette },
+    },
+  };
+}
+
+function renderBiChart({ level, title, subtitle, rows, valueLabel, headers, tableRows, path }) {
+  $("#biChartLevel").textContent = `NIVEL ${level}`;
+  $("#biChartTitle").textContent = title;
+  $("#biChartSubtitle").textContent = subtitle;
+  setReportPath(path);
+  reportRowsToTable(headers, tableRows);
+
+  const chart = ensureChart("topChart");
+  if (!chart) return;
   if (rows.length === 0) {
     chart.clear();
     return;
   }
-
-  chart.setOption(bar3DOption(rows.map(([s]) => s), rows.map(([, c]) => c), "Ingresos"), true);
+  chart.setOption(biBar3DOption(rows, valueLabel, { barSize: level === 1 ? 34 : undefined }), true);
   chart.off("click");
   chart.on("click", (params) => {
-    if (params.componentType === "series" && params.name) void showSectorDrilldown(params.name);
+    const row = rows.find((item) => item.name === params.name);
+    if (row && typeof row.action === "function") row.action();
   });
 }
 
-async function showSectorDrilldown(sectorLabel) {
-  const { start, end } = reportPeriodRange();
-  const isAll = sectorLabel === ALL_SECTORS_LABEL;
-  const sectorFilter = isAll ? "sector=is.null" : `sector=eq.${encodeURIComponent(sectorLabel)}`;
-
-  try {
-    const [impressions, campaigns] = await Promise.all([
-      supabaseRest(`campaign_impressions?select=campaign_id&${sectorFilter}&shown_at=gte.${encodeURIComponent(start.toISOString())}&shown_at=lte.${encodeURIComponent(end.toISOString())}&limit=5000`),
-      supabaseRest("central_admin_campaigns?select=id,name,created_at&order=created_at.asc"),
-    ]);
-
-    const counts = new Map();
-    (impressions || []).forEach((row) => counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1));
-
-    const rows = (campaigns || [])
-      .map((c) => ({ ...c, count: counts.get(c.id) || 0 }))
-      .filter((c) => c.count > 0)
-      .sort((a, b) => b.count - a.count);
-
-    $("#sectorDrilldownTitle").textContent = `Propaganda mostrada en: ${sectorLabel}`;
-    $("#sectorDrilldownCard").classList.remove("hidden");
-
-    const chart = ensureChart("sectorDrilldownChart");
-    if (chart) {
-      if (rows.length === 0) chart.clear();
-      else chart.setOption(bar3DOption(rows.map((r) => r.name), rows.map((r) => r.count), "Veces mostrada"), true);
-    }
-
-    const tbody = $("#reportDrilldownRows");
-    tbody.innerHTML = rows.length === 0
-      ? `<tr><td colspan="3" class="muted">Sin propaganda mostrada en este sector durante el periodo.</td></tr>`
-      : rows.map((r) => `
-        <tr>
-          <td>${esc(r.name)}</td>
-          <td>${new Date(r.created_at).toLocaleDateString("es-EC")}</td>
-          <td>${r.count}</td>
-        </tr>
-      `).join("");
-
-    $("#sectorDrilldownCard").scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (error) {
-    console.warn("No se pudo cargar el detalle del sector:", error);
-    notify("No se pudo cargar el detalle del sector.");
-  }
+function renderTopChart() {
+  renderReportSummary();
 }
 
-function closeDrilldown() {
-  const card = $("#sectorDrilldownCard");
-  if (card) card.classList.add("hidden");
+function renderReportSummary() {
+  const entries = state.lastEntryRows || [];
+  const impressions = state.lastImpressionRows || [];
+  const rows = [
+    {
+      name: "Ingresos por sector",
+      value: entries.filter((row) => row.sector).length,
+      action: renderSectorLevel,
+    },
+    {
+      name: "Ingresos sin sector",
+      value: entries.filter((row) => !row.sector).length,
+      action: () => renderCampaignLevel(ALL_SECTORS_LABEL),
+    },
+    {
+      name: "Propaganda",
+      value: impressions.length,
+      action: renderGlobalCampaignLevel,
+    },
+  ];
+  renderBiChart({
+    level: 1,
+    title: "Vista general del reporte",
+    subtitle: "Click en una figura para profundizar dentro del mismo grafico.",
+    rows,
+    valueLabel: "Total",
+    headers: ["Indicador", "Total", "Siguiente nivel"],
+    tableRows: rows.map((row) => ({
+      cells: [row.name, row.value, row.name === "Propaganda" ? "Campanas" : "Sectores / campanas"],
+      action: row.action,
+    })),
+    path: [{ label: REPORT_LEVELS.summary, action: renderReportSummary }],
+  });
 }
 
-function renderCampaignChart(campaigns, impressions) {
+function renderSectorLevel() {
+  const rows = sectorEntryCounts(state.lastEntryRows || [])
+    .filter(([sector]) => sector !== ALL_SECTORS_LABEL)
+    .map(([sector, count]) => ({
+      name: sector,
+      value: count,
+      action: () => renderCampaignLevel(sector),
+    }));
+  renderBiChart({
+    level: 2,
+    title: "Ingresos por sector",
+    subtitle: "Click en un sector para ver las campanas mostradas a ese grupo.",
+    rows,
+    valueLabel: "Ingresos",
+    headers: ["Sector", "Ingresos", "Siguiente nivel"],
+    tableRows: rows.map((row) => ({ cells: [row.name, row.value, "Campanas mostradas"], action: row.action })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: REPORT_LEVELS.sectors, action: renderSectorLevel },
+    ],
+  });
+}
+
+function renderCampaignLevel(sectorLabel) {
+  const impressions = filterImpressionsBySector(state.lastImpressionRows || [], sectorLabel);
+  const campaigns = state.lastCampaignRows || [];
   const counts = new Map();
   impressions.forEach((row) => counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1));
-  const chart = ensureChart("campaignChart");
-  if (!chart) return;
-
-  if (campaigns.length === 0) {
-    chart.clear();
-    return;
-  }
-
-  chart.setOption(bar3DOption(campaigns.map((c) => c.name), campaigns.map((c) => counts.get(c.id) || 0), "Veces mostrada"), true);
+  const rows = campaigns
+    .map((campaign) => ({
+      name: campaign.name,
+      value: counts.get(campaign.id) || 0,
+      campaign,
+      action: () => renderCampaignDayLevel(campaign.id, campaign.name, sectorLabel),
+    }))
+    .filter((row) => row.value > 0)
+    .sort((a, b) => b.value - a.value);
+  renderBiChart({
+    level: 3,
+    title: `Campanas mostradas: ${sectorLabel}`,
+    subtitle: "Click en una campana para ver el detalle diario dentro del mismo grafico.",
+    rows,
+    valueLabel: "Impresiones",
+    headers: ["Campana", "Creada", "Impresiones"],
+    tableRows: rows.map((row) => ({
+      cells: [row.name, row.campaign.created_at ? new Date(row.campaign.created_at).toLocaleDateString("es-EC") : "-", row.value],
+      action: row.action,
+    })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: sectorLabel === ALL_SECTORS_LABEL ? "Sin sector" : REPORT_LEVELS.sectors, action: sectorLabel === ALL_SECTORS_LABEL ? renderReportSummary : renderSectorLevel },
+      { label: sectorLabel, action: () => renderCampaignLevel(sectorLabel) },
+    ],
+  });
 }
 
-function renderCampaignImpressionsReport(campaigns, impressions) {
+function renderGlobalCampaignLevel() {
+  const rows = campaignImpressionRows(state.lastCampaignRows || [], state.lastImpressionRows || [])
+    .filter((campaign) => campaign.count > 0)
+    .map((campaign) => ({
+      name: campaign.name,
+      value: campaign.count,
+      campaign,
+      action: () => renderCampaignSectorLevel(campaign.id, campaign.name),
+    }));
+  renderBiChart({
+    level: 2,
+    title: "Propaganda por campana",
+    subtitle: "Click en una campana para ver los sectores impactados.",
+    rows,
+    valueLabel: "Impresiones",
+    headers: ["Campana", "Creada", "Impresiones"],
+    tableRows: rows.map((row) => ({
+      cells: [row.name, row.campaign.created_at ? new Date(row.campaign.created_at).toLocaleDateString("es-EC") : "-", row.value],
+      action: row.action,
+    })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: "Propaganda", action: renderGlobalCampaignLevel },
+    ],
+  });
+}
+
+function renderCampaignSectorLevel(campaignId, campaignName) {
+  const impressions = (state.lastImpressionRows || []).filter((row) => row.campaign_id === campaignId);
   const counts = new Map();
   impressions.forEach((row) => {
-    counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1);
+    const sector = row.sector || ALL_SECTORS_LABEL;
+    counts.set(sector, (counts.get(sector) || 0) + 1);
   });
+  const rows = Array.from(counts.entries())
+    .map(([sector, count]) => ({
+      name: sector,
+      value: count,
+      action: () => renderCampaignDayLevel(campaignId, campaignName, sector),
+    }))
+    .sort((a, b) => b.value - a.value);
+  renderBiChart({
+    level: 3,
+    title: `Sectores impactados: ${campaignName}`,
+    subtitle: "Click en un sector para ver el comportamiento diario de esta campana.",
+    rows,
+    valueLabel: "Impresiones",
+    headers: ["Sector", "Campana", "Impresiones"],
+    tableRows: rows.map((row) => ({ cells: [row.name, campaignName, row.value], action: row.action })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: "Propaganda", action: renderGlobalCampaignLevel },
+      { label: campaignName, action: () => renderCampaignSectorLevel(campaignId, campaignName) },
+    ],
+  });
+}
 
-  const tbody = $("#reportCampaignRows");
-  tbody.innerHTML = campaigns.length === 0
-    ? `<tr><td colspan="3" class="muted">Todavia no hay campanas.</td></tr>`
-    : campaigns.map((campaign) => `
-      <tr>
-        <td>${esc(campaign.name)}</td>
-        <td>${new Date(campaign.created_at).toLocaleDateString("es-EC")}</td>
-        <td>${counts.get(campaign.id) || 0}</td>
-      </tr>
-    `).join("");
+function renderCampaignDayLevel(campaignId, campaignName, sectorLabel) {
+  const impressions = filterImpressionsBySector(state.lastImpressionRows || [], sectorLabel)
+    .filter((row) => row.campaign_id === campaignId);
+  const rows = groupImpressionsByDay(impressions).map((row) => ({
+    name: formatReportDate(row.date),
+    value: row.count,
+  }));
+  renderBiChart({
+    level: 4,
+    title: `${campaignName} - ${sectorLabel}`,
+    subtitle: "Detalle diario de impresiones. Este es el ultimo nivel disponible con los datos actuales.",
+    rows,
+    valueLabel: "Impresiones por dia",
+    headers: ["Fecha", "Sector", "Impresiones"],
+    tableRows: rows.map((row) => ({ cells: [row.name, sectorLabel, row.value] })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: "Propaganda", action: renderGlobalCampaignLevel },
+      { label: sectorLabel, action: () => renderCampaignLevel(sectorLabel) },
+      { label: campaignName, action: () => renderCampaignDayLevel(campaignId, campaignName, sectorLabel) },
+    ],
+  });
 }
 
 function slugifyOccupationCode(label) {
@@ -1635,6 +1857,18 @@ async function deleteOccupation() {
     console.warn("No se pudo eliminar la ocupacion:", error);
     notify("No se pudo eliminar la ocupacion.");
   }
+}
+
+const DOMAIN_EXPLANATIONS = {
+  "cisa.gov": "la agencia de ciberseguridad del gobierno de Estados Unidos",
+  "bleepingcomputer.com": "un sitio web que reporta noticias de ciberataques",
+  "thehackernews.com": "un sitio web que reporta noticias de ciberseguridad",
+  "ecucert.gob.ec": "el equipo de respuesta a incidentes de ciberseguridad de Ecuador",
+};
+
+function explainDomain(domain) {
+  const explanation = DOMAIN_EXPLANATIONS[domain];
+  return explanation ? `${domain} (${explanation})` : domain;
 }
 
 function sourceDomain(url) {

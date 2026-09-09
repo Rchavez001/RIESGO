@@ -1,41 +1,8 @@
 const STORAGE_KEY = "ciber-dojo-central-admin-v2";
 
-const wisdomQuotes = [
-  {
-    source: "El arte de la guerra - Sun Tzu",
-    quote: "Conoce al enemigo y conocete a ti mismo; en cien batallas no correras peligro.",
-    cyber: "Antes de entrenar, identifica tus equipos, cuentas y datos importantes. Una buena defensa empieza sabiendo que debes proteger.",
-  },
-  {
-    source: "El arte de la guerra - Sun Tzu",
-    quote: "Toda guerra se basa en el engano.",
-    cyber: "Los mensajes falsos, la suplantacion y los enlaces falsos explotan la confianza. Verifica quien te escribe y no actues por apuro.",
-  },
-  {
-    source: "El arte de la guerra - Sun Tzu",
-    quote: "La victoria se decide antes de la batalla.",
-    cyber: "Copias de seguridad probadas, verificacion en dos pasos, actualizaciones y pasos claros de respuesta reducen el dano antes de que ocurra un problema.",
-  },
-  {
-    source: "Bushido - El Codigo del Samurai",
-    quote: "La rectitud es el poder de decidir una conducta correcta.",
-    cyber: "En ciberseguridad, rectitud significa reportar incidentes rapido, no ocultar errores y seguir controles aunque parezcan incomodos.",
-  },
-  {
-    source: "Bushido - El Codigo del Samurai",
-    quote: "El coraje verdadero vive cuando se hace lo correcto.",
-    cyber: "Ante una alerta, el coraje operativo es detener una accion riesgosa, escalar evidencia y proteger los datos antes que la comodidad.",
-  },
-  {
-    source: "Bushido - El Codigo del Samurai",
-    quote: "La disciplina convierte la intencion en habito.",
-    cyber: "Practicar katas de mensajes falsos, contrasenas, copias de seguridad y respuesta ante problemas convierte las reglas en habitos diarios.",
-  },
-];
-
 const baseState = {
   selectedDojoId: "dojo-phishing",
-  selectedCampaignId: "ad-1",
+  selectedCampaignId: null,
   dojos: [
     {
       id: "dojo-phishing",
@@ -63,11 +30,10 @@ const baseState = {
     { belt: "Blanco", color: "#eeeeee", percent: 20, kata: "Kata 1", exam: "Examen fundamentos" },
     { belt: "Amarillo", color: "#f5c518", percent: 15, kata: "Kata 2", exam: "Examen reglas basicas" },
     { belt: "Naranja", color: "#f97316", percent: 10, kata: "Kata 3", exam: "Examen equipos y cuentas" },
-    { belt: "Verde", color: "#22c55e", percent: 5, kata: "Kata 4", exam: "Examen acceso" },
-    { belt: "Azul", color: "#3b82f6", percent: 5, kata: "Kata 5", exam: "Examen proteccion de informacion" },
-    { belt: "Morado", color: "#a855f7", percent: 5, kata: "Kata 6", exam: "Examen cuidado de equipos" },
-    { belt: "Rojo", color: "#e63946", percent: 5, kata: "Kata 7", exam: "Examen respuesta ante problemas" },
-    { belt: "Negro", color: "#111827", percent: 35, kata: "Kata final", exam: "Revision integral" },
+    { belt: "Verde", color: "#22c55e", percent: 10, kata: "Kata 4", exam: "Examen acceso" },
+    { belt: "Azul", color: "#3b82f6", percent: 10, kata: "Kata 5", exam: "Examen proteccion de informacion" },
+    { belt: "Marrón", color: "#8b5a2b", percent: 10, kata: "Kata 6", exam: "Examen casos ciberdelito Ecuador" },
+    { belt: "Negro", color: "#111827", percent: 25, kata: "Kata final", exam: "Revision integral" },
   ],
   aiProviders: [
     { name: "DeepSeek", timeoutMs: 1800, order: 1 },
@@ -106,26 +72,16 @@ const baseState = {
     { name: "Archivos bloqueados y copias de seguridad", count: 16 },
     { name: "Uso seguro de WhatsApp", count: 11 },
   ],
-  campaigns: [
-    {
-      id: "ad-1",
-      name: "Plan de verificacion en dos pasos",
-      moment: "inicio",
-      duration: 12,
-      validity: "meses",
-      message: "Activa el paquete de soporte para configurar la verificacion en dos pasos en tu negocio.",
-      active: true,
-    },
-    {
-      id: "ad-2",
-      name: "Curso contra mensajes falsos",
-      moment: "sesion",
-      duration: 8,
-      validity: "sesiones",
-      message: "Refuerza a tu equipo con el curso rapido contra mensajes falsos.",
-      active: true,
-    },
-  ],
+  campaigns: [],
+  campaignSettings: { max_image_kb: 500, max_image_width: 1920, max_image_height: 1920 },
+  campaignAudit: [],
+  availableSectors: [],
+  lastEntryRows: [],
+  lastImpressionRows: [],
+  lastCampaignRows: [],
+  reportDrillPath: [],
+  occupations: [],
+  selectedOccupationCode: null,
   questionsByDojo: {},
   newsAlerts: [],
 };
@@ -142,8 +98,14 @@ function init() {
   renderAll();
   void loadQuestionsFromSupabase();
   void loadNewsAlertsFromSupabase();
+  void loadActor();
+  void loadCampaignsFromSupabase();
+  void loadCampaignSettingsFromSupabase();
+  void loadCampaignAuditFromSupabase();
+  void loadOccupationsFromSupabase();
+  void loadAvailableSectorsFromSupabase();
+  void runReport();
   startNewsAgentScheduler();
-  window.setTimeout(showWisdomPopup, 500);
 }
 
 function loadState() {
@@ -161,6 +123,13 @@ function mergeState(base, saved) {
   merged.newsAgent = { ...base.newsAgent, ...(saved.newsAgent || {}) };
   merged.questionsByDojo = saved.questionsByDojo || {};
   merged.newsAlerts = saved.newsAlerts || [];
+  merged.campaigns = [];
+  merged.campaignAudit = [];
+  merged.campaignSettings = base.campaignSettings;
+  merged.selectedCampaignId = null;
+  merged.occupations = [];
+  merged.selectedOccupationCode = null;
+  merged.availableSectors = [];
   return merged;
 }
 
@@ -180,6 +149,12 @@ function bindNavigation() {
         renderQuestions();
         renderNewsAlerts();
       }
+      if (button.dataset.panel === "reports") {
+        ["topChart"].forEach((id) => {
+          const chart = ensureChart(id);
+          if (chart) chart.resize();
+        });
+      }
     });
   });
 }
@@ -192,9 +167,15 @@ function bindActions() {
   $("#testAiFlow").addEventListener("click", testAiFlow);
   $("#simulateOpenQuestion").addEventListener("click", simulateOpenQuestion);
   $("#bulkSuspend").addEventListener("click", suspendSelectedUsers);
+  $("#addOccupation").addEventListener("click", addOccupation);
+  $("#saveOccupation").addEventListener("click", saveOccupation);
+  $("#deleteOccupation").addEventListener("click", deleteOccupation);
   $("#addCampaign").addEventListener("click", addCampaign);
-  $("#showWisdom").addEventListener("click", showWisdomPopup);
-  $("#closeWisdom").addEventListener("click", closeWisdomPopup);
+  $("#saveCampaign").addEventListener("click", saveCampaign);
+  $("#saveAdsSettings").addEventListener("click", saveCampaignSettings);
+  $("#adImageFile").addEventListener("change", handleCampaignImageSelected);
+  $("#adTargetAll").addEventListener("change", (e) => setTargetAllUI(e.target.checked));
+  $("#runReport").addEventListener("click", runReport);
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
   $("#forceNewsReview").addEventListener("click", runNewsAgent);
@@ -215,9 +196,6 @@ function bindActions() {
     $(`#${id}`).addEventListener("input", updateSelectedDojoFromForm);
   });
 
-  ["adName", "adMoment", "adDuration", "adValidity", "adMessage"].forEach((id) => {
-    $(`#${id}`).addEventListener("input", updateSelectedCampaignFromForm);
-  });
 }
 
 function renderAll() {
@@ -547,7 +525,7 @@ function runNewsAgent() {
   state.newsAlerts = state.newsAlerts.slice(0, 20);
   state.generatedKatas = state.generatedKatas.slice(0, 8);
   state.newsAgent.lastRun = alertTime;
-  persist("Agente ejecutado: preguntas IA y katas generadas como borrador.");
+  persist("Agente ejecutado: preguntas y katas generadas en borrador local (sin sobrescribir base de datos).");
   void saveNewsAlertToSupabase(alertEntry).then((saved) => {
     if (saved) {
       alertEntry.persisted = true;
@@ -555,7 +533,9 @@ function runNewsAgent() {
       renderNewsAlerts();
     }
   });
-  void saveQuestionsToSupabase(bank, dojo);
+  // NOTA DE SEGURIDAD OPERATIVA:
+  // No se invoca automáticamente saveQuestionsToSupabase(bank, dojo) para evitar
+  // que texto generado por plantillas fijas en JS destruya preguntas curriculares reales en Postgres.
   renderAll();
 }
 
@@ -854,30 +834,236 @@ function renderUsers() {
   `).join("");
 }
 
+const SUPABASE_PROJECT_URL = "https://wbbcjiqzbzswxsmwjqlw.supabase.co";
+const CAMPAIGN_STATUS_LABEL = { activa: "activa", suspendida: "suspendida", eliminada: "eliminada" };
+const CAMPAIGN_STATUS_BADGE = { activa: "ai", suspendida: "audit", eliminada: "danger" };
+let pendingCampaignImage = null;
+
+async function loadActor() {
+  try {
+    const response = await fetch("/api/whoami");
+    const data = await response.json();
+    state.actor = data.actor || "central-admin";
+  } catch (error) {
+    state.actor = "central-admin";
+  }
+}
+
+async function loadCampaignsFromSupabase() {
+  try {
+    const rows = await supabaseRest("central_admin_campaigns?select=*&order=created_at.desc");
+    state.campaigns = Array.isArray(rows) ? rows : [];
+    renderCampaigns();
+  } catch (error) {
+    console.warn("No se pudieron cargar las campanas:", error);
+    notify("No se pudieron cargar las campanas de propaganda.");
+  }
+}
+
+async function loadCampaignSettingsFromSupabase() {
+  try {
+    const rows = await supabaseRest("central_admin_campaign_settings?select=*&id=eq.1");
+    if (Array.isArray(rows) && rows[0]) state.campaignSettings = rows[0];
+    renderCampaignSettingsForm();
+  } catch (error) {
+    console.warn("No se pudieron cargar los limites de imagen:", error);
+  }
+}
+
+async function loadCampaignAuditFromSupabase() {
+  try {
+    const rows = await supabaseRest(
+      "central_admin_campaign_audit?select=id,actor,action,details,created_at,campaign:central_admin_campaigns(name)&order=created_at.desc&limit=50"
+    );
+    state.campaignAudit = Array.isArray(rows) ? rows : [];
+    renderCampaignAudit();
+  } catch (error) {
+    console.warn("No se pudo cargar la auditoria de campanas:", error);
+  }
+}
+
+function renderCampaignSettingsForm() {
+  const settings = state.campaignSettings;
+  $("#adsMaxKb").value = settings.max_image_kb;
+  $("#adsMaxWidth").value = settings.max_image_width;
+  $("#adsMaxHeight").value = settings.max_image_height;
+}
+
+async function saveCampaignSettings() {
+  const maxKb = Number($("#adsMaxKb").value);
+  const maxWidth = Number($("#adsMaxWidth").value);
+  const maxHeight = Number($("#adsMaxHeight").value);
+  const statusEl = $("#adsSettingsStatus");
+
+  if (!maxKb || !maxWidth || !maxHeight || maxKb <= 0 || maxWidth <= 0 || maxHeight <= 0) {
+    statusEl.textContent = "Ingresa valores mayores a 0.";
+    return;
+  }
+
+  try {
+    const rows = await supabaseRest("central_admin_campaign_settings?id=eq.1", {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        max_image_kb: maxKb,
+        max_image_width: maxWidth,
+        max_image_height: maxHeight,
+        updated_by: state.actor || "central-admin",
+      }),
+    });
+    if (Array.isArray(rows) && rows[0]) state.campaignSettings = rows[0];
+    statusEl.textContent = "Limites guardados.";
+    notify("Limites de imagen actualizados.");
+  } catch (error) {
+    console.warn("No se pudieron guardar los limites:", error);
+    statusEl.textContent = "No se pudo guardar. Intenta de nuevo.";
+  }
+}
+
+function handleCampaignImageSelected(event) {
+  const file = event.target.files && event.target.files[0];
+  const statusEl = $("#adImageStatus");
+  const previewWrap = $("#adImagePreviewWrap");
+  const previewImg = $("#adImagePreview");
+  statusEl.textContent = "";
+
+  if (!file) {
+    pendingCampaignImage = null;
+    return;
+  }
+
+  const settings = state.campaignSettings;
+  const maxBytes = settings.max_image_kb * 1024;
+
+  if (file.size > maxBytes) {
+    statusEl.textContent = `La imagen pesa ${(file.size / 1024).toFixed(0)}KB. El maximo permitido es ${settings.max_image_kb}KB.`;
+    event.target.value = "";
+    pendingCampaignImage = null;
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const probe = new Image();
+  probe.onload = () => {
+    if (probe.naturalWidth > settings.max_image_width || probe.naturalHeight > settings.max_image_height) {
+      statusEl.textContent = `La imagen mide ${probe.naturalWidth}x${probe.naturalHeight}px. El maximo permitido es ${settings.max_image_width}x${settings.max_image_height}px.`;
+      event.target.value = "";
+      pendingCampaignImage = null;
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+
+    pendingCampaignImage = { file, previewUrl: objectUrl };
+    previewImg.src = objectUrl;
+    previewWrap.classList.remove("hidden");
+    statusEl.textContent = `Lista para subir: ${(file.size / 1024).toFixed(0)}KB, ${probe.naturalWidth}x${probe.naturalHeight}px.`;
+  };
+  probe.onerror = () => {
+    statusEl.textContent = "No se pudo leer la imagen. Intenta con otro archivo.";
+    pendingCampaignImage = null;
+  };
+  probe.src = objectUrl;
+}
+
+async function uploadCampaignImage(file) {
+  const safeExt = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+
+  const response = await fetch(`/api/storage/v1/object/campaign-ads/${filename}`, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error(`${response.status} ${await response.text()}`);
+  }
+
+  return `${SUPABASE_PROJECT_URL}/storage/v1/object/public/campaign-ads/${filename}`;
+}
+
 function renderCampaigns() {
-  $("#campaignList").innerHTML = state.campaigns.map((campaign) => `
-    <button class="campaign-row ${campaign.id === state.selectedCampaignId ? "active" : ""}" data-id="${esc(campaign.id)}">
-      <div>
-        <strong>${esc(campaign.name)}</strong>
-        <div class="muted">${esc(campaign.moment)} - ${campaign.duration}s - ${esc(campaign.validity)}</div>
-      </div>
-      <span class="badge ${campaign.active ? "ai" : "audit"}">${campaign.active ? "activa" : "pausada"}</span>
-    </button>
-  `).join("");
+  const list = $("#campaignList");
+  if (state.campaigns.length === 0) {
+    list.innerHTML = `<p class="muted">Todavia no hay campanas. Usa "Agregar campana" para crear la primera.</p>`;
+  } else {
+    list.innerHTML = state.campaigns.map((campaign) => `
+      <button class="campaign-row ${campaign.id === state.selectedCampaignId ? "active" : ""}" data-id="${esc(campaign.id)}">
+        <div>
+          <strong>${esc(campaign.name)}</strong>
+          <div class="muted">${esc(campaign.moment)} - ${campaign.duration_seconds}s - ${esc(campaign.validity_type)}</div>
+        </div>
+        <span class="badge ${CAMPAIGN_STATUS_BADGE[campaign.status] || "audit"}">${CAMPAIGN_STATUS_LABEL[campaign.status] || campaign.status}</span>
+      </button>
+    `).join("");
+  }
 
   $$(".campaign-row").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedCampaignId = button.dataset.id;
+      pendingCampaignImage = null;
       renderCampaigns();
     });
   });
 
   const campaign = getSelectedCampaign();
-  $("#adName").value = campaign.name;
-  $("#adMoment").value = campaign.moment;
-  $("#adDuration").value = campaign.duration;
-  $("#adValidity").value = campaign.validity;
-  $("#adMessage").value = campaign.message;
+  const previewWrap = $("#adImagePreviewWrap");
+  const previewImg = $("#adImagePreview");
+  $("#adImageFile").value = "";
+  $("#adImageStatus").textContent = "";
+
+  if (campaign) {
+    $("#adName").value = campaign.name;
+    $("#adMoment").value = campaign.moment;
+    $("#adDuration").value = campaign.duration_seconds;
+    $("#adValidity").value = campaign.validity_type;
+    $("#adStatus").value = campaign.status;
+    $("#adLink").value = campaign.link_url || "";
+    $("#adMessage").value = campaign.message;
+    renderSectorCheckboxes(campaign.target_sectors);
+    setTargetAllUI(campaign.target_all !== false);
+    if (campaign.image_url) {
+      previewImg.src = campaign.image_url;
+      previewWrap.classList.remove("hidden");
+    } else {
+      previewWrap.classList.add("hidden");
+    }
+  } else {
+    $("#adName").value = "";
+    $("#adMoment").value = "inicio";
+    $("#adDuration").value = 10;
+    $("#adValidity").value = "indefinido";
+    $("#adStatus").value = "activa";
+    $("#adLink").value = "";
+    $("#adMessage").value = "";
+    renderSectorCheckboxes([]);
+    setTargetAllUI(true);
+    previewWrap.classList.add("hidden");
+  }
+}
+
+function renderCampaignAudit() {
+  const container = $("#campaignAuditLog");
+  if (state.campaignAudit.length === 0) {
+    container.innerHTML = `<p class="muted">Todavia no hay cambios registrados.</p>`;
+    return;
+  }
+
+  const actionLabel = { creada: "creo", actualizada: "actualizo", estado_cambiado: "cambio el estado de" };
+
+  container.innerHTML = state.campaignAudit.map((entry) => {
+    const campaignName = entry.campaign && entry.campaign.name ? entry.campaign.name : "(campana eliminada)";
+    const when = new Date(entry.created_at).toLocaleString("es-EC");
+    const detail = entry.action === "estado_cambiado" && entry.details
+      ? ` de "${esc(entry.details.from || "")}" a "${esc(entry.details.to || "")}"`
+      : "";
+    return `
+      <div class="progress-row">
+        <strong>${esc(entry.actor)}</strong> ${actionLabel[entry.action] || entry.action} <strong>${esc(campaignName)}</strong>${detail}
+        <div class="muted">${when}</div>
+      </div>
+    `;
+  }).join("");
 }
 
 function addDojo() {
@@ -906,19 +1092,9 @@ function addAiProvider() {
 }
 
 function addCampaign() {
-  const id = `ad-${Date.now()}`;
-  state.campaigns.push({
-    id,
-    name: "Nueva propaganda",
-    moment: "inicio",
-    duration: 10,
-    validity: "indefinido",
-    message: "Mensaje pendiente de configurar.",
-    active: true,
-  });
-  state.selectedCampaignId = id;
-  persist("Campana agregada.");
-  renderAll();
+  state.selectedCampaignId = null;
+  pendingCampaignImage = null;
+  renderCampaigns();
 }
 
 function updateSelectedDojoFromForm() {
@@ -931,15 +1107,90 @@ function updateSelectedDojoFromForm() {
   renderDojos();
 }
 
-function updateSelectedCampaignFromForm() {
-  const campaign = getSelectedCampaign();
-  campaign.name = $("#adName").value;
-  campaign.moment = $("#adMoment").value;
-  campaign.duration = Number($("#adDuration").value);
-  campaign.validity = $("#adValidity").value;
-  campaign.message = $("#adMessage").value;
-  renderMetrics();
-  renderCampaigns();
+async function saveCampaign() {
+  const name = $("#adName").value.trim();
+  const message = $("#adMessage").value.trim();
+
+  if (!name || !message) {
+    notify("Completa al menos el nombre y el mensaje de la campana.");
+    return;
+  }
+
+  const existing = getSelectedCampaign();
+  const targetAll = $("#adTargetAll").checked;
+  const payload = {
+    name,
+    moment: $("#adMoment").value,
+    duration_seconds: Number($("#adDuration").value) || 10,
+    validity_type: $("#adValidity").value,
+    status: $("#adStatus").value,
+    link_url: $("#adLink").value.trim() || null,
+    message,
+    target_all: targetAll,
+    target_sectors: targetAll ? [] : getTargetSectorsFromForm(),
+  };
+
+  try {
+    if (pendingCampaignImage) {
+      payload.image_url = await uploadCampaignImage(pendingCampaignImage.file);
+    }
+
+    if (existing) {
+      const previousStatus = existing.status;
+      const rows = await supabaseRest(`central_admin_campaigns?id=eq.${existing.id}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      const updated = Array.isArray(rows) && rows[0] ? rows[0] : { ...existing, ...payload };
+      state.campaigns = state.campaigns.map((campaign) => (campaign.id === updated.id ? updated : campaign));
+
+      if (previousStatus !== updated.status) {
+        await logCampaignAudit(updated.id, "estado_cambiado", { from: previousStatus, to: updated.status });
+      }
+      await logCampaignAudit(updated.id, "actualizada", payload);
+      notify("Campana actualizada.");
+    } else {
+      const rows = await supabaseRest("central_admin_campaigns", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      const created = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      if (created) {
+        state.campaigns.unshift(created);
+        state.selectedCampaignId = created.id;
+        await logCampaignAudit(created.id, "creada", payload);
+      }
+      notify("Campana creada.");
+    }
+
+    pendingCampaignImage = null;
+    renderCampaigns();
+    renderMetrics();
+    void loadCampaignAuditFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo guardar la campana:", error);
+    notify("No se pudo guardar la campana. Intenta de nuevo.");
+  }
+}
+
+async function logCampaignAudit(campaignId, action, details) {
+  try {
+    const response = await fetch("/api/rest/v1/central_admin_campaign_audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({
+        campaign_id: campaignId,
+        actor: state.actor || "central-admin",
+        action,
+        details: details || {},
+      }),
+    });
+    if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+  } catch (error) {
+    console.warn("No se pudo registrar la auditoria:", error);
+  }
 }
 
 function testAiFlow() {
@@ -963,24 +1214,619 @@ function suspendSelectedUsers() {
   renderMetrics();
 }
 
-function showWisdomPopup() {
-  const quote = wisdomQuotes[Math.floor(Math.random() * wisdomQuotes.length)];
-  $("#wisdomSource").textContent = quote.source;
-  $("#wisdomQuote").textContent = quote.quote;
-  $("#wisdomCyber").textContent = quote.cyber;
-  $("#wisdomModal").classList.add("active");
-}
-
-function closeWisdomPopup() {
-  $("#wisdomModal").classList.remove("active");
-}
-
 function getSelectedDojo() {
   return state.dojos.find((dojo) => dojo.id === state.selectedDojoId) || state.dojos[0];
 }
 
 function getSelectedCampaign() {
-  return state.campaigns.find((campaign) => campaign.id === state.selectedCampaignId) || state.campaigns[0];
+  return state.campaigns.find((campaign) => campaign.id === state.selectedCampaignId) || null;
+}
+
+async function loadOccupationsFromSupabase() {
+  try {
+    const rows = await supabaseRest("business_sectors?select=code,label,industry,active,display_order&order=display_order.asc");
+    state.occupations = Array.isArray(rows) ? rows : [];
+    renderOccupations();
+  } catch (error) {
+    console.warn("No se pudieron cargar las ocupaciones:", error);
+    notify("No se pudieron cargar las ocupaciones.");
+  }
+}
+
+function getSelectedOccupation() {
+  return state.occupations.find((item) => item.code === state.selectedOccupationCode) || null;
+}
+
+async function loadAvailableSectorsFromSupabase() {
+  try {
+    const rows = await supabaseRest("business_sectors?select=industry&active=eq.true&industry=not.is.null&order=industry.asc");
+    const unique = Array.from(new Set((rows || []).map((row) => row.industry).filter(Boolean)));
+    state.availableSectors = unique;
+    renderSectorCheckboxes();
+  } catch (error) {
+    console.warn("No se pudieron cargar los sectores:", error);
+  }
+}
+
+function renderSectorCheckboxes(selectedSectors) {
+  const container = $("#adSectorList");
+  if (!container) return;
+  const selected = new Set(selectedSectors || []);
+
+  container.innerHTML = state.availableSectors.map((sector) => `
+    <label class="sector-check">
+      <input type="checkbox" value="${esc(sector)}" ${selected.has(sector) ? "checked" : ""} />
+      ${esc(sector)}
+    </label>
+  `).join("");
+}
+
+function getTargetSectorsFromForm() {
+  return $$("#adSectorList input[type='checkbox']:checked").map((input) => input.value);
+}
+
+function setTargetAllUI(targetAll) {
+  $("#adTargetAll").checked = targetAll;
+  $("#adSectorList").classList.toggle("disabled", targetAll);
+}
+
+const REPORT_PERIOD_DAYS = { quincenal: 15, mensual: 30, trimestral: 90 };
+const ALL_SECTORS_LABEL = "Sin sector (todos)";
+const REPORT_LEVELS = {
+  summary: "Resumen",
+  sectors: "Sectores",
+  campaigns: "Campanas",
+  campaignSectors: "Campana por sector",
+  detail: "Detalle diario",
+};
+
+function reportPeriodRange() {
+  const periodKey = $("#reportPeriod") ? $("#reportPeriod").value : "trimestral";
+  const days = REPORT_PERIOD_DAYS[periodKey] || REPORT_PERIOD_DAYS.trimestral;
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
+function ensureChart(elId) {
+  if (typeof echarts === "undefined") return null;
+  const dom = document.getElementById(elId);
+  if (!dom) return null;
+  return echarts.getInstanceByDom(dom) || echarts.init(dom);
+}
+
+function renderReportKpis(entries = [], impressions = [], campaigns = []) {
+  const withSector = entries.filter((row) => row.sector).length;
+  const activeSectors = new Set(entries.filter((row) => row.sector).map((row) => row.sector)).size;
+  const campaignCounts = campaignImpressionRows(campaigns, impressions);
+  const topCampaign = campaignCounts[0];
+  const kpis = [
+    { label: "Ingresos totales", value: entries.length, accent: "cyan" },
+    { label: "Ingresos con sector", value: withSector, accent: "green" },
+    { label: "Sectores activos", value: activeSectors, accent: "violet" },
+    { label: "Impresiones", value: impressions.length, accent: "pink" },
+    { label: "Campana lider", value: topCampaign ? topCampaign.name : "-", detail: topCampaign ? `${topCampaign.count} vistas` : "Sin datos", accent: "amber" },
+  ];
+  const container = $("#reportKpis");
+  if (!container) return;
+  container.innerHTML = kpis.map((item) => `
+    <article class="bi-kpi ${esc(item.accent)}">
+      <span>${esc(item.label)}</span>
+      <strong>${esc(String(item.value))}</strong>
+      <em>${esc(item.detail || "Periodo seleccionado")}</em>
+    </article>
+  `).join("");
+}
+
+async function runReport() {
+  const { start, end } = reportPeriodRange();
+  const startIso = start.toISOString();
+  const endIso = end.toISOString();
+  const rangeEl = $("#reportRange");
+  if (rangeEl) rangeEl.textContent = `Del ${start.toLocaleDateString("es-EC")} al ${end.toLocaleDateString("es-EC")}`;
+  setReportPath([{ level: "summary", label: REPORT_LEVELS.summary }]);
+
+  try {
+    const [entries, impressions, campaigns] = await Promise.all([
+      supabaseRest(`app_entry_log?select=sector,entered_at&entered_at=gte.${encodeURIComponent(startIso)}&entered_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
+      supabaseRest(`campaign_impressions?select=campaign_id,sector,shown_at&shown_at=gte.${encodeURIComponent(startIso)}&shown_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
+      supabaseRest("central_admin_campaigns?select=id,name,created_at&order=created_at.asc"),
+    ]);
+
+    const entryRows = Array.isArray(entries) ? entries : [];
+    const impressionRows = Array.isArray(impressions) ? impressions : [];
+    const campaignRows = Array.isArray(campaigns) ? campaigns : [];
+    state.lastEntryRows = entryRows;
+    state.lastImpressionRows = impressionRows;
+    state.lastCampaignRows = campaignRows;
+
+    renderReportKpis(entryRows, impressionRows, campaignRows);
+    renderTopChart();
+  } catch (error) {
+    console.warn("No se pudo generar el reporte:", error);
+    notify("No se pudo generar el reporte.");
+  }
+}
+
+function sectorEntryCounts(entries) {
+  const counts = new Map();
+  entries.forEach((row) => {
+    const sector = row.sector || ALL_SECTORS_LABEL;
+    counts.set(sector, (counts.get(sector) || 0) + 1);
+  });
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+}
+
+function campaignImpressionRows(campaigns, impressions) {
+  const counts = new Map();
+  impressions.forEach((row) => counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1));
+  return (campaigns || [])
+    .map((c) => ({ ...c, count: counts.get(c.id) || 0 }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function filterImpressionsBySector(impressions, sectorLabel) {
+  const isAll = sectorLabel === ALL_SECTORS_LABEL;
+  return (impressions || []).filter((row) => isAll ? !row.sector : row.sector === sectorLabel);
+}
+
+function groupImpressionsByDay(impressions) {
+  const counts = new Map();
+  impressions.forEach((row) => {
+    const dateKey = row.shown_at ? new Date(row.shown_at).toISOString().slice(0, 10) : "Sin fecha";
+    counts.set(dateKey, (counts.get(dateKey) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function formatReportDate(dateKey) {
+  if (!dateKey || dateKey === "Sin fecha") return "Sin fecha";
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString("es-EC");
+}
+
+function setReportPath(path = []) {
+  state.reportDrillPath = path;
+  const el = $("#reportBreadcrumb");
+  if (!el) return;
+  el.innerHTML = path.map((item, index) => `
+    <button class="bi-crumb ${index === path.length - 1 ? "active" : ""}" data-index="${index}">
+      <span>${index + 1}</span>${esc(item.label)}
+    </button>
+  `).join("");
+  $$("#reportBreadcrumb .bi-crumb").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = path[Number(button.dataset.index)];
+      if (item && typeof item.action === "function") item.action();
+    });
+  });
+}
+
+function reportRowsToTable(headers, rows) {
+  const head = $("#reportDetailHead");
+  const body = $("#reportDetailRows");
+  if (!head || !body) return;
+  head.innerHTML = `<tr>${headers.map((header) => `<th>${esc(header)}</th>`).join("")}</tr>`;
+  body.innerHTML = rows.length === 0
+    ? `<tr><td colspan="${headers.length}" class="muted">Sin datos para este nivel del reporte.</td></tr>`
+    : rows.map((row) => `
+      <tr class="clickable-row">
+        ${row.cells.map((cell) => `<td>${esc(cell)}</td>`).join("")}
+      </tr>
+    `).join("");
+  $$("#reportDetailRows .clickable-row").forEach((tr, index) => {
+    const row = rows[index];
+    if (row && typeof row.action === "function") tr.addEventListener("click", row.action);
+  });
+}
+
+function biBar3DOption(rows, valueLabel, options = {}) {
+  const values = rows.map((row) => row.value);
+  const max = Math.max(...values, 1);
+  const palette = ["#5FB3B3", "#4F7CAC", "#D9A441", "#7B8FA1", "#6EA672", "#B76E79", "#8B7EC8", "#C4875A"];
+  return {
+    backgroundColor: "transparent",
+    tooltip: {
+      borderWidth: 0,
+      backgroundColor: "rgba(5, 12, 24, 0.95)",
+      textStyle: { color: "#F4F7FB", fontSize: 13 },
+      formatter: (p) => `${p.name}<br/>${valueLabel}: <strong>${p.value[2]}</strong><br/><span style="color:#A8B7C7">Click para profundizar</span>`,
+    },
+    xAxis3D: {
+      type: "category",
+      data: rows.map((row) => row.name),
+      axisLabel: { color: "#D8E2EF", interval: 0, fontSize: 12, margin: 12 },
+      axisLine: { lineStyle: { color: "rgba(143, 166, 188, .55)" } },
+    },
+    yAxis3D: { type: "category", data: [valueLabel || ""], show: false },
+    zAxis3D: {
+      type: "value",
+      axisLabel: { color: "#A8B7C7" },
+      name: valueLabel,
+      nameTextStyle: { color: "#F4F7FB", fontWeight: 700 },
+    },
+    grid3D: {
+      boxWidth: options.boxWidth || 132,
+      boxDepth: options.boxDepth || 48,
+      boxHeight: 76,
+      viewControl: {
+        alpha: 23,
+        beta: 32,
+        distance: options.distance || 205,
+        autoRotate: true,
+        autoRotateSpeed: 2.5,
+      },
+      light: {
+        main: { intensity: 1.35, shadow: true, shadowQuality: "high" },
+        ambient: { intensity: 0.72 },
+      },
+      postEffect: {
+        enable: true,
+        bloom: { enable: true, bloomIntensity: 0.11 },
+        screenSpaceAmbientOcclusion: { enable: true, intensity: 0.9, radius: 3 },
+      },
+      axisLine: { lineStyle: { color: "rgba(168, 183, 199, .34)" } },
+      splitLine: { lineStyle: { color: "rgba(255,255,255,.07)" } },
+      axisPointer: { show: true, lineStyle: { color: "#D9A441" } },
+    },
+    series: [{
+      type: "bar3D",
+      data: rows.map((row, i) => ({
+        name: row.name,
+        value: [i, 0, row.value],
+        meta: row.meta,
+        itemStyle: {
+          color: palette[i % palette.length],
+          opacity: 1,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,.52)",
+        },
+      })),
+      shading: "realistic",
+      bevelSize: 0.28,
+      bevelSmoothness: 3,
+      barSize: options.barSize || Math.max(13, Math.min(30, 390 / Math.max(rows.length, 1))),
+      label: {
+        show: true,
+        formatter: (p) => p.value[2] > 0 ? String(p.value[2]) : "",
+        color: "#FFFFFF",
+        fontWeight: 900,
+        distance: 2,
+      },
+      emphasis: {
+        label: { show: true, color: "#FFFFFF", fontSize: 16 },
+        itemStyle: { color: "#F7D774" },
+      },
+      animationDurationUpdate: 650,
+      animationEasingUpdate: "cubicOut",
+    }],
+    visualMap: {
+      show: false,
+      min: 0,
+      max,
+      inRange: { color: palette },
+    },
+  };
+}
+
+function renderBiChart({ level, title, subtitle, rows, valueLabel, headers, tableRows, path }) {
+  $("#biChartLevel").textContent = `NIVEL ${level}`;
+  $("#biChartTitle").textContent = title;
+  $("#biChartSubtitle").textContent = subtitle;
+  setReportPath(path);
+  reportRowsToTable(headers, tableRows);
+
+  const chart = ensureChart("topChart");
+  if (!chart) return;
+  if (rows.length === 0) {
+    chart.clear();
+    return;
+  }
+  chart.setOption(biBar3DOption(rows, valueLabel, { barSize: level === 1 ? 34 : undefined }), true);
+  chart.off("click");
+  chart.on("click", (params) => {
+    const row = rows.find((item) => item.name === params.name);
+    if (row && typeof row.action === "function") row.action();
+  });
+}
+
+function renderTopChart() {
+  renderReportSummary();
+}
+
+function renderReportSummary() {
+  const entries = state.lastEntryRows || [];
+  const impressions = state.lastImpressionRows || [];
+  const rows = [
+    {
+      name: "Ingresos por sector",
+      value: entries.filter((row) => row.sector).length,
+      action: renderSectorLevel,
+    },
+    {
+      name: "Ingresos sin sector",
+      value: entries.filter((row) => !row.sector).length,
+      action: () => renderCampaignLevel(ALL_SECTORS_LABEL),
+    },
+    {
+      name: "Propaganda",
+      value: impressions.length,
+      action: renderGlobalCampaignLevel,
+    },
+  ];
+  renderBiChart({
+    level: 1,
+    title: "Vista general del reporte",
+    subtitle: "Click en una figura para profundizar dentro del mismo grafico.",
+    rows,
+    valueLabel: "Total",
+    headers: ["Indicador", "Total", "Siguiente nivel"],
+    tableRows: rows.map((row) => ({
+      cells: [row.name, row.value, row.name === "Propaganda" ? "Campanas" : "Sectores / campanas"],
+      action: row.action,
+    })),
+    path: [{ label: REPORT_LEVELS.summary, action: renderReportSummary }],
+  });
+}
+
+function renderSectorLevel() {
+  const rows = sectorEntryCounts(state.lastEntryRows || [])
+    .filter(([sector]) => sector !== ALL_SECTORS_LABEL)
+    .map(([sector, count]) => ({
+      name: sector,
+      value: count,
+      action: () => renderCampaignLevel(sector),
+    }));
+  renderBiChart({
+    level: 2,
+    title: "Ingresos por sector",
+    subtitle: "Click en un sector para ver las campanas mostradas a ese grupo.",
+    rows,
+    valueLabel: "Ingresos",
+    headers: ["Sector", "Ingresos", "Siguiente nivel"],
+    tableRows: rows.map((row) => ({ cells: [row.name, row.value, "Campanas mostradas"], action: row.action })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: REPORT_LEVELS.sectors, action: renderSectorLevel },
+    ],
+  });
+}
+
+function renderCampaignLevel(sectorLabel) {
+  const impressions = filterImpressionsBySector(state.lastImpressionRows || [], sectorLabel);
+  const campaigns = state.lastCampaignRows || [];
+  const counts = new Map();
+  impressions.forEach((row) => counts.set(row.campaign_id, (counts.get(row.campaign_id) || 0) + 1));
+  const rows = campaigns
+    .map((campaign) => ({
+      name: campaign.name,
+      value: counts.get(campaign.id) || 0,
+      campaign,
+      action: () => renderCampaignDayLevel(campaign.id, campaign.name, sectorLabel),
+    }))
+    .filter((row) => row.value > 0)
+    .sort((a, b) => b.value - a.value);
+  renderBiChart({
+    level: 3,
+    title: `Campanas mostradas: ${sectorLabel}`,
+    subtitle: "Click en una campana para ver el detalle diario dentro del mismo grafico.",
+    rows,
+    valueLabel: "Impresiones",
+    headers: ["Campana", "Creada", "Impresiones"],
+    tableRows: rows.map((row) => ({
+      cells: [row.name, row.campaign.created_at ? new Date(row.campaign.created_at).toLocaleDateString("es-EC") : "-", row.value],
+      action: row.action,
+    })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: sectorLabel === ALL_SECTORS_LABEL ? "Sin sector" : REPORT_LEVELS.sectors, action: sectorLabel === ALL_SECTORS_LABEL ? renderReportSummary : renderSectorLevel },
+      { label: sectorLabel, action: () => renderCampaignLevel(sectorLabel) },
+    ],
+  });
+}
+
+function renderGlobalCampaignLevel() {
+  const rows = campaignImpressionRows(state.lastCampaignRows || [], state.lastImpressionRows || [])
+    .filter((campaign) => campaign.count > 0)
+    .map((campaign) => ({
+      name: campaign.name,
+      value: campaign.count,
+      campaign,
+      action: () => renderCampaignSectorLevel(campaign.id, campaign.name),
+    }));
+  renderBiChart({
+    level: 2,
+    title: "Propaganda por campana",
+    subtitle: "Click en una campana para ver los sectores impactados.",
+    rows,
+    valueLabel: "Impresiones",
+    headers: ["Campana", "Creada", "Impresiones"],
+    tableRows: rows.map((row) => ({
+      cells: [row.name, row.campaign.created_at ? new Date(row.campaign.created_at).toLocaleDateString("es-EC") : "-", row.value],
+      action: row.action,
+    })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: "Propaganda", action: renderGlobalCampaignLevel },
+    ],
+  });
+}
+
+function renderCampaignSectorLevel(campaignId, campaignName) {
+  const impressions = (state.lastImpressionRows || []).filter((row) => row.campaign_id === campaignId);
+  const counts = new Map();
+  impressions.forEach((row) => {
+    const sector = row.sector || ALL_SECTORS_LABEL;
+    counts.set(sector, (counts.get(sector) || 0) + 1);
+  });
+  const rows = Array.from(counts.entries())
+    .map(([sector, count]) => ({
+      name: sector,
+      value: count,
+      action: () => renderCampaignDayLevel(campaignId, campaignName, sector),
+    }))
+    .sort((a, b) => b.value - a.value);
+  renderBiChart({
+    level: 3,
+    title: `Sectores impactados: ${campaignName}`,
+    subtitle: "Click en un sector para ver el comportamiento diario de esta campana.",
+    rows,
+    valueLabel: "Impresiones",
+    headers: ["Sector", "Campana", "Impresiones"],
+    tableRows: rows.map((row) => ({ cells: [row.name, campaignName, row.value], action: row.action })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: "Propaganda", action: renderGlobalCampaignLevel },
+      { label: campaignName, action: () => renderCampaignSectorLevel(campaignId, campaignName) },
+    ],
+  });
+}
+
+function renderCampaignDayLevel(campaignId, campaignName, sectorLabel) {
+  const impressions = filterImpressionsBySector(state.lastImpressionRows || [], sectorLabel)
+    .filter((row) => row.campaign_id === campaignId);
+  const rows = groupImpressionsByDay(impressions).map((row) => ({
+    name: formatReportDate(row.date),
+    value: row.count,
+  }));
+  renderBiChart({
+    level: 4,
+    title: `${campaignName} - ${sectorLabel}`,
+    subtitle: "Detalle diario de impresiones. Este es el ultimo nivel disponible con los datos actuales.",
+    rows,
+    valueLabel: "Impresiones por dia",
+    headers: ["Fecha", "Sector", "Impresiones"],
+    tableRows: rows.map((row) => ({ cells: [row.name, sectorLabel, row.value] })),
+    path: [
+      { label: REPORT_LEVELS.summary, action: renderReportSummary },
+      { label: "Propaganda", action: renderGlobalCampaignLevel },
+      { label: sectorLabel, action: () => renderCampaignLevel(sectorLabel) },
+      { label: campaignName, action: () => renderCampaignDayLevel(campaignId, campaignName, sectorLabel) },
+    ],
+  });
+}
+
+function slugifyOccupationCode(label) {
+  const normalized = label
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return normalized.slice(0, 40) || `ocupacion_${Date.now()}`;
+}
+
+function renderOccupations() {
+  const list = $("#occupationList");
+  if (state.occupations.length === 0) {
+    list.innerHTML = `<p class="muted">Todavia no hay ocupaciones cargadas.</p>`;
+  } else {
+    list.innerHTML = state.occupations.map((item) => `
+      <button class="campaign-row ${item.code === state.selectedOccupationCode ? "active" : ""}" data-code="${esc(item.code)}">
+        <div>
+          <strong>${esc(item.label)}</strong>
+          <div class="muted">${esc(item.industry || "Sin sector")}</div>
+        </div>
+        <span class="badge ${item.active ? "ai" : "audit"}">${item.active ? "activa" : "inactiva"}</span>
+      </button>
+    `).join("");
+
+    $$("#occupationList .campaign-row").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.selectedOccupationCode = button.dataset.code;
+        renderOccupations();
+      });
+    });
+  }
+
+  const occupation = getSelectedOccupation();
+  const statusEl = $("#occupationStatus");
+  if (statusEl) statusEl.textContent = "";
+
+  if (occupation) {
+    $("#occLabel").value = occupation.label;
+    $("#occIndustry").value = occupation.industry || "";
+    $("#occOrder").value = occupation.display_order;
+    $("#occStatus").value = occupation.active ? "activa" : "inactiva";
+  } else {
+    $("#occLabel").value = "";
+    $("#occIndustry").value = "";
+    $("#occOrder").value = state.occupations.length > 0
+      ? Math.max(...state.occupations.map((item) => item.display_order || 0)) + 10
+      : 10;
+    $("#occStatus").value = "activa";
+  }
+}
+
+function addOccupation() {
+  state.selectedOccupationCode = null;
+  renderOccupations();
+}
+
+async function saveOccupation() {
+  const label = $("#occLabel").value.trim();
+  const industry = $("#occIndustry").value.trim();
+  const displayOrder = Number($("#occOrder").value) || 100;
+  const active = $("#occStatus").value === "activa";
+  const statusEl = $("#occupationStatus");
+
+  if (!label) {
+    statusEl.textContent = "Ingresa el nombre de la ocupacion.";
+    return;
+  }
+
+  const existing = getSelectedOccupation();
+  const payload = { label, industry: industry || null, display_order: displayOrder, active };
+
+  try {
+    if (existing) {
+      const rows = await supabaseRest(`business_sectors?code=eq.${existing.code}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      const updated = Array.isArray(rows) && rows[0] ? rows[0] : { ...existing, ...payload };
+      state.occupations = state.occupations.map((item) => (item.code === updated.code ? updated : item));
+      notify("Ocupacion actualizada.");
+    } else {
+      const code = slugifyOccupationCode(label);
+      const rows = await supabaseRest("business_sectors", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ code, ...payload }),
+      });
+      const created = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      if (created) {
+        state.occupations.push(created);
+        state.selectedOccupationCode = created.code;
+      }
+      notify("Ocupacion agregada.");
+    }
+
+    renderOccupations();
+  } catch (error) {
+    console.warn("No se pudo guardar la ocupacion:", error);
+    statusEl.textContent = "No se pudo guardar. Revisa que el nombre no este repetido.";
+  }
+}
+
+async function deleteOccupation() {
+  const occupation = getSelectedOccupation();
+  if (!occupation) return;
+  if (!window.confirm(`Eliminar "${occupation.label}" de la lista de ocupaciones?`)) return;
+
+  try {
+    await supabaseRest(`business_sectors?code=eq.${occupation.code}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    state.occupations = state.occupations.filter((item) => item.code !== occupation.code);
+    state.selectedOccupationCode = null;
+    renderOccupations();
+    notify("Ocupacion eliminada.");
+  } catch (error) {
+    console.warn("No se pudo eliminar la ocupacion:", error);
+    notify("No se pudo eliminar la ocupacion.");
+  }
 }
 
 function sourceDomain(url) {

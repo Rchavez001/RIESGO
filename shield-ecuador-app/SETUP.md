@@ -22,12 +22,13 @@ supabase start
 supabase link --project-ref TU_PROJECT_REF
 supabase db push
 
-# O en el Dashboard → SQL Editor, ejecutar en orden:
+# O en el Dashboard → SQL Editor, ejecutar en orden (21 migraciones a la fecha de esta revision):
 # 1. supabase/migrations/001_initial_schema.sql
 # 2. supabase/migrations/002_rls_policies.sql
 # 3. supabase/migrations/003_seed_data.sql
 # ...
-# 16. supabase/migrations/016_business_sectors_catalog.sql
+# 21. supabase/migrations/021_campaign_impressions_sector.sql
+# Lista completa y detalle de cada tabla: BASE_DE_DATOS.md
 ```
 
 ### Deploy Edge Functions
@@ -44,6 +45,8 @@ supabase functions deploy analyze-email
 supabase functions deploy run-incident-investigator
 supabase functions deploy audit-generated-questions
 supabase functions deploy run-daily-agent-workflows
+supabase functions deploy migrate-user-pii
+supabase functions deploy backfill-email-domains
 
 # Configurar secrets para las AI APIs:
 supabase secrets set DEEPSEEK_API_KEY=tu_key
@@ -113,17 +116,20 @@ shield-ecuador-app/
 │       ├── complete-kata/           ← Evalua katas, puntos y cinturones
 │       ├── generate-recommendations/← Llama a AI para recomendaciones
 │       └── analyze-email/           ← Detecta phishing en correos
-└── frontend/
-    └── src/
-        ├── lib/supabase.ts          ← Cliente Supabase + tipos
-        ├── contexts/AuthContext.tsx ← Auth state global
-        ├── screens/
-        │   ├── LoginScreen.tsx      ← Login / Registro
-        │   ├── DashboardScreen.tsx  ← Dashboard principal
-        │   └── ResultsScreen.tsx    ← Resultados evaluación
-        └── components/
-            └── AdaptiveQuestionnaire.tsx ← Cuestionario adaptativo
+├── frontend/                          ← App de usuario (Cloud Run "cyberdojo")
+│   ├── static-server.js               ← Servidor de produccion + proxy /admin y /api
+│   └── src/
+│       ├── lib/supabase.ts          ← Cliente Supabase + tipos
+│       ├── contexts/AuthContext.tsx ← Auth state global
+│       ├── screens/                 ← 15 pantallas (ver ARQUITECTURA_CYBER_DOJO.md seccion 4.1)
+│       └── components/
+│           └── AdaptiveQuestionnaire.tsx ← Cuestionario adaptativo
+└── central-admin-app/                 ← Consola admin (Cloud Run "cyberdojo-admin")
+    ├── server.js                      ← Servidor + proxy hacia Supabase (service role)
+    └── app.js                        ← Logica de los 13 paneles (ver MANUAL_ADMINISTRADOR.md)
 ```
+
+Ver `ARQUITECTURA_CYBER_DOJO.md` para la organizacion completa del codigo y `BASE_DE_DATOS.md` para el esquema completo.
 
 ---
 

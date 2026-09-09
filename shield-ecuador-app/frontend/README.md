@@ -1,46 +1,99 @@
-# Getting Started with Create React App
+# Ciber Dojo — Frontend de Usuario
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Aplicación web progresiva (PWA) desarrollada en **React 19 + TypeScript**, estilizada con **Tailwind CSS**, animada con **Framer Motion, Three.js y GSAP**, y respaldada por **Supabase**.
 
-## Available Scripts
+Este servicio se despliega de forma independiente en **Google Cloud Run** bajo el nombre `cyberdojo`.
 
-In the project directory, you can run:
+---
 
-### `npm start`
+## 1. Stack Tecnológico
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+| Componente | Versión / Detalle |
+|---|---|
+| **Framework** | React `^19.2.5` + ReactDOM `^19.2.5` |
+| **Enrutamiento** | React Router DOM `^7.15.0` |
+| **Lenguaje** | TypeScript `^4.9.5` |
+| **Estado Global** | Zustand `^5.0.13` (experiencia y cinturón) + React Context (Auth, Audio, Toast) |
+| **Cliente Backend** | `@supabase/supabase-js` `^2.104.1` |
+| **Efectos Visuales / 3D** | Three.js `^0.184.0`, Framer Motion `^12.38.0`, GSAP `^3.15.0`, Lucide React |
+| **Audio** | Howler.js `^2.2.4` + Web Audio API |
+| **Servidor de Producción** | `static-server.js` (Node.js nativo sin dependencias externas) |
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+---
 
-### `npm test`
+## 2. Variables de Entorno
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Crear un archivo `.env` en el directorio `frontend/` a partir de `.env.example`:
+
+```env
+REACT_APP_SUPABASE_URL=https://<project-ref>.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=<anon_key_de_supabase>
+NODE_ENV=development
+```
+
+En producción (Cloud Run), `static-server.js` admite opcionalmente:
+* `PORT`: Puerto en el que escucha el servidor estático (por defecto `3000`, o asignado por Cloud Run).
+* `ADMIN_UPSTREAM_HOST`: Host del servicio de administración para reenviar peticiones a `/admin/*` y `/api/*` (por defecto `cyberdojo-admin-61855290194.us-central1.run.app`).
+
+---
+
+## 3. Scripts Disponibles
+
+En la carpeta `frontend/`, puedes ejecutar:
+
+### `npm run start:dev`
+Inicia la aplicación en modo desarrollo local usando `react-scripts start`.  
+Abre [http://localhost:3000](http://localhost:3000) en el navegador.
 
 ### `npm run build`
+Compila la aplicación optimizada para producción dentro del directorio `build/`.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### `npm start`
+Inicia el servidor de producción HTTP nativo (`static-server.js`). Sirve los archivos estáticos desde `build/` y redirige el tráfico a `/admin` y `/api` hacia el servicio administrativo en Cloud Run.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### `npm run gcp-build`
+Hook utilizado por los Cloud Buildpacks de Google Cloud Run al desplegar el código fuente con `gcloud run deploy`. Ejecuta `npm run build`.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### `npm test`
+Ejecuta la suite de pruebas unitarias en modo interactivo/watch. Para una ejecución única en pipelines o scripts:
+```bash
+npm test -- --watchAll=false
+```
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## 4. Estructura de Código (`src/`)
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```
+src/
+├── components/          # Componentes visuales reutilizables (DojoShell, CyberBushido, DojoWebGLBackdrop, AdminShell)
+│   └── VulnScanner/     # Componentes del escáner educativo de vulnerabilidades (/escaner)
+├── contexts/            # Proveedores de estado (AuthContext, DojoAudioContext, ToastContext)
+├── data/                # Datos y catálogos locales (ciberDojo.ts: citas, módulos, niveles de cinturón)
+├── hooks/               # Custom hooks (usePWAInstall, usePwaInstallPrompt)
+├── lib/                 # Cliente de Supabase e interfaces TypeScript (supabase.ts)
+├── screens/             # Vistas principales de la aplicación:
+│   ├── LandingPage.tsx          # Portada pública informativa
+│   ├── LoginScreen.tsx          # Acceso por enlace mágico o contraseña + Registro seguro
+│   ├── DashboardScreen.tsx      # Panel del guerrero (misiones, alertas, cinturón dinámico)
+│   ├── DojoListPage.tsx         # Listado de dojos temáticos
+│   ├── DojoDetailPage.tsx       # Pantalla de entrenamiento y preguntas del dojo
+│   ├── KataExamPage.tsx         # Exámenes de ascenso de cinturón evaluados en servidor
+│   ├── LeaderboardPage.tsx      # Tabla de honor corporativa (excluye dominios públicos)
+│   ├── SenseiConsultPage.tsx    # Chat con Sensei IA (Edge Function ask-sensei + fallback local)
+│   ├── VulnScannerPage.tsx      # Diagnóstico de seguridad local (/escaner, lazy-loaded)
+│   ├── ProfilePage.tsx          # Perfil privado con cifrado ARCO y camino de cinturones
+│   ├── AuthCallbackPage.tsx     # Manejador del callback de Magic Link
+│   └── ResetPasswordPage.tsx    # Recuperación de contraseña
+├── services/            # Servicios de integración frontend (senseiIA, auditorIA, scanOrchestrator)
+└── store/               # Store Zustand (dojoStore.ts: experiencia acumulada y cinturón)
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+---
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## 5. Arquitectura del Proxy `/admin`
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+El frontend y el panel de administración operan en el mismo dominio público gracias al servidor `static-server.js`:
+* Cualquier petición a `/admin` o `/admin/*` se reenvía vía HTTPS al microservicio `cyberdojo-admin`.
+* Cualquier petición a `/api/*` se reenvía hacia el microservicio administrativo (que añade de forma segura la autenticación de servicio hacia Supabase).
+* Las rutas SPA del frontend son capturadas por el fallback hacia `build/index.html`.

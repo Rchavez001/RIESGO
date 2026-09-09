@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ciber Dojo Central Admin</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
   </head>
   <body>
     <div id="app" class="central-app">
@@ -47,7 +49,9 @@
           <button class="nav-item" data-panel="threatIntel">Inteligencia de Amenazas</button>
           <button class="nav-item" data-panel="openQuestions">Preguntas abiertas</button>
           <button class="nav-item" data-panel="users">Usuarios</button>
+          <button class="nav-item" data-panel="occupations">Ocupaciones</button>
           <button class="nav-item" data-panel="ads">Propaganda</button>
+          <button class="nav-item" data-panel="reports">Reportes</button>
         </nav>
 
         <div class="rail-card">
@@ -65,7 +69,6 @@
             <p>Gestiona dojos, bancos de preguntas, reglas de avance, inteligencia artificial, revision de respuestas, usuarios y propaganda.</p>
           </div>
           <div class="top-actions">
-            <button id="showWisdom" class="btn secondary">Frase dojo</button>
             <button id="forgotPassword" class="btn secondary">¿Olvidó contraseña?</button>
             <button id="saveAll" class="btn secondary">Guardar borrador</button>
             <button id="publishAll" class="btn primary">Publicar configuracion</button>
@@ -127,7 +130,7 @@
         <section id="dojos" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">N DOJOS CONFIGURABLES</span>
+              <span class="label">N DOJOS CONFIGURABLES <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
               <h2>Dojos tematicos</h2>
             </div>
             <button id="addDojo" class="btn primary">Agregar dojo</button>
@@ -293,7 +296,7 @@
         <section id="ai" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">CONFIGURACION DE IA</span>
+              <span class="label">CONFIGURACION DE IA <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
               <h2>Orden de consulta, tiempos y revision</h2>
             </div>
             <button id="testAiFlow" class="btn secondary">Probar algoritmo</button>
@@ -390,7 +393,7 @@
         <section id="openQuestions" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">PREGUNTAS ABIERTAS</span>
+              <span class="label">PREGUNTAS ABIERTAS <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
               <h2>Validacion de tema y respuesta con IA</h2>
             </div>
             <button id="simulateOpenQuestion" class="btn primary">Simular pregunta</button>
@@ -417,7 +420,7 @@
         <section id="users" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">USUARIOS</span>
+              <span class="label">USUARIOS <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Maqueta]</span></span>
               <h2>Estadistica y bajas</h2>
             </div>
             <button id="bulkSuspend" class="btn danger">Dar de baja seleccionados</button>
@@ -440,6 +443,49 @@
           </div>
         </section>
 
+        <section id="occupations" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">REGISTRO DE USUARIOS</span>
+              <h2>Ocupaciones y sectores</h2>
+            </div>
+            <button id="addOccupation" class="btn primary">Agregar ocupacion</button>
+          </div>
+          <p class="muted">Esta lista aparece en "A que te dedicas" cuando alguien se registra. Solo las ocupaciones activas se muestran a los usuarios.</p>
+          <div class="ads-layout">
+            <div id="occupationList" class="campaign-list"></div>
+            <article class="card">
+              <h2>Editor de ocupacion</h2>
+              <div class="form-grid compact">
+                <label>
+                  Ocupacion / Profesion
+                  <input id="occLabel" type="text" placeholder="Ej: Contador/a" />
+                </label>
+                <label>
+                  Sector / Industria
+                  <input id="occIndustry" type="text" placeholder="Ej: Administracion, Finanzas y Oficina" />
+                </label>
+                <label>
+                  Orden
+                  <input id="occOrder" type="number" min="0" />
+                </label>
+                <label>
+                  Estado
+                  <select id="occStatus">
+                    <option value="activa">Activa</option>
+                    <option value="inactiva">Inactiva</option>
+                  </select>
+                </label>
+              </div>
+              <div class="modal-actions">
+                <button id="saveOccupation" class="btn primary">Guardar</button>
+                <button id="deleteOccupation" class="btn danger">Eliminar</button>
+              </div>
+              <p id="occupationStatus" class="muted"></p>
+            </article>
+          </div>
+        </section>
+
         <section id="ads" class="panel">
           <div class="section-toolbar">
             <div>
@@ -448,6 +494,29 @@
             </div>
             <button id="addCampaign" class="btn primary">Agregar campana</button>
           </div>
+
+          <article class="card">
+            <h2>Limites de imagen para toda subida</h2>
+            <p class="muted">Estos limites aplican a cualquier imagen que se suba en una campana. En la pantalla del usuario, la imagen se muestra al 10% del tamano de su pantalla.</p>
+            <div class="form-grid compact">
+              <label>
+                Peso maximo (KB)
+                <input id="adsMaxKb" type="number" min="1" />
+              </label>
+              <label>
+                Ancho maximo (px)
+                <input id="adsMaxWidth" type="number" min="1" />
+              </label>
+              <label>
+                Alto maximo (px)
+                <input id="adsMaxHeight" type="number" min="1" />
+              </label>
+            </div>
+            <div class="modal-actions">
+              <button id="saveAdsSettings" class="btn secondary">Guardar limites</button>
+              <span id="adsSettingsStatus" class="muted"></span>
+            </div>
+          </article>
 
           <div class="ads-layout">
             <div id="campaignList" class="campaign-list"></div>
@@ -468,7 +537,7 @@
                 </label>
                 <label>
                   Duracion en segundos
-                  <input id="adDuration" type="number" />
+                  <input id="adDuration" type="number" min="1" />
                 </label>
                 <label>
                   Vigencia
@@ -478,29 +547,95 @@
                     <option value="indefinido">Indefinido</option>
                   </select>
                 </label>
+                <label>
+                  Estado
+                  <select id="adStatus">
+                    <option value="activa">Activa</option>
+                    <option value="suspendida">Suspendida</option>
+                    <option value="eliminada">Eliminada</option>
+                  </select>
+                </label>
+                <label>
+                  Enlace al hacer clic
+                  <input id="adLink" type="url" placeholder="https://..." />
+                </label>
               </div>
               <label>
                 Mensaje
-                <textarea id="adMessage" rows="5"></textarea>
+                <textarea id="adMessage" rows="3"></textarea>
               </label>
+              <div class="sector-target-box">
+                <span class="label">Sectores a los que se dirige</span>
+                <label class="sector-check sector-check-all">
+                  <input id="adTargetAll" type="checkbox" />
+                  Todos los sectores
+                </label>
+                <div id="adSectorList" class="sector-check-list"></div>
+              </div>
+              <label>
+                Imagen de la campana
+                <input id="adImageFile" type="file" accept="image/png,image/jpeg,image/webp" />
+              </label>
+              <div id="adImagePreviewWrap" class="ad-image-preview hidden">
+                <img id="adImagePreview" alt="Vista previa de la propaganda" />
+              </div>
+              <p id="adImageStatus" class="muted"></p>
+              <div class="modal-actions">
+                <button id="saveCampaign" class="btn primary">Guardar campana</button>
+              </div>
             </article>
           </div>
+
+          <article class="card">
+            <h2>Historial de cambios (auditoria)</h2>
+            <div id="campaignAuditLog" class="progression-preview"></div>
+          </article>
+        </section>
+
+        <section id="reports" class="panel">
+          <div class="section-toolbar report-hero">
+            <div>
+              <span class="label">REPORTES</span>
+              <h2>Centro BI de ingresos y propaganda</h2>
+              <p class="muted">Haz clic sobre cada figura para bajar de nivel: resumen, sector, campana y detalle temporal.</p>
+            </div>
+          </div>
+          <article class="card report-control-card">
+            <div class="form-grid compact">
+              <label>
+                Periodo
+                <select id="reportPeriod">
+                  <option value="quincenal">Quincenal (15 dias)</option>
+                  <option value="mensual">Mensual</option>
+                  <option value="trimestral" selected>Trimestral</option>
+                </select>
+              </label>
+            </div>
+            <div class="modal-actions">
+              <button id="runReport" class="btn primary">Generar reporte</button>
+              <span id="reportRange" class="muted"></span>
+            </div>
+          </article>
+
+          <div id="reportBreadcrumb" class="bi-breadcrumb" aria-label="Ruta del reporte BI"></div>
+          <div id="reportKpis" class="bi-kpi-grid" aria-live="polite"></div>
+
+          <article class="card bi-card">
+            <div class="card-heading">
+              <div>
+                <span id="biChartLevel" class="label">NIVEL 1</span>
+                <h2 id="biChartTitle">Vista general del reporte</h2>
+                <span id="biChartSubtitle" class="muted">Click en una figura para profundizar dentro del mismo grafico.</span>
+              </div>
+            </div>
+            <div id="topChart" class="report-chart-3d"></div>
+            <table class="user-table">
+              <thead id="reportDetailHead"><tr><th>Indicador</th><th>Total</th></tr></thead>
+              <tbody id="reportDetailRows"></tbody>
+            </table>
+          </article>
         </section>
       </main>
-    </div>
-    <div id="wisdomModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="wisdomTitle">
-      <div class="modal-backdrop"></div>
-      <article class="modal-card">
-        <div class="card-head">
-          <div>
-            <span id="wisdomSource" class="label">Sabiduria oriental</span>
-            <h2 id="wisdomTitle">Aplicacion al Ciber Dojo</h2>
-          </div>
-          <button id="closeWisdom" class="btn secondary">Cerrar</button>
-        </div>
-        <blockquote id="wisdomQuote"></blockquote>
-        <p id="wisdomCyber"></p>
-      </article>
     </div>
     <script src="./app.js"></script>
   </body>

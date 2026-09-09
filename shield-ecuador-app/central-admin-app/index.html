@@ -12,7 +12,7 @@
     <div id="app" class="central-app">
       <aside class="rail">
         <div class="brand">
-          <span class="brand-mark">CD</span>
+          <span class="brand-mark" aria-hidden="true">&#9163;</span>
           <div>
             <strong>Ciber Dojo</strong>
             <em>Central Admin</em>
@@ -34,7 +34,7 @@
         </div>
 
         <div class="admin-sensei">
-          <img src="./cyber-sensei.png" alt="Sensei digital de Ciber Dojo" />
+          <img src="./cyber-sensei.gif" alt="Sensei digital de Ciber Dojo" />
           <span>Sensei del Dojo</span>
         </div>
 
@@ -63,7 +63,8 @@
 
       <main class="workspace">
         <header class="topbar">
-          <div>
+          <div class="topbar-heading">
+            <div class="kanji-bg">道場</div>
             <span class="eyebrow">CONSOLA CENTRAL DE CONFIGURACION</span>
               <h1>Administrador de Ciber Dojo</h1>
             <p>Gestiona dojos, bancos de preguntas, reglas de avance, inteligencia artificial, revision de respuestas, usuarios y propaganda.</p>
@@ -72,6 +73,7 @@
             <button id="forgotPassword" class="btn secondary">¿Olvidó contraseña?</button>
             <button id="saveAll" class="btn secondary">Guardar borrador</button>
             <button id="publishAll" class="btn primary">Publicar configuracion</button>
+            <button id="logoutBtn" class="btn danger">Salir</button>
           </div>
         </header>
 
@@ -130,7 +132,7 @@
         <section id="dojos" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">N DOJOS CONFIGURABLES</span>
+              <span class="label">N DOJOS CONFIGURABLES <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
               <h2>Dojos tematicos</h2>
             </div>
             <button id="addDojo" class="btn primary">Agregar dojo</button>
@@ -296,7 +298,7 @@
         <section id="ai" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">CONFIGURACION DE IA</span>
+              <span class="label">CONFIGURACION DE IA <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
               <h2>Orden de consulta, tiempos y revision</h2>
             </div>
             <button id="testAiFlow" class="btn secondary">Probar algoritmo</button>
@@ -393,7 +395,7 @@
         <section id="openQuestions" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">PREGUNTAS ABIERTAS</span>
+              <span class="label">PREGUNTAS ABIERTAS <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
               <h2>Validacion de tema y respuesta con IA</h2>
             </div>
             <button id="simulateOpenQuestion" class="btn primary">Simular pregunta</button>
@@ -420,7 +422,7 @@
         <section id="users" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">USUARIOS</span>
+              <span class="label">USUARIOS <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Maqueta]</span></span>
               <h2>Estadistica y bajas</h2>
             </div>
             <button id="bulkSuspend" class="btn danger">Dar de baja seleccionados</button>
@@ -593,13 +595,14 @@
         </section>
 
         <section id="reports" class="panel">
-          <div class="section-toolbar">
+          <div class="section-toolbar report-hero">
             <div>
               <span class="label">REPORTES</span>
-              <h2>Ingresos por sector y desempeno de propaganda</h2>
+              <h2>Centro BI de ingresos y propaganda</h2>
+              <p class="muted">Haz clic sobre cada figura para bajar de nivel: resumen, sector, campana y detalle temporal.</p>
             </div>
           </div>
-          <article class="card">
+          <article class="card report-control-card">
             <div class="form-grid compact">
               <label>
                 Periodo
@@ -616,45 +619,22 @@
             </div>
           </article>
 
-          <article class="card">
+          <div id="reportBreadcrumb" class="bi-breadcrumb" aria-label="Ruta del reporte BI"></div>
+          <div id="reportKpis" class="bi-kpi-grid" aria-live="polite"></div>
+
+          <article class="card bi-card">
             <div class="card-heading">
-              <h2>Ingresos: con sector vs sin sector</h2>
-              <span class="muted">Click en "Con sector" para desglosar por sector</span>
+              <button id="biBackBtn" class="btn secondary bi-back hidden" aria-label="Volver al grafico anterior">&#8592; Volver</button>
+              <div>
+                <span id="biChartLevel" class="label">NIVEL 1</span>
+                <h2 id="biChartTitle">Vista general del reporte</h2>
+                <span id="biChartSubtitle" class="muted">Click en una figura para profundizar dentro del mismo grafico.</span>
+              </div>
             </div>
             <div id="topChart" class="report-chart-3d"></div>
-          </article>
-
-          <article id="sectorBreakdownCard" class="card hidden">
-            <div class="card-heading">
-              <h2>Accesos a la aplicacion por sector</h2>
-              <span class="muted">Click en una barra para ver que propaganda se desplego en ese sector</span>
-              <button id="closeSectorBreakdown" class="btn secondary">Volver</button>
-            </div>
-            <div id="sectorChart" class="report-chart-3d"></div>
             <table class="user-table">
-              <thead><tr><th>Sector</th><th>Ingresos</th></tr></thead>
-              <tbody id="reportSectorRows"></tbody>
-            </table>
-          </article>
-
-          <article id="sectorDrilldownCard" class="card hidden">
-            <div class="card-heading">
-              <h2 id="sectorDrilldownTitle">Propaganda mostrada en el sector</h2>
-              <button id="closeDrilldown" class="btn secondary">Volver</button>
-            </div>
-            <div id="sectorDrilldownChart" class="report-chart-3d"></div>
-            <table class="user-table">
-              <thead><tr><th>Campana</th><th>Auspiciante desde</th><th>Veces mostrada en el sector</th></tr></thead>
-              <tbody id="reportDrilldownRows"></tbody>
-            </table>
-          </article>
-
-          <article class="card">
-            <h2>Veces que se mostro cada propaganda (todos los sectores)</h2>
-            <div id="campaignChart" class="report-chart-3d"></div>
-            <table class="user-table">
-              <thead><tr><th>Campana</th><th>Creada</th><th>Mostrada</th></tr></thead>
-              <tbody id="reportCampaignRows"></tbody>
+              <thead id="reportDetailHead"><tr><th>Indicador</th><th>Total</th></tr></thead>
+              <tbody id="reportDetailRows"></tbody>
             </table>
           </article>
         </section>

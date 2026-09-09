@@ -4,41 +4,49 @@ import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { Activity, Award, Flame, Gauge, Play } from 'lucide-react'
 import { CyberSensei, KataIcon, NeonButton, SectionHeader, SENSEI_IMAGE_SRC, containerVariants } from '../components/CyberBushido'
-import { dojoModules, senseiQuotes } from '../data/ciberDojo'
-import { supabase, Alert, Kata } from '../lib/supabase'
+import { senseiQuotes } from '../data/ciberDojo'
+import { learningDojos } from '../services/learning'
+import { supabase, Alert } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useDojoStore } from '../store/dojoStore'
 
 export function DashboardScreen() {
   const navigate = useNavigate()
   const { userProfile } = useAuth()
-  const { xp } = useDojoStore()
-  const [katas, setKatas] = useState<Kata[]>([])
+  const { xp, belt } = useDojoStore()
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [showGreeting, setShowGreeting] = useState(false)
   const quote = senseiQuotes[Math.floor(new Date().getDate() % senseiQuotes.length)]
-  const missions = katas.length
-    ? katas.slice(0, 4).map((kata, index) => ({
-      id: kata.id,
-      title: simplifyForCitizens(kata.name),
-      description: simplifyForCitizens(kata.description ?? 'Kata practico del dojo'),
-      route: index < dojoModules.length ? `/dojo/${dojoModules[index].id}` : '/dojos',
-    }))
-    : dojoModules.slice(0, 4).map((kata) => ({
+
+  const beltNames: Record<string, string> = {
+    white: 'BLANCO',
+    yellow: 'AMARILLO',
+    orange: 'NARANJA',
+    green: 'VERDE',
+    blue: 'AZUL',
+    brown: 'MARRÓN',
+    black: 'NEGRO',
+    blanco: 'BLANCO',
+    amarillo: 'AMARILLO',
+    naranja: 'NARANJA',
+    verde: 'VERDE',
+    azul: 'AZUL',
+    marron: 'MARRÓN',
+    negro: 'NEGRO',
+  }
+  const currentBeltKey = (userProfile?.belt || belt || 'white').toLowerCase()
+  const displayBelt = beltNames[currentBeltKey] ?? currentBeltKey.toUpperCase()
+  const currentDojo = learningDojos.find(d => d.db_belt === currentBeltKey || d.belt === currentBeltKey) ?? learningDojos[0]
+  const missions = learningDojos.filter(d => d.rank <= currentDojo.rank).slice(-4).map((kata) => ({
       id: kata.id,
       title: kata.title,
-      description: kata.isoControl,
+      description: '30 preguntas con explicación y un kata de 5 casos',
       route: `/dojo/${kata.id}`,
     }))
 
   useEffect(() => {
-    void Promise.all([loadKatas(), loadAlerts()])
+    void loadAlerts()
   }, [])
-
-  async function loadKatas() {
-    const { data } = await supabase.from('katas').select('*').eq('active', true).order('points_reward').limit(4)
-    setKatas((data as Kata[]) ?? [])
-  }
 
   async function loadAlerts() {
     const { data } = await supabase.from('alerts').select('*').eq('active', true).order('published_at', { ascending: false }).limit(3)
@@ -47,7 +55,7 @@ export function DashboardScreen() {
 
   return (
     <motion.div variants={containerVariants} initial="initial" animate="animate">
-      <SectionHeader eyebrow={`BIENVENIDO, ${userProfile?.full_name ?? 'GUERRERO'} · CINTURON VERDE`} title="Dashboard · 修行" kanji="修行" />
+      <SectionHeader eyebrow={`BIENVENIDO, ${userProfile?.full_name ?? 'GUERRERO'} · CINTURÓN ${displayBelt}`} title="Dashboard · 修行" kanji="修行" />
 
       <div className="sensei-wisdom-banner glass-panel">
         <div className="sensei-wisdom-avatar">

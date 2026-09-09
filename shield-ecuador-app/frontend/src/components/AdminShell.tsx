@@ -21,7 +21,7 @@ const NAV_SECTIONS = [
   {
     group: 'APLICACIÓN USUARIO',
     items: [
-      { to: '/dashboard', tab: '', label: 'Ver como usuario', icon: Swords, external: false },
+      { to: '/dashboard?preview=true', tab: '', label: 'Ver como usuario', icon: Swords, external: false },
     ],
   },
 ]

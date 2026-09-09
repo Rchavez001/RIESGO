@@ -1,129 +1,238 @@
-import React, { useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Castle, Play, Shield, Swords } from 'lucide-react'
-import { BeltBadge, CyberSensei, KanjiBackground, NeonButton, ScanlineOverlay, cardVariants, containerVariants } from '../components/CyberBushido'
-import { TatamiCombatIntro } from '../components/TatamiCombatIntro'
+import { gsap } from 'gsap'
+import { Howl } from 'howler'
+import { Play, Shield, ChevronRight } from 'lucide-react'
+import { BeltBadge, ScanlineOverlay } from '../components/CyberBushido'
 import { beltPath, senseiQuotes } from '../data/ciberDojo'
 import { usePwaInstallPrompt } from '../hooks/usePwaInstallPrompt'
 import { useAuth } from '../contexts/AuthContext'
 
-const BOW_DURATION_MS = 1400
+const BOW_DURATION_MS = 2500
 
 export function LandingPage() {
-  const navigate = useNavigate()
-  const quote = senseiQuotes[0]
+  const navigate  = useNavigate()
+  const quote     = senseiQuotes[0]
   const { deferredPrompt, install } = usePwaInstallPrompt()
   const { user, loading } = useAuth()
-  const [bowing, setBowing] = useState(false)
-  const bowTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showBow, setShowBow]   = useState(false)
+  const [busy, setBusy]         = useState(false)
+  const howlRef = useRef<Howl | null>(null)
+
+  /* ── GSAP refs ───────────────────────────────────────── */
+  const cornersRef  = useRef<HTMLDivElement>(null)
+  const hudRef      = useRef<HTMLDivElement>(null)
+  const eyebrowRef  = useRef<HTMLDivElement>(null)
+  const line1Ref    = useRef<HTMLSpanElement>(null)
+  const line2Ref    = useRef<HTMLSpanElement>(null)
+  const line3Ref    = useRef<HTMLSpanElement>(null)
+  const taglineRef  = useRef<HTMLParagraphElement>(null)
+  const ctaRef      = useRef<HTMLDivElement>(null)
+  const senseiRef   = useRef<HTMLDivElement>(null)
+  const statsRef    = useRef<HTMLElement>(null)
+  const beltRef     = useRef<HTMLElement>(null)
+  const featRef     = useRef<HTMLElement>(null)
+
+  /* Preload audio */
+  useEffect(() => {
+    howlRef.current = new Howl({ src: ['/sensei-osu.wav'], preload: true })
+    return () => { howlRef.current?.unload() }
+  }, [])
+
+  /* GSAP cinematic boot sequence */
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) return
+
+    const targets = [
+      cornersRef.current, hudRef.current, eyebrowRef.current,
+      line1Ref.current, line2Ref.current, line3Ref.current,
+      taglineRef.current, ctaRef.current, senseiRef.current,
+      statsRef.current, beltRef.current, featRef.current,
+    ]
+
+    gsap.set(targets, { autoAlpha: 0 })
+    gsap.set([line1Ref.current, line2Ref.current, line3Ref.current], { y: 80, skewX: -4 })
+    gsap.set([eyebrowRef.current, taglineRef.current], { y: 24 })
+    gsap.set(ctaRef.current, { y: 30 })
+    gsap.set(senseiRef.current, { scale: 0.9, x: 30 })
+    gsap.set([statsRef.current, beltRef.current, featRef.current], { y: 40 })
+
+    const tl = gsap.timeline({ defaults: { ease: 'power4.out' } })
+    tl
+      .to(cornersRef.current, { autoAlpha: 1, duration: 0.3 })
+      .to(hudRef.current,     { autoAlpha: 1, duration: 0.3 }, '+=0.1')
+      .to(eyebrowRef.current, { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.1')
+      .to(line1Ref.current,   { autoAlpha: 1, y: 0, skewX: 0, duration: 0.55 }, '-=0.1')
+      .to(line2Ref.current,   { autoAlpha: 1, y: 0, skewX: 0, duration: 0.55 }, '-=0.38')
+      .to(line3Ref.current,   { autoAlpha: 1, y: 0, skewX: 0, duration: 0.55 }, '-=0.38')
+      .to(taglineRef.current, { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.15')
+      .to(ctaRef.current,     { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.15')
+      .to(senseiRef.current,  { autoAlpha: 1, scale: 1, x: 0, duration: 0.75, ease: 'back.out(1.2)' }, '-=0.5')
+      .to(statsRef.current,   { autoAlpha: 1, y: 0, duration: 0.45 }, '-=0.2')
+      .to(beltRef.current,    { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.3')
+      .to(featRef.current,    { autoAlpha: 1, y: 0, duration: 0.4 }, '-=0.25')
+
+    return () => { tl.kill() }
+  }, [])
 
   function startTraining() {
-    if (bowing) return
-    setBowing(true)
-    bowTimeout.current = setTimeout(() => {
+    if (busy) return
+    setBusy(true)
+    setShowBow(true)
+    howlRef.current?.play()
+    setTimeout(() => {
+      setShowBow(false)
       navigate(user ? '/dashboard' : '/login')
     }, BOW_DURATION_MS)
   }
 
   return (
     <ScanlineOverlay>
-      <div className="cyber-page">
-        <TatamiCombatIntro />
-        <KanjiBackground char="道場" />
+      {/* ── BOW OVERLAY ─────────────────────────────────── */}
+      {/* Portaled to <body>: PageTransition animates transform/filter on its wrapper,
+          which creates a containing block that breaks position:fixed for descendants. */}
+      {showBow && createPortal(
+        <div className="bow-overlay" aria-hidden="true">
+          <img src="/sensei-reverencia.gif" alt="" />
+        </div>,
+        document.body
+      )}
 
-        <section className="hero-grid">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55 }}
-          >
-            <div className="hero-badge">CINTURÓN BLANCO A NEGRO</div>
-            <p className="hero-kicker">CIBER DOJO · SISTEMA DE ENTRENAMIENTO</p>
-            <h1 className="hero-title">
-              Forja tu<br />
-              <span>armadura</span> digital<br />
-              en el Dojo
+      <div className="lp-page">
+
+        {/* ── CINEMATIC VIDEO BACKGROUND ───────────────── */}
+        <video
+          className="lp-video-bg"
+          src="/hero-cinematic.mp4"
+          autoPlay muted loop playsInline
+          aria-hidden="true"
+        />
+        <div className="lp-video-overlay" aria-hidden="true" />
+
+        {/* ── HUD CORNERS ──────────────────────────────── */}
+        <div ref={cornersRef} className="hud-corners" aria-hidden="true">
+          <span className="hud-c hud-tl" />
+          <span className="hud-c hud-tr" />
+          <span className="hud-c hud-bl" />
+          <span className="hud-c hud-br" />
+        </div>
+
+        {/* ── HUD TOP BAR ──────────────────────────────── */}
+        <div ref={hudRef} className="lp-hud-top" aria-hidden="true">
+          <span>サイバー道場 · SYS-ONLINE</span>
+          <span className="hud-dot" />
+          <span>SHIELD ECUADOR v2.0</span>
+        </div>
+
+        {/* ── HERO ─────────────────────────────────────── */}
+        <section className="lp-hero">
+
+          {/* Left: copy */}
+          <div className="lp-copy">
+            <div ref={eyebrowRef} className="lp-eyebrow">
+              <span className="lp-tag">// SISTEMA DE ENTRENAMIENTO</span>
+            </div>
+
+            <h1 className="lp-title">
+              <span ref={line1Ref} className="lp-t1">FORJA</span>
+              <span ref={line2Ref} className="lp-t2">TU <em>ARMADURA</em></span>
+              <span ref={line3Ref} className="lp-t3">DIGITAL</span>
             </h1>
-            <p className="hero-copy">
-              Entrenamiento de seguridad digital para personas y pequeños negocios. Aprende con preguntas, ejemplos y exámenes de cinturón explicados en lenguaje sencillo.
+
+            <p ref={taglineRef} className="lp-tagline">
+              Cinturón Blanco → Negro. Entrenamiento de ciberseguridad<br />
+              explicado en lenguaje sencillo para personas y negocios.
             </p>
-            <div className="hero-actions">
-              <NeonButton onClick={startTraining} disabled={loading || bowing}>
-                {loading ? <Shield size={16} /> : <Play size={16} />}
-                {user ? 'CONTINUAR ENTRENAMIENTO' : 'COMENZAR ENTRENAMIENTO'}
-              </NeonButton>
-              <NeonButton
-                variant="outline"
-                color="cyan"
+
+            <div ref={ctaRef} className="lp-cta-group">
+              <button
+                className="lp-btn-primary"
+                onClick={startTraining}
+                disabled={loading || busy}
+              >
+                {loading ? <Shield size={18} /> : <Play size={18} />}
+                {user ? 'CONTINUAR' : 'COMENZAR ENTRENAMIENTO'}
+                <ChevronRight size={16} className="lp-chevron" />
+              </button>
+
+              <button
+                className="lp-btn-ghost"
                 onClick={() => document.getElementById('rangos')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 VER RANGOS
-              </NeonButton>
+              </button>
+
               {deferredPrompt && (
-                <NeonButton variant="outline" color="gold" onClick={() => void install()}>
-                  <Shield size={16} /> INSTALAR APP
-                </NeonButton>
+                <button className="lp-btn-ghost" onClick={() => void install()}>
+                  <Shield size={14} /> INSTALAR APP
+                </button>
               )}
             </div>
-            <div className="hero-action-tip">
-              Instala la app y accede al dojo desde tu celular con un solo toque.
+
+            <p className="lp-install-hint">Disponible en Android e iOS · Sin costo</p>
+          </div>
+
+          {/* Right: real sensei photo (standing) */}
+          <div ref={senseiRef} className="lp-sensei-col">
+            <div className="lp-sensei-photo-wrap">
+              <img
+                src="/sensei-de-pie.png"
+                alt="Sensei del Ciber Dojo"
+                className="lp-sensei-photo"
+              />
+              {/* Quote bubble */}
+              <div className="lp-sensei-bubble">
+                <span className="lp-sensei-jp">{quote.jp}</span>
+                <p className="lp-sensei-es">{quote.es}</p>
+              </div>
             </div>
-          </motion.div>
-
-          {/* Sensei section — bowing class applied on click */}
-          <div className={bowing ? 'sensei-bowing' : ''}>
-            <CyberSensei message={quote.es} messageJP={quote.jp} />
           </div>
+
         </section>
 
-        <section id="rangos" className="belt-row">
-          <div className="mono-label">{'// PROGRESIÓN DE RANGOS'}</div>
-          <div className="belt-list">
-            {beltPath.map((belt, index) => (
-              <BeltBadge key={belt.level} level={belt.level} animate={index === 0} />
-            ))}
-          </div>
-        </section>
-
-        <section className="stats-row">
-          {[
-            ['GUERREROS ACTIVOS', '1,247', 'glow-cyan'],
-            ['BUENAS PRÁCTICAS', 'OK', 'glow-gold'],
-            ['KATAS DISPONIBLES', '48', 'glow-cyan'],
-            ['DISPONIBILIDAD', '99.9%', 'text-green-400'],
-          ].map(([label, value, cls]) => (
-            <div className="stat-box" key={label}>
-              <strong className={cls}>{value}</strong>
-              <span className="mono-label">{label}</span>
+        {/* ── STATS BAR ────────────────────────────────── */}
+        <section ref={statsRef} className="lp-stats">
+          {([
+            ['1 247', 'GUERREROS ACTIVOS'],
+            ['48',    'KATAS DISPONIBLES'],
+            ['99.9%', 'DISPONIBILIDAD'],
+            ['5',     'CINTURONES'],
+          ] as [string, string][]).map(([val, lbl]) => (
+            <div className="lp-stat" key={lbl}>
+              <strong>{val}</strong>
+              <span>{lbl}</span>
             </div>
           ))}
         </section>
 
-        <motion.section
-          className="feature-grid"
-          variants={containerVariants}
-          initial="initial"
-          whileInView="animate"
-          viewport={{ once: true }}
-        >
-          {[
-            [Swords,  'KATA DIGITAL',        'Entrenamiento por combate',   'Preguntas con situaciones reales. Cada respuesta correcta te ayuda a vencer un riesgo digital.',       'APRENDIZAJE'],
-            [Shield,  'CINTURÓN INTELIGENTE', 'Progreso paso a paso',        'Avanza de Blanco a Negro completando katas. La dificultad crece según tu entrenamiento.',              'GUIADO'],
-            [Castle,  'DOJO EMPRESARIAL',     'Revisión clara de seguridad', 'Al llegar a Cinturón Negro, tu negocio obtiene una lectura sencilla de qué debe mejorar.',           'PRÁCTICO'],
-          ].map(([Icon, kicker, title, body, badge]) => {
-            const TypedIcon = Icon as typeof Shield
-            return (
-              <motion.article className="feature-card" variants={cardVariants} key={String(title)}>
-                <TypedIcon className="text-cyan-300" size={32} />
-                <span className="badge">{kicker as string}</span>
-                <h3>{title as string}</h3>
-                <p>{body as string}</p>
-                <div className="hero-badge mt-5">{badge as string}</div>
-              </motion.article>
-            )
-          })}
-        </motion.section>
+        {/* ── BELT PROGRESSION ─────────────────────────── */}
+        <section ref={beltRef} id="rangos" className="lp-belts">
+          <div className="lp-section-label">{'// PROGRESIÓN DE RANGOS'}</div>
+          <div className="lp-belt-list">
+            {beltPath.map((belt, i) => (
+              <BeltBadge key={belt.level} level={belt.level} animate={i === 0} />
+            ))}
+          </div>
+        </section>
+
+        {/* ── BATTLE SEQUENCE ──────────────────────────── */}
+        <section ref={featRef} className="lp-battle-section">
+          <div className="lp-section-label">{'// TÉCNICAS DE COMBATE DIGITAL'}</div>
+          <div className="lp-battle-wrap">
+            <img
+              src="/sensei-batalla.png"
+              alt="6 técnicas del sensei para derrotar amenazas digitales"
+              className="lp-battle-img"
+            />
+            <p className="lp-battle-caption">
+              <span className="lp-battle-kata">KATA 1–6</span>
+              Aprende a identificar y neutralizar cada tipo de amenaza digital como lo haría un maestro de artes marciales
+            </p>
+          </div>
+        </section>
+
       </div>
     </ScanlineOverlay>
   )

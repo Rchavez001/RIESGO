@@ -35,8 +35,7 @@ const beltMap: Record<string, BeltLevel> = {
   orange: 'naranja',
   green: 'verde',
   blue: 'azul',
-  purple: 'morado',
-  red: 'rojo',
+  brown: 'marron',
   black: 'negro',
 }
 

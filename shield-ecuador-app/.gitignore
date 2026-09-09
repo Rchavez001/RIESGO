@@ -26,3 +26,7 @@ supabase/.temp/
 *.log
 frontend.zip
 tmp_*.json
+backup*
+.tmp-learning-pg/
+__pycache__/
+.deploy/

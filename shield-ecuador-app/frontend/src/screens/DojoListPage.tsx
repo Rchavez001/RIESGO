@@ -1,145 +1,46 @@
 import React, { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { GraduationCap, Loader } from 'lucide-react'
-import { BeltBadge, KataCard, NeonButton, SectionHeader, containerVariants } from '../components/CyberBushido'
-import { BeltLevel, beltPath, dojoModules } from '../data/ciberDojo'
-import { supabase } from '../lib/supabase'
-
-type BeltExam = {
-  id: string
-  kata_code: string
-  name: string
-  description: string | null
-  teaching: string | null
-  estimated_minutes: number | null
-  required_belt: string | null
-  points_reward: number | null
-  steps: unknown
-}
-
-const beltMap: Record<string, BeltLevel> = {
-  white: 'blanco',
-  yellow: 'amarillo',
-  orange: 'naranja',
-  green: 'verde',
-  blue: 'azul',
-  brown: 'marron',
-  black: 'negro',
-}
+import { BeltBadge, NeonButton, SectionHeader } from '../components/CyberBushido'
+import { learningCall, learningDojos, LearningOverview } from '../services/learning'
+import { useAuth } from '../contexts/AuthContext'
 
 export function DojoListPage() {
   const navigate = useNavigate()
-  const [belt, setBelt] = useState('todos')
-  const [exams, setExams] = useState<BeltExam[]>([])
-  const [loadingExams, setLoadingExams] = useState(true)
-
+  const { user } = useAuth()
+  const [overview, setOverview] = useState<LearningOverview[]>([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [reload, setReload] = useState(0)
   useEffect(() => {
     let active = true
-
-    async function loadExams() {
-      setLoadingExams(true)
-      const { data, error } = await supabase
-        .from('katas')
-        .select('id, kata_code, name, description, teaching, estimated_minutes, required_belt, points_reward, steps')
-        .like('kata_code', 'EXAM_%')
-        .eq('active', true)
-
-      if (!active) return
-
-      if (error) {
-        console.error('Error loading belt exams:', error)
-        setExams([])
-      } else {
-        const beltOrder = beltPath.map((item) => item.level)
-        const sorted = [...(data ?? [])] as BeltExam[]
-        sorted.sort((a, b) => {
-          const beltA = beltOrder.indexOf(beltMap[a.required_belt ?? 'white'] ?? 'blanco')
-          const beltB = beltOrder.indexOf(beltMap[b.required_belt ?? 'white'] ?? 'blanco')
-          return beltA - beltB
-        })
-        setExams(sorted)
-      }
-
-      setLoadingExams(false)
-    }
-
-    void loadExams()
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  const filtered = belt === 'todos' ? dojoModules : dojoModules.filter((dojo) => dojo.requiredBelt === belt)
-  const filteredExams = belt === 'todos'
-    ? exams
-    : exams.filter((exam) => beltMap[exam.required_belt ?? 'white'] === belt)
-
-  return (
-    <motion.div variants={containerVariants} initial="initial" animate="animate">
-      <SectionHeader eyebrow="// SALA DE ENTRENAMIENTO" title="Dojos · 道場一覧" kanji="型" />
-      <div className="glass-panel p-3 mb-5 flex flex-wrap gap-2">
-        <button className={`neon-button ghost cyan ${belt === 'todos' ? 'outline cyan' : ''}`} onClick={() => setBelt('todos')}>TODOS</button>
-        {beltPath.map((item) => (
-          <button key={item.level} className={`neon-button ghost cyan ${belt === item.level ? 'outline cyan' : ''}`} onClick={() => setBelt(item.level)}>
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <motion.div className="dojo-grid" variants={containerVariants}>
-        {filtered.map((dojo) => (
-          <KataCard
-            key={dojo.id}
-            number={dojo.number}
-            kanji={dojo.kanji}
-            title={dojo.title}
-            isoControl={dojo.isoControl}
-            requiredBelt={dojo.requiredBelt}
-            difficulty={dojo.difficulty}
-            status={dojo.status}
-            onOpen={() => navigate(`/dojo/${dojo.id}`)}
-          />
-        ))}
-      </motion.div>
-      <div className="exam-section">
-        <SectionHeader eyebrow="// EXAMENES PARA SUBIR DE CINTURON" title="Katas de Cinturon" kanji="昇" />
-        {loadingExams ? (
-          <div className="glass-panel p-6 flex items-center gap-3">
-            <Loader className="animate-spin text-cyan-300" size={22} />
-            <span className="mono-label">CARGANDO KATAS DE CINTURON</span>
-          </div>
-        ) : (
-          <motion.div className="belt-exam-grid" variants={containerVariants}>
-            {filteredExams.map((exam) => {
-              const prereqBelt = beltMap[exam.required_belt ?? 'white'] ?? 'blanco'
-              const prereqIndex = beltPath.findIndex((item) => item.level === prereqBelt)
-              const awardedBelt = beltPath[prereqIndex + 1]?.level ?? prereqBelt
-              const questionCount = Array.isArray(exam.steps) ? exam.steps.length : 0
-              return (
-                <motion.article key={exam.id} className="belt-exam-card glass-panel" variants={containerVariants} whileHover={{ y: -8 }} transition={{ duration: 0.2 }}>
-                  <div className="exam-card-top">
-                    <GraduationCap size={22} />
-                    <span className="mono-label">EXAMEN DE ASCENSO</span>
-                  </div>
-                  <h3>{exam.name}</h3>
-                  <p>{exam.description}</p>
-                  <div className="exam-card-meta">
-                    <BeltBadge level={awardedBelt} showKanji={false} size="sm" />
-                    <span>{questionCount} preguntas</span>
-                    <span>{exam.estimated_minutes ?? 15} min</span>
-                    <span>{exam.points_reward ?? 0} XP</span>
-                  </div>
-                  <p className="exam-card-teaching">{exam.teaching}</p>
-                  <NeonButton color="gold" variant="outline" className="w-full justify-center" onClick={() => navigate(`/kata/${exam.kata_code}`)}>
-                    INICIAR EXAMEN
-                  </NeonButton>
-                </motion.article>
-              )
-            })}
-          </motion.div>
-        )}
-      </div>
-    </motion.div>
-  )
+    setLoading(true); setOverview([]); setError('')
+    if (!user) { setLoading(false); return }
+    learningCall<LearningOverview[]>('learning_overview')
+      .then(value => { if (active) setOverview(value) })
+      .catch(e => { if (active) setError(e.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [user, reload])
+  return <div className="learning-page">
+    <SectionHeader eyebrow="TU CAMINO · PASO A PASO" title="Dojos de ciberseguridad" kanji="道" />
+    <div className="learning-intro glass-panel"><p>No necesitas saber de informática. En cada cinturón practicarás 30 preguntas con explicación. Después, demuestra lo aprendido en cinco casos de la vida diaria. Tu avance se guarda en tu cuenta.</p></div>
+    {loading && <p role="status">Recuperando tu avance…</p>}
+    {error && <div role="alert"><p>{error}</p><NeonButton onClick={() => setReload(n => n + 1)}>Volver a intentar</NeonButton></div>}
+    {!user && <p>Inicia sesión para comenzar y guardar tu progreso.</p>}
+    <div className="dojo-grid">{learningDojos.map(dojo => {
+      const progress = overview.find(p => p.id === dojo.id)
+      const ready = progress?.unlocked && progress.answered === 30
+      return <article key={dojo.id} className="glass-panel learning-dojo-card">
+        <BeltBadge level={dojo.belt} /><h2>{dojo.title}</h2>
+        <p>{progress ? `${progress.answered} de 30 preguntas respondidas` : '30 preguntas para aprender a tu ritmo'}</p>
+        <progress className="learning-progress" value={progress?.answered ?? 0} max={30} aria-label={`Avance del cinturón ${dojo.belt}`} />
+        {!loading && progress && !progress.unlocked && <p>Se abre cuando apruebes el cinturón anterior.</p>}
+        <NeonButton color="cyan" disabled={!progress?.unlocked || loading}
+          onClick={() => navigate(`/dojo/${dojo.id}`)}>{progress?.answered ? 'Continuar mi entrenamiento' : 'Comenzar entrenamiento'}</NeonButton>
+        <div className="learning-exam-entry"><p>{progress?.passed ? 'Kata aprobado. Puedes revisar lo que aprendiste.' : ready ? 'Ya puedes presentar tu kata.' : 'El kata se abre al responder las 30 preguntas.'}</p>
+          <NeonButton color="gold" variant="outline" disabled={!ready || loading}
+            onClick={() => navigate(`/kata/${dojo.exam_code}`)}>{progress?.passed ? 'Revisar mi kata' : 'Kata · 5 casos'}</NeonButton></div>
+      </article>
+    })}</div>
+  </div>
 }

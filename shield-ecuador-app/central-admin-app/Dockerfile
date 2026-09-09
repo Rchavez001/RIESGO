@@ -8,7 +8,7 @@ COPY tpotService.js ./
 COPY index.html ./
 COPY styles.css ./
 COPY app.js ./
-COPY cyber-sensei.png ./
+COPY cyber-sensei.gif ./
 
 ENV NODE_ENV=production
 ENV PORT=8080

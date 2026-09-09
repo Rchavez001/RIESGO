@@ -16,10 +16,10 @@ La aplicacion tiene tres superficies principales:
 
 Estado general observado:
 
-- El frontend implementa autenticacion, registro seguro, perfil privado, dashboard, dojos, katas/examenes, ranking, Sensei IA y scanner educativo.
-- Supabase contiene 14 migraciones, tablas base, politicas RLS, cifrado PII, agentes IA, ranking y estructuras T-Pot.
-- Existen Edge Functions conectadas al frontend (`secure-register-user`, `get-private-profile`, `calculate-risk`, `complete-kata`, `ask-sensei`, `get-ranking`, `vuln-scanner-ai`) y otras disponibles para evolucion (`generate-recommendations`, `analyze-email`, agentes diarios, migraciones PII).
-- `central-admin-app` usa un proxy server-side con `SUPABASE_SERVICE_ROLE_KEY`; esto permite administracion, pero exige endurecimiento fuerte antes de produccion.
+- El frontend implementa autenticacion, registro seguro, perfil privado, dashboard (con cinturón dinámico), dojos, katas/examenes (7 cinturones), ranking corporativo, Sensei IA y scanner educativo.
+- Supabase contiene 22 migraciones (001 a 022_security_hardening_rls.sql), tablas base, politicas RLS completas, cifrado PII (AES-256-GCM), agentes IA, ranking, catalogo de ocupaciones, campanas y estructuras T-Pot.
+- Existen 7 Edge Functions conectadas al frontend (`secure-register-user`, `get-private-profile`, `calculate-risk`, `complete-kata`, `ask-sensei`, `get-ranking`, `vuln-scanner-ai`) y 7 auxiliares para cron, batch, migraciones o mantenimiento.
+- `central-admin-app` opera con HTTP Basic Auth fail-closed y comparaciones seguras (`timingSafeEqual`), actuando como proxy seguro hacia Supabase con la service_role key y modulo defensivo T-Pot.
 
 ## 2. Fuentes internas revisadas
 

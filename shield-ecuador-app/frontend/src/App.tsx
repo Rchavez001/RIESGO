@@ -43,14 +43,18 @@ function LoadingScreen() {
 
 function ProtectedShell() {
   const { user, userProfile, loading, signOut } = useAuth()
-  const { belt, xp, setBelt } = useDojoStore()
+  const { belt, xp, setBelt, setXp } = useDojoStore()
   const location = useLocation()
 
   React.useEffect(() => {
     if (userProfile?.belt) {
-      try { setBelt(userProfile.belt as any) } catch (e) {}
+      setBelt(userProfile.belt)
+      setXp(userProfile.total_points ?? 0)
+    } else {
+      setBelt('blanco')
+      setXp(0)
     }
-  }, [userProfile, setBelt])
+  }, [userProfile, setBelt, setXp])
 
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />
@@ -82,15 +86,24 @@ function ProtectedShell() {
 
 function DashboardOrAdminRedirect() {
   const { userProfile, loading } = useAuth()
+  const location = useLocation()
+  const isPreview = new URLSearchParams(location.search).get('preview') === 'true'
 
   React.useEffect(() => {
-    if (!loading && userProfile?.role === 'admin') {
+    if (!loading && userProfile?.role === 'admin' && !isPreview) {
       window.location.href = '/admin'
     }
-  }, [loading, userProfile])
+  }, [loading, userProfile, isPreview])
 
-  if (loading || userProfile?.role === 'admin') return null
+  if (loading || (userProfile?.role === 'admin' && !isPreview)) return null
   return <PageTransition><DashboardScreen /></PageTransition>
+}
+
+function DevKataRoute() {
+  if (process.env.NODE_ENV === 'production') {
+    return <Navigate to="/dojos" replace />
+  }
+  return <PageTransition><DevKata /></PageTransition>
 }
 
 function TenantAdminRoute() {
@@ -115,7 +128,7 @@ function AppRoutes() {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/dev/kata/:code" element={<PageTransition><DevKata /></PageTransition>} />
+        <Route path="/dev/kata/:code" element={<DevKataRoute />} />
         <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
         <Route path="/login" element={<PageTransition><LoginScreen /></PageTransition>} />
         <Route path="/auth/callback" element={<PageTransition><AuthCallbackPage /></PageTransition>} />

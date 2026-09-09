@@ -55,6 +55,12 @@ serve(async (req) => {
       return jsonResponse({ error: "Invalid kata code" }, 400)
     }
 
+    // Belt exams now use account-scoped attempts and enforce 30 training answers.
+    // Keep the old endpoint from bypassing the new prerequisite and case selection.
+    if (kataCode.toUpperCase().startsWith('EXAM_')) {
+      return jsonResponse({ error: 'Abre el examen desde tu dojo después de completar las 30 preguntas.' }, 409)
+    }
+
     const { data: kata, error: kataError } = await supabase
       .from("katas")
       .select("id, kata_code, required_belt, points_reward, steps")
@@ -106,18 +112,25 @@ serve(async (req) => {
 
     if (pointsError) throw pointsError
 
+    const { count: learningAwards, error: learningError } = await supabase
+      .from("learning_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("passed", true)
+      .not("rewarded_at", "is", null)
+    if (learningError) throw learningError
+
     const totalPoints = (completions ?? []).reduce(
       (acc, row) => acc + Number(row.points_earned ?? 0),
-      0,
+      (learningAwards ?? 0) * 250,
     )
 
     const updatePayload: Record<string, unknown> = {
       total_points: totalPoints,
     }
 
-    if (passed) {
-      updatePayload.belt = getNextBelt(exam.required_belt ?? "white")
-    }
+    // Ordinary legacy activities can earn points; belt promotion belongs solely
+    // to the new, prerequisite-checked learning exam transaction.
 
     const { error: userUpdateError } = await supabase
       .from("users")
@@ -140,13 +153,6 @@ serve(async (req) => {
     return jsonResponse({ error: "Unable to complete kata" }, 500)
   }
 })
-
-function getNextBelt(current: string) {
-  const path = ["white", "yellow", "orange", "green", "blue", "brown", "black"]
-  const index = path.indexOf(current)
-  if (index < 0) return "yellow"
-  return path[Math.min(index + 1, path.length - 1)]
-}
 
 function jsonResponse(payload: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(payload), {

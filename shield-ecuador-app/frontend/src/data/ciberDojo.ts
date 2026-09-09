@@ -1,3 +1,5 @@
+import learningCatalog from './learningCatalog.json'
+
 export type BeltLevel = 'blanco' | 'amarillo' | 'naranja' | 'verde' | 'azul' | 'marron' | 'negro'
 export type KataStatus = 'locked' | 'available' | 'completed'
 
@@ -18,139 +20,14 @@ export const beltPath: Array<{
   { level: 'negro', label: 'Negro', kanji: 'X', color: '#101827', iso: 'Revision completa de seguridad', xp: 9000 },
 ]
 
-export const dojoModules = [
-  {
-    id: 'passwords',
-    number: 1,
-    kanji: 'CL',
-    title: 'Cuidado de Contrasenas',
-    isoControl: 'Tema: claves seguras',
-    category: 'Identidad',
-    requiredBelt: 'blanco' as BeltLevel,
-    difficulty: 2,
-    status: 'available' as KataStatus,
-    xp: 150,
-    enemy: 'Estafador de mensajes',
-    enemyImage: '/amenaza-hacker.jpg',
-    questions: [
-      {
-        prompt: 'Una persona usa la misma contrasena para correo, banco y sistema de ventas. Que haces primero?',
-        options: ['Bloquear todo internet', 'Activar verificacion en dos pasos y usar una contrasena diferente en cada cuenta', 'Cambiar el logo del sistema', 'Compartir una clave maestra'],
-        correct: 1,
-        explanation: 'La verificacion en dos pasos agrega un segundo candado, y las contrasenas diferentes evitan que una clave robada abra todas las cuentas.',
-      },
-    ],
-  },
-  {
-    id: 'phishing',
-    number: 2,
-    kanji: 'MS',
-    title: 'Defensa contra Mensajes Falsos',
-    isoControl: 'Tema: correos y enlaces sospechosos',
-    category: 'Conciencia',
-    requiredBelt: 'blanco' as BeltLevel,
-    difficulty: 3,
-    status: 'available' as KataStatus,
-    xp: 210,
-    enemy: 'Correo falso',
-    enemyImage: '/amenaza-phishing.jpg',
-    questions: [
-      {
-        prompt: 'Recibes un correo urgente con enlace acortado para pagar una factura. Cual es la accion correcta?',
-        options: ['Abrir rapido', 'Reenviar a todos', 'Verificar quien lo envia y entrar solo por la pagina oficial', 'Responder con tus claves'],
-        correct: 2,
-        explanation: 'Revisar quien envia el mensaje y usar la pagina oficial evita caer en paginas falsas.',
-      },
-    ],
-  },
-  {
-    id: 'assets',
-    number: 3,
-    kanji: 'EQ',
-    title: 'Lista de Equipos y Cuentas',
-    isoControl: 'Tema: saber que debes proteger',
-    category: 'Equipos y cuentas',
-    requiredBelt: 'amarillo' as BeltLevel,
-    difficulty: 2,
-    status: 'completed' as KataStatus,
-    xp: 180,
-    enemy: 'Inventario fantasma',
-    enemyImage: '/amenaza-troyanos.jpg',
-    questions: [],
-  },
-  {
-    id: 'access',
-    number: 4,
-    kanji: 'EN',
-    title: 'Control de Entradas',
-    isoControl: 'Tema: quien puede entrar a cada cuenta',
-    category: 'Acceso',
-    requiredBelt: 'verde' as BeltLevel,
-    difficulty: 4,
-    status: 'locked' as KataStatus,
-    xp: 320,
-    enemy: 'Intruso escondido',
-    enemyImage: '/amenaza-ciberdelincuentes.jpg',
-    questions: [],
-  },
-  {
-    id: 'backup',
-    number: 5,
-    kanji: 'CS',
-    title: 'Copias de Seguridad y Recuperacion',
-    isoControl: 'Tema: recuperar informacion perdida',
-    category: 'Continuidad',
-    requiredBelt: 'naranja' as BeltLevel,
-    difficulty: 3,
-    status: 'available' as KataStatus,
-    xp: 260,
-    enemy: 'Secuestrador de archivos',
-    enemyImage: '/amenaza-ransomware.jpg',
-    questions: [],
-  },
-  {
-    id: 'incident',
-    number: 6,
-    kanji: 'AL',
-    title: 'Respuesta ante Problemas',
-    isoControl: 'Tema: que hacer cuando algo sale mal',
-    category: 'Emergencias',
-    requiredBelt: 'marron' as BeltLevel,
-    difficulty: 5,
-    status: 'locked' as KataStatus,
-    xp: 520,
-    enemy: 'Alerta roja',
-    enemyImage: '/amenaza-malware.jpg',
-    questions: [],
-  },
-  {
-    id: 'mentorship',
-    number: 7,
-    kanji: 'MT',
-    title: 'Mentor del Dojo Digital',
-    isoControl: 'Tema: ensenar y liderar seguridad en tu entorno',
-    category: 'Liderazgo',
-    requiredBelt: 'negro' as BeltLevel,
-    difficulty: 5,
-    status: 'locked' as KataStatus,
-    xp: 600,
-    enemy: 'Complacencia digital',
-    enemyImage: '/amenaza-estafas.jpg',
-    questions: [
-      {
-        prompt: 'Ya dominas los fundamentos y varios companeros te piden ayuda. Notas que el personal nuevo evita el entrenamiento porque "no da tiempo". Que haces como referente del dojo?',
-        options: [
-          'Dejarlo pasar, no es tu responsabilidad',
-          'Ensenar con ejemplos cortos, explicar el riesgo real sin usar miedo y dar tiempo protegido para practicar',
-          'Reportar a Recursos Humanos sin hablar primero',
-          'Obligar el entrenamiento con multas',
-        ],
-        correct: 1,
-        explanation: 'Un cinturon negro protege ensenando con claridad y ejemplos, no solo exigiendo. Dar espacio real para practicar ayuda a que el aprendizaje se quede.',
-      },
-    ],
-  },
-]
+// The live catalogue contains metadata only; questions and progress come from
+// the account-scoped learning service. Exam answers never ship in this bundle.
+export const dojoModules = learningCatalog.map(d => ({
+  id: d.id, number: d.rank + 1, kanji: '道', title: d.title,
+  isoControl: '30 preguntas con explicación', category: d.title,
+  requiredBelt: d.belt as BeltLevel, difficulty: d.rank + 1,
+  status: 'available' as KataStatus, xp: 250,
+}))
 
 export const senseiQuotes = [
   { jp: 'Verifica antes de actuar', es: 'El conocimiento es tu herramienta mas fuerte.' },

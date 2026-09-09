@@ -1,440 +1,135 @@
-usuarios no informaticos ecuatorianos para formar con un lenguje no informatico sobre la ciberseguridad a traves de un juego o entrenamiento tipo Dojo de Karate donde al ir contestando bien las preguntas de seguridad informatica va subiendo de cinturon. El sistema combina:
+# Requisitos Funcionales y No Funcionales — Ciber Dojo
 
-- frontend en React + TypeScript;
-- autenticacion y base de datos en Supabase;
-- funciones Edge para calculo de riesgo, recomendaciones con IA y analisis de correos sospechosos.
+Actualización completa de este documento, que en su versión anterior (commit del 2026-08-27) reflejaba el estado del sistema anterior a las migraciones 016-021 de Supabase y no cubría el panel de administración en detalle. Todo lo que sigue está verificado contra el código fuente actual — migraciones `001` a `021`, `frontend/src/`, `central-admin-app/app.js` e `index.html` — con referencias cruzadas a `BASE_DE_DATOS.md`, `ARQUITECTURA_CYBER_DOJO.md`, `MANUAL_ADMINISTRADOR.md` y `MANUAL_USUARIO_CYBER_DOJO.md`, que contienen el detalle exhaustivo de cada punto.
 
-El enfoque funcional actual gira alrededor de cuatro ejes:
+Ciber Dojo es una PWA en español para formar a personas no informáticas de MIPYMEs ecuatorianas en ciberseguridad, mediante un juego de entrenamiento tipo dojo de karate donde contestar bien preguntas de seguridad hace subir de cinturón. El sistema combina: frontend en React + TypeScript, autenticación y base de datos en Supabase, funciones Edge para cálculo de riesgo/recomendaciones con IA/análisis de correos sospechosos, y una consola de administración independiente.
 
-- registro e inicio de sesion;
-- evaluacion adaptativa de riesgo;
-- gamificacion con cinturones y katas;
-- alertas y capacidades backend de apoyo para ciberseguridad.
+---
 
-## 2. Funcionalidades visibles e implementadas en el frontend
+## 1. Requisitos funcionales
 
-### 2.1 Autenticacion de usuarios
+### 1.1 Autenticación y registro de usuarios
 
-La aplicacion permite:
+- Iniciar sesión con enlace mágico por correo (método por defecto, recomendado en la interfaz) o con correo y contraseña (alternativa explícita).
+- Registrar nuevos usuarios: nombre completo, correo, contraseña (mínimo 8 caracteres), tipo de negocio/ocupación.
+- El tipo de negocio se selecciona de un catálogo administrable (`business_sectors`, ~79 ocupaciones reales agrupadas en 14 industrias desde la migración 019), no de una lista fija en el frontend.
+- Autorización obligatoria de tratamiento de datos personales antes de completar el registro, con texto de derechos ARCO y un correo de contacto para ejercerlos.
+- Recuperación de contraseña por correo.
+- Cerrar sesión; mantener la sesión activa al recargar (comportamiento estándar del SDK de Supabase).
+- Detalle completo: `MANUAL_USUARIO_CYBER_DOJO.md` secciones 2-3.
 
-- iniciar sesion con correo y contrasena;
-- iniciar sesion con magic link enviado por correo;
-- registrar nuevos usuarios;
-- cerrar sesion;
-- mantener la sesion activa al recargar;
-- cargar el perfil del usuario autenticado desde la tabla `users`.
+### 1.2 Entrenamiento gamificado (dojos, katas, cinturones)
 
-Durante el registro se recopilan estos datos:
+- Cuestionario/combate por dojo temático, con preguntas reales cargadas de la tabla `questions`, filtradas por dojo y por estado de auditoría aprobado.
+- Selector de personaje/avatar de combate (preferencia local del navegador).
+- Progresión por 7 cinturones: blanco → amarillo → naranja → verde → azul → marrón → negro, con umbrales de XP reales (0/600/1300/2200/3400/6000/9000).
+- Exámenes de ascenso de cinturón (katas especiales con contenido sobre casos reales de ciberdelito en Ecuador, migración 009), aprobación con 75% de respuestas correctas, validado en servidor (Edge Function `complete-kata`) — el cliente no puede otorgarse un ascenso.
+- Video de recompensa y celebración animada al completar un dojo o aprobar un examen de cinturón.
+- Detalle completo: `MANUAL_USUARIO_CYBER_DOJO.md` secciones 5-6.
 
-- nombre completo;
-- correo electronico;
-- contrasena;
-- sector/tipo de negocio;
-- autorizacion de tratamiento de datos.
+### 1.3 Tabla de honor / Ranking
 
-Los sectores disponibles ya no viven como lista fija en el frontend. Se leen desde `business_sectors`, solo si `active = true`.
+- Ranking real por XP total, cinturón y katas completados, vía Edge Function `get-ranking`.
+- Exclusión automática de cuentas con proveedores de correo públicos (Gmail, Hotmail, Outlook, etc. — migración 014) para que solo compitan cuentas con correo corporativo/propio.
 
-Sectores iniciales sembrados por migracion:
+### 1.4 Sensei IA (consultas)
 
-- `comerciante`: Comerciante;
-- `restaurante`: Restaurante / Comida;
-- `ferreteria`: Ferreteria;
-- `farmacia`: Farmacia;
-- `agricultor`: Agricultor;
-- `pescador`: Pescador;
-- `otro`: Otro.
+- Chat con un asistente de IA sobre ciberseguridad, vía Edge Function `ask-sensei`.
+- Registro de cada consulta en `sensei_consultations` (tema detectado, si es de ciberseguridad, fuentes usadas, retroalimentación útil/no útil, sentimiento).
+- Respuesta local de respaldo si la función falla (sin usar IA), para no dejar la conversación sin respuesta.
+- Auditoría en tiempo real de las respuestas del Sensei antes de mostrarlas (agente `sensei-question-auditor`, migración 011).
 
-Comportamientos adicionales:
+### 1.5 Escáner de vulnerabilidades
 
-- el boton `COMENZAR ENTRENAMIENTO` lleva al flujo de ingreso por correo;
-- muestra mensajes de error traducidos para login invalido o correo ya registrado;
-- el magic link usa Supabase Auth `signInWithOtp` con `shouldCreateUser = false`, mensaje neutral y callback `/auth/callback`;
-- si el usuario es nuevo o no recibe enlace, la misma pantalla ofrece `Crear cuenta` sin revelar si el correo existe;
-- exige sector de negocio en registro;
-- valida el sector en `secure-register-user` contra `business_sectors`;
-- crea perfil en la tabla `users` despues del alta en Supabase Auth.
+- Pantalla `/escaner`: diagnóstico de seguridad con detección del sistema del visitante y reporte, apoyado en la Edge Function `vuln-scanner-ai` bajo un patrón de doble consulta IA (generador + auditor).
 
-### 2.1.1 Mantenimiento de sectores
+### 1.6 Alertas de seguridad
 
-El administrador puede mantener sectores desde el admin interno:
+- Consulta de alertas activas (tabla `alerts`), con severidad, fuente y fecha.
+- Registro de entrega/apertura por usuario disponible en el esquema (`alert_deliveries`) — confirmar contra el inventario de pantallas si está expuesto en la interfaz actual antes de asumir que es una funcionalidad visible; no se encontró una pantalla dedicada de alertas fuera del bloque "Historial de combate" del Dashboard.
 
-- crear un nuevo sector;
-- editar codigo interno, nombre visible, orden y estado;
-- inhabilitar un sector para que no aparezca en nuevos registros;
-- guardar cambios mediante `save_business_sector`.
+### 1.7 Ventanas emergentes de propaganda/campañas
 
-Cuando cambia el codigo interno de un sector, la funcion SQL actualiza:
+- Popups con imagen, mensaje y enlace, mostrados según el momento (inicio/sesión/salida) y segmentados por sector de industria del usuario.
+- Rotación "una campaña por vez" (no repetir hasta agotar el ciclo), registrada en `campaign_impressions`.
+- Gestión completa desde el panel admin: creación, límites de imagen configurables, estados (activa/suspendida/eliminada), bitácora de auditoría de quién cambió qué.
 
-- `business_sectors.code`;
-- `users.business_type`;
-- `alerts.target_business_types`.
+### 1.8 Análisis de correos sospechosos (backend, sin pantalla activa)
 
-## 2.2 Carga inicial y control de acceso
+- Edge Function `analyze-email`: valida SPF/DKIM/DMARC, detecta typosquatting, cuenta URLs/palabras clave de phishing, clasifica como seguro/sospechoso/peligroso.
+- **Estado real:** existe en el backend y se despliega, pero no se encontró ninguna pantalla del frontend que la invoque (verificado por búsqueda de `analyze-email` en todo `frontend/src/`; solo aparece en el archivo huérfano `AdminCenterScreen.tsx`, que no está enrutado). Es funcionalidad construida pero no expuesta al usuario final.
 
-Al abrir la app:
+### 1.9 Recomendaciones personalizadas por IA (backend, sin pantalla activa)
 
-- se valida si existe sesion activa;
-- se muestra una pantalla de carga mientras se resuelve autenticacion;
-- si no hay usuario autenticado, se redirige a la pantalla de login;
-- si el usuario existe, entra al dashboard.
+- Edge Function `generate-recommendations`, con caché de resultados (`recommendations_cache`) y cadena de proveedores de IA con fallback (DeepSeek → Kimi → Claude).
+- **Estado real:** mismo caso que 1.8 — sin punto de invocación activo en el frontend actual.
 
-## 2.3 Dashboard principal
+### 1.10 Panel de administración — módulos reales (conectados a Supabase)
 
-El dashboard muestra informacion central del usuario:
+Verificado panel por panel en `MANUAL_ADMINISTRADOR.md`. Reales: Preguntas (banco por dojo), Sensei IA (estadísticas de solo lectura), Inteligencia de Amenazas (integración T-Pot/honeypot), Ocupaciones (catálogo `business_sectors`), Propaganda (campañas), Reportes (gráficos 3D de accesos por sector e impresiones de campaña, con drill-down de 3 niveles).
 
-- nombre o correo;
-- cinturon actual;
-- nivel de riesgo actual;
-- puntos acumulados;
-- boton para iniciar o repetir evaluacion.
+### 1.11 Panel de administración — módulos de maqueta (sin conexión real)
 
-Tambien incorpora navegacion por pestañas:
+**Hallazgo de este trabajo de auditoría, no presente en ninguna documentación previa:** 4 de los 13 paneles del admin operan sobre datos de ejemplo guardados solo en el `localStorage` del navegador, sin ninguna conexión a las tablas reales que su nombre sugiere:
+- **Dojos y progreso** — no lee ni escribe la tabla real `cyber_dojos`.
+- **IA y auditoría** — la cadena de proveedores y las instrucciones de generación/auditoría no modifican `ai_providers`/`agent_configs`/`agent_provider_assignments`; los cuadros de texto de instrucciones ni siquiera capturan lo que se escribe en ellos.
+- **Usuarios** — muestra 3 usuarios de ejemplo fijos; "Dar de baja seleccionados" no suspende ninguna cuenta real.
+- **Preguntas abiertas** — el botón "Simular pregunta" es literalmente eso, y no existe una tabla `open_questions` en el esquema real.
 
-- `Dojo`;
-- `Katas`;
-- `Alertas`.
+Adicionalmente, el panel "Agente noticias" **simula** contenido de IA con plantillas de texto fijas en JavaScript (no llama a ningún proveedor de IA real) y ese contenido simulado **sí se escribe** en la tabla real `questions`, sobrescribiendo preguntas existentes de un dojo. Ver `MANUAL_ADMINISTRADOR.md` sección 5 para el detalle completo — es el hallazgo más delicado de todo este trabajo de documentación.
 
-### 2.3.1 Pestaña Dojo
+### 1.12 Agentes de IA en backend, activados por cron o invocación manual externa
 
-Muestra:
+`run-incident-investigator`, `audit-generated-questions` y `run-daily-agent-workflows` existen como Edge Functions desplegadas, con su configuración completa en `agent_configs`/`agent_provider_assignments`, pero **no se invocan desde ninguna de las dos aplicaciones (usuario ni admin)** — su modelo de invocación previsto es externo (cron/Cloud Scheduler o llamada manual con el header `x-cron-secret`), según `GUIA_LEVANTAMIENTO_PROYECTO.md`. Confirmar si existe efectivamente un disparador externo configurado en producción requiere revisión fuera del alcance de este documento (no es visible desde el código del repositorio).
 
-- resumen de progreso;
-- cantidad de katas completados;
-- puntos ganados;
-- mensaje motivacional del "Sensei".
+---
 
-### 2.3.2 Pestaña Katas
+## 2. Requisitos no funcionales
 
-Permite:
+Esta sección no existía como tal en la documentación anterior del proyecto; se construye aquí a partir de lo verificable en el código y configuración, marcando explícitamente lo que no se pudo confirmar.
 
-- listar katas activas;
-- ver nombre, descripcion, ensenanza, tiempo estimado, cinturon requerido y puntos;
-- identificar si un kata ya fue completado;
-- marcar un kata como completado.
+### 2.1 Seguridad
 
-Cuando se completa un kata:
+- Cifrado de PII en reposo (AES-256-GCM) para email, nombre, teléfono y ubicación de los usuarios — ver `SECURITY_PRIVACY.md`.
+- Autorización a nivel de fila (RLS) en Postgres para la mayoría de las tablas, gobernada por `public.is_admin()`.
+- **Brechas de RLS detectadas y documentadas en `BASE_DE_DATOS.md` sección 9**: 4 tablas (`sponsors`, `ai_configs`, `recommendations_cache`, y sin política de escritura admin en `domains_whitelist`/`katas`) no tienen el mismo nivel de cobertura que el resto del esquema.
+- Panel de administración protegido con HTTP Basic Auth a nivel de Cloud Run, más verificación adicional de `role='admin'` para operaciones contra Supabase.
+- No se encontró en el repositorio evidencia de rate limiting persistente para registro o recuperación de contraseña (recomendación pendiente ya señalada en `SECURITY_PRIVACY.md`).
 
-- se inserta un registro en `kata_completions`;
-- se invoca la Edge Function `complete-kata`;
-- el servidor valida las respuestas contra `katas.steps`;
-- se recalcula `users.total_points` desde `kata_completions.points_earned`;
-- si aprueba, se actualiza el cinturon desde servidor;
-- se refresca el perfil del usuario;
-- la interfaz cambia el estado visual a completado.
+### 2.2 Disponibilidad y despliegue
 
-### 2.3.3 Pestaña Alertas
+- Dos servicios independientes en Google Cloud Run (`cyberdojo`, `cyberdojo-admin`), proyecto `polar-plate-499719-r1`, región `us-central1` — confirmado con `gcloud config get-value project` en este trabajo. (La guía de despliegue anterior citaba el proyecto `cool-archery-452216-v7`, que es incorrecto; se corrige en `GUIA_LEVANTAMIENTO_PROYECTO.md`.)
+- Base de datos gestionada por Supabase Cloud (proyecto `wbbcjiqzbzswxsmwjqlw`), con backups y escalado gestionados por el proveedor — no verificable desde el código del repositorio, se documenta como afirmación de Supabase, no verificación propia.
+- No se encontró un pipeline de CI/CD versionado en el repositorio (ver `ARQUITECTURA_CYBER_DOJO.md` sección 8); los despliegues verificados en esta sesión de trabajo se hicieron con `gcloud run deploy` manual.
 
-Permite:
+### 2.3 Usabilidad y accesibilidad
 
-- consultar alertas activas desde la base de datos;
-- mostrar las 5 alertas mas recientes;
-- ver titulo, descripcion, severidad, fecha y fuente;
-- presentar estados visuales por severidad;
-- mostrar mensaje vacio si no hay alertas activas.
+- Lenguaje simplificado deliberadamente: la migración 013 reescribió términos técnicos (MFA, phishing, ransomware, credenciales, dominio) a lenguaje llano en todo el banco de preguntas, alertas y katas; `DashboardScreen.tsx` aplica la misma sustitución en tiempo de ejecución sobre contenido dinámico.
+- PWA instalable (`PWAInstallPrompt`), con manifest y service worker (`public/sw.js`).
+- No se realizó en este trabajo una auditoría de accesibilidad (WCAG) formal — no se afirma ni se descarta el cumplimiento, queda fuera del alcance de esta revisión de código.
 
-## 2.4 Evaluacion adaptativa de riesgo
+### 2.4 Rendimiento
 
-La aplicacion incluye un cuestionario adaptativo que:
+- Carga diferida (`React.lazy`) de pantallas pesadas y poco frecuentes (`TenantAdminPage`, `VulnScannerPage`) para reducir el bundle inicial.
+- No se encontró en el código ninguna cifra objetivo de rendimiento (tiempos de carga, throughput) documentada ni verificable — cualquier cifra en la documentación anterior sobre este punto (por ejemplo, tamaños de bundle en KB) no pudo verificarse y se omite aquí en vez de repetirse sin evidencia.
 
-- arranca en la pregunta `A01`;
-- obtiene cada pregunta desde la tabla `questions`;
-- avanza segun `siguiente_pregunta` definida en cada opcion;
-- termina automaticamente cuando llega a `FIN`;
-- soporta rutas distintas segun la respuesta del usuario.
+### 2.5 Mantenibilidad
 
-Capacidades del flujo:
+- Separación clara de dos aplicaciones independientes (`frontend/`, `central-admin-app/`) con sus propios `package.json`, sin acoplamiento de build.
+- Migraciones de base de datos numeradas y versionadas (`001` a `021`), cada una idempotente donde corresponde (`IF NOT EXISTS`, `ON CONFLICT DO UPDATE`).
+- Código huérfano detectado y documentado (`AdminCenterScreen.tsx`, prompts de IA no funcionales en el panel admin, tabla de ranking de ejemplo sin usar) — ver `ARQUITECTURA_CYBER_DOJO.md` y `MANUAL_USUARIO_CYBER_DOJO.md` para el detalle, para que una limpieza futura tenga un punto de partida verificado.
 
-- barra de progreso;
-- conteo de preguntas respondidas;
-- explicacion educativa despues de cada respuesta;
-- alertas criticas inmediatas cuando una respuesta implica alto riesgo;
-- transicion temporizada hacia la siguiente pregunta;
-- pantalla de procesamiento final mientras se calcula el riesgo.
+### 2.6 Cumplimiento y privacidad
 
-## 2.5 Calculo de resultado y almacenamiento de la evaluacion
+- Consentimiento explícito de tratamiento de datos personales, con referencia a derechos ARCO, exigido antes de completar el registro.
+- Ver `SECURITY_PRIVACY.md` para el detalle completo del cifrado, auditoría (`security_audit_events`) y recomendaciones pendientes de seguridad.
 
-Al finalizar el cuestionario:
+---
 
-- el frontend invoca la Edge Function `calculate-risk`;
-- recibe puntaje total de riesgo, nivel de riesgo y detalle por vector;
-- guarda la evaluacion en la tabla `evaluations`;
-- actualiza el perfil del usuario con:
-  - nivel de riesgo;
-  - fecha de ultima evaluacion;
-  - fecha de ultima evaluacion.
+## 3. Trazabilidad de fuentes
 
-Nota importante:
+Este documento no reinterpreta el código: cada afirmación funcional se puede verificar en los archivos citados. Para el detalle exhaustivo tabla por tabla, pantalla por pantalla y panel por panel, ver siempre el documento especializado correspondiente (`BASE_DE_DATOS.md`, `ARQUITECTURA_CYBER_DOJO.md`, `MANUAL_ADMINISTRADOR.md`, `MANUAL_USUARIO_CYBER_DOJO.md`) en vez de asumir que este resumen es exhaustivo por sí solo.
 
-- `calculate-risk` guarda el puntaje de riesgo en `evaluations.total_score`;
-- `users.total_points` queda reservado para puntos de gamificacion;
-- la suma de puntos se controla desde `complete-kata`, no desde el navegador.
+---
 
-## 2.6 Pantalla de resultados
-
-Despues de la evaluacion se presenta:
-
-- estado de evaluacion completada;
-- cinturon obtenido;
-- nivel de riesgo;
-- puntaje de riesgo total;
-- area mas debil;
-- mensaje contextual segun el nivel de riesgo;
-- detalle por vector con barras de progreso.
-
-Vectores mostrados actualmente:
-
-- `A`: Dispositivos;
-- `B`: Contrasenas;
-- `C`: Phishing;
-- `I`: Tecnologia.
-
-Ademas:
-
-- el usuario puede volver al dashboard;
-- existe un CTA de "Ver mis Katas recomendados", aunque hoy redirige al dashboard y no filtra recomendaciones especificas.
-
-## 3. Funcionalidades backend desarrolladas
-
-Estas capacidades existen en la base de datos y/o funciones Edge, aunque no todas estan conectadas al frontend actual.
-
-### 3.1 Funcion Edge: `calculate-risk`
-
-Responsabilidades:
-
-- validar que exista un arreglo de respuestas;
-- sumar `puntaje_riesgo` de cada respuesta;
-- acumular puntajes por rama o vector;
-- determinar nivel de riesgo;
-- asignar cinturon;
-- identificar el vector mas debil;
-- devolver un resumen listo para la interfaz.
-- guardar la evaluacion en `evaluations`;
-- actualizar `users.current_risk_level` y `users.last_evaluation_at`.
-
-Reglas de salida actuales:
-
-- `>= 86`: riesgo `critico`, cinturon `white`;
-- `>= 56`: riesgo `alto`, cinturon `yellow`;
-- `>= 26`: riesgo `medio`, cinturon `orange`;
-- `>= 11`: riesgo `bajo`, cinturon `green`;
-- `< 11`: riesgo `bajo`, cinturon `brown`.
-
-Observacion:
-
-- la funcion ya no debe escribir `users.total_points`, porque ese campo representa puntos de gamificacion.
-- la funcion tampoco debe reemplazar el cinturon gamificado del usuario; la progresion de cinturones se maneja con katas.
-
-### 3.2 Funcion Edge: `complete-kata`
-
-Responsabilidades:
-
-- validar sesion del usuario;
-- cargar la kata activa por `kata_code`;
-- evaluar `selected_answers` contra `katas.steps`;
-- aprobar con umbral de 75%;
-- insertar o actualizar `kata_completions`;
-- recalcular `users.total_points` como suma de puntos ganados;
-- actualizar `users.belt` al siguiente cinturon si aprueba.
-
-Motivo:
-
-- evita que el frontend escriba directamente `users.belt`;
-- evita manipulacion de puntos desde el navegador;
-- mantiene separados los puntos del dojo y el puntaje de riesgo.
-
-### 3.3 Funcion Edge: `generate-recommendations`
-
-Capacidad backend disponible para:
-
-- recibir un perfil de riesgo y tipo de negocio;
-- generar un hash para cache;
-- revisar si ya existe recomendacion en `recommendations_cache`;
-- reutilizar resultados cacheados;
-- consultar configuracion activa de IA desde `ai_configs`;
-- usar una cadena de fallback entre modelos/proveedores;
-- persistir la recomendacion generada en cache.
-
-Secuencia de proveedores configurada:
-
-- DeepSeek;
-- Kimi;
-- Claude.
-
-Caracteristicas funcionales:
-
-- timeout configurable;
-- temperatura y max tokens configurables;
-- prompt controlado para evitar alucinaciones;
-- respuesta obligatoria en JSON estricto.
-
-Estado actual:
-
-- la funcion existe en backend;
-- no se encontraron invocaciones desde el frontend actual.
-
-### 3.4 Funcion Edge: `analyze-email`
-
-Capacidad backend disponible para analizar correos sospechosos.
-
-Entradas soportadas:
-
-- correo del remitente;
-- nombre visible del remitente;
-- asunto;
-- cuerpo;
-- headers;
-- URLs detectadas.
-
-Analisis realizados:
-
-- validacion de autenticacion del usuario por token;
-- extraccion del dominio remitente;
-- comparacion contra whitelist de dominios conocidos;
-- deteccion de typosquatting con distancia Levenshtein;
-- revision de SPF, DKIM y DMARC si vienen en headers;
-- conteo de URLs sospechosas;
-- deteccion de palabras clave tipicas de phishing;
-- calculo de puntaje de amenaza;
-- clasificacion como `seguro`, `sospechoso` o `peligroso`.
-
-Tambien:
-
-- guarda el resultado en la tabla `email_analysis`;
-- devuelve recomendacion textual segun el veredicto.
-
-Estado actual:
-
-- la funcion existe en backend;
-- no se encontraron pantallas o componentes que la usen hoy en el frontend.
-
-## 4. Funcionalidades de datos y seguridad en Supabase
-
-## 4.1 Modelo de datos principal
-
-Tablas funcionales identificadas:
-
-- `users`: perfil del usuario, cinturon, puntos, tipo de negocio, nivel de riesgo;
-- `evaluations`: historial de evaluaciones y respuestas;
-- `questions`: banco de preguntas adaptativas;
-- `katas`: catalogo de ejercicios de entrenamiento;
-- `kata_completions`: trazabilidad de katas completados;
-- `alerts`: alertas de ciberseguridad;
-- `email_analysis`: resultados de analisis de correos;
-- `domains_whitelist`: dominios oficiales confiables;
-- `alert_deliveries`: registro de entrega y apertura de alertas;
-- `sponsors`: socios/comercios/servicios de apoyo;
-- `ai_configs`: configuracion de modelos de IA;
-- `recommendations_cache`: cache de recomendaciones generadas.
-
-## 4.2 Seguridad con Row Level Security
-
-El proyecto activa RLS en tablas sensibles y define politicas para que:
-
-- cada usuario vea solo su propio perfil;
-- cada usuario actualice solo su propio perfil;
-- cada usuario inserte solo su propio perfil;
-- cada usuario vea solo sus evaluaciones;
-- cada usuario inserte solo sus evaluaciones;
-- cada usuario vea solo sus completaciones de kata;
-- cada usuario inserte solo sus completaciones de kata;
-- cada usuario vea solo sus analisis de correo;
-- cada usuario inserte solo sus analisis de correo;
-- cada usuario vea solo sus entregas de alertas.
-
-Tablas publicas de solo lectura para usuarios autenticados:
-
-- `alerts` activas;
-- `katas` activas;
-- `questions` activas;
-- `domains_whitelist` activos.
-
-## 4.3 Seeds funcionales cargados
-
-El proyecto ya trae datos de arranque para:
-
-- preguntas del cuestionario;
-- katas;
-- whitelist de dominios ecuatorianos;
-- configuracion IA por defecto;
-- alertas de ejemplo.
-
-## 5. Inventario funcional por modulo
-
-### 5.1 Frontend
-
-- Login y registro.
-- Persistencia de sesion.
-- Carga de perfil.
-- Dashboard con progreso.
-- Listado y completado de katas.
-- Listado de alertas.
-- Cuestionario adaptativo.
-- Resultados de evaluacion.
-
-### 5.2 Backend Supabase
-
-- Autenticacion por email/password.
-- Base de datos relacional para usuarios, evaluaciones, katas, alertas e IA.
-- Politicas RLS.
-- Funcion de calculo de riesgo.
-- Funcion de recomendaciones con IA y cache.
-- Funcion de analisis de email sospechoso.
-
-## 6. Funcionalidades previstas o parcialmente implementadas
-
-Se encontraron capacidades modeladas en backend pero no conectadas completamente en la interfaz actual:
-
-- recomendaciones personalizadas con IA para mostrar al usuario;
-- analizador de correos sospechosos en una pantalla dedicada;
-- entrega y seguimiento de apertura de alertas (`alert_deliveries`);
-- integracion de patrocinadores/tecnicos/servicios (`sponsors`);
-- uso de `onboarding_completed`;
-- uso de `prompt_version`, `ai_used` y tiempos de respuesta de IA en frontend;
-- katas automaticos o con verificacion avanzada mas alla del marcado manual;
-- filtrado de katas recomendados segun el resultado de la evaluacion;
-- cinturon negro, definido en datos pero no asignado por la logica actual.
-
-## 7. Observaciones de estado actual
-
-### 7.1 Lo que si esta operativo en este workspace
-
-- flujo completo de autenticacion;
-- dashboard basico;
-- evaluacion adaptativa end-to-end;
-- calculo de riesgo mediante Edge Function;
-- almacenamiento de evaluacion;
-- consulta y marcado de katas;
-- visualizacion de alertas.
-
-### 7.2 Lo que existe tecnicamente pero no esta expuesto al usuario final
-
-- generacion de recomendaciones con IA;
-- analisis de phishing por correo;
-- tracking de entregas de alertas;
-- gestion funcional de sponsors.
-
-### 7.3 Riesgos o inconsistencias funcionales detectadas
-
-- revisar historicos antiguos donde `total_points` pudo haber sido usado como puntaje de riesgo;
-- el CTA de katas recomendados no lleva a recomendaciones reales;
-- la progresion completa de cinturones requiere tener aplicada la migracion `015_align_belt_progression_and_points.sql`;
-- `supabase/config.toml` referencia `seed.sql`, pero los datos sembrados reales estan en `migrations/003_seed_data.sql`;
-- el frontend no refleja varias capacidades backend ya construidas.
-
-## 8. Conclusion ejecutiva
-
-Shield Ecuador ya implementa un MVP funcional centrado en:
-
-- autenticacion;
-- evaluacion adaptativa de riesgo;
-- gamificacion por cinturones y katas;
-- visualizacion de alertas.
-
-Adicionalmente, el backend ya tiene bases solidas para una siguiente fase con:
-
-- recomendaciones personalizadas por IA;
-- analisis de correos phishing;
-- gestion de alertas mas avanzada;
-- integracion de sponsors o tecnicos de apoyo.
-
-En otras palabras, el proyecto no solo evalua riesgo: tambien esta preparado para evolucionar hacia una plataforma de acompanamiento y entrenamiento continuo en ciberseguridad para pequenos negocios ecuatorianos.
+*Documento reescrito el 2026-09-08. Reemplaza la versión del 2026-08-27, que era honesta en su redacción pero no cubría las migraciones 016-021 ni el panel de administración, y no distinguía requisitos funcionales de no funcionales.*

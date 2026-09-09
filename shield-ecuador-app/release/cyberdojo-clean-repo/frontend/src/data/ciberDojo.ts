@@ -1,4 +1,4 @@
-export type BeltLevel = 'blanco' | 'amarillo' | 'naranja' | 'verde' | 'azul' | 'morado' | 'rojo' | 'negro'
+export type BeltLevel = 'blanco' | 'amarillo' | 'naranja' | 'verde' | 'azul' | 'marron' | 'negro'
 export type KataStatus = 'locked' | 'available' | 'completed'
 
 export const beltPath: Array<{
@@ -14,8 +14,7 @@ export const beltPath: Array<{
   { level: 'naranja', label: 'Naranja', kanji: 'N', color: '#f97316', iso: 'Cuidar equipos, cuentas y datos', xp: 1300 },
   { level: 'verde', label: 'Verde', kanji: 'V', color: '#22c55e', iso: 'Control de entradas', xp: 2200 },
   { level: 'azul', label: 'Azul', kanji: 'Z', color: '#3b82f6', iso: 'Proteger informacion importante', xp: 3400 },
-  { level: 'morado', label: 'Morado', kanji: 'M', color: '#a855f7', iso: 'Cuidar lugares y equipos', xp: 4800 },
-  { level: 'rojo', label: 'Rojo', kanji: 'R', color: '#e63946', iso: 'Responder ante problemas', xp: 6500 },
+  { level: 'marron', label: 'Marron', kanji: 'M', color: '#8b5a2b', iso: 'Cuidar lugares, equipos y responder ante problemas', xp: 6000 },
   { level: 'negro', label: 'Negro', kanji: 'X', color: '#101827', iso: 'Revision completa de seguridad', xp: 9000 },
 ]
 
@@ -111,12 +110,38 @@ export const dojoModules = [
     title: 'Respuesta ante Problemas',
     isoControl: 'Tema: que hacer cuando algo sale mal',
     category: 'Emergencias',
-    requiredBelt: 'rojo' as BeltLevel,
+    requiredBelt: 'marron' as BeltLevel,
     difficulty: 5,
     status: 'locked' as KataStatus,
     xp: 520,
     enemy: 'Alerta roja',
     questions: [],
+  },
+  {
+    id: 'mentorship',
+    number: 7,
+    kanji: 'MT',
+    title: 'Mentor del Dojo Digital',
+    isoControl: 'Tema: ensenar y liderar seguridad en tu entorno',
+    category: 'Liderazgo',
+    requiredBelt: 'negro' as BeltLevel,
+    difficulty: 5,
+    status: 'locked' as KataStatus,
+    xp: 600,
+    enemy: 'Complacencia digital',
+    questions: [
+      {
+        prompt: 'Ya dominas los fundamentos y varios companeros te piden ayuda. Notas que el personal nuevo evita el entrenamiento porque "no da tiempo". Que haces como referente del dojo?',
+        options: [
+          'Dejarlo pasar, no es tu responsabilidad',
+          'Ensenar con ejemplos cortos, explicar el riesgo real sin usar miedo y dar tiempo protegido para practicar',
+          'Reportar a Recursos Humanos sin hablar primero',
+          'Obligar el entrenamiento con multas',
+        ],
+        correct: 1,
+        explanation: 'Un cinturon negro protege ensenando con claridad y ejemplos, no solo exigiendo. Dar espacio real para practicar ayuda a que el aprendizaje se quede.',
+      },
+    ],
   },
 ]
 
@@ -129,8 +154,8 @@ export const senseiQuotes = [
 
 export const leaderboard = [
   { rank: 1, name: 'Akira Manta', company: 'Manta Market', belt: 'negro' as BeltLevel, xp: 9420, katas: 48, streak: 31 },
-  { rank: 2, name: 'Lina Quito', company: 'Andes Tech', belt: 'rojo' as BeltLevel, xp: 8120, katas: 42, streak: 18 },
-  { rank: 3, name: 'Marco Loja', company: 'Cafe Loja', belt: 'morado' as BeltLevel, xp: 6900, katas: 35, streak: 14 },
+  { rank: 2, name: 'Lina Quito', company: 'Andes Tech', belt: 'marron' as BeltLevel, xp: 8120, katas: 42, streak: 18 },
+  { rank: 3, name: 'Marco Loja', company: 'Cafe Loja', belt: 'marron' as BeltLevel, xp: 6900, katas: 35, streak: 14 },
   { rank: 4, name: 'Diana Cuenca', company: 'Cuenca Farma', belt: 'azul' as BeltLevel, xp: 5520, katas: 28, streak: 9 },
   { rank: 5, name: 'Rafael Guayaquil', company: 'Puerto Seguro', belt: 'verde' as BeltLevel, xp: 3840, katas: 22, streak: 7 },
   { rank: 6, name: 'Tu Dojo', company: 'PYME Ecuador', belt: 'verde' as BeltLevel, xp: 2840, katas: 16, streak: 5 },

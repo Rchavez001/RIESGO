@@ -6,15 +6,21 @@ interface DojoState {
   belt: BeltLevel
   activeKataId: string
   setXp: (xp: number) => void
-  setBelt: (belt: BeltLevel) => void
+  setBelt: (belt: string) => void
   setActiveKataId: (id: string) => void
 }
 
 export const useDojoStore = create<DojoState>((set) => ({
-  xp: 2840,
-  belt: 'verde',
+  xp: 0,
+  belt: 'blanco',
   activeKataId: 'passwords',
   setXp: (xp) => set({ xp }),
-  setBelt: (belt) => set({ belt }),
+  setBelt: (value) => {
+    const names: Record<string, BeltLevel> = {
+      white: 'blanco', yellow: 'amarillo', orange: 'naranja', green: 'verde', blue: 'azul', brown: 'marron', black: 'negro',
+      blanco: 'blanco', amarillo: 'amarillo', naranja: 'naranja', verde: 'verde', azul: 'azul', marron: 'marron', negro: 'negro',
+    }
+    set({ belt: names[value] ?? 'blanco' })
+  },
   setActiveKataId: (id) => set({ activeKataId: id }),
 }))

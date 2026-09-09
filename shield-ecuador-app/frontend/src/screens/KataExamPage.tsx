@@ -1,338 +1,87 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CheckCircle2, Loader, XCircle } from 'lucide-react'
-import { BeltAwardCelebration, BeltBadge, KataRewardVideo, NeonButton, SectionHeader } from '../components/CyberBushido'
-import { beltPath, BeltLevel } from '../data/ciberDojo'
+import { BeltAwardCelebration, BeltBadge, NeonButton, SectionHeader } from '../components/CyberBushido'
+import { LearningFeedback, LearningTerms } from '../components/LearningHelpers'
+import { learningCall, learningDojos, LearningExam } from '../services/learning'
 import { useAuth } from '../contexts/AuthContext'
-import { useDojoStore } from '../store/dojoStore'
-import { supabase } from '../lib/supabase'
-
-type ExamStep = {
-  question: string
-  term?: string
-  term_explanation?: string
-  options: string[]
-  correct: number
-  explanation: string
-}
-
-type KataExam = {
-  id: string
-  kata_code: string
-  name: string
-  description: string | null
-  teaching: string | null
-  estimated_minutes: number | null
-  required_belt: string | null
-  points_reward: number | null
-  steps: ExamStep[]
-}
-
-const beltMap: Record<string, BeltLevel> = {
-  white: 'blanco',
-  yellow: 'amarillo',
-  orange: 'naranja',
-  green: 'verde',
-  blue: 'azul',
-  brown: 'marron',
-  black: 'negro',
-}
 
 export function KataExamPage() {
   const { code } = useParams()
   const navigate = useNavigate()
   const { user, refreshProfile } = useAuth()
-  const [exam, setExam] = useState<KataExam | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [stepIndex, setStepIndex] = useState(0)
+  const dojo = learningDojos.find(d => d.exam_code === code)
+  const [exam, setExam] = useState<LearningExam | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
-  const [selectedAnswers, setSelectedAnswers] = useState<number[]>([])
-  const [saving, setSaving] = useState(false)
-  const [showCelebrate, setShowCelebrate] = useState(false)
-  const [pendingReward, setPendingReward] = useState(false)
-
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [celebrate, setCelebrate] = useState(false)
+  const generation = useRef(0)
+  const inFlight = useRef(false)
   useEffect(() => {
-    let active = true
-
-    async function loadExam() {
-      setLoading(true)
-      setError('')
-
-      const { data, error: loadError } = await supabase
-        .from('katas')
-        .select('id, kata_code, name, description, teaching, estimated_minutes, required_belt, points_reward, steps')
-        .eq('kata_code', code ?? '')
-        .eq('active', true)
-        .single()
-
-      if (!active) return
-
-      if (loadError || !data) {
-        setError('No encontre este examen de cinturon.')
-        setExam(null)
-      } else {
-        setExam({ ...(data as Omit<KataExam, 'steps'> & { steps: unknown }), steps: normalizeSteps(data.steps) })
-      }
-
-      setLoading(false)
-    }
-
-    void loadExam()
-
-    return () => {
-      active = false
-    }
-  }, [code])
-
-  const step = exam?.steps[stepIndex]
-  const score = useMemo(() => selectedAnswers.reduce((acc, answer, index) => {
-    return acc + (answer === exam?.steps[index]?.correct ? 1 : 0)
-  }, 0), [exam?.steps, selectedAnswers])
-  const total = exam?.steps.length ?? 0
-  const passed = total > 0 && score / total >= 0.75
-  const finished = exam !== null && selectedAnswers.length === total
-  const currentBelt = beltMap[exam?.required_belt ?? 'white'] ?? 'blanco'
-  const awardedBelt = getNextBelt(currentBelt)
-
-  function answer(index: number) {
-    if (!step || selected !== null) return
-
-    setSelected(index)
-    setSelectedAnswers((current) => [...current, index])
-  }
-
-  function next() {
-    if (!exam) return
-    if (stepIndex >= exam.steps.length - 1) return
-    setStepIndex((current) => current + 1)
-    setSelected(null)
-  }
-
-  async function finish() {
-    if (!exam || !user) {
-      navigate('/dojos')
-      return
-    }
-
-    setSaving(true)
+    const current = ++generation.current
+    setExam(null); setSelected(null); setError(''); setCelebrate(false)
+    if (!dojo || !user) return
+    setBusy(true)
+    learningCall<LearningExam>('learning_start_exam', { p_code: dojo.exam_code })
+      .then(value => { if (generation.current === current) setExam(value) })
+      .catch(e => { if (generation.current === current) setError(e.message) })
+      .finally(() => { if (generation.current === current) setBusy(false) })
+    return () => { generation.current = current + 1 }
+  }, [dojo, user])
+  async function act(name: string, args: Record<string, unknown>) {
+    if (inFlight.current) return
+    inFlight.current = true
+    const current = generation.current
+    setBusy(true); setError('')
     try {
-      const { data, error: completeError } = await supabase.functions.invoke('complete-kata', {
-        body: {
-          kata_code: exam.kata_code,
-          selected_answers: selectedAnswers,
-        },
-      })
-
-      if (completeError) throw completeError
-
-      setSaving(false)
-
-      if (data?.passed) {
-        if (refreshProfile) await refreshProfile()
-        const { setBelt } = useDojoStore.getState()
-        setBelt(awardedBelt as any)
-        setShowCelebrate(true)
-        try { playCelebrateSound() } catch (e) {}
-      } else {
-        navigate('/dojos')
-      }
-    } catch (err) {
-      console.error('Error completing kata:', err)
-      setSaving(false)
-      window.alert('No se pudo guardar el resultado del kata. Intenta nuevamente.')
+      const value = await learningCall<LearningExam>(name, args)
+      if (current !== generation.current) return
+      setExam(value); setSelected(null)
+      if (value.finished && value.passed) { setCelebrate(dojo?.rank !== 6); void refreshProfile() }
+    } catch (e) {
+      if (current === generation.current) setError((e as Error).message)
+    } finally {
+      inFlight.current = false
+      if (current === generation.current) setBusy(false)
     }
   }
-
-  function continueAfterAward() {
-    setShowCelebrate(false)
-    setPendingReward(true)
-  }
-
-  function resolvePendingReward() {
-    setPendingReward(false)
-    navigate('/dojos')
-  }
-
-function playCelebrateSound() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const o = ctx.createOscillator()
-    const g = ctx.createGain()
-    o.type = 'sine'
-    o.frequency.value = 880
-    o.connect(g)
-    g.connect(ctx.destination)
-    g.gain.value = 0.0001
-    const now = ctx.currentTime
-    g.gain.linearRampToValueAtTime(0.12, now + 0.01)
-    o.start(now)
-    o.frequency.exponentialRampToValueAtTime(1320, now + 0.18)
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.45)
-    o.stop(now + 0.5)
-  } catch (e) {
-    console.warn('Audio not available:', e)
-  }
-}
-
-  if (loading) {
-    return (
-      <div className="cyber-page grid place-items-center min-h-96">
-        <div className="text-center glass-panel p-8">
-          <Loader className="animate-spin mx-auto text-cyan-300" size={34} />
-          <p className="mono-label mt-4">CARGANDO EXAMEN DE CINTURON</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !exam || !step) {
-    return (
-      <div className="glass-panel p-8">
-        <SectionHeader eyebrow="// KATA DE CINTURON" title="Examen no disponible" kanji="型" />
-        <p className="text-slate-200">{error || 'Este examen aun no tiene preguntas.'}</p>
-        <div className="mt-5">
-          <NeonButton color="cyan" variant="outline" onClick={() => navigate('/dojos')}>Volver a Dojos</NeonButton>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      {/* Dev: quick test button to trigger celebration when ?dev_test=celebrate is present */}
-      {typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('dev_test') === 'celebrate' && (
-        <button id="devTriggerCelebrate" onClick={() => { setShowCelebrate(true); try { playCelebrateSound() } catch(e){}; window.setTimeout(() => { setShowCelebrate(false); navigate('/dojos') }, 2600) }} style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 1200, padding: '10px 12px', borderRadius: 8, background: '#0f172a', color: 'white' }}>
-          Probar animación
-        </button>
-      )}
-      {false && showCelebrate && (
-        <div className="celebrate-overlay">
-          <div className="celebrate-card">
-            <CheckCircle2 size={48} />
-            <h2>¡Felicidades, has aprobado!</h2>
-            <p>Has demostrado tu habilidad en el Dojo. Sigue así.</p>
-          </div>
-          <div className="confetti-layer">
-            {Array.from({ length: 18 }).map((_, i) => (
-              <motion.span key={i} className="confetti" initial={{ y: -40, opacity: 0 }} animate={{ y: 400, opacity: 1, rotate: 360 }} transition={{ delay: i * 0.04, duration: 1.6 }} />
-            ))}
-          </div>
-        </div>
-      )}
-      <SectionHeader eyebrow="// KATA DE ASCENSO" title={exam.name} kanji="型" />
-      {showCelebrate && (
-        <BeltAwardCelebration
-          currentBelt={currentBelt}
-          awardedBelt={awardedBelt}
-          score={score}
-          total={total}
-          onContinue={continueAfterAward}
-        />
-      )}
-      {pendingReward && (
-        <KataRewardVideo src="/kata-victoria.mp4" onClose={resolvePendingReward} />
-      )}
-      <div className="exam-layout">
-        <aside className="exam-side glass-panel">
-          <span className="mono-label">CINTURON REQUERIDO</span>
-          <BeltBadge level={currentBelt} />
-          <p>{exam.description}</p>
-          <div className="exam-stat">
-            <strong>{exam.estimated_minutes ?? 15} min</strong>
-            <span>duracion estimada</span>
-          </div>
-          <div className="exam-stat">
-            <strong>{exam.points_reward ?? 0} XP</strong>
-            <span>si apruebas</span>
-          </div>
-          <p className="exam-note">{exam.teaching}</p>
-        </aside>
-
-        <section className="exam-card glass-panel">
-          {!finished ? (
-            <>
-              <div className="exam-progress">
-                <span>Pregunta {stepIndex + 1} de {total}</span>
-                <strong>{score}/{selectedAnswers.length} correctas</strong>
-              </div>
-              {step.term && (
-                <div className="term-box">
-                  <span>{step.term}</span>
-                  <p>{step.term_explanation}</p>
-                </div>
-              )}
-              <h2>{step.question}</h2>
-              <div className="answer-grid">
-                {step.options.map((option, index) => {
-                  const isCorrect = index === step.correct
-                  const isSelected = selected === index
-                  const stateClass = selected === null ? '' : isCorrect ? 'correct' : isSelected ? 'wrong' : ''
-                  return (
-                    <button
-                      key={`${stepIndex}-${option}`}
-                      className={`answer-option btn-katana ${stateClass}`}
-                      onClick={() => answer(index)}
-                      disabled={selected !== null}
-                    >
-                      {String.fromCharCode(65 + index)} - {option}
-                    </button>
-                  )
-                })}
-              </div>
-              {selected !== null && (
-                <div className={`combat-feedback ${selected === step.correct ? 'success' : 'danger'}`}>
-                  {selected === step.correct ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-                  <span>{step.explanation}</span>
-                </div>
-              )}
-              {selected !== null && (
-                <div className="mt-5">
-                  <NeonButton color="cyan" variant="outline" onClick={next}>
-                    {stepIndex >= total - 1 ? 'VER RESULTADO' : 'SIGUIENTE PREGUNTA'}
-                  </NeonButton>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="exam-result">
-              <span className="mono-label">RESULTADO DEL KATA</span>
-              <h2>{passed ? 'Aprobado' : 'Necesita repasar'}</h2>
-              <p>Respondiste {score} de {total} correctamente. Para aprobar necesitas al menos 75%.</p>
-              <NeonButton color={passed ? 'gold' : 'cyan'} variant="outline" onClick={finish}>
-                {saving ? 'GUARDANDO...' : 'FINALIZAR'}
-              </NeonButton>
-            </div>
-          )}
-        </section>
-      </div>
-    </motion.div>
-  )
-}
-
-function getNextBelt(current: BeltLevel): BeltLevel {
-  const index = beltPath.findIndex((belt) => belt.level === current)
-  if (index < 0) return 'amarillo'
-  return beltPath[Math.min(index + 1, beltPath.length - 1)].level
-}
-
-function normalizeSteps(value: unknown): ExamStep[] {
-  if (!Array.isArray(value)) return []
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== 'object') return null
-      const row = item as Partial<ExamStep>
-      if (!row.question || !Array.isArray(row.options) || row.options.length < 2) return null
-      return {
-        question: row.question,
-        term: row.term,
-        term_explanation: row.term_explanation,
-        options: row.options.map(String),
-        correct: typeof row.correct === 'number' ? row.correct : 0,
-        explanation: row.explanation || 'Respuesta registrada.',
-      }
-    })
-    .filter(Boolean) as ExamStep[]
+  if (!dojo) return <div className="glass-panel p-8">No encontramos este examen. <button onClick={() => navigate('/dojos')}>Volver a dojos</button></div>
+  const index = exam ? Object.keys(exam.answers).length : 0
+  const item = exam?.cases[index]
+  return <div className="learning-page">
+    <SectionHeader eyebrow="KATA · PON EN PRÁCTICA LO APRENDIDO" title={dojo.rank === 6 ? 'Kata final del cinturón negro' : `Examen del cinturón ${dojo.belt}`} kanji="型" />
+    {celebrate && exam && <BeltAwardCelebration currentBelt={dojo.belt}
+      awardedBelt={learningDojos[Math.min(6, dojo.rank + 1)].belt} score={exam.score ?? 0} total={5} onContinue={() => setCelebrate(false)} />}
+    <div className="learning-intro glass-panel"><BeltBadge level={dojo.belt} />
+      <p>Cinco casos, sin límite de tiempo. El último combina más decisiones. Se aprueba con al menos 75 %: cuatro de cinco aciertos (80 %). Al terminar podrás revisar todas las explicaciones.</p></div>
+    {error && <div role="alert" className="combat-feedback"><p>{error}</p><NeonButton disabled={busy}
+      onClick={() => act('learning_start_exam', { p_code: dojo.exam_code })}>Recuperar examen</NeonButton></div>}
+    {!user && <p>Inicia sesión para presentar tu examen.</p>}
+    {busy && !exam && <p role="status">Comprobando tu entrenamiento y preparando los cinco casos…</p>}
+    {exam && !exam.finished && item && <section className="exam-card glass-panel" aria-busy={busy}>
+      <p className="hero-badge">Caso {index + 1} de 5{index === 4 ? ' · Desafío final' : ''}</p>
+      <progress className="learning-progress" value={index} max={5} aria-label="Casos enviados" />
+      <h2 className="learning-prompt">{item.prompt}</h2><LearningTerms item={item} />
+      <div className="answer-grid">{item.options.map((option, i) => <button key={`${item.id}-${i}`}
+        aria-pressed={selected === i} disabled={busy} className={`answer-option ${selected === i ? 'learning-selected' : ''}`}
+        onClick={() => setSelected(i)}>{'ABCD'[i]}. {option}</button>)}</div>
+      <p>Puedes cambiar tu elección antes de enviarla. Una vez enviada, queda guardada.</p>
+      <NeonButton color="cyan" disabled={busy || selected === null}
+        onClick={() => act('learning_exam_answer', { p_attempt: exam.id, p_case: item.id, p_answer: selected })}>
+        {busy ? 'Guardando respuesta…' : index === 4 ? 'Enviar y ver resultado' : 'Enviar y continuar'}</NeonButton>
+    </section>}
+    {exam?.finished && <section className="exam-card glass-panel">
+      <h2>{exam.passed ? (dojo.rank === 6 ? '¡Completaste la ruta del dojo!' : '¡Aprobaste tu kata!') : 'Sigamos practicando'}</h2>
+      <p>Acertaste {exam.score} de 5 casos ({(exam.score ?? 0) * 20} %). Tu resultado está guardado.</p>
+      <p>{exam.passed ? 'Lleva estas decisiones a tu vida diaria y comparte lo aprendido con paciencia.' : 'Equivocarte aquí te permite aprender sin arriesgar tu dinero ni tus datos. Revisa las explicaciones y vuelve a intentarlo cuando te sientas listo.'}</p>
+      <h3>Revisa los cinco casos</h3>
+      {exam.cases.map((q, i) => <article className="learning-review" key={q.id}>
+        <h4>Caso {i + 1} · {q.topic}</h4><p className="learning-prompt">{q.prompt}</p>
+        <p>Elegiste: {q.options[exam.answers[q.id]]}</p><LearningFeedback item={q} selected={exam.answers[q.id]} /><LearningTerms item={q} />
+      </article>)}
+      {!exam.passed && <NeonButton color="gold" disabled={busy} onClick={() => act('learning_start_exam', { p_code: dojo.exam_code, p_retry: true })}>Practicar con otro examen</NeonButton>}
+    </section>}
+    <div className="learning-actions"><NeonButton color="cyan" variant="ghost" onClick={() => navigate(`/dojo/${dojo.id}`)}>Volver al entrenamiento</NeonButton>
+      <NeonButton color="cyan" variant="ghost" onClick={() => navigate('/dojos')}>Volver a dojos</NeonButton></div>
+  </div>
 }

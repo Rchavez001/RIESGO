@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { createTpotService, getConfigFromEnv } = require('./tpotService');
 
 const root = __dirname;
@@ -20,12 +21,46 @@ const contentTypes = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
 };
 
+const LOGGED_OUT_HTML = `<!doctype html>
+<html lang="es"><head><meta charset="utf-8" /><title>Sesion cerrada - Ciber Dojo</title>
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#080f1e; color:#EEF2F7; font-family:'Rajdhani',sans-serif; text-align:center; }
+  .torii { font-size:48px; color:#C62828; }
+  h1 { font-size:28px; margin:8px 0; }
+  p { color:#8AA0BB; max-width:420px; margin:0 auto 22px; }
+  a { display:inline-block; padding:12px 22px; border:1px solid #00B4D8; color:#00B4D8; text-decoration:none; border-radius:4px; letter-spacing:.08em; }
+</style></head>
+<body>
+  <div>
+    <div class="torii">&#9163;</div>
+    <h1>Sesion cerrada</h1>
+    <p>Cierra esta pestana o ventana del navegador para completar el cierre de sesion. Si vuelves a entrar, el navegador pedira usuario y contrasena de nuevo.</p>
+    <a href="/">Volver a iniciar sesion</a>
+  </div>
+</body></html>`;
+
 const server = http.createServer((req, res) => {
-  if (adminUser && adminPassword && !isAuthorized(req)) {
+  if ((req.url || '/').split('?')[0] === '/logged-out') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(LOGGED_OUT_HTML);
+    return;
+  }
+
+  if (!adminUser || !adminPassword) {
+    res.writeHead(503, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    res.end('Central Admin authentication credentials are not configured on this server.');
+    return;
+  }
+
+  if (!isAuthorized(req)) {
     res.writeHead(401, {
       'Content-Type': 'text/plain; charset=utf-8',
       'WWW-Authenticate': 'Basic realm="Ciber Dojo Central Admin"',
@@ -90,13 +125,30 @@ function isAuthorized(req) {
   if (!header.startsWith('Basic ')) return false;
 
   const encoded = header.slice('Basic '.length);
-  const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  let decoded = '';
+  try {
+    decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  } catch {
+    return false;
+  }
+
   const separatorIndex = decoded.indexOf(':');
   if (separatorIndex === -1) return false;
 
   const user = decoded.slice(0, separatorIndex);
   const password = decoded.slice(separatorIndex + 1);
-  return user === adminUser && password === adminPassword;
+
+  const userBuf = Buffer.from(user);
+  const adminUserBuf = Buffer.from(adminUser);
+  const passBuf = Buffer.from(password);
+  const adminPassBuf = Buffer.from(adminPassword);
+
+  const userMatch = userBuf.length === adminUserBuf.length &&
+    crypto.timingSafeEqual(userBuf, adminUserBuf);
+  const passMatch = passBuf.length === adminPassBuf.length &&
+    crypto.timingSafeEqual(passBuf, adminPassBuf);
+
+  return userMatch && passMatch;
 }
 
 async function proxySupabase(req, res) {

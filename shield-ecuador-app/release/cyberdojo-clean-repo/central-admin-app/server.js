@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { createTpotService, getConfigFromEnv } = require('./tpotService');
 
 const root = __dirname;
@@ -25,7 +26,16 @@ const contentTypes = {
 };
 
 const server = http.createServer((req, res) => {
-  if (adminUser && adminPassword && !isAuthorized(req)) {
+  if (!adminUser || !adminPassword) {
+    res.writeHead(503, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    res.end('Central Admin authentication credentials are not configured on this server.');
+    return;
+  }
+
+  if (!isAuthorized(req)) {
     res.writeHead(401, {
       'Content-Type': 'text/plain; charset=utf-8',
       'WWW-Authenticate': 'Basic realm="Ciber Dojo Central Admin"',
@@ -35,13 +45,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if ((req.url || '').startsWith('/api/rest/v1/') || (req.url || '').startsWith('/api/auth/v1/')) {
+  if (
+    (req.url || '').startsWith('/api/rest/v1/') ||
+    (req.url || '').startsWith('/api/auth/v1/') ||
+    (req.url || '').startsWith('/api/storage/v1/')
+  ) {
     proxySupabase(req, res);
     return;
   }
 
   if ((req.url || '').startsWith('/api/admin/tpot')) {
     handleTpotApi(req, res);
+    return;
+  }
+
+  if ((req.url || '').startsWith('/api/whoami')) {
+    sendJson(res, 200, { actor: adminUser || 'central-admin' });
     return;
   }
 
@@ -81,13 +100,30 @@ function isAuthorized(req) {
   if (!header.startsWith('Basic ')) return false;
 
   const encoded = header.slice('Basic '.length);
-  const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  let decoded = '';
+  try {
+    decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  } catch {
+    return false;
+  }
+
   const separatorIndex = decoded.indexOf(':');
   if (separatorIndex === -1) return false;
 
   const user = decoded.slice(0, separatorIndex);
   const password = decoded.slice(separatorIndex + 1);
-  return user === adminUser && password === adminPassword;
+
+  const userBuf = Buffer.from(user);
+  const adminUserBuf = Buffer.from(adminUser);
+  const passBuf = Buffer.from(password);
+  const adminPassBuf = Buffer.from(adminPassword);
+
+  const userMatch = userBuf.length === adminUserBuf.length &&
+    crypto.timingSafeEqual(userBuf, adminUserBuf);
+  const passMatch = passBuf.length === adminPassBuf.length &&
+    crypto.timingSafeEqual(passBuf, adminPassBuf);
+
+  return userMatch && passMatch;
 }
 
 async function proxySupabase(req, res) {

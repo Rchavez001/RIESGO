@@ -24,8 +24,7 @@ const beltMap: Record<string, BeltLevel> = {
   orange: 'naranja',
   green: 'verde',
   blue: 'azul',
-  purple: 'morado',
-  red: 'rojo',
+  brown: 'marron',
   black: 'negro',
 }
 
@@ -45,7 +44,6 @@ export function DojoListPage() {
         .select('id, kata_code, name, description, teaching, estimated_minutes, required_belt, points_reward, steps')
         .like('kata_code', 'EXAM_%')
         .eq('active', true)
-        .order('required_belt', { ascending: true })
 
       if (!active) return
 
@@ -53,7 +51,14 @@ export function DojoListPage() {
         console.error('Error loading belt exams:', error)
         setExams([])
       } else {
-        setExams((data ?? []) as BeltExam[])
+        const beltOrder = beltPath.map((item) => item.level)
+        const sorted = [...(data ?? [])] as BeltExam[]
+        sorted.sort((a, b) => {
+          const beltA = beltOrder.indexOf(beltMap[a.required_belt ?? 'white'] ?? 'blanco')
+          const beltB = beltOrder.indexOf(beltMap[b.required_belt ?? 'white'] ?? 'blanco')
+          return beltA - beltB
+        })
+        setExams(sorted)
       }
 
       setLoadingExams(false)
@@ -107,7 +112,9 @@ export function DojoListPage() {
         ) : (
           <motion.div className="belt-exam-grid" variants={containerVariants}>
             {filteredExams.map((exam) => {
-              const requiredBelt = beltMap[exam.required_belt ?? 'white'] ?? 'blanco'
+              const prereqBelt = beltMap[exam.required_belt ?? 'white'] ?? 'blanco'
+              const prereqIndex = beltPath.findIndex((item) => item.level === prereqBelt)
+              const awardedBelt = beltPath[prereqIndex + 1]?.level ?? prereqBelt
               const questionCount = Array.isArray(exam.steps) ? exam.steps.length : 0
               return (
                 <motion.article key={exam.id} className="belt-exam-card glass-panel" variants={containerVariants} whileHover={{ y: -8 }} transition={{ duration: 0.2 }}>
@@ -118,7 +125,7 @@ export function DojoListPage() {
                   <h3>{exam.name}</h3>
                   <p>{exam.description}</p>
                   <div className="exam-card-meta">
-                    <BeltBadge level={requiredBelt} showKanji={false} size="sm" />
+                    <BeltBadge level={awardedBelt} showKanji={false} size="sm" />
                     <span>{questionCount} preguntas</span>
                     <span>{exam.estimated_minutes ?? 15} min</span>
                     <span>{exam.points_reward ?? 0} XP</span>

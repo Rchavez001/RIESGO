@@ -496,7 +496,11 @@ code { font-family: var(--font-mono); }
 .wisdom-modal {
   position: fixed;
   inset: 0;
-  z-index: 45;
+  /* Must outrank .campaign-ad-position (z-index: 60): a user-initiated action modal
+     (opened by clicking "Comenzar entrenamiento") should never be blocked by a passive
+     promo popup rendered on top of it. Matches the tier used by the other must-interact
+     overlays (.dojo-victory-overlay, z-index: 1000). */
+  z-index: 1000;
   display: grid;
   place-items: center;
   padding: 24px;

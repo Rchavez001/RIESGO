@@ -7,8 +7,9 @@ Proyecto:
 - GitHub: https://github.com/Rchavez001/RIESGO
 - Supabase project ref: `wbbcjiqzbzswxsmwjqlw`
 - Supabase URL: `https://wbbcjiqzbzswxsmwjqlw.supabase.co`
-- Google Cloud project: `cool-archery-452216-v7`
-- Google Cloud Run consola: https://console.cloud.google.com/run/overview?hl=es&project=cool-archery-452216-v7
+- Google Cloud project: `polar-plate-499719-r1` (verificado con `gcloud config get-value project` el 2026-09-08; la referencia anterior a `cool-archery-452216-v7` en este documento era incorrecta)
+- Google Cloud Run consola: https://console.cloud.google.com/run/overview?hl=es&project=polar-plate-499719-r1
+- Servicios reales desplegados: `cyberdojo` (frontend de usuario, `https://cyberdojo-61855290194.us-central1.run.app`) y `cyberdojo-admin` (consola de administración, `https://cyberdojo-admin-61855290194.us-central1.run.app`), ambos en `us-central1`. El admin también es accesible en `/admin` del dominio del frontend, vía un proxy propio — ver `ARQUITECTURA_CYBER_DOJO.md` sección 2.
 
 ## 1. Que contiene el proyecto
 
@@ -16,21 +17,29 @@ El repositorio contiene una aplicacion web llamada **Ciber Dojo**.
 
 Componentes principales:
 
-- `frontend/`: aplicacion React + TypeScript.
-- `supabase/migrations/`: estructura de base de datos, RLS, datos iniciales y hardening.
-- `supabase/functions/`: Edge Functions de Supabase.
+- `frontend/`: aplicacion React + TypeScript de usuario (Cloud Run `cyberdojo`).
+- `central-admin-app/`: consola de administracion, Node.js sin dependencias de npm (Cloud Run `cyberdojo-admin`). No estaba documentada en esta guia hasta esta revision — ver seccion 10-bis mas abajo.
+- `supabase/migrations/`: estructura de base de datos, RLS, datos iniciales y hardening (21 migraciones, `001` a `021` a la fecha de esta revision — ver `BASE_DE_DATOS.md` para el detalle tabla por tabla).
+- `supabase/functions/`: 14 Edge Functions de Supabase.
 - `SETUP.md`: guia corta previa.
 - `GUIA_LEVANTAMIENTO_PROYECTO.md`: este instructivo detallado.
 
-Funciones Supabase incluidas:
+Las 14 funciones Supabase incluidas (ver `ARQUITECTURA_CYBER_DOJO.md` seccion 5 para saber cual app invoca a cada una):
 
 - `calculate-risk`: calcula y guarda el resultado de riesgo.
 - `complete-kata`: evalua katas en servidor, registra puntos y actualiza cinturon.
-- `generate-recommendations`: genera recomendaciones con IA.
-- `analyze-email`: analiza correos sospechosos.
-- `run-incident-investigator`: investiga incidentes y genera preguntas.
-- `audit-generated-questions`: audita preguntas generadas por IA.
-- `run-daily-agent-workflows`: dispatcher diario de agentes.
+- `secure-register-user`: registro de usuario con cifrado de datos personales.
+- `get-private-profile`: descifra el perfil propio o, si es admin, el de otro usuario.
+- `ask-sensei`: chat del Sensei IA.
+- `get-ranking`: tabla de honor.
+- `vuln-scanner-ai`: backend del escaner de vulnerabilidades (`/escaner`).
+- `generate-recommendations`: genera recomendaciones con IA (sin pantalla activa que la invoque hoy).
+- `analyze-email`: analiza correos sospechosos (sin pantalla activa que la invoque hoy).
+- `run-incident-investigator`: investiga incidentes y genera preguntas (sin invocacion desde ninguna de las dos apps; pensada para cron/invocacion externa con `x-cron-secret`).
+- `audit-generated-questions`: audita preguntas generadas por IA (mismo caso: sin invocacion desde las apps).
+- `run-daily-agent-workflows`: dispatcher diario de agentes (mismo caso: sin invocacion desde las apps).
+- `migrate-user-pii`: migracion por lotes de datos personales en claro a cifrados (uso manual, ver `SECURITY_PRIVACY.md`).
+- `backfill-email-domains`: rellena `users.email_domain` para el ranking (migracion 014, uso manual/una vez).
 
 ## 2. Requisitos previos
 
@@ -115,7 +124,7 @@ Luego inicia sesion:
 
 ```bash
 gcloud auth login
-gcloud config set project cool-archery-452216-v7
+gcloud config set project polar-plate-499719-r1
 ```
 
 Verifica el proyecto activo:
@@ -127,7 +136,7 @@ gcloud config get-value project
 Debe devolver:
 
 ```text
-cool-archery-452216-v7
+polar-plate-499719-r1
 ```
 
 ## 3. Clonar el repositorio
@@ -199,7 +208,7 @@ Esto aplica los archivos en:
 supabase/migrations/
 ```
 
-Orden esperado:
+Orden esperado (21 migraciones a la fecha de esta revision; ver `BASE_DE_DATOS.md` para el contenido detallado de cada una):
 
 ```text
 001_initial_schema.sql
@@ -207,8 +216,22 @@ Orden esperado:
 003_seed_data.sql
 004_admin_center.sql
 005_security_hardening.sql
-...
+006_ai_question_workflow_defaults.sql
+007_central_admin_ciber_dojo.sql
+008_sensei_consultations.sql
+009_belt_exam_katas.sql
+010_plain_language_portal_text.sql
+011_sensei_audit_agent_report.sql
+012_encrypt_registration_pii.sql
+013_tpot_integration.sql
+014_ranking_email_domain.sql
+015_align_belt_progression_and_points.sql
 016_business_sectors_catalog.sql
+017_align_belt_progression_marron.sql
+018_campaign_ads_upgrade.sql
+019_business_sectors_occupations.sql
+020_campaign_sector_targeting.sql
+021_campaign_impressions_sector.sql
 ```
 
 Si falla una migracion:
@@ -233,15 +256,36 @@ questions
 katas
 kata_completions
 alerts
+alert_deliveries
+sponsors
 email_analysis
 domains_whitelist
+ai_configs
+recommendations_cache
 ai_providers
 agent_configs
 agent_provider_assignments
 incident_investigations
 agent_runs
+cyber_dojos
+cyber_dojo_wisdom_quotes
+cyber_news_sources
+cyber_dojo_generated_katas
+central_admin_campaigns
+central_admin_campaign_settings
+central_admin_campaign_audit
+sensei_consultations
+security_audit_events
+tpot_integration_settings
+tpot_query_audit
+tpot_ai_analysis_jobs
+tpot_iocs_cache
 business_sectors
+campaign_impressions
+app_entry_log
 ```
+
+Lista completa de 33 tablas con sus columnas, RLS y relaciones: `BASE_DE_DATOS.md`.
 
 ### 4.4 Verificar RLS
 
@@ -271,6 +315,8 @@ business_sectors
 ```
 
 No desactives RLS para "probar rapido"; eso rompe el modelo de seguridad.
+
+**Nota verificada en esta revision:** las tablas `sponsors`, `ai_configs`, `recommendations_cache` no tienen RLS habilitado en ninguna de las 21 migraciones, y `domains_whitelist`/`katas` tienen RLS habilitado pero sin una politica de escritura para admin declarada en SQL. No es necesariamente un error (puede ser intencional si esas tablas solo se tocan con `service_role`), pero debe confirmarse antes de asumir que todo el esquema tiene el mismo nivel de proteccion — ver `BASE_DE_DATOS.md` seccion 9 para el detalle completo.
 
 ## 5. Configurar variables de entorno del frontend
 
@@ -427,12 +473,14 @@ supabase functions deploy analyze-email
 supabase functions deploy run-incident-investigator
 supabase functions deploy audit-generated-questions
 supabase functions deploy run-daily-agent-workflows
+supabase functions deploy migrate-user-pii
+supabase functions deploy backfill-email-domains
 ```
 
 Tambien puedes desplegarlas todas con un script manual:
 
 ```bash
-for fn in calculate-risk complete-kata secure-register-user get-private-profile ask-sensei get-ranking vuln-scanner-ai generate-recommendations analyze-email run-incident-investigator audit-generated-questions run-daily-agent-workflows; do
+for fn in calculate-risk complete-kata secure-register-user get-private-profile ask-sensei get-ranking vuln-scanner-ai generate-recommendations analyze-email run-incident-investigator audit-generated-questions run-daily-agent-workflows migrate-user-pii backfill-email-domains; do
   supabase functions deploy "$fn"
 done
 ```
@@ -452,7 +500,9 @@ $functions = @(
   "analyze-email",
   "run-incident-investigator",
   "audit-generated-questions",
-  "run-daily-agent-workflows"
+  "run-daily-agent-workflows",
+  "migrate-user-pii",
+  "backfill-email-domains"
 )
 
 foreach ($fn in $functions) {
@@ -549,17 +599,19 @@ Nota:
 
 ## 14. Configurar Google Cloud
 
-El proyecto de Google Cloud es:
+El proyecto de Google Cloud verificado en produccion (`gcloud config get-value project`, 2026-09-08) es:
 
 ```text
-cool-archery-452216-v7
+polar-plate-499719-r1
 ```
+
+(Una version anterior de esta guia citaba `cool-archery-452216-v7`, que es incorrecto — puede haber sido un proyecto de pruebas anterior; el proyecto real donde corren `cyberdojo` y `cyberdojo-admin` es el de arriba.)
 
 Configura CLI:
 
 ```bash
 gcloud auth login
-gcloud config set project cool-archery-452216-v7
+gcloud config set project polar-plate-499719-r1
 ```
 
 Activa APIs necesarias:
@@ -580,11 +632,11 @@ Puedes usar otra region si el proyecto ya tiene una definida.
 
 ## 15. Despliegue en Cloud Run
 
-Cloud Run ejecuta contenedores. Para este frontend React hay dos caminos.
+**Correccion importante verificada en esta revision:** el servicio real `cyberdojo` en produccion **no usa Dockerfile ni Nginx** (no existe ningun `Dockerfile` en `frontend/`, verificado). Usa el mecanismo de buildpacks de Cloud Build al ejecutar `gcloud run deploy --source .` sin Dockerfile presente: Cloud Build detecta el script `"gcp-build": "npm run build"` de `frontend/package.json` para compilar, y luego ejecuta `"start": "node static-server.js"` como servidor de produccion — un servidor Node minimalista sin dependencias que ademas actua como proxy hacia `cyberdojo-admin` para las rutas `/admin/*` y `/api/*` (ver `ARQUITECTURA_CYBER_DOJO.md` seccion 2). Ese comando de despliegue por buildpacks es el que aparece en la seccion 22 "Comandos rapidos de referencia" de esta misma guia. La Opcion A de abajo (Dockerfile con Nginx) es una alternativa valida pero **no es la que usa la produccion actual**, y si se usa, hay que portar manualmente la logica de proxy `/admin`+`/api` a la configuracion de Nginx o se pierde el acceso al panel admin desde el mismo dominio.
 
 ### Opcion A: desplegar imagen Docker con Nginx
 
-Esta es la opcion recomendada para produccion.
+Alternativa valida, pero **no es la que usa la produccion actual** (ver nota arriba). Requiere agregar el proxy `/admin` y `/api` manualmente a la configuracion de Nginx si se quiere mantener paridad con produccion.
 
 En `frontend/`, crea un archivo llamado `Dockerfile` si no existe:
 
@@ -645,7 +697,7 @@ Pasos:
 
 1. Entra a Google Cloud Console.
 2. Abre Cloud Run:
-   https://console.cloud.google.com/run/overview?hl=es&project=cool-archery-452216-v7
+   https://console.cloud.google.com/run/overview?hl=es&project=polar-plate-499719-r1
 3. Crea un servicio nuevo o abre el servicio existente.
 4. Selecciona despliegue continuo desde repositorio.
 5. Conecta GitHub.
@@ -692,6 +744,32 @@ https://cyberdojo-61855290194.us-central1.run.app/auth/callback
 ```
 
 La app usa email/password y magic link. Para magic link configura Email Auth con SMTP real de produccion, frecuencia minima de reenvio de 60 segundos o mas y expiracion de OTP/magic link de 900 segundos.
+
+## 16-bis. Despliegue de `central-admin-app` (consola de administracion)
+
+Esta guia no cubria este servicio hasta esta revision. `central-admin-app/` **si tiene Dockerfile propio** (`node:20-alpine`, expone el puerto 8080, comando `node server.js`), a diferencia del frontend. Desde `central-admin-app/`:
+
+```bash
+gcloud run deploy cyberdojo-admin \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated
+```
+
+Variables de entorno requeridas en el servicio (configuralas en Cloud Run, no en archivos versionados):
+
+```text
+SUPABASE_URL=https://wbbcjiqzbzswxsmwjqlw.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service role key>
+ADMIN_BASIC_AUTH_USER=<usuario para HTTP Basic Auth>
+ADMIN_BASIC_AUTH_PASSWORD=<password para HTTP Basic Auth>
+```
+
+(Nombres exactos de variables a confirmar contra `central-admin-app/server.js` y `.env.example` si difieren — no se transcriben aqui los valores reales de produccion por tratarse de credenciales.)
+
+El servicio `cyberdojo` (frontend) necesita saber a donde reenviar `/admin` y `/api`; por defecto usa `cyberdojo-admin-61855290194.us-central1.run.app` (hardcodeado como valor por defecto en `frontend/static-server.js`), pero se puede sobreescribir con la variable de entorno `ADMIN_UPSTREAM_HOST` en el servicio `cyberdojo` si el admin se redespliega con otra URL.
+
+Acceso resultante: el admin queda disponible tanto en su URL propia de Cloud Run como en `https://cyberdojo-61855290194.us-central1.run.app/admin`, protegido por HTTP Basic Auth en ambos casos (la proteccion vive en el propio servicio `cyberdojo-admin`, el proxy del frontend simplemente reenvia la peticion completa incluyendo el header `Authorization`).
 
 ## 17. Variables y secretos en produccion
 
@@ -913,7 +991,7 @@ run-daily-agent-workflows
 
 ### Google Cloud Run
 
-- [ ] Proyecto activo: `cool-archery-452216-v7`.
+- [ ] Proyecto activo: `polar-plate-499719-r1`.
 - [ ] APIs habilitadas.
 - [ ] Servicio Cloud Run creado.
 - [ ] URL publica funcionando.
@@ -938,6 +1016,8 @@ supabase functions deploy analyze-email
 supabase functions deploy run-incident-investigator
 supabase functions deploy audit-generated-questions
 supabase functions deploy run-daily-agent-workflows
+supabase functions deploy migrate-user-pii
+supabase functions deploy backfill-email-domains
 ```
 
 Desde `frontend/`:
@@ -949,13 +1029,14 @@ npm run build
 npm audit --omit=dev
 ```
 
-Google Cloud:
+Google Cloud (nombres de servicio reales: `cyberdojo` y `cyberdojo-admin`; `ciber-dojo-frontend` en otras secciones de esta guia es solo un nombre de ejemplo generico):
 
 ```bash
 gcloud auth login
-gcloud config set project cool-archery-452216-v7
+gcloud config set project polar-plate-499719-r1
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
-gcloud run deploy ciber-dojo-frontend --source . --region us-central1 --allow-unauthenticated
+gcloud run deploy cyberdojo --source frontend --region us-central1 --allow-unauthenticated
+gcloud run deploy cyberdojo-admin --source central-admin-app --region us-central1 --allow-unauthenticated
 ```
 
 ## 23. Notas de seguridad para el desarrollador

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { Bot, CheckCircle2, Home, ListChecks, LogOut, Medal, Menu, Play, ShieldCheck, Swords, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
@@ -670,6 +670,10 @@ function CampaignAdOverlay() {
   const [visible, setVisible] = React.useState(false)
   const { playSound } = useDojoAudio()
   const { userProfile } = useAuth()
+  const location = useLocation()
+  // A promo popup (rendered via portal, so it can outrank normal page content
+  // regardless of z-index) must never interrupt an active lesson or exam.
+  const isFocusedFlow = location.pathname.startsWith('/dojo/') || location.pathname.startsWith('/kata/')
 
   React.useEffect(() => {
     if (!userProfile?.id) return
@@ -708,7 +712,7 @@ function CampaignAdOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ad, visible])
 
-  if (!ad || !ad.image_url) return null
+  if (!ad || !ad.image_url || isFocusedFlow) return null
 
   const image = <img src={ad.image_url} alt={ad.message} />
 
