@@ -203,6 +203,7 @@ function CoinStage({ phase, isTiebreak, choice, result, userStarts, wonByTiebrea
             <img key={stillFace} src={COIN_PHOTO_SRC[stillFace]} alt="" className="coin-still-photo" />
           </motion.div>
         )}
+        <img src="/videos/ninfiggy-badge.webp" alt="" aria-hidden="true" className="coin-mascot-badge" />
       </div>
 
       {(phase === 'coin-select' || phase === 'tiebreak-select') && (
