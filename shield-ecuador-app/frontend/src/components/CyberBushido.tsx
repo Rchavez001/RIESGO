@@ -500,6 +500,7 @@ export function DojoShell({
   xp,
   onSignOut,
   isAdmin,
+  onOpenChallenge,
 }: {
   children: React.ReactNode
   userName: string
@@ -507,15 +508,17 @@ export function DojoShell({
   xp: number
   onSignOut: () => void
   isAdmin?: boolean
+  onOpenChallenge?: () => void
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { notify } = useToast()
   const { enabled: audioEnabled, toggleAudio, playSound } = useDojoAudio()
 
-  const nav = [
+  const nav: Array<{ to: string; label: string; icon: typeof Home; action?: () => void }> = [
     { to: '/dashboard', label: 'Dashboard', icon: Home },
     { to: '/dojos', label: 'Dojos', icon: ListChecks },
-    { to: '/sensei', label: 'Sensei IA', icon: Bot },
+    { to: '/sensei', label: 'Preguntando al Sensei', icon: Bot },
+    ...(onOpenChallenge ? [{ to: '#', label: 'Desafiando al Sensei', icon: Swords, action: onOpenChallenge }] : []),
     { to: '/escaner', label: 'Escáner', icon: ShieldCheck },
     { to: '/ranking', label: 'Ranking', icon: Medal },
     { to: '/perfil', label: 'Perfil', icon: User },
@@ -562,6 +565,14 @@ export function DojoShell({
           <nav>
             {nav.map((item) => {
               const Icon = item.icon
+              if (item.action) {
+                return (
+                  <button key={item.label} type="button" className="side-link" onClick={() => { playSound('tap'); setSidebarOpen(false); item.action?.() }}>
+                    <Icon size={18} />
+                    {item.label}
+                  </button>
+                )
+              }
               return (
                 <NavLink key={item.to} to={item.to} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`} onClick={() => playSound('tap')}>
                   <Icon size={18} />
@@ -603,6 +614,14 @@ export function DojoShell({
           <div className="mobile-bottom-nav">
             {nav.map((item) => {
               const Icon = item.icon
+              if (item.action) {
+                return (
+                  <button key={item.label} type="button" className="bottom-link" onClick={() => { setSidebarOpen(false); item.action?.() }}>
+                    <Icon size={18} />
+                    <span>{item.label}</span>
+                  </button>
+                )
+              }
               return (
                 <NavLink key={item.to} to={item.to} className={({ isActive }) => `bottom-link ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
                   <Icon size={18} />

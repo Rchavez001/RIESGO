@@ -1,6 +1,8 @@
 import React from 'react'
 
 type DojoSound = 'tap' | 'strike' | 'success' | 'belt' | 'ad-in' | 'ad-out'
+  | 'coin-select' | 'coin-flip' | 'coin-land' | 'place-x' | 'place-o'
+  | 'answer-correct' | 'answer-wrong' | 'game-win' | 'game-lose' | 'game-draw'
 
 type DojoAudioContextValue = {
   enabled: boolean
@@ -63,6 +65,67 @@ export function DojoAudioProvider({ children }: { children: React.ReactNode }) {
     if (sound === 'ad-out') {
       playTone(audio, gain, now, 520, 0.12, 0.026, 'sine')
       playTone(audio, gain, now + 0.05, 300, 0.18, 0.02, 'triangle')
+      return
+    }
+
+    if (sound === 'coin-select') {
+      playTone(audio, gain, now, 500, 0.05, 0.02, 'sine')
+      return
+    }
+
+    if (sound === 'coin-flip') {
+      for (let i = 0; i < 6; i += 1) {
+        playTone(audio, gain, now + i * 0.22, 700 - i * 30, 0.05, 0.018, 'triangle')
+      }
+      return
+    }
+
+    if (sound === 'coin-land') {
+      playTone(audio, gain, now, 180, 0.14, 0.05, 'sine')
+      playNoise(audio, gain, now, 0.1, 0.03)
+      return
+    }
+
+    if (sound === 'place-x') {
+      playTone(audio, gain, now, 300, 0.07, 0.04, 'sawtooth')
+      playNoise(audio, gain, now, 0.05, 0.02)
+      return
+    }
+
+    if (sound === 'place-o') {
+      playTone(audio, gain, now, 440, 0.09, 0.035, 'sine')
+      return
+    }
+
+    if (sound === 'answer-correct') {
+      playTone(audio, gain, now, 523, 0.1, 0.035, 'sine')
+      playTone(audio, gain, now + 0.09, 659, 0.14, 0.035, 'sine')
+      return
+    }
+
+    if (sound === 'answer-wrong') {
+      playTone(audio, gain, now, 220, 0.16, 0.04, 'sawtooth')
+      playTone(audio, gain, now + 0.09, 160, 0.2, 0.032, 'sawtooth')
+      return
+    }
+
+    if (sound === 'game-win') {
+      playTone(audio, gain, now, 392, 0.12, 0.04, 'sine')
+      playTone(audio, gain, now + 0.1, 523, 0.14, 0.04, 'sine')
+      playTone(audio, gain, now + 0.22, 659, 0.16, 0.04, 'sine')
+      playTone(audio, gain, now + 0.36, 784, 0.26, 0.04, 'triangle')
+      return
+    }
+
+    if (sound === 'game-lose') {
+      playTone(audio, gain, now, 300, 0.2, 0.04, 'triangle')
+      playTone(audio, gain, now + 0.16, 220, 0.28, 0.035, 'sine')
+      return
+    }
+
+    if (sound === 'game-draw') {
+      playTone(audio, gain, now, 392, 0.1, 0.03, 'sine')
+      playTone(audio, gain, now + 0.09, 392, 0.14, 0.03, 'sine')
       return
     }
 

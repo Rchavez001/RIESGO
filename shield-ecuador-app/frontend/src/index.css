@@ -404,7 +404,7 @@ code { font-family: var(--font-mono); }
   text-shadow: 0 0 18px rgba(200,16,46,.55);
   filter: drop-shadow(0 0 14px rgba(200,16,46,.48));
 }
-.side-link { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); text-decoration: none; padding: 11px 12px; border: 1px solid transparent; font-weight: 700; }
+.side-link { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); text-decoration: none; text-align: left; padding: 11px 12px; border: 1px solid transparent; font-weight: 700; background: none; width: 100%; }
 .side-link.active, .side-link:hover { color: var(--neon-cyan); border-color: var(--border-cyber); background: var(--neon-cyan-dim); }
 .sidebar-sensei-card {
   padding: 10px;

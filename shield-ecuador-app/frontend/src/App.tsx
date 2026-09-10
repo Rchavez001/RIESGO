@@ -17,6 +17,7 @@ import { SenseiConsultPage } from './screens/SenseiConsultPage'
 import { ResetPasswordPage } from './screens/ResetPasswordPage'
 import { AuthCallbackPage } from './screens/AuthCallbackPage'
 import { DojoShell } from './components/CyberBushido'
+import { SenseiChallengeModal } from './components/SenseiChallengeModal'
 import { AdminShell } from './components/AdminShell'
 import { PageTransition } from './components/PageTransition'
 import { ToastProvider } from './contexts/ToastContext'
@@ -45,6 +46,7 @@ function ProtectedShell() {
   const { user, userProfile, loading, signOut } = useAuth()
   const { belt, xp, setBelt, setXp } = useDojoStore()
   const location = useLocation()
+  const [showChallenge, setShowChallenge] = React.useState(false)
 
   React.useEffect(() => {
     if (userProfile?.belt) {
@@ -78,8 +80,10 @@ function ProtectedShell() {
       xp={xp}
       isAdmin={false}
       onSignOut={() => void signOut()}
+      onOpenChallenge={() => setShowChallenge(true)}
     >
       <Outlet />
+      {showChallenge && <SenseiChallengeModal onClose={() => setShowChallenge(false)} />}
     </DojoShell>
   )
 }
