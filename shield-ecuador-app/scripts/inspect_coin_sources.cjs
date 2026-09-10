@@ -1,0 +1,10 @@
+const {chromium}=require('@playwright/test'),fs=require('fs')
+;(async()=>{const browser=await chromium.launch({headless:true});try{
+ const page=await browser.newPage({viewport:{width:1200,height:820},deviceScaleFactor:1})
+ await page.goto('http://localhost:3001')
+ await page.setContent(`<style>body{background:#19221a;color:white;font:15px sans-serif}main{display:flex;gap:20px}video{width:280px;height:332px;object-fit:contain}figure{margin:0}</style><h1>Original / transparencia procesada</h1><main>${['coin-original-cara.webm','volado_1usd_cara_calidad_videojuego.webm','coin-original-sello.webm','volado_1usd_sello_calidad_videojuego.webm'].map(name=>`<figure><video src="http://localhost:3001/videos/${name}" muted preload="auto"></video><figcaption>${name}</figcaption></figure>`).join('')}</main>`)
+ const data=await page.locator('video').evaluateAll(async vs=>Promise.all(vs.map(async v=>{await new Promise(r=>{if(v.readyState>=2)r();else v.addEventListener('loadeddata',r,{once:true})});v.currentTime=v.duration-.12;await new Promise(r=>v.addEventListener('seeked',r,{once:true}));return{src:v.src,width:v.videoWidth,height:v.videoHeight,duration:v.duration}})))
+ console.log(JSON.stringify(data));await page.screenshot({path:'test-results/coin-source-comparison.png'})
+ await page.locator('video').evaluateAll(async vs=>Promise.all(vs.map(async v=>{v.currentTime=1;await new Promise(r=>v.addEventListener('seeked',r,{once:true}))})))
+ await page.screenshot({path:'test-results/coin-source-motion.png'})
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1})

@@ -11,7 +11,6 @@ export function ResetPasswordPage() {
 
   useEffect(() => {
     // Try to extract tokens from URL (hash or query)
-    const full = window.location.href
     const hash = window.location.hash || ''
     const search = window.location.search || ''
 

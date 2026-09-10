@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import './cinematic.css';
 import reportWebVitals from './reportWebVitals';
 import { registerServiceWorker } from './serviceWorkerRegistration';
 

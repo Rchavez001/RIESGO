@@ -5,9 +5,10 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Bot, CheckCircle2, Home, ListChecks, LogOut, Medal, Menu, Play, ShieldCheck, Swords, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
-import { useToast } from '../contexts/ToastContext'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
 import { useAuth } from '../contexts/AuthContext'
+import { KarateBelt } from './KarateBelt'
+import { DoggoArt } from './DojoCompanion'
 
 export const SENSEI_IMAGE_SRC = '/sensei-de-pie.jpg'
 
@@ -47,16 +48,7 @@ export const WARRIOR_IMAGES = [
   '/kata-negro-5.jpg',
 ] as const
 
-const THREAT_IMAGES = [
-  '/amenaza-hacker.jpg',
-  '/amenaza-virus.jpg',
-  '/amenaza-malware.jpg',
-  '/amenaza-phishing.jpg',
-  '/amenaza-ciberdelincuentes.jpg',
-  '/amenaza-estafas.jpg',
-  '/amenaza-ransomware.jpg',
-  '/amenaza-troyanos.jpg',
-] as const
+
 
 export const pageVariants = {
   initial: { opacity: 0, x: -20 },
@@ -132,18 +124,14 @@ export function BeltBadge({
   size?: 'sm' | 'md' | 'lg'
 }) {
   const belt = beltPath.find((item) => item.level === level) ?? beltPath[0]
-  const width = size === 'lg' ? 72 : size === 'sm' ? 38 : 52
+  const width = size === 'lg' ? 100 : size === 'sm' ? 55 : 80
   return (
     <motion.div
       className={`belt-badge ${animate ? 'active' : ''}`}
       title={`${belt.label}: ${belt.iso}`}
-      animate={animate ? { opacity: [1, 0.62, 1] } : undefined}
-      transition={animate ? { repeat: Infinity, duration: 2 } : undefined}
     >
       {showKanji && <span className="belt-kanji" style={{ color: belt.color }}>{belt.kanji}</span>}
-      <span className="belt-strip" style={{ width, background: belt.level === 'negro' ? '#101827' : belt.color, borderColor: belt.color }}>
-        <span className="belt-knot" />
-      </span>
+      <KarateBelt color={belt.level === 'negro' ? '#353d35' : belt.color} width={width} />
       <span className="belt-label">{belt.label}</span>
     </motion.div>
   )
@@ -155,7 +143,7 @@ export function XPBar({ current, max, belt }: { current: number; max: number; be
   return (
     <div className="xp-wrap">
       <div className="xp-meta">
-        <span>NIVEL DE CHI</span>
+        <span>PUNTOS DE APRENDIZAJE</span>
         <strong>{current}/{max} XP</strong>
       </div>
       <div className="xp-track">
@@ -465,34 +453,6 @@ export function KataCard({
   )
 }
 
-// Isolated so the 1.5s image cycle only re-renders this small box, not the whole sidebar.
-function SidebarThreatCarousel() {
-  const [tick, setTick] = useState(0)
-  const threatIndex = tick % THREAT_IMAGES.length
-
-  useEffect(() => {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduceMotion) return
-    const id = window.setInterval(() => {
-      setTick((t) => t + 1)
-    }, 1500)
-    return () => window.clearInterval(id)
-  }, [])
-
-  return (
-    <div className="sidebar-threat">
-      <motion.img
-        key={threatIndex}
-        src={THREAT_IMAGES[threatIndex]}
-        alt="Amenaza digital"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-      />
-    </div>
-  )
-}
-
 export function DojoShell({
   children,
   userName,
@@ -511,23 +471,19 @@ export function DojoShell({
   onOpenChallenge?: () => void
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { notify } = useToast()
   const { enabled: audioEnabled, toggleAudio, playSound } = useDojoAudio()
 
   const nav: Array<{ to: string; label: string; icon: typeof Home; action?: () => void }> = [
-    { to: '/dashboard', label: 'Dashboard', icon: Home },
+    { to: '/dashboard', label: 'Mi entrenamiento', icon: Home },
     { to: '/dojos', label: 'Dojos', icon: ListChecks },
-    { to: '/sensei', label: 'Preguntando al Sensei', icon: Bot },
+    { to: '/sensei', label: 'Pregunta al sensei', icon: Bot },
     ...(onOpenChallenge ? [{ to: '#', label: 'Desafiando al Sensei', icon: Swords, action: onOpenChallenge }] : []),
-    { to: '/escaner', label: 'Escáner', icon: ShieldCheck },
-    { to: '/ranking', label: 'Ranking', icon: Medal },
+    { to: '/escaner', label: 'Revisa tu seguridad', icon: ShieldCheck },
+    { to: '/ranking', label: 'Tabla de honor', icon: Medal },
+    { to: '/personajes', label: 'Personajes del dojo', icon: Swords },
     { to: '/perfil', label: 'Perfil', icon: User },
     ...(isAdmin ? [{ to: '/admin', label: 'Admin', icon: Wrench }] : []),
   ]
-
-  useEffect(() => {
-    notify('Sensei: el dojo ha recargado tu energia digital. Revisa el ranking y tus misiones.', 'info')
-  }, [notify])
 
   return (
     <ScanlineOverlay>
@@ -558,8 +514,8 @@ export function DojoShell({
           <NavLink to="/" className="brand-lockup" onClick={() => setSidebarOpen(false)}>
             <span className="torii">⛩</span>
             <span>
-              <strong>CIBER DOJO</strong>
-              <em>サイバー道場</em>
+              <strong>ciberDojo</strong>
+              <em>EL ARTE DE PROTEGERTE</em>
             </span>
           </NavLink>
           <nav>
@@ -574,7 +530,7 @@ export function DojoShell({
                 )
               }
               return (
-                <NavLink key={item.to} to={item.to} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`} onClick={() => playSound('tap')}>
+                <NavLink key={item.to} to={item.to} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`} onClick={() => { playSound('tap'); setSidebarOpen(false) }}>
                   <Icon size={18} />
                   {item.label}
                 </NavLink>
@@ -582,8 +538,7 @@ export function DojoShell({
             })}
           </nav>
           <div className="sidebar-sensei-card">
-            <div className="mono-label">SENSEI DEL DOJO</div>
-            <SidebarThreatCarousel />
+            <NavLink to="/personajes/doggoteka" className="sidebar-doggo"><DoggoArt />DoggoTeka · Tu compañero ↗</NavLink>
           </div>
           <div className="sidebar-rank">
             <div className="mono-label">GUERRERO</div>

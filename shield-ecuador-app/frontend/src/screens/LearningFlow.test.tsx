@@ -7,7 +7,7 @@ import { KataExamPage } from './KataExamPage'
 
 const mockUser = { id: 'learner-1' }
 let mockParams: Record<string, string> = { id: 'passwords' }
-jest.mock('react-router-dom', () => ({ useParams: () => mockParams, useNavigate: () => jest.fn() }), { virtual: true })
+jest.mock('react-router-dom', () => ({ useParams: () => mockParams, useNavigate: () => jest.fn(), Link: ({children, to}: any) => <a href={to}>{children}</a> }), { virtual: true })
 jest.mock('../lib/supabase', () => ({ supabase: { rpc: jest.fn() } }))
 jest.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: mockUser, refreshProfile: jest.fn() }) }))
 jest.mock('../components/CyberBushido', () => ({

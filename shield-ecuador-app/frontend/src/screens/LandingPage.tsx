@@ -19,6 +19,17 @@ export function LandingPage() {
   const [showBow, setShowBow]   = useState(false)
   const [busy, setBusy]         = useState(false)
   const howlRef = useRef<Howl | null>(null)
+  const heroVideoRef = useRef<HTMLVideoElement>(null)
+
+  /* iOS Safari can silently ignore the autoplay attribute (its autoplay
+     heuristics are stricter than Android's about the element's state at
+     mount), so force it explicitly once the video element exists. */
+  useEffect(() => {
+    const video = heroVideoRef.current
+    if (!video) return
+    video.muted = true
+    video.play().catch(() => { /* Still blocked (e.g. iOS Low Power Mode) — the poster/first frame stays visible. */ })
+  }, [])
 
   /* ── GSAP refs ───────────────────────────────────────── */
   const cornersRef  = useRef<HTMLDivElement>(null)
@@ -102,16 +113,26 @@ export function LandingPage() {
         document.body
       )}
 
-      <div className="lp-page">
+      {/* Portaled to <body>: PageTransition animates transform/filter on its wrapper,
+          which creates a containing block that breaks position:fixed for descendants.
+          On iOS Safari this also blocks autoplay outright — the video mounts inside an
+          opacity:0/blurred ancestor, which iOS treats as "not visible" and never starts
+          (Android's autoplay policy is more lenient about it, so the bug only shows on iOS). */}
+      {createPortal(
+        <>
+          <video
+            ref={heroVideoRef}
+            className="lp-video-bg"
+            src="/hero-cinematic.mp4"
+            autoPlay muted loop playsInline
+            aria-hidden="true"
+          />
+          <div className="lp-video-overlay" aria-hidden="true" />
+        </>,
+        document.body
+      )}
 
-        {/* ── CINEMATIC VIDEO BACKGROUND ───────────────── */}
-        <video
-          className="lp-video-bg"
-          src="/hero-cinematic.mp4"
-          autoPlay muted loop playsInline
-          aria-hidden="true"
-        />
-        <div className="lp-video-overlay" aria-hidden="true" />
+      <div className="lp-page">
 
         {/* ── HUD CORNERS ──────────────────────────────── */}
         <div ref={cornersRef} className="hud-corners" aria-hidden="true">

@@ -1,5 +1,5 @@
 export function registerServiceWorker() {
-  if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) {
+  if (process.env.NODE_ENV !== 'production' || ['localhost', '127.0.0.1'].includes(window.location.hostname) || !('serviceWorker' in navigator)) {
     return
   }
 

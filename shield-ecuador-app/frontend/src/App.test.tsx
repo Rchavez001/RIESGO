@@ -13,6 +13,7 @@ jest.mock('react-router-dom', () => ({
   useParams: () => ({}),
   useSearchParams: () => [new URLSearchParams(), jest.fn()],
   NavLink: ({ children }: any) => <a>{children}</a>,
+  Link: ({ children, to }: any) => <a href={to}>{children}</a>,
 }), { virtual: true });
 
 // Mock Three.js / WebGL backdrop para entorno jsdom de pruebas
@@ -23,7 +24,8 @@ jest.mock('./components/DojoWebGLBackdrop', () => ({
 import App from './App';
 
 test('renders Ciber Dojo application without crashing', () => {
+  window.matchMedia = jest.fn().mockReturnValue({ matches: true, addEventListener: jest.fn(), removeEventListener: jest.fn() });
+  jest.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   const { container } = render(<App />);
   expect(container).toBeDefined();
 });
-

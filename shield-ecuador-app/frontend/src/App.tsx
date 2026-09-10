@@ -3,9 +3,11 @@ import { AnimatePresence } from 'framer-motion'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { Loader } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { LandingPage } from './screens/LandingPage'
+import { LandingPage } from './screens/CinematicLandingPage'
+import { CharactersPage } from './screens/CharactersPage'
+import { PracticePage } from './screens/PracticePage'
 import { LoginScreen } from './screens/LoginScreen'
-import { DashboardScreen } from './screens/DashboardScreen'
+import { DashboardScreen } from './screens/CinematicDashboardScreen'
 import { DojoListPage } from './screens/DojoListPage'
 import { DojoDetailPage } from './screens/DojoDetailPage'
 import { KataExamPage } from './screens/KataExamPage'
@@ -22,7 +24,6 @@ import { AdminShell } from './components/AdminShell'
 import { PageTransition } from './components/PageTransition'
 import { ToastProvider } from './contexts/ToastContext'
 import { DojoAudioProvider } from './contexts/DojoAudioContext'
-import { DojoWebGLBackdrop } from './components/DojoWebGLBackdrop'
 import { useDojoStore } from './store/dojoStore'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
 
@@ -134,6 +135,9 @@ function AppRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/dev/kata/:code" element={<DevKataRoute />} />
         <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
+        <Route path="/personajes" element={<PageTransition><CharactersPage /></PageTransition>} />
+        <Route path="/personajes/:id" element={<PageTransition><CharactersPage /></PageTransition>} />
+        <Route path="/practica" element={<PageTransition><PracticePage /></PageTransition>} />
         <Route path="/login" element={<PageTransition><LoginScreen /></PageTransition>} />
         <Route path="/auth/callback" element={<PageTransition><AuthCallbackPage /></PageTransition>} />
         <Route path="/reset-password" element={<PageTransition><ResetPasswordPage /></PageTransition>} />
@@ -159,7 +163,6 @@ export default function App() {
     <AuthProvider>
       <DojoAudioProvider>
         <ToastProvider>
-          <DojoWebGLBackdrop />
           <BrowserRouter>
             <AppRoutes />
           </BrowserRouter>

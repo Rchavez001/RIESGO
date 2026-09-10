@@ -1,7 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { NeonButton } from '../CyberBushido'
 import type { EstadoIA, RecomendacionIA } from '../../services/scanOrchestrator'
 import type { ScanCheck } from '../../data/scanChecks'
 

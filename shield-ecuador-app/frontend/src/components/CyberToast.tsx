@@ -25,7 +25,7 @@ export function CyberToastList({
   onDismiss: (id: string) => void
 }) {
   return (
-    <div className="cyber-toast-list">
+    <div className="cyber-toast-list" role="status" aria-live="polite">
       <AnimatePresence>
         {toasts.map((toast) => (
           <motion.div

@@ -80,10 +80,8 @@ function exportReport(results: ScanResult[], sistema: SystemInfo, score: number,
 export function SecurityReport({ results, sistema, onConsult, onRescan }: SecurityReportProps) {
   const score = calculateScore(results)
   const beltName = assignBelt(score)
-  const belt = BELT_SYSTEM[beltName]
   const failed = results.filter((r) => !r.passed)
   const passed = results.filter((r) => r.passed)
-  const beltColor = beltName === 'negro' ? '#374151' : belt.color
 
   return (
     <motion.div
@@ -95,15 +93,15 @@ export function SecurityReport({ results, sistema, onConsult, onRescan }: Securi
       <div className="vs-report-header">
         <div className="vs-report-title">🥋 REPORTE DEL SENSEI</div>
         <div style={{ fontSize: '.8rem', color: 'var(--text-secondary)', marginBottom: '.5rem' }}>
-          Ciber Dojo — Análisis de Seguridad Digital
+          Comprobaciones orientativas del navegador. No es un análisis completo del equipo.
         </div>
 
         <BeltDisplay beltName={beltName} score={score} animate />
 
         <p style={{ fontSize: '.9rem', color: 'var(--text-primary)', marginTop: '1rem', maxWidth: '420px', margin: '1rem auto 0' }}>
           {failed.length === 0
-            ? '🎉 ¡Excelente! Tu dojo digital está bien protegido.'
-            : `"¡${belt.mensaje.replace('!', '')}! Tu dojo digital tiene ${failed.length} ${failed.length === 1 ? 'puerta' : 'puertas'} que reforzar."`}
+            ? 'Estas comprobaciones no detectaron señales pendientes. Esto no garantiza que el equipo esté libre de amenazas.'
+            : `Hay ${failed.length} comprobaciones para revisar. Algunas dependen de la información que el navegador permite consultar.`}
         </p>
       </div>
 

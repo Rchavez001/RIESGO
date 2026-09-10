@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Loader, Shield } from 'lucide-react'
 import { KanjiBackground, NeonButton, ScanlineOverlay } from '../components/CyberBushido'
 import { useAuth } from '../contexts/AuthContext'
@@ -192,9 +192,10 @@ export function LoginScreen() {
       <div className="auth-shell cyber-page">
         <KanjiBackground char="門" />
         <form onSubmit={handleSubmit} className="auth-card glass-panel">
+          <Link className="auth-home-link" to="/">← Volver a ciberDojo</Link>
           <div className="text-center">
             <div className="torii">⛩</div>
-            <p className="mono-label">サイバー道場 · AUTH GATE</p>
+            <p className="mono-label">TU CAMINO EMPIEZA AQUÍ</p>
             <h1>CIBER DOJO</h1>
           </div>
           <div className="auth-tabs">

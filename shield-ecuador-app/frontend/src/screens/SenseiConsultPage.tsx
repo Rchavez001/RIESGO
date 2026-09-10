@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Bot, Loader, MessageCircle, Send, ShieldCheck, ThumbsDown, ThumbsUp } from 'lucide-react'
-import { NeonButton, SectionHeader, SENSEI_IMAGE_SRC } from '../components/CyberBushido'
+import { NeonButton, SectionHeader } from '../components/CyberBushido'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -27,7 +27,7 @@ export function SenseiConsultPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'sensei',
-      text: 'Soy el Sensei IA. Preguntame sobre seguridad digital, ciberdelitos, mensajes falsos, contrasenas, verificacion en dos pasos, archivos bloqueados por extorsion, privacidad, fraudes bancarios o conceptos que aparezcan en el dojo.',
+      text: 'Soy tu sensei, un asistente de inteligencia artificial: un programa que responde tus preguntas. Cuéntame qué te preocupa. Por ejemplo: «Me llegó un mensaje del banco pidiendo un código, ¿qué hago?». No incluyas contraseñas, códigos ni números de cuenta.',
     },
   ])
   const [lastAnswer, setLastAnswer] = useState<SenseiAnswer | null>(null)
@@ -105,13 +105,13 @@ export function SenseiConsultPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <SectionHeader eyebrow="// CONSULTA GUIADA" title="Sensei IA" kanji="問" />
+      <SectionHeader eyebrow="PREGUNTA CON CONFIANZA" title="Pregunta al sensei" kanji="問" />
       <div className="sensei-consult-layout">
         <section className="sensei-chat-panel glass-panel">
           <div className="sensei-chat-head">
             <Bot className="text-cyan-300" />
             <div>
-              <span className="mono-label">VALIDA - RESPONDE - REVISA</span>
+              <span className="mono-label">UNA DUDA A LA VEZ</span>
               <h2>Consulta dudas de ciberseguridad</h2>
             </div>
           </div>
@@ -131,13 +131,14 @@ export function SenseiConsultPage() {
             {loading && (
               <article className="sensei-message sensei">
                 <div className="sensei-message-icon"><Loader className="animate-spin" size={18} /></div>
-                <p>El Sensei valida si el tema es de seguridad digital, consulta el banco de preguntas y revisa la respuesta antes de enviarla...</p>
+                <p>Estoy preparando una explicación para ti…</p>
               </article>
             )}
           </div>
 
           <form className="sensei-ask-form" onSubmit={askSensei}>
             <textarea
+              aria-label="Tu pregunta para el sensei"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               placeholder="Ejemplo: me llego un WhatsApp del banco pidiendo un codigo, que hago?"
@@ -152,8 +153,8 @@ export function SenseiConsultPage() {
 
         <aside className="sensei-feedback-panel glass-panel">
           <img src="/sensei-meditacion.jpg" alt="Sensei IA de Ciber Dojo" className="sensei-consult-photo" />
-          <h2>Despues de responder</h2>
-          <p>El Sensei registra la consulta para que Central Admin vea temas frecuentes, respuestas utiles y sentimiento del alumno.</p>
+          <h2>Aprende a tu ritmo</h2>
+          <p>Si algo no queda claro, pide otro ejemplo. Tus consultas y comentarios se guardan para mejorar las explicaciones. Evita compartir información privada.</p>
 
           {lastAnswer && (
             <div className="sensei-followup">

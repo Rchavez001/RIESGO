@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { BeltBadge, NeonButton, SectionHeader, WARRIOR_IMAGES } from '../components/CyberBushido'
+import { BeltBadge, NeonButton, SectionHeader } from '../components/CyberBushido'
+import { CompanionPicker } from '../components/DojoCompanion'
 import { LearningFeedback, LearningTerms } from '../components/LearningHelpers'
 import { learningCall, learningDojos, LearningState } from '../services/learning'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,7 +16,6 @@ export function DojoDetailPage() {
   const [error, setError] = useState('')
   const request = useRef(0)
   const inFlight = useRef(false)
-  const [hero, setHero] = useState(0)
   useEffect(() => {
     const generation = ++request.current
     setState(null); setError('')
@@ -54,8 +54,7 @@ export function DojoDetailPage() {
     {!state && busy && <p role="status">Recuperando tu última pregunta…</p>}
     {state && q && <div className="combat-layout learning-layout">
       <aside className="combat-panel learning-companion"><p className="mono-label">TU COMPAÑERO DE PRÁCTICA</p>
-        <img src={WARRIOR_IMAGES[hero]} alt="Guerrero del dojo" />
-        <button className="neon-button ghost cyan" onClick={() => setHero((hero + 1) % WARRIOR_IMAGES.length)}>Cambiar personaje</button>
+        <CompanionPicker />
         <p>No hay límite de tiempo. Lee con calma y elige lo que harías.</p></aside>
       <section className="combat-panel question-card glass-panel" aria-busy={busy}>
         <div className="hero-badge">Pregunta {state.cursor + 1} de 30 · {q.topic}</div>

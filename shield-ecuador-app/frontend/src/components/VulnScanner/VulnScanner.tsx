@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useReducer } from 'react'
+import React, { useCallback, useReducer } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NeonButton } from '../CyberBushido'
 import { SystemDetector } from './SystemDetector'
@@ -224,20 +224,20 @@ function WelcomeCard({ onStart }: { onStart: () => void }) {
       </div>
 
       <p style={{ color: 'var(--text-primary)', marginBottom: '1.5rem', fontSize: '.9rem', lineHeight: 1.7 }}>
-        En los próximos minutos voy a revisar tu equipo, como un médico revisa tu salud. Al final tendrás:
+        Revisaremos algunas señales que tu navegador permite consultar. Esto no examina todos los archivos ni confirma si hay virus en tu equipo. Al final tendrás:
       </p>
 
       <div className="vs-welcome-features">
-        <div className="vs-feature-item">🎯 Tu nivel de seguridad actual</div>
-        <div className="vs-feature-item">⚠️ Las puertas abiertas que debes cerrar</div>
-        <div className="vs-feature-item">🤖 Consejos personalizados del Sensei IA</div>
-        <div className="vs-feature-item">📊 Tu cinturón digital de seguridad</div>
+        <div className="vs-feature-item">Señales observables desde tu navegador</div>
+        <div className="vs-feature-item">Aspectos que puedes revisar</div>
+        <div className="vs-feature-item">Explicaciones del sensei si las solicitas</div>
+        <div className="vs-feature-item">Un resumen orientativo, separado de tu cinturón de aprendizaje</div>
       </div>
 
       <div className="vs-welcome-meta">
         <span>⏱️ Tiempo estimado: 2–3 minutos</span>
         <span>💰 Costo: GRATIS</span>
-        <span>🔒 Sin datos personales enviados</span>
+        <span>Si consultas al sensei, se envían los datos de esa consulta al servicio.</span>
       </div>
 
       <NeonButton color="red" onClick={onStart}>

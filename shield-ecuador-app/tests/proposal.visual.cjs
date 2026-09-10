@@ -1,0 +1,50 @@
+const {chromium}=require('@playwright/test')
+const fs=require('fs'),path=require('path'),assert=require('assert/strict')
+const bank=JSON.parse(fs.readFileSync(path.join(__dirname,'../Banco de preguntas/optimizado/banco_700_preguntas_300_casos.json'),'utf8'))
+;(async()=>{const browser=await chromium.launch({headless:true});try{
+ const context=await browser.newContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'})
+ const page=await context.newPage(),errors=[],remote=[]
+ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!new URL(r.url()).hostname.match(/localhost|127\.0\.0\.1/))remote.push(r.url())})
+ await page.goto('http://localhost:3001/demo/index.html');await page.getByRole('heading',{name:/APRENDE GRATIS A/}).waitFor()
+ await page.locator('video').evaluate(v=>v.readyState>=2?Promise.resolve():new Promise(r=>v.addEventListener('loadeddata',r,{once:true})))
+ await page.screenshot({path:'test-results/proposal-desktop.png',fullPage:true})
+ if(process.argv.includes('--screens-only')){
+   await page.setViewportSize({width:390,height:844})
+   await page.screenshot({path:'test-results/proposal-mobile.png',fullPage:true})
+   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile overflow')
+   console.log('PASS: final desktop and mobile presentation');return
+ }
+ await page.getByRole('link',{name:'Mis guías'}).click();await page.locator('[data-action="mentor:kira"]').click()
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('ciberdojo-cinematic-proposal-v1')).mentor),'kira')
+ await page.goto('http://localhost:3001/demo/index.html#dojo/passwords')
+ await page.locator('[data-action="answer:passwords:0"]').click()
+ await page.locator('.feedback').waitFor()
+ await page.screenshot({path:'test-results/proposal-question.png',fullPage:true})
+ await page.reload();await page.locator('.feedback').waitFor()
+ assert.equal(await page.locator('.answer:disabled').count(),4)
+ for(let i=0;i<29;i++){
+   await page.locator('[data-action="next:passwords"]').click()
+   await page.locator('[data-action="answer:passwords:0"]').click()
+ }
+ await page.locator('[data-action="next:passwords"]').click()
+ await page.locator('[data-action="choose:passwords:0"]').waitFor()
+ await page.screenshot({path:'test-results/proposal-kata.png',fullPage:true})
+ for(let i=0;i<5;i++){
+   const ids=await page.evaluate(()=>JSON.parse(localStorage.getItem('ciberdojo-cinematic-proposal-v1')).exams.passwords.ids)
+   const q=bank.items.find(q=>q.id===ids[i])
+   await page.locator(`[data-action="choose:passwords:${q.correct}"]`).click()
+   await page.locator('[data-action="submit:passwords"]').click()
+ }
+ await page.getByRole('heading',{name:'La práctica da frutos.'}).waitFor()
+ assert.equal(await page.locator('.review').count(),5)
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('ciberdojo-cinematic-proposal-v1')).belt),1)
+ await page.locator('[data-action="celebrate"]').click();assert(await page.locator('dialog').isVisible())
+ await page.getByRole('button',{name:'Cerrar presentación'}).click()
+ await page.goto('http://localhost:3001/demo/index.html#kata/assets');await page.getByRole('heading',{name:'Tu camino en el dojo.'}).waitFor()
+ await page.goto('http://localhost:3001/demo/index.html#inicio');await page.getByRole('heading',{name:/APRENDE GRATIS A/}).waitFor()
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-results/proposal-mobile.png',fullPage:true})
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mobile overflow')
+ await page.getByRole('button',{name:'Conoce a tu sensei'}).click();assert(await page.locator('dialog video').isVisible())
+ assert.deepEqual(errors,[]);assert.deepEqual(remote,[])
+ console.log('PASS: desktop/mobile, guide choice, saved explanation after reload, 30 answers, gated kata, five cases, result, celebration, no external requests or browser errors.')
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1})

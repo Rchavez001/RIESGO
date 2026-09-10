@@ -1,5 +1,6 @@
 import React from 'react'
 import type { LearningItem } from '../services/learning'
+import { DoggoNote } from './DojoCompanion'
 
 export function LearningTerms({ item }: { item: LearningItem }) {
   const terms = Object.entries(item.terms || {})
@@ -16,7 +17,7 @@ export function LearningFeedback({ item, selected }: { item: LearningItem; selec
   const explanation = !correct && recommended && item.explanation?.startsWith(recommended)
     ? item.explanation.slice(recommended.length).trim() : item.explanation
   return <div className={`combat-feedback ${correct ? 'success' : ''}`} role="status">
-    <p><strong>{correct ? 'Bien hecho. Esta decisión te ayuda a protegerte.' : 'Vamos paso a paso. Aquí puedes practicar sin riesgo.'}</strong></p>
+    <DoggoNote>{correct ? 'Bien hecho. Esta decisión te ayuda a protegerte.' : 'Vamos paso a paso. Aquí puedes practicar sin riesgo.'}</DoggoNote>
     {!correct && item.correct !== undefined && <p>Respuesta recomendada: {item.options[item.correct]}</p>}
     {explanation && <p>{explanation}</p>}
   </div>
