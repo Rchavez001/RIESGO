@@ -134,6 +134,14 @@ const COIN_VIDEO_SRC: Record<'cara' | 'sello', string> = {
   sello: '/videos/volado_1usd_sello_calidad_videojuego.webm',
 }
 
+// Real, cropped photographs of the same physical dollar coin used in the
+// toss footage (its resting frame, keyed to transparency) — not a CSS
+// illustration — so the pre-flip preview reads as an actual coin.
+const COIN_PHOTO_SRC: Record<'cara' | 'sello', string> = {
+  cara: '/videos/cara-moneda.webp',
+  sello: '/videos/sello-moneda.webp',
+}
+
 function CoinStage({ phase, isTiebreak, choice, result, userStarts, wonByTiebreak, reduceMotion, onSelect, onLaunch, onFlipEnded }: {
   phase: string; isTiebreak: boolean; choice: string | null; result: string | null; userStarts: boolean | null
   wonByTiebreak: boolean; reduceMotion: boolean
@@ -141,13 +149,15 @@ function CoinStage({ phase, isTiebreak, choice, result, userStarts, wonByTiebrea
 }) {
   const flipping = phase === 'coin-flip' || phase === 'tiebreak-flip'
   const announcing = phase === 'coin-announce' || phase === 'tiebreak-announce'
-  const targetRotation = result === 'sello' ? 180 : 0
   const videoRef = useRef<HTMLVideoElement>(null)
   // Real footage of the coin only plays with full motion; reduced motion
   // never autoplays it and instead snaps straight to the final, already
   // computed face. Both paths call onFlipEnded — the single place that
   // advances the state machine — so it never depends on which one ran.
   const showVideo = (flipping || announcing) && !!result && !reduceMotion
+  // Before the result is known, preview whichever face the user has (or
+  // would by default) selected, so tapping Cara/Sello visibly swaps the coin.
+  const stillFace = (result ?? choice ?? 'cara') as 'cara' | 'sello'
 
   useEffect(() => {
     if (!flipping || !result || !reduceMotion) return
@@ -185,9 +195,12 @@ function CoinStage({ phase, isTiebreak, choice, result, userStarts, wonByTiebrea
             />
           </div>
         ) : (
-          <motion.div className="coin-3d" animate={{ rotateY: targetRotation }} transition={{ duration: 0.2 }}>
-            <div className="coin-face coin-face-cara"><span>LIBERTY</span>CARA</div>
-            <div className="coin-face coin-face-sello"><span>ESCUDO</span>SELLO</div>
+          <motion.div
+            className="coin-toss-video-frame"
+            animate={reduceMotion ? undefined : { y: [0, -7, 0], rotate: [0, -2, 2, 0] }}
+            transition={reduceMotion ? undefined : { duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <img key={stillFace} src={COIN_PHOTO_SRC[stillFace]} alt="" className="coin-still-photo" />
           </motion.div>
         )}
       </div>

@@ -76,7 +76,6 @@
 .coin-stage { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 8px 0 4px; }
 
 .coin-3d-wrap {
-  perspective: 1100px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -84,10 +83,6 @@
   min-height: 210px;
   justify-content: center;
   position: relative;
-  /* Drop-shadow lives on the wrapper, not on .coin-3d: a `filter` on the
-     element that also carries `transform-style: preserve-3d` makes Chromium
-     flatten its 3D compositing, which silently breaks backface-visibility
-     and can show the wrong (mirrored) coin face. */
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .55));
 }
 
@@ -100,67 +95,14 @@
   background: radial-gradient(ellipse 55% 60% at 50% 56%, rgba(0, 240, 255, .14), rgba(0, 240, 255, 0) 72%);
 }
 
-.coin-toss-video {
+/* Both the toss clip and the at-rest photo are real footage of the same
+   physical coin, keyed to true alpha transparency (ffmpeg colorkey → VP9/
+   WebP with an alpha channel) — no CSS-drawn coin, no mask-image trick. */
+.coin-toss-video, .coin-still-photo {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  /* The source clip is a real coin filmed on a plain white backdrop, tossed
-     through nearly the full frame height. A radial mask fades that white to
-     transparent around the coin's full range of motion instead of keying it
-     out with a blend mode (which would also tint the coin's gold toward the
-     dark UI background); a wide, gentle multi-stop taper reads as a lit
-     display pedestal rather than a hard-edged cutout, and the opaque core
-     stays large enough to never clip the coin at any point in the toss. */
-  -webkit-mask-image: radial-gradient(ellipse 40% 52% at 50% 56%, #000 100%, rgba(0, 0, 0, .5) 130%, transparent 165%);
-  mask-image: radial-gradient(ellipse 40% 52% at 50% 56%, #000 100%, rgba(0, 0, 0, .5) 130%, transparent 165%);
 }
-
-.coin-3d {
-  position: relative;
-  width: 152px;
-  height: 152px;
-  transform-style: preserve-3d;
-}
-
-.coin-face {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  gap: 4px;
-  backface-visibility: hidden;
-  font-family: var(--font-impact, 'Bebas Neue', sans-serif);
-  font-size: 26px;
-  letter-spacing: .07em;
-  color: #3d2a05;
-  /* Layered rim + bevel + specular sweep to read as struck metal, not a flat sticker. */
-  box-shadow:
-    0 0 0 4px rgba(0, 0, 0, .28),
-    0 0 0 6px rgba(255, 255, 255, .12),
-    inset 0 3px 8px rgba(255, 255, 255, .65),
-    inset 0 -10px 16px rgba(0, 0, 0, .28);
-}
-
-.coin-face::before {
-  content: '';
-  position: absolute;
-  inset: 10px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, .35);
-  box-shadow: inset 0 0 12px rgba(0, 0, 0, .22);
-  pointer-events: none;
-}
-
-.coin-face span {
-  font-family: var(--font-mono, monospace);
-  font-size: 9px;
-  letter-spacing: .22em;
-  opacity: .75;
-}
-
-.coin-face-cara { background: radial-gradient(circle at 32% 28%, #fff3c4, #ffdd66 38%, #d4a017 72%, #93700c 100%); }
-.coin-face-sello { background: radial-gradient(circle at 32% 28%, #e8fbff, #7dd3fc 40%, #0891b2 74%, #045066 100%); transform: rotateY(180deg); }
 
 .coin-instruction { color: #e2e8f0; font-size: 14px; font-weight: 700; text-align: center; margin: 0; }
 
@@ -295,5 +237,5 @@
 .sensei-result-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .sensei-cell, .win-line, .coin-3d { transition: none !important; }
+  .sensei-cell, .win-line { transition: none !important; }
 }
