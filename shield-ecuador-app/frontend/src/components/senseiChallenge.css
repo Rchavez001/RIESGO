@@ -106,27 +106,6 @@
 
 .coin-instruction { color: #e2e8f0; font-size: 14px; font-weight: 700; text-align: center; margin: 0; }
 
-/* NinFiggy — the challenger's mascot, peeking in on the toss from the corner.
-   Purely decorative (aria-hidden): never covers the coin or the cara/sello
-   buttons, so it can't interfere with reading the result. */
-.coin-mascot-badge {
-  position: absolute;
-  left: 4%;
-  bottom: 6%;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid var(--gold-belt, #e6c179);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, .5), 0 0 0 4px rgba(230, 193, 121, .12);
-  transform: rotate(-8deg);
-  pointer-events: none;
-}
-
-@media (max-width: 480px) {
-  .coin-mascot-badge { width: 46px; height: 46px; left: 2%; bottom: 2%; }
-}
-
 .coin-choice-row { display: flex; gap: 12px; }
 
 .coin-choice-btn {
