@@ -5,7 +5,9 @@
   "directories": {
     "doc": "docs"
   },
-  "scripts": {},
+  "scripts": {
+    "test:frontend": "playwright test -c playwright.frontend.config.ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

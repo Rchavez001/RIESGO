@@ -29,7 +29,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 
 | # | Pantalla / Componente | Responsive | Presentación HD | Testing | OWASP | Estado |
 |---|---|---|---|---|---|---|
-| G1 | Base web: `index.html`, `manifest.json`, `static-server.js`, tokens/CSS globales (`index.css`) | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| G1 | Base web: `index.html`, `manifest.json`, `static-server.js`, tokens/CSS globales (`index.css`) | ✅ | ✅ | ✅ | ✅ | **done** |
 | 1 | `/` Landing (`CinematicLandingPage` + `CinematicPublicShell` + `SenseiVideoModal`) | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 2 | `/login` `LoginScreen` (+ `OtpCodeStep`) | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 3 | `/registro` `RegisterScreen` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -69,4 +69,8 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 
 ## Notas por fila (una línea por columna al cerrar cada fila)
 
-_(vacío — se llena al cerrar cada fila)_
+### G1 — Base web (2026-09-19) · done
+- **Responsive:** `viewport-fit=cover` + tokens `--safe-top/right/bottom/left` aplicados al `body`; 16 reglas `100vh` ahora con fallback `100dvh` (iOS Safari); `text-size-adjust`; manifest ya no fuerza `orientation: portrait` (bloqueaba tablets/escritorio instalados). Pendiente por pantalla: `max-height: 58/70/80/88vh` y elementos `position:fixed` (headers/sidebars) que deben consumir `--safe-*` — se resuelven en las filas 1, 7, 13, 20. **Verificar en iPhone real:** barra de URL dinámica y Dynamic Island (WebKit-Windows no los reproduce).
+- **Presentación HD:** título/descr./`apple-mobile-web-app-title` ya dicen CiberDojo (decían "Shield Ecuador"); Google Fonts pasó de `@import` en CSS (cadena bloqueante) a `<link rel=preconnect>` + `<link>` en el HTML; `color-scheme: dark`; JS transferido con brotli: 727 KB → 200 KB.
+- **Testing:** nueva suite `tests/frontend/base.spec.ts` + `playwright.frontend.config.ts` (`npm run test:frontend`): 7 perfiles (iPhone SE/14 y iPad en WebKit; Pixel 7 y Galaxy S9+ en Chromium; Desktop Chrome/Safari) × 8 pruebas = **56/56 verdes** (headers, caché, `%` malformado, viewport-fit sin bloquear zoom, sin scroll horizontal y sin violaciones CSP en `/`, `/login`, `/registro`, `/personajes`). Limitación: son perfiles emulados, no dispositivos físicos; rutas autenticadas se cubren en sus filas.
+- **OWASP:** A02 — CSP (`script-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`…), HSTS, nosniff, Referrer-Policy, Permissions-Policy; deja de filtrarse el caché (`no-cache` HTML, `immutable` para `/static/`). A03 — `npm audit fix`: 3 vulnerabilidades altas/bajas (react-router, ws) → **0** en dependencias de producción. A10 — `decodeURIComponent` con `%` malformado **tumbaba el proceso Node** (DoS con una sola petición) → ahora 400; el chequeo anti path-traversal usaba `startsWith(root)` (permitía carpetas hermanas con el mismo prefijo) → ahora exige `root + sep`. A04 — bundle sin secretos (solo la anon key pública de Supabase, por diseño). Pendiente para filas posteriores: `_vs_last_report` en `localStorage` (fila 14). Nota: el commit incluye cambios previos sin commitear de `index.css`/`cinematic.css`/`static-server.js`.
