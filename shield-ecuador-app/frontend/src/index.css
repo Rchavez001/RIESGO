@@ -1092,8 +1092,8 @@ code { font-family: var(--font-mono); }
   margin-bottom: 4px;
 }
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
-.field label { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; letter-spacing: .12em; }
-.field input, .field select, .field textarea { color: var(--text-primary); background: rgba(5,5,15,.72); border: 1px solid var(--border-subtle); padding: 12px; outline: none; }
+.field label { font-family: var(--font-mono); color: var(--text-secondary); font-size: 12px; letter-spacing: .1em; }
+.field input, .field select, .field textarea { color: var(--text-primary); background: rgba(5,5,15,.72); border: 1px solid var(--border-subtle); padding: 12px; min-height: 48px; font-size: 16px; /* <16px makes iOS Safari zoom the page on focus */ outline: none; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--border-cyber); box-shadow: 0 0 0 3px rgba(0,240,255,.08); }
 .field .link {
   border: 0;
@@ -1101,6 +1101,9 @@ code { font-family: var(--font-mono); }
   color: var(--neon-cyan);
   cursor: pointer;
   padding: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   text-align: left;
   font-weight: 800;
 }
@@ -1118,7 +1121,7 @@ code { font-family: var(--font-mono); }
 }
 .password-field input {
   width: 100%;
-  padding-right: 48px;
+  padding-right: 56px;
 }
 .password-field button {
   position: absolute;
@@ -1126,8 +1129,8 @@ code { font-family: var(--font-mono); }
   right: 8px;
   display: inline-grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   transform: translateY(-50%);
   border: 1px solid transparent;
   background: transparent;
@@ -3248,3 +3251,9 @@ code { font-family: var(--font-mono); }
   .lp-stat { padding: 14px 16px; }
   .lp-stat strong { font-size: 28px; }
 }
+
+/* Auth screens (checklist row 2): full-width submit, readable spacing, 44px links */
+.auth-card p { margin: 0 0 12px; }
+.auth-card .auth-submit { width: 100%; justify-content: center; min-height: 48px; }
+.auth-card .auth-home-link, .auth-card .auth-secondary-links a, .auth-card .field .link { display: inline-flex; align-items: center; min-height: 44px; }
+.auth-card .auth-secondary-links { gap: 4px 16px; }

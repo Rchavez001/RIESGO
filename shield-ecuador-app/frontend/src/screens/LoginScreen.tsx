@@ -1,371 +1,196 @@
 import React, { useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { Eye, EyeOff, Loader, Shield } from 'lucide-react'
 import { KanjiBackground, NeonButton, ScanlineOverlay } from '../components/CyberBushido'
+import { OtpCodeStep } from '../components/OtpCodeStep'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { friendlyAuthError } from '../lib/authErrors'
 
-type Mode = 'login' | 'register'
-
-const FALLBACK_BUSINESS_SECTORS = [
-  { code: 'comerciante', label: 'Comerciante', industry: 'Comercio y Ventas' },
-  { code: 'agricultor', label: 'Agricultor/a', industry: 'Agropecuario y Pesca' },
-  { code: 'pescador', label: 'Pescador/a', industry: 'Agropecuario y Pesca' },
-  { code: 'otro', label: 'Otro', industry: null },
-]
+type Step = 'password' | 'code'
 
 export function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, loading: authLoading, signIn, signInWithMagicLink, signUp } = useAuth()
-  const [mode, setMode] = useState<Mode>(() => (
-    new URLSearchParams(location.search).get('mode') === 'register' ? 'register' : 'login'
-  ))
+  const { user, loading: authLoading, signIn, sendLoginCode, verifyCode } = useAuth()
+  const [step, setStep] = useState<Step>('password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [businessType, setBusinessType] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showReset, setShowReset] = useState(false)
-  const [resetMessage, setResetMessage] = useState('')
-  const [magicLinkMessage, setMagicLinkMessage] = useState('')
-  const [magicLinkLoading, setMagicLinkLoading] = useState(false)
-  const [magicLinkCooldownUntil, setMagicLinkCooldownUntil] = useState(0)
-  const [showPassword, setShowPassword] = useState(false)
-  const [showPasswordLogin, setShowPasswordLogin] = useState(false)
-  const [showDataConsent, setShowDataConsent] = useState(false)
-  const [businessSectors, setBusinessSectors] = useState(FALLBACK_BUSINESS_SECTORS)
+  const [fallbackNotice, setFallbackNotice] = useState('')
   const redirectPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/dashboard'
 
   React.useEffect(() => {
-    if (!authLoading && user) {
+    // Same reasoning as RegisterScreen: an anonymous guest is still `user`
+    // truthy, but must be able to actually reach the login form instead of
+    // bouncing back to a guest-gated /dashboard.
+    if (!authLoading && user && !user.is_anonymous) {
       navigate(redirectPath, { replace: true })
     }
   }, [authLoading, navigate, redirectPath, user])
 
   React.useEffect(() => {
-    const search = window.location.search
-    const hash = window.location.hash
-    const params = new URLSearchParams(search.replace(/^\?/, ''))
-    const type = params.get('type')
-    const accessToken = params.get('access_token') || new URLSearchParams(hash.replace(/^#/, '')).get('access_token')
-    const refreshToken = params.get('refresh_token') || new URLSearchParams(hash.replace(/^#/, '')).get('refresh_token')
+    // Supabase puts recovery tokens in the URL *fragment*. They are never read from the query
+    // string: a crafted /login?type=recovery&access_token=... link would otherwise sign a victim
+    // into an attacker-chosen session, and query strings end up in logs and Referer headers.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const type = hash.get('type')
+    const accessToken = hash.get('access_token')
+    const refreshToken = hash.get('refresh_token')
 
-    if (type === 'password_recovery' || type === 'recovery') {
-      handlePasswordRecoveryRedirect(accessToken, refreshToken)
+    if ((type === 'password_recovery' || type === 'recovery') && accessToken && refreshToken) {
+      window.history.replaceState(null, '', window.location.pathname) // scrub tokens from the address bar/history first
+      void handlePasswordRecoveryRedirect(accessToken, refreshToken)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  React.useEffect(() => {
-    async function loadBusinessSectors() {
-      const { data, error } = await supabase
-        .from('business_sectors')
-        .select('code,label,industry')
-        .eq('active', true)
-        .order('display_order')
-
-      if (!error && data && data.length > 0) {
-        setBusinessSectors(data)
-      }
-    }
-
-    void loadBusinessSectors()
-  }, [])
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-
-    try {
-      if (mode === 'login') {
-        if (!showPasswordLogin) {
-          await handleMagicLinkSignIn()
-          return
-        }
-        setLoading(true)
-        await signIn(email, password)
-        navigate(redirectPath, { replace: true })
-      } else {
-        if (!businessType) throw new Error('Seleccione el tipo de negocio')
-        setShowDataConsent(true)
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido'
-      setError(msg.includes('Invalid login') ? 'Correo o contrasena incorrectos' : msg)
-    } finally {
-      setLoading(false)
-    }
+  if (new URLSearchParams(location.search).get('mode') === 'register') {
+    return <Navigate to="/registro" replace />
   }
 
-  async function acceptDataConsent() {
-    setError('')
-    setShowDataConsent(false)
-    setLoading(true)
-
-    try {
-      await signUp(email, password, {
-        full_name: fullName.trim(),
-        business_type: businessType,
-        data_processing_authorized: true,
-        data_processing_authorized_at: new Date().toISOString(),
-      } as any)
-      navigate('/dashboard')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido'
-      setError(msg)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function rejectDataConsent() {
-    setShowDataConsent(false)
-    navigate('/')
-  }
-
-  async function handlePasswordRecoveryRedirect(accessToken: string | null, refreshToken: string | null) {
-    if (!accessToken) return
-
+  async function handlePasswordRecoveryRedirect(accessToken: string, refreshToken: string) {
     try {
       setLoading(true)
-      await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken ?? accessToken })
+      await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
       window.location.replace('/reset-password')
-    } catch (err) {
-      console.error('Error al procesar el enlace de recuperación:', err)
+    } catch {
+      console.error('Error al procesar el enlace de recuperación')
       setError('No se pudo procesar el enlace de recuperación. Intenta abrirlo nuevamente.')
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleResetPassword() {
+  // Password is the primary path. If it fails — wrong password, or an
+  // account that was never given a real one — we fall back to emailing a
+  // login code instead of just showing "incorrect credentials" and
+  // stopping. This never reveals which of those two cases occurred (no
+  // account-enumeration signal), it just offers the safer path either way.
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
     setError('')
-    setResetMessage('')
-    if (!email) return setError('Por favor ingresa el correo asociado a la cuenta')
+    setFallbackNotice('')
     setLoading(true)
+
     try {
-      const redirectTo = `${window.location.origin}/reset-password`
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
-      if (error) throw error
-      setResetMessage('Se envió un correo con instrucciones para restablecer la contraseña. Revisa tu bandeja.')
+      await signIn(email, password)
+      navigate(redirectPath, { replace: true })
+      return
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al solicitar recuperación'
-      setError(msg)
+      const msg = err instanceof Error ? err.message : ''
+      if (!/invalid login/i.test(msg)) {
+        setError(friendlyAuthError(err, 'No pudimos iniciar sesión. Revisa tus datos e inténtalo de nuevo.'))
+        setLoading(false)
+        return
+      }
+    }
+
+    try {
+      await sendLoginCode(email)
+      setFallbackNotice('No pudimos iniciar sesión con esa contraseña.')
+      setStep('code')
+    } catch (err: unknown) {
+      // Never surface Supabase's own text here: "Signups not allowed" would confirm the e-mail has no account.
+      setError(friendlyAuthError(err, 'Correo o contraseña incorrectos.'))
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleMagicLinkSignIn() {
-    setError('')
-    setMagicLinkMessage('')
-
-    const normalizedEmail = email.trim().toLowerCase()
-    if (!isValidEmail(normalizedEmail)) {
-      setError('Ingresa un correo electronico valido')
-      return
-    }
-
-    const now = Date.now()
-    if (magicLinkCooldownUntil > now) {
-      setMagicLinkMessage('Si el correo esta registrado, recibiras un enlace seguro en unos minutos.')
-      return
-    }
-
-    setMagicLinkLoading(true)
-    try {
-      await signInWithMagicLink(normalizedEmail, redirectPath)
-      setMagicLinkCooldownUntil(now + 60_000)
-      setMagicLinkMessage('Si el correo ya esta registrado, recibiras un enlace seguro. Si eres nuevo, completa el registro.')
-    } catch {
-      setMagicLinkCooldownUntil(now + 60_000)
-      setMagicLinkMessage('Si el correo ya esta registrado, recibiras un enlace seguro. Si eres nuevo, completa el registro.')
-    } finally {
-      setMagicLinkLoading(false)
-    }
+  async function handleVerify(code: string) {
+    await verifyCode(email, code)
+    navigate(redirectPath, { replace: true })
   }
 
   return (
     <ScanlineOverlay>
       <div className="auth-shell cyber-page">
         <KanjiBackground char="門" />
-        <form onSubmit={handleSubmit} className="auth-card glass-panel">
+        <div className="auth-card glass-panel">
           <Link className="auth-home-link" to="/">← Volver a ciberDojo</Link>
           <div className="text-center">
             <div className="torii">⛩</div>
-            <p className="mono-label">TU CAMINO EMPIEZA AQUÍ</p>
-            <h1>CIBER DOJO</h1>
-          </div>
-          <div className="auth-tabs">
-            <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Ingresar</button>
-            <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>Registro</button>
+            <h1>Entra a tu dojo</h1>
           </div>
 
-          {mode === 'login' && (
-            <div className="auth-guidance">
-              Escribe tu correo. Si ya tienes cuenta, te enviaremos un enlace seguro de acceso; si eres nuevo, puedes registrarte aqui mismo.
-            </div>
+          {step === 'password' && (
+            <form onSubmit={(e) => void handleSubmit(e)}>
+              <div className="field">
+                <label htmlFor="login-email">CORREO ELECTRÓNICO</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="nombre@empresa.com"
+                  name="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="email"
+                  enterKeyHint="next"
+                  autoFocus
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="login-password">CONTRASEÑA</label>
+                <div className="password-field">
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="********"
+                    name="password"
+                    autoComplete="current-password"
+                    enterKeyHint="go"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setShowPassword((visible) => !visible)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {error && <div className="form-error" role="alert">{error}</div>}
+
+              <NeonButton type="submit" className="auth-submit" disabled={loading}>
+                {loading ? <Loader className="animate-spin" size={18} /> : <Shield size={16} />}
+                Ingreso
+              </NeonButton>
+
+              <div className="field small">
+                <div className="auth-secondary-links">
+                  <Link className="link" to="/registro">Crear cuenta nueva</Link>
+                </div>
+              </div>
+            </form>
           )}
 
-          {mode === 'register' && (
-            <div className="field">
-              <label>NOMBRE DEL GUERRERO</label>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Nombre completo" autoComplete="name" />
-            </div>
-          )}
-
-          <div className="field">
-            <label>CORREO ELECTRONICO</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="nombre@empresa.com" autoComplete="email" />
-          </div>
-
-          {(mode === 'register' || showPasswordLogin) && (
-          <div className="field">
-            <label>CONTRASENA</label>
-            <div className="password-field">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required={mode === 'register' || showPasswordLogin}
-                minLength={mode === 'register' ? 8 : undefined}
-                placeholder="********"
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+          {step === 'code' && (
+            <>
+              {fallbackNotice && <p className="muted">{fallbackNotice}</p>}
+              <OtpCodeStep
+                email={email}
+                onVerify={handleVerify}
+                onResend={() => sendLoginCode(email)}
+                onEditEmail={() => { setStep('password'); setError(''); setFallbackNotice('') }}
               />
-              <button
-                type="button"
-                aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
-                title={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
-                onClick={() => setShowPassword((visible) => !visible)}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+            </>
           )}
-
-          {mode === 'login' && (
-            <div className="field small">
-              <div className="auth-method-toggle">
-                <button
-                  type="button"
-                  className={`auth-method-btn${!showPasswordLogin ? ' active' : ''}`}
-                  onClick={() => { setShowPasswordLogin(false); setPassword(''); setError('') }}
-                >
-                  🔗 Enlace seguro
-                  {!showPasswordLogin && <span className="auth-method-badge">Recomendado</span>}
-                </button>
-                <button
-                  type="button"
-                  className={`auth-method-btn${showPasswordLogin ? ' active' : ''}`}
-                  onClick={() => { setShowPasswordLogin(true); setError('') }}
-                >
-                  🔑 Contraseña
-                </button>
-              </div>
-              <div className="auth-secondary-links">
-                <button type="button" className="link" onClick={() => { setMode('register'); setError(''); setMagicLinkMessage('') }}>
-                  Crear cuenta nueva
-                </button>
-                <button type="button" className="link" onClick={() => { setShowReset((s) => !s); setResetMessage(''); setError('') }}>
-                  ¿Olvidaste tu contraseña?
-                </button>
-              </div>
-              {magicLinkMessage && <div className="form-success">{magicLinkMessage}</div>}
-            </div>
-          )}
-
-          {showReset && mode === 'login' && (
-            <div className="field">
-              <label>Recuperar contraseña</label>
-              <p className="muted">Ingresa tu correo y te enviaremos un enlace para restablecerla.</p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@empresa.com" />
-                <button type="button" className="btn secondary" onClick={handleResetPassword} disabled={loading}>{loading ? 'Enviando...' : 'Enviar'}</button>
-              </div>
-              {resetMessage && <div className="form-success">{resetMessage}</div>}
-            </div>
-          )}
-
-          {mode === 'register' && (
-            <div className="field">
-              <label>TIPO DE NEGOCIO</label>
-              <select value={businessType} onChange={(e) => setBusinessType(e.target.value)} required>
-                <option value="">Seleccione...</option>
-                {groupBusinessSectorsByIndustry(businessSectors).map(([industry, items]) => (
-                  industry
-                    ? (
-                      <optgroup key={industry} label={industry}>
-                        {items.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
-                      </optgroup>
-                    )
-                    : items.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)
-                ))}
-              </select>
-            </div>
-          )}
-
-          {error && <div className="form-error">{error}</div>}
-
-          <NeonButton type="submit" className="w-full justify-center" disabled={loading || magicLinkLoading}>
-            {(loading || magicLinkLoading) ? <Loader className="animate-spin" size={18} /> : <Shield size={16} />}
-            {mode === 'login'
-              ? (showPasswordLogin ? 'ABRIR EL DOJO' : 'ENVIAR ENLACE SEGURO')
-              : 'FORJAR CUENTA'}
-          </NeonButton>
-        </form>
-
-        {showDataConsent && createPortal(
-          <div className="consent-modal" role="dialog" aria-modal="true" aria-labelledby="consent-title">
-            <div className="consent-backdrop" />
-            <div className="consent-card glass-panel">
-              <div className="mono-label">AUTORIZACION DE DATOS PERSONALES</div>
-              <h2 id="consent-title">Tratamiento de datos personales</h2>
-              <p>
-                Autorizo el tratamiento de mis datos personales para fines internos de la aplicación,
-                incluyendo registro, gestión de usuario, operación del servicio y clasificación estadística
-                durante la vigencia de mi uso de la aplicación.
-              </p>
-              <p>
-                Declaro conocer que puedo ejercer mis derechos de acceso, rectificación, actualización,
-                eliminación y oposición —derechos ARCO—, así como solicitar la modificación o eliminación
-                de mis datos personales, escribiendo al correo: <strong>raulchavezdrouet@gmail.com</strong>.
-              </p>
-              <div className="consent-actions">
-                <NeonButton color="cyan" variant="outline" onClick={rejectDataConsent}>
-                  No acepto
-                </NeonButton>
-                <NeonButton color="gold" variant="outline" onClick={() => void acceptDataConsent()}>
-                  Acepto y continuar
-                </NeonButton>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+        </div>
       </div>
     </ScanlineOverlay>
   )
-}
-
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-}
-
-function groupBusinessSectorsByIndustry<T extends { industry?: string | null }>(items: T[]): [string | null, T[]][] {
-  const groups: [string | null, T[]][] = []
-
-  items.forEach((item) => {
-    const industry = item.industry || null
-    const lastGroup = groups[groups.length - 1]
-    if (lastGroup && lastGroup[0] === industry) {
-      lastGroup[1].push(item)
-    } else {
-      groups.push([industry, [item]])
-    }
-  })
-
-  return groups
 }
