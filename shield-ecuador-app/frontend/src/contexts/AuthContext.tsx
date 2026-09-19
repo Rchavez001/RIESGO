@@ -7,10 +7,12 @@ interface AuthContextType {
   userProfile: UserProfile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signInWithMagicLink: (email: string, redirectPath?: string) => Promise<void>
+  sendLoginCode: (email: string) => Promise<void>
+  verifyCode: (email: string, token: string) => Promise<void>
   signUp: (email: string, password: string, metadata: Partial<UserProfile>) => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  continueAsGuest: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -109,23 +111,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
+    if (error) {
+      reportLoginEvent('login_failed', email)
+      throw error
+    }
   }
 
-  async function signInWithMagicLink(email: string, redirectPath = '/dashboard') {
+  // Fallback path for an EXISTING account whose password login just failed
+  // (either a real typo, or — for accounts that somehow never got a real
+  // password — there simply isn't one to check). shouldCreateUser: false
+  // means this never silently creates a new user either way.
+  async function sendLoginCode(email: string) {
     const normalizedEmail = email.trim().toLowerCase()
-    const safeRedirectPath = normalizeLocalRedirect(redirectPath)
-    const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeRedirectPath)}`
-
     const { error } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo,
-      },
+      options: { shouldCreateUser: false },
     })
+    if (error) {
+      reportLoginEvent('otp_send_failed', normalizedEmail)
+      throw error
+    }
+  }
 
-    if (error) throw error
+  async function verifyCode(email: string, token: string) {
+    const normalizedEmail = email.trim().toLowerCase()
+    const { error } = await supabase.auth.verifyOtp({ email: normalizedEmail, token: token.trim(), type: 'email' })
+    if (error) {
+      reportLoginEvent('otp_verify_failed', normalizedEmail)
+      throw error
+    }
+  }
+
+  // Best-effort, fire-and-forget: gives the Centro de Seguridad visibility
+  // into login attacks without ever slowing down or blocking a real login.
+  function reportLoginEvent(eventType: 'login_failed' | 'otp_send_failed' | 'otp_verify_failed', email: string) {
+    try {
+      void Promise.resolve(supabase.functions.invoke('log-login-event', { body: { event_type: eventType, email } })).catch(() => {})
+    } catch {
+      // Logging must never be the reason a real login attempt reports the wrong error.
+    }
   }
 
   async function signUp(email: string, password: string, metadata: Partial<UserProfile>) {
@@ -150,8 +174,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error
   }
 
+  // "Probar sin cuenta": a real Supabase Auth session (so the existing
+  // belt/dojo RPCs work unchanged) but with no `users` row behind it — the
+  // learning_overview RPC already treats a missing profile as belt rank 0,
+  // which is exactly "only the first dojo unlocked". GuestGate (App.tsx) is
+  // what stops this session from reaching anything past that.
+  async function continueAsGuest() {
+    const { error } = await supabase.auth.signInAnonymously()
+    if (error) throw error
+  }
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, signIn, signInWithMagicLink, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, signIn, sendLoginCode, verifyCode, signUp, signOut, refreshProfile, continueAsGuest }}>
       {children}
     </AuthContext.Provider>
   )
@@ -159,12 +193,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-function normalizeLocalRedirect(value: string) {
-  if (!value.startsWith('/') || value.startsWith('//')) return '/dashboard'
-  if (value.startsWith('/login') || value.startsWith('/auth/callback')) return '/dashboard'
-  return value
 }
 
 async function getSupabaseFunctionErrorMessage(error: unknown) {

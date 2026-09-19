@@ -42,3 +42,54 @@ body{background:var(--bg-void);color:var(--text-primary)}button,a,input,select,t
 .sensei-video-replay{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;background:transparent;border:0;color:var(--text-secondary);font:inherit;font-size:13px;cursor:pointer}
 .sensei-video-replay:hover{color:var(--neon-cyan)}
 @media (max-width:700px){.cinema-sensei-video-btn{width:100%}.sensei-video-backdrop{padding:0;align-items:end}.sensei-video-dialog{border-inline:0;border-bottom:0}.sensei-video-head{padding:12px 14px}}
+
+/* Landing audit (checklist row 1): touch targets, legibility, first-screen fold, short landscape, safe areas */
+.cinema-header nav a{display:inline-flex;align-items:center;min-height:44px;padding-block:0}
+.cinema-login{display:inline-flex;align-items:center;min-height:44px}
+.cinema-brand{min-height:44px}
+.cinema-brand small{font-size:9px}
+.cinema-video-control{min-height:44px;padding:0 14px;font-size:12px}
+.cinema-text-link{display:inline-flex;align-items:center;min-height:44px}
+.cinema-eyebrow{font-size:11px}
+.cinema-reassurance{font-size:12px!important}
+.cinema-footer{font-size:12px}
+@media(max-width:700px){
+  .cinema-hero{--hero-media-h:clamp(190px,30dvh,300px);min-height:0}
+  .cinema-hero-video{height:var(--hero-media-h)}
+  .cinema-hero-copy{padding:calc(var(--hero-media-h) - 56px) 5% 26px}
+  .cinema-eyebrow{font-size:10px}
+  .cinema-hero h1{margin:12px 0}
+  .cinema-hero h1 .cinema-hero-intro{margin-bottom:4px}
+  .cinema-hero h1 .cinema-hero-connector{margin:6px 0}
+  .cinema-hero-copy>p{margin:8px 0}
+  .cinema-actions{margin-top:12px;gap:8px 17px}
+  .cinema-sensei-video-btn{margin-top:8px}
+  .cinema-reassurance{margin-top:8px!important}
+}
+@media(max-height:520px) and (orientation:landscape){
+  .cinema-header{height:64px;min-height:0;flex-wrap:nowrap;padding:0 5%;gap:16px}
+  .cinema-header nav{order:0;width:auto;gap:18px}
+  .cinema-brand{font-size:24px}.cinema-brand small{display:none}
+  .cinema-hero{min-height:0;align-items:center}
+  .cinema-hero:after{background:linear-gradient(90deg,var(--bg-void) 8%,rgba(4,9,18,.99) 36%,rgba(4,9,18,.55) 60%,transparent 86%),linear-gradient(0deg,var(--bg-void),transparent 25%)}
+  .cinema-hero-video{top:0;right:0;width:64%;height:100%;object-position:70%}
+  .cinema-hero-copy{width:62%;padding:20px 5% 22px}
+  .cinema-hero h1{margin:8px 0;font-size:clamp(28px,5.2vw,44px)}
+  .cinema-hero h1 .cinema-hero-intro{font-size:12px;margin-bottom:4px}
+  .cinema-hero h1 .cinema-hero-connector{font-size:11px;margin:4px 0}
+  .cinema-hero-copy>p{margin:6px 0;font-size:13px;max-width:360px}
+  .cinema-actions{margin-top:8px;gap:8px 16px}
+  .cinema-button{min-height:44px;padding:8px 18px}
+  .cinema-sensei-video-btn{margin-top:8px;min-height:48px}
+  .cinema-reassurance,.cinema-sensei-caption{display:none}
+  .cinema-video-control{top:8px}
+  .sensei-video-backdrop{padding:0}
+  .sensei-video-dialog{width:min(960px,100%,calc(100dvh * 16 / 9));max-height:100dvh;border:0}
+  .sensei-video-head{position:absolute;top:0;right:0;z-index:2;padding:6px;border:0;background:transparent}
+  .sensei-video-head>div{display:none}
+  .sensei-video-stage{aspect-ratio:auto;height:100dvh}
+}
+.sensei-video-backdrop{padding:max(16px,var(--safe-top)) max(16px,var(--safe-right)) max(16px,var(--safe-bottom)) max(16px,var(--safe-left))}
+@media(max-width:700px){.sensei-video-backdrop{padding:0}.sensei-video-dialog{padding-bottom:var(--safe-bottom)}}
+.cinema-header nav a{min-width:44px;justify-content:center;padding-inline:6px}
+.cinematic-public .cinema-text-link,.cinema-footer>a{display:inline-flex;align-items:center;min-height:44px}
