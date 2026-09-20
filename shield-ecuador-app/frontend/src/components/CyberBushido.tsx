@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bot, CheckCircle2, Home, ListChecks, LogOut, Medal, Menu, Play, ShieldCheck, Swords, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
+import { Bot, CheckCircle2, Home, ListChecks, LogOut, Menu, Play, ShieldCheck, Swords, Trophy, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { useModalA11y } from '../hooks/useModalA11y'
 import { KarateBelt } from './KarateBelt'
 import { DoggoArt } from './DojoCompanion'
 
@@ -472,36 +474,56 @@ export function DojoShell({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { enabled: audioEnabled, toggleAudio, playSound } = useDojoAudio()
+  // Below 960px the sidebar is an off-canvas drawer; above it, a permanent column.
+  const isDrawer = useMediaQuery('(max-width: 960px)')
+  const drawerRef = useRef<HTMLElement>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const closeDrawer = React.useCallback(() => setSidebarOpen(false), [])
+  const bottomNavPaths = ['/dashboard', '/dojos', '/sensei', '/campeonato']
 
-  const nav: Array<{ to: string; label: string; icon: typeof Home; action?: () => void }> = [
-    { to: '/dashboard', label: 'Mi entrenamiento', icon: Home },
+  const nav: Array<{ to: string; label: string; icon: typeof Home; action?: () => void; external?: boolean; short?: string }> = [
+    { to: '/dashboard', label: 'Mi entrenamiento', short: 'Inicio', icon: Home },
     { to: '/dojos', label: 'Dojos', icon: ListChecks },
-    { to: '/sensei', label: 'Pregunta al sensei', icon: Bot },
+    { to: '/sensei', label: 'Pregunta al sensei', short: 'Sensei', icon: Bot },
     ...(onOpenChallenge ? [{ to: '#', label: 'Desafiando al Sensei', icon: Swords, action: onOpenChallenge }] : []),
     { to: '/escaner', label: 'Revisa tu seguridad', icon: ShieldCheck },
-    { to: '/ranking', label: 'Tabla de honor', icon: Medal },
+    { to: '/campeonato', label: 'Campeonato', short: 'Torneo', icon: Trophy },
     { to: '/personajes', label: 'Personajes del dojo', icon: Swords },
     { to: '/perfil', label: 'Perfil', icon: User },
-    ...(isAdmin ? [{ to: '/admin', label: 'Admin', icon: Wrench }] : []),
+    // /admin is not a route of this SPA: it is proxied to the admin app by static-server, so it needs a real navigation.
+    ...(isAdmin ? [{ to: '/admin/', label: 'Admin', icon: Wrench, external: true }] : []),
   ]
 
   return (
     <ScanlineOverlay>
       <div className={`app-shell ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        <a className="cinema-skip" href="#contenido">Ir al contenido</a>
         <button
+          ref={menuButtonRef}
           className="floating-menu-toggle"
           type="button"
-          aria-label={sidebarOpen ? 'Cerrar menu' : 'Abrir menu'}
+          aria-label={sidebarOpen ? 'Cerrar menú' : 'Abrir menú'}
           aria-expanded={sidebarOpen}
+          aria-controls="dojo-sidebar"
           onClick={() => {
             playSound('tap')
             setSidebarOpen((open) => !open)
           }}
         >
           {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          <span>{sidebarOpen ? 'Cerrar' : 'Menu'}</span>
+          <span>{sidebarOpen ? 'Cerrar' : 'Menú'}</span>
         </button>
-        <aside className="dojo-sidebar">
+        {/* Closed drawer: `inert` keeps its 14 off-screen links out of the tab order and the accessibility tree. */}
+        <aside
+          id="dojo-sidebar"
+          ref={drawerRef}
+          className="dojo-sidebar"
+          tabIndex={-1}
+          inert={isDrawer && !sidebarOpen ? true : undefined}
+          role={isDrawer && sidebarOpen ? 'dialog' : undefined}
+          aria-modal={isDrawer && sidebarOpen ? true : undefined}
+          aria-label={isDrawer && sidebarOpen ? 'Menú principal' : undefined}
+        >
           <div className="sidebar-mobile-top">
             <button className="mobile-menu-toggle" onClick={() => {
               playSound('tap')
@@ -518,9 +540,17 @@ export function DojoShell({
               <em>EL ARTE DE PROTEGERTE</em>
             </span>
           </NavLink>
-          <nav>
+          <nav aria-label="Secciones">
             {nav.map((item) => {
               const Icon = item.icon
+              if (item.external) {
+                return (
+                  <a key={item.to} href={item.to} className="side-link">
+                    <Icon size={18} />
+                    {item.label}
+                  </a>
+                )
+              }
               if (item.action) {
                 return (
                   <button key={item.label} type="button" className="side-link" onClick={() => { playSound('tap'); setSidebarOpen(false); item.action?.() }}>
@@ -557,34 +587,32 @@ export function DojoShell({
             </button>
             <button className="logout-link" onClick={onSignOut}>
               <LogOut size={16} />
-              Salir de la aplicacion
+              Salir de la aplicación
             </button>
           </div>
         </aside>
+        {isDrawer && sidebarOpen && <DrawerBehavior drawer={drawerRef} onClose={closeDrawer} returnFocusTo={menuButtonRef} />}
         <div className="mobile-menu-backdrop" onClick={() => {
           playSound('tap')
           setSidebarOpen(false)
         }} />
-        <main className="dojo-main">
-          <div className="mobile-bottom-nav">
-            {nav.map((item) => {
+        <main id="contenido" className="dojo-main">
+          <nav className="mobile-bottom-nav" aria-label="Navegación principal">
+            {nav.filter((item) => bottomNavPaths.includes(item.to)).map((item) => {
               const Icon = item.icon
-              if (item.action) {
-                return (
-                  <button key={item.label} type="button" className="bottom-link" onClick={() => { setSidebarOpen(false); item.action?.() }}>
-                    <Icon size={18} />
-                    <span>{item.label}</span>
-                  </button>
-                )
-              }
               return (
-                <NavLink key={item.to} to={item.to} className={({ isActive }) => `bottom-link ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-                  <Icon size={18} />
-                  <span>{item.label}</span>
+                <NavLink key={item.to} to={item.to} aria-label={item.label} className={({ isActive }) => `bottom-link ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+                  <Icon size={18} aria-hidden="true" />
+                  <span>{item.short ?? item.label}</span>
                 </NavLink>
               )
             })}
-          </div>
+            {/* Everything else (Perfil, Personajes, Revisa tu seguridad…) lives in the drawer, one tap away. */}
+            <button type="button" className="bottom-link" aria-haspopup="dialog" aria-expanded={sidebarOpen} aria-controls="dojo-sidebar" onClick={() => { playSound('tap'); setSidebarOpen(true) }}>
+              <Menu size={18} aria-hidden="true" />
+              <span>Más</span>
+            </button>
+          </nav>
           <AppEntryLogger />
           <CampaignAdOverlay />
           <WisdomQuoteOverlay />
@@ -593,6 +621,13 @@ export function DojoShell({
       </div>
     </ScanlineOverlay>
   )
+}
+
+// Mounted only while the drawer is open: focus moves in, Tab is trapped, Escape closes, page scroll
+// is locked, and focus returns to the button that opened it.
+function DrawerBehavior({ drawer, onClose, returnFocusTo }: { drawer: React.RefObject<HTMLElement | null>; onClose: () => void; returnFocusTo: React.RefObject<HTMLElement | null> }) {
+  useModalA11y(drawer, onClose, () => returnFocusTo.current)
+  return null
 }
 
 export function SectionHeader({ eyebrow, title, kanji }: { eyebrow: string; title: string; kanji: string }) {
@@ -690,10 +725,25 @@ function CampaignAdOverlay() {
 
   const image = <img src={ad.image_url} alt={ad.message} />
 
+  function dismiss() {
+    playSound('ad-out')
+    setVisible(false)
+  }
+
   return createPortal(
-    <div className="campaign-ad-position">
-      <AnimatePresence onExitComplete={() => setAd(null)}>
-        {visible && (
+    <AnimatePresence onExitComplete={() => setAd(null)}>
+      {visible && (
+        <div className="campaign-ad-position">
+          <motion.button
+            type="button"
+            className="campaign-ad-backdrop"
+            aria-label="Cerrar anuncio"
+            onClick={dismiss}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+          />
           <motion.div
             className="campaign-ad-overlay"
             initial={{ opacity: 0, scale: 0.5, y: -16, filter: 'blur(10px)' }}
@@ -701,6 +751,14 @@ function CampaignAdOverlay() {
             exit={{ opacity: 0, scale: 0.35, rotate: 10, y: 24, filter: 'blur(20px)' }}
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
           >
+            <button
+              type="button"
+              className="campaign-ad-close"
+              aria-label="Cerrar anuncio"
+              onClick={dismiss}
+            >
+              <X size={18} />
+            </button>
             {ad.link_url ? (
               <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="campaign-ad-card">
                 {image}
@@ -709,9 +767,9 @@ function CampaignAdOverlay() {
               <div className="campaign-ad-card">{image}</div>
             )}
           </motion.div>
-        )}
-      </AnimatePresence>
-    </div>,
+        </div>
+      )}
+    </AnimatePresence>,
     document.body
   )
 }

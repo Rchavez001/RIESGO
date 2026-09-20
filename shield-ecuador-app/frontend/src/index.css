@@ -3275,3 +3275,29 @@ code { font-family: var(--font-mono); }
 .callback-icon-warn { color: var(--gold-belt); }
 .callback-card .auth-submit { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; text-decoration: none; }
 .reset-back { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; text-decoration: none; }
+
+/* Authenticated shell (checklist row 7) ------------------------------------------------------ */
+:root { --bottom-nav-h: 64px; }
+.side-link, .train-now, .audio-toggle, .logout-link { min-height: 44px; }
+.wisdom-pill { min-height: 44px; }
+.dojo-sidebar { padding-top: max(18px, calc(18px + var(--safe-top))); }
+@media (max-width: 960px) {
+  /* 9 icons with two-line labels made a 101px bar (30% of a landscape phone) that also hid the
+     "Frase dojo" button behind it. Four core destinations + "Más" (opens the drawer) fit one line. */
+  .mobile-bottom-nav { overflow: visible; gap: 6px; padding: 6px 8px calc(6px + var(--safe-bottom)); }
+  .bottom-link { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 6px 4px; gap: 3px; border-radius: 12px; font-size: 11px; line-height: 1.2; text-align: center; border: 1px solid transparent; font-family: inherit; cursor: pointer; }
+  .bottom-link span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dojo-main { padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 24px); }
+  .floating-menu-toggle { top: max(14px, var(--safe-top)); left: max(14px, var(--safe-left)); }
+  .wisdom-pill { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 12px); right: max(16px, var(--safe-right)); }
+}
+@media (max-width: 960px) and (max-height: 520px) and (orientation: landscape) {
+  :root { --bottom-nav-h: 52px; }
+  .mobile-bottom-nav { padding: 4px 10px calc(4px + var(--safe-bottom)); }
+  .bottom-link { flex-direction: row; min-height: 44px; gap: 8px; }
+}
+/* The drawer is one scrollable column: its children used to shrink, clipping the menu after "Personajes del dojo" (Perfil unreachable on short phones). */
+.dojo-sidebar > * { flex-shrink: 0; }
+@media (max-height: 700px) { .sidebar-sensei-card { display: none; } }
+/* Pinned to the bottom of the drawer it hid 35% of a 568px screen and covered the menu; on short screens it scrolls with the rest. */
+@media (max-height: 700px) { .sidebar-footer-actions { position: static; } }
