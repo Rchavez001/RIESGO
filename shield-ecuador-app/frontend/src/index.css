@@ -3324,3 +3324,5 @@ code { font-family: var(--font-mono); }
 .learning-dojo-card.is-locked { opacity: .78; border-style: dashed; }
 /* Same-height titles (1 or 2 lines) so progress bars and buttons line up across a row of cards. */
 @media (min-width: 701px) { .learning-dojo-card h2 { min-height: 3em; } }
+/* Focus / scrollIntoView must not leave the target hidden under the fixed bottom bar (WCAG 2.4.11). */
+@media (max-width: 960px) { html { scroll-padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 20px); } }

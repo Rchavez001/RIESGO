@@ -39,7 +39,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | 7 | Shell autenticado: `ProtectedShell` + `DojoShell` (`CyberBushido.tsx`) + `GuestRegisterPrompt` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 8 | `/dashboard` `CinematicDashboardScreen` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 9 | `/dojos` `DojoListPage` | ✅ | ✅ | ✅ | ✅ | **done** |
-| 10 | `/dojo/:id` `DojoDetailPage` (+ `LearningHelpers`, `DojoCompanion`) | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| 10 | `/dojo/:id` `DojoDetailPage` (+ `LearningHelpers`, `DojoCompanion`) | ✅ | ✅ | ✅ | ✅ | **done** |
 | 11 | `/kata/:code` `KataExamPage` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 12 | `/sensei` `SenseiConsultPage` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 13 | `SenseiChallengeModal` ("Desafiando al Sensei") | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -129,3 +129,9 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Testing:** `tests/frontend/dojos.spec.ts` × 7 perfiles (6 pruebas): 7 tarjetas/targets/scroll, botón con relleno propio y bloqueado distinguible, continuar→dojo y kata bloqueado, kata habilitado con 30 respuestas, error de carga con reintento, invitado. Totales: **Playwright 400 pasan, 0 fallan (25 omitidas por perfil) · Jest 77/77** (la batería completa ya tarda ~10 min con 7 perfiles: conviene ejecutarla por archivo durante el desarrollo).
 - **OWASP:** A01 — el bloqueo por cinturón y el de invitados en esta pantalla son solo de presentación; la autorización real está en los RPC (`learning_state` rechaza dojos por encima del rango del usuario, verificado con una sesión anónima real en la sesión anterior). A10 — el error de `learning_overview` se muestra genérico (probado con "relation does not exist" para no filtrar nombres de tablas). Accesibilidad: los botones deshabilitados ahora se explican con `aria-describedby` ("Se abre cuando apruebes el cinturón anterior", "El kata se abre al responder las 30 preguntas") — antes un lector de pantalla solo oía "botón no disponible". `NeonButton` gana la prop `describedBy`.
 
+### 10 — `/dojo/:id` (2026-09-20) · done
+- **Responsive:** en teléfono la introducción ocupaba toda la primera pantalla; ahora se compacta (y se oculta tras la primera respuesta o en horizontal bajo) y la pregunta queda sobre la barra inferior de 65 px incluso en iPhone SE. Opciones y "palabras que te pueden ayudar" ≥44 px; sin scroll horizontal. `scroll-padding-bottom` evita que un foco/scroll quede bajo la barra inferior.
+- **Presentación HD:** el estado "dojo inexistente" era un botón sin estilo → `NeonButton` dentro de un panel con `role=alert`. Modo invitado: aviso "Regístrate gratis" y el texto ya no dice "guardadas en tu cuenta" (dice "en esta sesión").
+- **Testing:** `tests/frontend/dojo-detail.spec.ts` × 7 perfiles (7 pruebas): primera pantalla móvil, targets/scroll/sin marcar antes de responder, foco y scroll a la explicación, foco y scroll a la nueva pregunta tras "Continuar", invitado, error de carga sin detalles del servidor, dojo inexistente.
+- **A11y:** tras responder el foco pasa a la explicación y tras continuar a la nueva pregunta (antes la página seguía abajo y el foco apuntaba a un botón eliminado); correcto/incorrecto no depende solo del color ("Respuesta recomendada" / "Tu respuesta").
+- **OWASP:** **A06/A01 (hallazgo real)** — `learning_state` devolvía la pregunta completa **antes de responder**, incluidos `correct`, `explanation` y feedback: la respuesta estaba a un vistazo de la pestaña Network. **Migración 059** (ya aplicada en producción y verificada con una sesión real) elimina esas claves mientras la pregunta no esté respondida; tras responder se devuelve el documento completo.
