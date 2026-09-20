@@ -93,3 +93,12 @@ body{background:var(--bg-void);color:var(--text-primary)}button,a,input,select,t
 @media(max-width:700px){.sensei-video-backdrop{padding:0}.sensei-video-dialog{padding-bottom:var(--safe-bottom)}}
 .cinema-header nav a{min-width:44px;justify-content:center;padding-inline:6px}
 .cinematic-public .cinema-text-link,.cinema-footer>a{display:inline-flex;align-items:center;min-height:44px}
+
+/* Personajes (checklist row 6) */
+.cinema-container.cinema-section{padding-inline:5%} /* .cinema-section's `padding:55px 0` was zeroing the container's side gutters: text touched the screen edge */
+.cinema-back{display:inline-flex;align-items:center;min-height:44px}
+.character-card>.doggo-art img{height:540px!important} /* the 640px source was stretched to 900px (2.7×, blurry on HD); 540px is 1.6× */
+@media(max-width:700px){.character-card>.doggo-art img{height:380px!important}}
+.character-card>.doggo-art img{transform:translateX(-38%)} /* centre the crop on the dog (~38% across the image), not on the image midpoint (a kick + energy burst) */
+.character-card h2{font-size:clamp(18px,5.4vw,25px);overflow-wrap:anywhere}
+@media(min-width:701px){.character-card h2{font-size:clamp(25px,2.2vw,31px)}}
