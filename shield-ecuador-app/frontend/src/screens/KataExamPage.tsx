@@ -17,6 +17,9 @@ export function KataExamPage() {
   const [celebrate, setCelebrate] = useState(false)
   const generation = useRef(0)
   const inFlight = useRef(false)
+  const promptRef = useRef<HTMLHeadingElement>(null)
+  const resultRef = useRef<HTMLHeadingElement>(null)
+  const lastShown = useRef('')
   useEffect(() => {
     const current = ++generation.current
     setExam(null); setSelected(null); setError(''); setCelebrate(false)
@@ -45,9 +48,21 @@ export function KataExamPage() {
       if (current === generation.current) setBusy(false)
     }
   }
-  if (!dojo) return <div className="glass-panel p-8">No encontramos este examen. <button onClick={() => navigate('/dojos')}>Volver a dojos</button></div>
   const index = exam ? Object.keys(exam.answers).length : 0
   const item = exam?.cases[index]
+  const shownKey = !exam ? '' : exam.finished ? `${exam.id}:done` : `${exam.id}:${index}`
+  useEffect(() => {
+    // Each submitted case swaps the question in place; without this the page stays scrolled at the
+    // old "Enviar" button and focus points at a control that no longer exists.
+    const previous = lastShown.current
+    lastShown.current = shownKey
+    if (!shownKey || !previous || previous === shownKey || !previous.startsWith(shownKey.split(':')[0])) return
+    const behavior: ScrollBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    const target = shownKey.endsWith(':done') ? resultRef.current : promptRef.current
+    target?.scrollIntoView({ block: 'start', behavior })
+    target?.focus({ preventScroll: true })
+  }, [shownKey])
+  if (!dojo) return <div className="learning-page"><div className="glass-panel learning-intro" role="alert"><p>No encontramos este examen.</p><NeonButton color="cyan" variant="outline" onClick={() => navigate('/dojos')}>Volver a dojos</NeonButton></div></div>
   return <div className="learning-page">
     <SectionHeader eyebrow="KATA · PON EN PRÁCTICA LO APRENDIDO" title={dojo.rank === 6 ? 'Kata final del cinturón negro' : `Examen del cinturón ${dojo.belt}`} kanji="型" />
     {celebrate && exam && <BeltAwardCelebration currentBelt={dojo.belt}
@@ -61,17 +76,17 @@ export function KataExamPage() {
     {exam && !exam.finished && item && <section className="exam-card glass-panel" aria-busy={busy}>
       <p className="hero-badge">Caso {index + 1} de 5{index === 4 ? ' · Desafío final' : ''}</p>
       <progress className="learning-progress" value={index} max={5} aria-label="Casos enviados" />
-      <h2 className="learning-prompt">{item.prompt}</h2><LearningTerms item={item} />
+      <h2 className="learning-prompt" ref={promptRef} tabIndex={-1}>{item.prompt}</h2><LearningTerms item={item} />
       <div className="answer-grid">{item.options.map((option, i) => <button key={`${item.id}-${i}`}
         aria-pressed={selected === i} disabled={busy} className={`answer-option ${selected === i ? 'learning-selected' : ''}`}
-        onClick={() => setSelected(i)}>{'ABCD'[i]}. {option}</button>)}</div>
+        onClick={() => setSelected(i)}>{selected === i && <strong>✓ Elegida · </strong>}{'ABCD'[i]}. {option}</button>)}</div>
       <p>Puedes cambiar tu elección antes de enviarla. Una vez enviada, queda guardada.</p>
       <NeonButton color="cyan" disabled={busy || selected === null}
         onClick={() => act('learning_exam_answer', { p_attempt: exam.id, p_case: item.id, p_answer: selected })}>
         {busy ? 'Guardando respuesta…' : index === 4 ? 'Enviar y ver resultado' : 'Enviar y continuar'}</NeonButton>
     </section>}
     {exam?.finished && <section className="exam-card glass-panel">
-      <h2>{exam.passed ? (dojo.rank === 6 ? '¡Completaste la ruta del dojo!' : '¡Aprobaste tu kata!') : 'Sigamos practicando'}</h2>
+      <h2 ref={resultRef} tabIndex={-1}>{exam.passed ? (dojo.rank === 6 ? '¡Completaste la ruta del dojo!' : '¡Aprobaste tu kata!') : 'Sigamos practicando'}</h2>
       <p>Acertaste {exam.score} de 5 casos ({(exam.score ?? 0) * 20} %). Tu resultado está guardado.</p>
       <p>{exam.passed ? 'Lleva estas decisiones a tu vida diaria y comparte lo aprendido con paciencia.' : 'Equivocarte aquí te permite aprender sin arriesgar tu dinero ni tus datos. Revisa las explicaciones y vuelve a intentarlo cuando te sientas listo.'}</p>
       <h3>Revisa los cinco casos</h3>

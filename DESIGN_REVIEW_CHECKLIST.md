@@ -40,7 +40,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | 8 | `/dashboard` `CinematicDashboardScreen` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 9 | `/dojos` `DojoListPage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 10 | `/dojo/:id` `DojoDetailPage` (+ `LearningHelpers`, `DojoCompanion`) | ✅ | ✅ | ✅ | ✅ | **done** |
-| 11 | `/kata/:code` `KataExamPage` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| 11 | `/kata/:code` `KataExamPage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 12 | `/sensei` `SenseiConsultPage` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 13 | `SenseiChallengeModal` ("Desafiando al Sensei") | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 14 | `/escaner` `VulnScannerPage` + `components/VulnScanner/*` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -135,3 +135,9 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Testing:** `tests/frontend/dojo-detail.spec.ts` × 7 perfiles (7 pruebas): primera pantalla móvil, targets/scroll/sin marcar antes de responder, foco y scroll a la explicación, foco y scroll a la nueva pregunta tras "Continuar", invitado, error de carga sin detalles del servidor, dojo inexistente.
 - **A11y:** tras responder el foco pasa a la explicación y tras continuar a la nueva pregunta (antes la página seguía abajo y el foco apuntaba a un botón eliminado); correcto/incorrecto no depende solo del color ("Respuesta recomendada" / "Tu respuesta").
 - **OWASP:** **A06/A01 (hallazgo real)** — `learning_state` devolvía la pregunta completa **antes de responder**, incluidos `correct`, `explanation` y feedback: la respuesta estaba a un vistazo de la pestaña Network. **Migración 059** (ya aplicada en producción y verificada con una sesión real) elimina esas claves mientras la pregunta no esté respondida; tras responder se devuelve el documento completo.
+
+### 11 — `/kata/:code` (2026-09-20) · done
+- **Responsive:** opciones y botones ≥44 px, sin scroll horizontal en los 7 perfiles. Tras enviar un caso la página seguía abajo (donde estaba "Enviar"): ahora hace scroll y enfoca la nueva pregunta, y al terminar enfoca el resultado (respeta `prefers-reduced-motion`).
+- **Presentación HD:** la opción elegida solo se distinguía por un contorno cian → ahora lleva el texto "✓ Elegida" (no depende del color). El estado "examen inexistente" era un botón sin estilo → `NeonButton` en un panel `role=alert`.
+- **Testing:** `tests/frontend/kata-exam.spec.ts` × 7 perfiles (7 pruebas): targets/scroll/"Enviar" desactivado, elección cambiable con marca textual, recorrido de los 5 casos con foco y resultado (4 de 5 = 80 %), sin explicaciones ni respuestas antes de terminar, invitado bloqueado, error sin detalles del servidor, examen inexistente.
+- **OWASP:** A04/A01 — verificado en `026_learning_progress.sql`: la corrección, el puntaje y el premio (cinturón/250 puntos) se calculan en el servidor (`learning_exam_answer`), exige responder en orden y las 30 preguntas previas, y `learning_exam_view` oculta `correct`/explicaciones hasta terminar; el cliente solo envía el índice. Los invitados no llegan al kata (`GuestRegisterPrompt`, probado). Sin hallazgos nuevos.
