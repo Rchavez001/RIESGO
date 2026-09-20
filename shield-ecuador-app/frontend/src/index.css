@@ -3338,3 +3338,21 @@ code { font-family: var(--font-mono); }
   .sensei-chat-panel, .sensei-feedback-panel { padding: 14px; }
   .sensei-feedback-panel img { aspect-ratio: 16 / 10; }
 }
+
+/* /ranking (checklist row 15) */
+.leader-scroll { overflow-x: auto; }
+.leader-table th[scope="row"] { font-family: inherit; font-size: inherit; letter-spacing: normal; color: inherit; background: transparent; }
+.leader-table td, .leader-table th { overflow-wrap: anywhere; }
+.leader-table td:nth-child(3) { min-width: 96px; }
+.honor-card h3 { overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .podium { grid-template-columns: 1fr; }
+  .honor-card[data-rank="1"] { order: -1; }
+  .honor-card.first { padding-top: 18px; }
+  .leader-domain { display: none; }
+  .leader-table th, .leader-table td { padding: 12px 8px; }
+}
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+/* Target size must not depend on font metrics (web font swap changed these by 1–3px). */
+.neon-button { min-height: 44px; }
+.brand-lockup { min-height: 44px; }

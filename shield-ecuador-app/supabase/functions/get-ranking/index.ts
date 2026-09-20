@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { checkRateLimit } from "../_shared/rate-limit.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,38 +32,38 @@ serve(async (req) => {
     const { data: authData, error: authError } = await supabase.auth.getUser(token)
     if (authError || !authData.user) return jsonResponse({ error: "No autorizado." }, 401)
 
-    const limit = Math.min(100, Math.max(1, Number(new URL(req.url).searchParams.get("limit") ?? 50)))
+    // The harvest of every registered user's name and company domain must not be one anonymous sign-in away.
+    if (authData.user.is_anonymous) return jsonResponse({ error: "Regístrate para ver la tabla de honor." }, 403)
+    const allowed = await checkRateLimit({ req, endpoint: "get-ranking", email: authData.user.id, windowSeconds: 300, maxHits: 30 })
+    if (!allowed.allowed) return jsonResponse({ error: "Demasiadas consultas. Espera unos minutos." }, 429)
 
-    const { data: completions, error: completionsError } = await supabase
-      .from("kata_completions")
-      .select("user_id, points_earned, kata_id")
-      .not("user_id", "is", null)
+    const limit = Math.min(100, Math.max(1, Number(new URL(req.url).searchParams.get("limit") ?? 50) || 50))
 
-    if (completionsError) throw completionsError
-
-    if (!completions || completions.length === 0) {
-      return jsonResponse({ ranking: [] })
-    }
-
-    const xpByUser = new Map<string, number>()
-    const katasByUser = new Map<string, Set<string>>()
-    for (const row of completions) {
-      const uid = row.user_id
-      xpByUser.set(uid, (xpByUser.get(uid) ?? 0) + (row.points_earned ?? 0))
-      if (!katasByUser.has(uid)) katasByUser.set(uid, new Set())
-      katasByUser.get(uid)!.add(row.kata_id)
-    }
-
-    const userIds = Array.from(xpByUser.keys())
-    if (userIds.length === 0) return jsonResponse({ ranking: [] })
-
+    // XP is what learning_exam_answer awards into users.total_points (the number the dashboard shows).
+    // The old source (kata_completions) is only written by the legacy complete-kata function, so new
+    // exam passes never reached the ranking.
     const { data: users, error: usersError } = await supabase
       .from("users")
-      .select("id, email_domain, belt, full_name_encrypted, email_encrypted")
-      .in("id", userIds)
+      .select("id, email_domain, belt, total_points, full_name_encrypted, email_encrypted")
+      .gt("total_points", 0)
+      .order("total_points", { ascending: false })
+      .limit(500)
 
     if (usersError) throw usersError
     if (!users || users.length === 0) return jsonResponse({ ranking: [] })
+
+    const userIds = users.map((u) => u.id)
+    const katasByUser = new Map<string, Set<string>>()
+    const addKata = (uid: string, kata: string) => {
+      if (!katasByUser.has(uid)) katasByUser.set(uid, new Set())
+      katasByUser.get(uid)!.add(kata)
+    }
+    const { data: attempts, error: attemptsError } = await supabase
+      .from("learning_attempts").select("user_id, dojo_id").eq("passed", true).in("user_id", userIds)
+    if (attemptsError) throw attemptsError
+    for (const row of attempts ?? []) addKata(row.user_id, `dojo:${row.dojo_id}`)
+    const { data: legacy } = await supabase.from("kata_completions").select("user_id, kata_id").in("user_id", userIds)
+    for (const row of legacy ?? []) addKata(row.user_id, `kata:${row.kata_id}`)
 
     const ranked: Array<{
       rank: number
@@ -101,14 +102,14 @@ serve(async (req) => {
         }
       }
 
-      if (!fullName) fullName = "Guerrero"
+      fullName = publicName(fullName)
 
       const uid = user.id
       ranked.push({
         rank: 0,
         full_name: fullName,
         belt: user.belt ?? "white",
-        total_xp: xpByUser.get(uid) ?? 0,
+        total_xp: user.total_points ?? 0,
         katas_completed: katasByUser.get(uid)?.size ?? 0,
         email_domain: domain,
       })
@@ -133,6 +134,14 @@ serve(async (req) => {
     return jsonResponse({ error: "No se pudo obtener el ranking." }, 500)
   }
 })
+
+// Data minimisation: the board is visible to every registered user, so show "Ana P." rather than the full name.
+function publicName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return "Guerrero"
+  const first = parts[0].slice(0, 24)
+  return parts.length > 1 ? `${first} ${Array.from(parts[parts.length - 1])[0].toUpperCase()}.` : first
+}
 
 type EncryptedPayload = {
   v: number
