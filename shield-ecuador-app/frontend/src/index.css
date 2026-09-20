@@ -3274,3 +3274,4 @@ code { font-family: var(--font-mono); }
 .callback-icon { display: block; margin: 0 auto; color: var(--neon-cyan); }
 .callback-icon-warn { color: var(--gold-belt); }
 .callback-card .auth-submit { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; text-decoration: none; }
+.reset-back { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; text-decoration: none; }
