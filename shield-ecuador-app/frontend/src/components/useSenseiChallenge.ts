@@ -99,6 +99,12 @@ function reducer(state: GameState, action: Action): GameState {
   }
 }
 
+// Only messages we raise ourselves (SQLSTATE P0001) are meant for people; anything else is backend detail.
+function friendlyMessage(err: unknown, fallback: string) {
+  const e = err as { code?: string; message?: string } | null
+  return e?.code === 'P0001' && e.message ? e.message : fallback
+}
+
 export function useSenseiChallenge() {
   const [state, dispatch] = useReducer(reducer, undefined, initialGameState)
   const { playSound } = useDojoAudio()
@@ -178,7 +184,7 @@ export function useSenseiChallenge() {
       const order = shuffleIndices((data.options as string[]).length)
       dispatch({ type: 'QUESTION_LOADED', question: data as QuestionContent, order })
     } catch (err) {
-      dispatch({ type: 'QUESTION_LOAD_FAILED', message: err instanceof Error ? err.message : 'No se pudo cargar la pregunta. Intenta de nuevo.' })
+      dispatch({ type: 'QUESTION_LOAD_FAILED', message: friendlyMessage(err, 'No se pudo cargar la pregunta. Intenta de nuevo.') })
     }
   }, [])
 
@@ -201,7 +207,7 @@ export function useSenseiChallenge() {
       playSound(data.correct ? 'answer-correct' : 'answer-wrong')
       dispatch({ type: 'ANSWER_RESULT', correct: data.correct, explanation: data.explanation ?? '', correctDisplayIndex })
     } catch (err) {
-      dispatch({ type: 'ANSWER_FAILED', message: err instanceof Error ? err.message : 'No se pudo comprobar tu respuesta. Intenta de nuevo.' })
+      dispatch({ type: 'ANSWER_FAILED', message: friendlyMessage(err, 'No se pudo comprobar tu respuesta. Intenta de nuevo.') })
     } finally {
       answering.current = false
     }

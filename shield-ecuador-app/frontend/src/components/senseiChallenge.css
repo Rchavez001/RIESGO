@@ -150,6 +150,8 @@
 
 .sensei-question-prompt { color: #fff; font-size: 16px; line-height: 1.5; margin: 0 0 14px; }
 
+.sensei-question-date { color: #9fb3c8; font-size: 12px; font-style: italic; margin: -8px 0 14px; }
+
 .sensei-question-options { display: grid; gap: 10px; }
 
 .sensei-option-btn {
@@ -238,4 +240,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sensei-cell, .win-line { transition: none !important; }
+}
+
+/* Desafiando al Sensei (checklist row 13) */
+.sensei-challenge-modal:focus { outline: none; }
+.sensei-challenge-modal button:focus-visible { outline: 3px solid #fde68a; outline-offset: 3px; }
+.sensei-challenge-mute, .sensei-challenge-close { display: inline-grid; place-items: center; }
+.sensei-option-btn { min-height: 48px; }
+.sensei-question-prompt, .sensei-answer-feedback p { overflow-wrap: anywhere; }
+@media (max-height: 520px) and (orientation: landscape) {
+  .coin-3d-wrap { min-height: 120px; }
+  .coin-toss-video-frame { width: min(150px, 30vw); }
+  .sensei-challenge-modal { padding: 12px 18px; }
 }

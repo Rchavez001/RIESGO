@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
+import { Volume2, VolumeX, X } from 'lucide-react'
 import { SENSEI_IMAGE_SRC, NeonButton } from './CyberBushido'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
 import { useSenseiChallenge } from './useSenseiChallenge'
@@ -24,9 +25,23 @@ export function SenseiChallengeModal({ onClose }: { onClose: () => void }) {
   const reduceMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   useEffect(() => {
+    // Lock page scroll behind the dialog and give focus back to whatever opened it.
+    const opener = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+      if (opener && opener !== document.body && opener.isConnected) opener.focus()
+    }
+  }, [])
+
+  useEffect(() => {
+    // Each phase swaps the content: move focus to its first control (not the mute/close buttons in the
+    // header, which would pull focus away from the game on every step), or to the dialog itself.
     const el = dialogRef.current
-    const focusable = el?.querySelector<HTMLElement>('button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
-    focusable?.focus()
+    if (!el) return
+    const focusable = el.querySelector<HTMLElement>('.sensei-challenge-header ~ * button:not(:disabled), .sensei-challenge-header ~ * [href]')
+    ;(focusable ?? el).focus({ preventScroll: true })
   }, [state.phase])
 
   function requestClose() {
@@ -53,13 +68,14 @@ export function SenseiChallengeModal({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div className="sensei-challenge-overlay" role="presentation" onKeyDown={handleKeyDown}>
-      <button className="sensei-challenge-backdrop" aria-label="Cerrar desafío" onClick={requestClose} />
+      <button className="sensei-challenge-backdrop" aria-label="Cerrar desafío" tabIndex={-1} onClick={requestClose} />
       <motion.div
         ref={dialogRef}
         className="sensei-challenge-modal"
         role="dialog"
         aria-modal="true"
         aria-label="Desafiando al Sensei"
+        tabIndex={-1}
         initial={reduceMotion ? undefined : { opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
@@ -68,9 +84,9 @@ export function SenseiChallengeModal({ onClose }: { onClose: () => void }) {
           <h2>Desafiando al Sensei</h2>
           <div className="sensei-challenge-header-actions">
             <button className="sensei-challenge-mute" onClick={toggleAudio} aria-pressed={soundOn} aria-label={soundOn ? 'Silenciar sonido' : 'Activar sonido'}>
-              {soundOn ? '🔊' : '🔇'}
+              {soundOn ? <Volume2 size={20} aria-hidden="true" /> : <VolumeX size={20} aria-hidden="true" />}
             </button>
-            <button className="sensei-challenge-close" onClick={requestClose} aria-label="Cerrar">✕</button>
+            <button className="sensei-challenge-close" onClick={requestClose} aria-label="Cerrar"><X size={20} aria-hidden="true" /></button>
           </div>
         </header>
 
@@ -116,7 +132,7 @@ export function SenseiChallengeModal({ onClose }: { onClose: () => void }) {
         {state.phase === 'error' && (
           <div className="sensei-challenge-status">
             <p role="alert">{state.errorMessage}</p>
-            <NeonButton color="cyan" onClick={() => window.location.reload()}>Reintentar</NeonButton>
+            <NeonButton color="cyan" onClick={reset}>Reintentar</NeonButton>
           </div>
         )}
 
@@ -234,11 +250,10 @@ function Board({ board, locked, winLine, onCell }: { board: (string | null)[]; l
   const winKey = winLine ? winLine.join(',') : null
   return (
     <div className="sensei-board-wrap">
-      <div className="sensei-board" role="grid" aria-label="Tablero de tres en raya">
+      <div className="sensei-board" role="group" aria-label="Tablero de tres en raya">
         {board.map((cell, index) => (
           <button
             key={index}
-            role="gridcell"
             className={`sensei-cell ${cell ? `filled-${cell.toLowerCase()}` : ''}`}
             disabled={locked || cell !== null}
             aria-label={cell ? `Casilla ${index + 1}: ${cell === 'X' ? 'tu ficha' : 'ficha del Sensei'}` : `Casilla ${index + 1}, vacía`}
@@ -279,6 +294,11 @@ function QuestionPanel({ state, onAnswer, onContinueAfterWrong, onEnterPlacing }
   return (
     <div className="sensei-question-panel">
       <p className="sensei-question-prompt">{q.prompt}</p>
+      {q.generated_at && (
+        <p className="sensei-question-date">
+          Basada en una noticia real del {new Date(q.generated_at).toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      )}
       <div className="sensei-question-options">
         {displayed.map((option, i) => {
           const isCorrect = answered && i === state.lastCorrectDisplayIndex
