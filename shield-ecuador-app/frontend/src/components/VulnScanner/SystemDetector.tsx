@@ -22,6 +22,8 @@ export function SystemDetector({ info }: SystemDetectorProps) {
   return (
     <motion.div
       className="vs-detector"
+      data-autofocus
+      tabIndex={-1}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}

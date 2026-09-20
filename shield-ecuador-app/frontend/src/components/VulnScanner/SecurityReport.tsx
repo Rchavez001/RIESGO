@@ -91,7 +91,7 @@ export function SecurityReport({ results, sistema, onConsult, onRescan }: Securi
       transition={{ duration: 0.4 }}
     >
       <div className="vs-report-header">
-        <div className="vs-report-title">🥋 REPORTE DEL SENSEI</div>
+        <h2 className="vs-report-title" data-autofocus tabIndex={-1}>🥋 REPORTE DEL SENSEI</h2>
         <div style={{ fontSize: '.8rem', color: 'var(--text-secondary)', marginBottom: '.5rem' }}>
           Comprobaciones orientativas del navegador. No es un análisis completo del equipo.
         </div>

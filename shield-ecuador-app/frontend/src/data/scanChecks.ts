@@ -54,7 +54,7 @@ export const SCAN_CHECKS: ScanCheck[] = [
     capa: "RED",
     capaLabel: "⚔️ Red y Conectividad",
     explicacion_simple: "Las redes móviles desconocidas son como conversar en voz alta en un parque",
-    verificar: (ctx) => ctx.connectionType !== "cellular" && ctx.connectionType !== "unknown",
+    verificar: (ctx) => ctx.connectionType !== "cellular",
   },
 
   // ── CAPA 2: SISTEMA OPERATIVO ─────────────────────────────

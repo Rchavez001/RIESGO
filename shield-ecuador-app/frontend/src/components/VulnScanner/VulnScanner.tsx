@@ -1,4 +1,4 @@
-import React, { useCallback, useReducer } from 'react'
+import React, { useCallback, useEffect, useReducer, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NeonButton } from '../CyberBushido'
 import { SystemDetector } from './SystemDetector'
@@ -107,6 +107,26 @@ export function VulnScanner() {
     return saved ? { ...initialState } : initialState
   })
 
+  const pageRef = useRef<HTMLDivElement>(null)
+  const firstPhase = useRef(true)
+  useEffect(() => {
+    // Each phase replaces the content: move focus to its heading/summary so keyboard and screen-reader
+    // users land on the new content instead of on a control that just disappeared.
+    if (firstPhase.current) { firstPhase.current = false; return }
+    if (state.fase === 'consulting') return // the consult panel takes focus itself
+    // AnimatePresence mode="wait": the new phase mounts only after the old one has faded out, so poll briefly.
+    let tries = 0
+    const timer = window.setInterval(() => {
+      const target = pageRef.current?.querySelector<HTMLElement>(`[data-phase="${state.fase}"] [data-autofocus]`)
+      if (target) {
+        window.clearInterval(timer)
+        target.focus({ preventScroll: true })
+        target.scrollIntoView({ block: 'start', behavior: 'auto' })
+      } else if (++tries > 30) window.clearInterval(timer)
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [state.fase])
+
   const runScan = useCallback(async () => {
     if (!state.sistemaDetectado) return
     dispatch({ type: 'START_SCAN' })
@@ -158,7 +178,7 @@ export function VulnScanner() {
   )
 
   return (
-    <div className="vs-page">
+    <div className="vs-page" ref={pageRef}>
       <AnimatePresence mode="wait">
         {state.fase === 'idle' && (
           <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -167,7 +187,7 @@ export function VulnScanner() {
         )}
 
         {state.fase === 'detecting' && (
-          <motion.div key="detecting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div key="detecting" data-phase="detecting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             {state.sistemaDetectado && (
               <>
                 <SystemDetector info={state.sistemaDetectado} />
@@ -182,13 +202,13 @@ export function VulnScanner() {
         )}
 
         {state.fase === 'scanning' && (
-          <motion.div key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div key="scanning" data-phase="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <ScanProgress results={state.partialResults} progreso={state.progreso} />
           </motion.div>
         )}
 
         {(state.fase === 'reporting' || state.fase === 'consulting') && (
-          <motion.div key="reporting" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <motion.div key="reporting" data-phase="reporting" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <SecurityReport
               results={state.resultados}
               sistema={state.sistemaDetectado!}

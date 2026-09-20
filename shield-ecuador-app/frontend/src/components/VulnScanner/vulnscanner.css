@@ -363,3 +363,14 @@
   .vs-pipeline { gap: .35rem; }
   .vs-pipeline-step { min-width: 80px; padding: .5rem .65rem; }
 }
+
+/* /escaner (checklist row 14): failed cards are real buttons now; close button and small text targets. */
+button.vs-vuln-card { display: block; width: 100%; min-height: 44px; text-align: left; font: inherit; color: inherit; }
+button.vs-vuln-card:focus-visible, .vs-ia-close:focus-visible { outline: 3px solid #fde68a; outline-offset: 3px; }
+.vs-ia-close { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; background: none; border: none; cursor: pointer; color: var(--text-secondary); }
+.vs-ia-panel:focus, .vs-report-title:focus, .vs-scan-box:focus, .vs-detector:focus { outline: none; }
+.vs-vuln-name, .vs-vuln-analogy, .vs-check-label { overflow-wrap: anywhere; min-width: 0; }
+@media (max-width: 600px) {
+  .vs-report-actions > * { width: 100%; min-height: 44px; }
+  .vs-vuln-header { flex-wrap: wrap; }
+}

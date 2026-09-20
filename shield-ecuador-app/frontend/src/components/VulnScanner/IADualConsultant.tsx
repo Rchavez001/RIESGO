@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import type { EstadoIA, RecomendacionIA } from '../../services/scanOrchestrator'
@@ -12,6 +12,14 @@ interface IADualConsultantProps {
 }
 
 export function IADualConsultant({ check, estadoIA, resultado, onClose }: IADualConsultantProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    // The panel opens below the whole report: without this the click seems to do nothing.
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    panelRef.current?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' })
+    panelRef.current?.focus({ preventScroll: true })
+  }, [check.id])
+
   const steps = [
     { key: 'sensei', icon: '🥋', label: 'Sensei IA preparando consejo' },
     { key: 'auditor', icon: '🔍', label: 'Auditor IA verificando calidad' },
@@ -45,7 +53,11 @@ export function IADualConsultant({ check, estadoIA, resultado, onClose }: IADual
 
   return (
     <motion.div
+      ref={panelRef}
       className="vs-ia-panel"
+      role="region"
+      aria-label="Consulta al Sensei IA"
+      tabIndex={-1}
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
     >
@@ -61,9 +73,9 @@ export function IADualConsultant({ check, estadoIA, resultado, onClose }: IADual
         <button
           onClick={onClose}
           aria-label="Cerrar consulta"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
+          className="vs-ia-close"
         >
-          <X size={18} />
+          <X size={18} aria-hidden="true" />
         </button>
       </div>
 
@@ -93,7 +105,7 @@ export function IADualConsultant({ check, estadoIA, resultado, onClose }: IADual
       {resultado && (
         <div>
           <div className="vs-recommendation">
-            {resultado.recomendacion}
+            {plainText(resultado.recomendacion)}
           </div>
           <div>
             {resultado.esFallback ? (
@@ -109,4 +121,9 @@ export function IADualConsultant({ check, estadoIA, resultado, onClose }: IADual
       )}
     </motion.div>
   )
+}
+
+// The model (and the emergency answer) use **bold** markers; the panel renders plain text, so drop the markers.
+function plainText(value: string) {
+  return value.replace(/\*\*|__/g, '').replace(/^\s*\*(?=[^*])/gm, '').replace(/\*(?=\s|$)/g, '')
 }

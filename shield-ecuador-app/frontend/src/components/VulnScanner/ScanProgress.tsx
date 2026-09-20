@@ -44,6 +44,8 @@ export function ScanProgress({ results, progreso }: ScanProgressProps) {
   return (
     <motion.div
       className="vs-scan-box"
+      data-autofocus
+      tabIndex={-1}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
@@ -54,7 +56,7 @@ export function ScanProgress({ results, progreso }: ScanProgressProps) {
         </span>
       </div>
 
-      <div className="vs-progress-bar-wrap" role="progressbar" aria-valuenow={progreso} aria-valuemin={0} aria-valuemax={100}>
+      <div className="vs-progress-bar-wrap" role="progressbar" aria-label="Progreso del escaneo" aria-valuenow={progreso} aria-valuemin={0} aria-valuemax={100}>
         <div className="vs-progress-bar" style={{ width: `${progreso}%` }} />
       </div>
       <div style={{ textAlign: 'right', fontSize: '.75rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
