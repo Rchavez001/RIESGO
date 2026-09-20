@@ -7,6 +7,7 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests/frontend',
   reporter: 'list',
+  workers: 3, // 7 perfiles WebKit/Chromium en paralelo saturan la máquina y producen falsos timeouts
   use: { baseURL: process.env.BASE_URL ?? 'http://localhost:8793' },
   projects: [
     { name: 'iphone-se-safari', use: { ...devices['iPhone SE'] } },

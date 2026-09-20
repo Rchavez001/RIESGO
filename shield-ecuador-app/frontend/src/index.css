@@ -2645,8 +2645,9 @@ code { font-family: var(--font-mono); }
   inset: 0;
   z-index: 1200;
   display: grid;
-  place-items: center;
-  padding: 22px;
+  overflow-y: auto; /* the card can be taller than a phone screen (SE, landscape): it must scroll */
+  overscroll-behavior: contain;
+  padding: max(22px, var(--safe-top)) max(22px, var(--safe-right)) max(22px, var(--safe-bottom)) max(22px, var(--safe-left));
 }
 
 .consent-backdrop {
@@ -2658,6 +2659,7 @@ code { font-family: var(--font-mono); }
 
 .consent-card {
   position: relative;
+  margin: auto; /* safe centering: unlike place-items:center it never clips the top when taller than the viewport */
   width: min(720px, 100%);
   padding: 28px;
   border-color: rgba(245, 197, 24, .34);
@@ -2675,7 +2677,9 @@ code { font-family: var(--font-mono); }
   line-height: 1;
 }
 
+.consent-card:focus { outline: none; }
 .consent-card p {
+  margin: 0 0 14px;
   color: var(--text-secondary);
   font-size: 17px;
   line-height: 1.55;
@@ -2696,6 +2700,10 @@ code { font-family: var(--font-mono); }
 @media (max-width: 560px) {
   .consent-card {
     padding: 22px;
+  }
+
+  .consent-card p {
+    font-size: 16px;
   }
 
   .consent-actions {
@@ -3257,3 +3265,5 @@ code { font-family: var(--font-mono); }
 .auth-card .auth-submit { width: 100%; justify-content: center; min-height: 48px; }
 .auth-card .auth-home-link, .auth-card .auth-secondary-links a, .auth-card .field .link { display: inline-flex; align-items: center; min-height: 44px; }
 .auth-card .auth-secondary-links { gap: 4px 16px; }
+
+.field-hint { color: var(--text-secondary); font-size: 12px; }
