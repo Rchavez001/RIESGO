@@ -5,6 +5,7 @@ import { Eye, EyeOff, Loader, Shield } from 'lucide-react'
 import { KanjiBackground, NeonButton, ScanlineOverlay } from '../components/CyberBushido'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { safeLocalPath } from '../lib/safeRedirect'
 import { friendlyAuthError } from '../lib/authErrors'
 import { useModalA11y } from '../hooks/useModalA11y'
 
@@ -28,7 +29,7 @@ export function RegisterScreen() {
   const [error, setError] = useState('')
   const [showDataConsent, setShowDataConsent] = useState(false)
   const [businessSectors, setBusinessSectors] = useState(FALLBACK_BUSINESS_SECTORS)
-  const redirectPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/dashboard'
+  const redirectPath = safeLocalPath((location.state as { from?: { pathname?: string } } | null)?.from?.pathname)
 
   React.useEffect(() => {
     // An anonymous guest session is still `user` truthy — it must NOT skip

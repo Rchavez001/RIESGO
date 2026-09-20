@@ -5,6 +5,7 @@ import { KanjiBackground, NeonButton, ScanlineOverlay } from '../components/Cybe
 import { OtpCodeStep } from '../components/OtpCodeStep'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { safeLocalPath } from '../lib/safeRedirect'
 import { friendlyAuthError } from '../lib/authErrors'
 
 type Step = 'password' | 'code'
@@ -20,7 +21,7 @@ export function LoginScreen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fallbackNotice, setFallbackNotice] = useState('')
-  const redirectPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/dashboard'
+  const redirectPath = safeLocalPath((location.state as { from?: { pathname?: string } } | null)?.from?.pathname)
 
   React.useEffect(() => {
     // Same reasoning as RegisterScreen: an anonymous guest is still `user`

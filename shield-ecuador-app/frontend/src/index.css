@@ -3267,3 +3267,10 @@ code { font-family: var(--font-mono); }
 .auth-card .auth-secondary-links { gap: 4px 16px; }
 
 .field-hint { color: var(--text-secondary); font-size: 12px; }
+
+/* /auth/callback */
+.callback-card { text-align: center; }
+.callback-card h1 { font-size: clamp(24px, 6vw, 32px); margin: 14px 0 6px; }
+.callback-icon { display: block; margin: 0 auto; color: var(--neon-cyan); }
+.callback-icon-warn { color: var(--gold-belt); }
+.callback-card .auth-submit { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; text-decoration: none; }
