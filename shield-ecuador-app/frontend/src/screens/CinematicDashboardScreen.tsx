@@ -38,7 +38,7 @@ export function DashboardScreen() {
       ['/sensei','Pregunta al sensei','Aclara una duda con palabras sencillas.'],
       ['/escaner','Revisa tu seguridad','Conoce qué puede comprobar tu navegador.'],
       ['/personajes','Aliados y adversarios','Elige a tu compañero y conoce las amenazas.'],
-      ['/ranking','Tabla de honor','Consulta el progreso de la comunidad.'],
+      ['/campeonato','Campeonato','Reglas, inscripción y tu próximo combate.'],
       ['/perfil','Mi perfil','Tu cinturón, tus puntos y tu compañero.'],
     ].map(([to,title,copy])=><Link key={to} to={to}><strong>{title} ↗</strong><p>{copy}</p></Link>)}</div>
     <section className="dashboard-alerts glass-panel"><h2>Para tener presente</h2>{alertError && <p role="status">{alertError}</p>}{!alertError && !alerts.length && <p>Si hay alertas disponibles, aparecerán aquí.</p>}{alerts.map(a=><article key={a.id}><time dateTime={a.published_at}>{new Date(a.published_at).toLocaleDateString('es-EC')}</time><h3>{a.title}</h3><p>{a.description}</p>{a.source_url && /^https?:\/\//.test(a.source_url) && <a className="cinema-text-link" href={a.source_url} target="_blank" rel="noreferrer">Consultar fuente ↗</a>}</article>)}</section>

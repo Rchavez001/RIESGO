@@ -14,6 +14,8 @@ export async function signedIn(page: Page, opts: FixtureUser = {}) {
     localStorage.setItem(`sb-${ref}-auth-token`, JSON.stringify({ access_token: 'h.p.s', refresh_token: 'r', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user }))
   }, { ref: REF, user })
 
+  // Playwright tries the most recently registered route first: the catch-all goes first so the specific mocks below win.
+  await page.route('**/rest/v1/**', r => r.fulfill({ status: r.request().method() === 'POST' ? 201 : 200, contentType: 'application/json', body: '[]' }))
   await page.route('**/auth/v1/user*', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(user) }))
   await page.route('**/auth/v1/logout*', r => r.fulfill({ status: 204, body: '' }))
   await page.route('**/functions/v1/get-private-profile', r => opts.anonymous
@@ -23,5 +25,4 @@ export async function signedIn(page: Page, opts: FixtureUser = {}) {
     { id: 'passwords', answered: 3, passed: false, unlocked: true }, { id: 'assets', answered: 0, passed: false, unlocked: !!0 },
   ]) }))
   await page.route('**/rest/v1/rpc/get_next_campaign_for_user', r => r.fulfill({ status: 200, contentType: 'application/json', body: 'null' }))
-  await page.route('**/rest/v1/**', r => r.fulfill({ status: r.request().method() === 'POST' ? 201 : 200, contentType: 'application/json', body: '[]' }))
 }
