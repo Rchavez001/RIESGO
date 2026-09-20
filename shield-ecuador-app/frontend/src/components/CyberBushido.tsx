@@ -83,6 +83,7 @@ export function NeonButton({
   type = 'button',
   className = '',
   disabled = false,
+  describedBy,
 }: {
   children: React.ReactNode
   variant?: 'primary' | 'outline' | 'ghost'
@@ -91,6 +92,7 @@ export function NeonButton({
   type?: 'button' | 'submit'
   className?: string
   disabled?: boolean
+  describedBy?: string
 }) {
   const { playSound } = useDojoAudio()
 
@@ -98,6 +100,7 @@ export function NeonButton({
     <motion.button
       type={type}
       disabled={disabled}
+      aria-describedby={describedBy}
       onClick={() => {
         if (disabled) return
         playSound(color === 'red' ? 'strike' : 'tap')

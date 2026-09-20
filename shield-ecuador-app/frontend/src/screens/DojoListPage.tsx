@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 export function DojoListPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const isGuest = Boolean(user?.is_anonymous)
   const [overview, setOverview] = useState<LearningOverview[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -27,18 +28,23 @@ export function DojoListPage() {
     {loading && <p role="status">Recuperando tu avance…</p>}
     {error && <div role="alert"><p>{error}</p><NeonButton onClick={() => setReload(n => n + 1)}>Volver a intentar</NeonButton></div>}
     {!user && <p>Inicia sesión para comenzar y guardar tu progreso.</p>}
-    <div className="dojo-grid">{learningDojos.map(dojo => {
+    <div className="dojo-grid" aria-busy={loading}>{learningDojos.map(dojo => {
       const progress = overview.find(p => p.id === dojo.id)
       const ready = progress?.unlocked && progress.answered === 30
-      return <article key={dojo.id} className="glass-panel learning-dojo-card">
+      const locked = !loading && !!progress && !progress.unlocked
+      const lockNoteId = `lock-${dojo.id}`
+      const kataNoteId = `kata-${dojo.id}`
+      return <article key={dojo.id} className={`glass-panel learning-dojo-card${locked ? ' is-locked' : ''}`}>
         <BeltBadge level={dojo.belt} /><h2>{dojo.title}</h2>
         <p>{progress ? `${progress.answered} de 30 preguntas respondidas` : '30 preguntas para aprender a tu ritmo'}</p>
         <progress className="learning-progress" value={progress?.answered ?? 0} max={30} aria-label={`Avance del cinturón ${dojo.belt}`} />
-        {!loading && progress && !progress.unlocked && <p>Se abre cuando apruebes el cinturón anterior.</p>}
-        <NeonButton color="cyan" disabled={!progress?.unlocked || loading}
+        {locked && (
+          <p id={lockNoteId}>{isGuest ? 'Regístrate gratis para desbloquear este dojo.' : 'Se abre cuando apruebes el cinturón anterior.'}</p>
+        )}
+        <NeonButton color="cyan" describedBy={locked ? lockNoteId : undefined} disabled={(!progress?.unlocked && !isGuest) || loading}
           onClick={() => navigate(`/dojo/${dojo.id}`)}>{progress?.answered ? 'Continuar mi entrenamiento' : 'Comenzar entrenamiento'}</NeonButton>
-        <div className="learning-exam-entry"><p>{progress?.passed ? 'Kata aprobado. Puedes revisar lo que aprendiste.' : ready ? 'Ya puedes presentar tu kata.' : 'El kata se abre al responder las 30 preguntas.'}</p>
-          <NeonButton color="gold" variant="outline" disabled={!ready || loading}
+        <div className="learning-exam-entry"><p id={kataNoteId}>{progress?.passed ? 'Kata aprobado. Puedes revisar lo que aprendiste.' : ready ? 'Ya puedes presentar tu kata.' : 'El kata se abre al responder las 30 preguntas.'}</p>
+          <NeonButton color="gold" variant="outline" describedBy={kataNoteId} disabled={!ready || loading}
             onClick={() => navigate(`/kata/${dojo.exam_code}`)}>{progress?.passed ? 'Revisar mi kata' : 'Kata · 5 casos'}</NeonButton></div>
       </article>
     })}</div>
