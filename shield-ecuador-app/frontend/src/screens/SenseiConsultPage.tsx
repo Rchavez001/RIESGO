@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Bot, Loader, MessageCircle, Send, ShieldCheck, ThumbsDown, ThumbsUp } from 'lucide-react'
 import { NeonButton, SectionHeader } from '../components/CyberBushido'
@@ -34,6 +34,14 @@ export function SenseiConsultPage() {
   const [needsMore, setNeedsMore] = useState<boolean | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
+  const [feedbackError, setFeedbackError] = useState('')
+  const logRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Keep the newest message in view: the log scrolls inside its own box.
+    const log = logRef.current
+    if (log) log.scrollTop = log.scrollHeight
+  }, [messages, loading])
 
   async function askSensei(event: React.FormEvent) {
     event.preventDefault()
@@ -44,6 +52,8 @@ export function SenseiConsultPage() {
     setQuestion('')
     setNeedsMore(null)
     setFeedbackSent(false)
+    setFeedbackError('')
+    setFeedbackText('')
     setLastAnswer(null)
     setMessages((current) => [...current, { role: 'student', text: trimmed }])
 
@@ -52,7 +62,16 @@ export function SenseiConsultPage() {
         body: { question: trimmed },
       })
 
-      if (error) throw error
+      if (error) {
+        // Rate limit / invalid input are the user's to act on: show the server's Spanish message instead of a silent local answer.
+        const status = (error as { context?: Response }).context?.status
+        if (status === 429 || status === 400) {
+          const detail = await (error as { context: Response }).context.json().catch(() => null) as { error?: string } | null
+          setMessages((current) => [...current, { role: 'sensei', text: detail?.error ?? 'No pudimos procesar tu consulta. Inténtalo de nuevo en unos minutos.' }])
+          return
+        }
+        throw error
+      }
 
       const answer = data as SenseiAnswer
       setLastAnswer(answer)
@@ -86,6 +105,7 @@ export function SenseiConsultPage() {
       setFeedbackSent(true)
       return
     }
+    setFeedbackError('')
 
     const sentiment = analyzeSentiment(feedbackText, helpful)
     const { error } = await supabase
@@ -99,7 +119,11 @@ export function SenseiConsultPage() {
       .eq('id', lastAnswer.consultation_id)
       .eq('user_id', user.id)
 
-    if (error) console.error('Error saving Sensei feedback:', error)
+    if (error) {
+      console.error('Error saving Sensei feedback:', error)
+      setFeedbackError('No pudimos guardar tu opinión. Inténtalo de nuevo.')
+      return
+    }
     setFeedbackSent(true)
   }
 
@@ -116,10 +140,10 @@ export function SenseiConsultPage() {
             </div>
           </div>
 
-          <div className="sensei-chat-log">
+          <div className="sensei-chat-log" ref={logRef} role="log" aria-live="polite" aria-label="Conversación con el sensei" tabIndex={0}>
             {messages.map((message, index) => (
-              <article key={`${message.role}-${index}`} className={`sensei-message ${message.role}`}>
-                <div className="sensei-message-icon">
+              <article key={`${message.role}-${index}`} className={`sensei-message ${message.role}`} aria-label={message.role === 'sensei' ? 'Sensei' : 'Tú'}>
+                <div className="sensei-message-icon" aria-hidden="true">
                   {message.role === 'sensei' ? <Bot size={18} /> : <MessageCircle size={18} />}
                 </div>
                 <div>
@@ -129,8 +153,8 @@ export function SenseiConsultPage() {
               </article>
             ))}
             {loading && (
-              <article className="sensei-message sensei">
-                <div className="sensei-message-icon"><Loader className="animate-spin" size={18} /></div>
+              <article className="sensei-message sensei" role="status">
+                <div className="sensei-message-icon" aria-hidden="true"><Loader className="animate-spin" size={18} /></div>
                 <p>Estoy preparando una explicación para ti…</p>
               </article>
             )}
@@ -141,10 +165,11 @@ export function SenseiConsultPage() {
               aria-label="Tu pregunta para el sensei"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Ejemplo: me llego un WhatsApp del banco pidiendo un codigo, que hago?"
+              placeholder="Ejemplo: me llegó un WhatsApp del banco pidiendo un código, ¿qué hago?"
               rows={3}
+              maxLength={1000}
             />
-            <NeonButton type="submit" color="cyan" variant="outline" className="justify-center">
+            <NeonButton type="submit" color="cyan" variant="outline" className="justify-center" disabled={loading || !question.trim()}>
               <Send size={16} />
               Preguntar
             </NeonButton>
@@ -158,34 +183,36 @@ export function SenseiConsultPage() {
 
           {lastAnswer && (
             <div className="sensei-followup">
-              <span className="mono-label">Necesitas algo mas?</span>
+              <span className="mono-label">¿Necesitas algo más?</span>
               <div className="sensei-choice-row">
-                <button className={needsMore === true ? 'active' : ''} onClick={() => setNeedsMore(true)}>Si</button>
-                <button className={needsMore === false ? 'active' : ''} onClick={() => setNeedsMore(false)}>No</button>
+                <button type="button" aria-pressed={needsMore === true} className={needsMore === true ? 'active' : ''} onClick={() => setNeedsMore(true)}>Sí</button>
+                <button type="button" aria-pressed={needsMore === false} className={needsMore === false ? 'active' : ''} onClick={() => setNeedsMore(false)}>No</button>
               </div>
 
               {needsMore === false && !feedbackSent && (
                 <div className="sensei-feedback-box">
                   <label>
-                    Fue de ayuda?
+                    ¿Fue de ayuda?
                     <textarea
                       value={feedbackText}
                       onChange={(event) => setFeedbackText(event.target.value)}
-                      placeholder="Opcional: cuentanos si te ayudo o que falto."
+                      placeholder="Opcional: cuéntanos si te ayudó o qué faltó."
                       rows={4}
+                      maxLength={500}
                     />
                   </label>
                   <div className="sensei-choice-row">
-                    <button onClick={() => void sendFeedback(true)}><ThumbsUp size={16} /> Si ayudo</button>
-                    <button onClick={() => void sendFeedback(false)}><ThumbsDown size={16} /> No ayudo</button>
+                    <button type="button" onClick={() => void sendFeedback(true)}><ThumbsUp size={16} /> Sí ayudó</button>
+                    <button type="button" onClick={() => void sendFeedback(false)}><ThumbsDown size={16} /> No ayudó</button>
                   </div>
+                  {feedbackError && <p role="alert">{feedbackError}</p>}
                 </div>
               )}
 
               {feedbackSent && (
                 <div className="sensei-saved">
                   <ShieldCheck size={18} />
-                  Gracias. Tu respuesta quedo registrada para analisis estadistico.
+                  Gracias. Tu respuesta quedó registrada para análisis estadístico.
                 </div>
               )}
             </div>
@@ -202,8 +229,8 @@ async function localSenseiAnswer(question: string): Promise<SenseiAnswer> {
     return {
       is_cybersecurity: false,
       validation_reason: 'Tema fuera del alcance del dojo.',
-      answer: 'Puedo responder solo sobre ciberseguridad, ciberdelitos, privacidad, fraude digital, contrasenas, MFA, phishing, ransomware o proteccion de dispositivos.',
-      ask_more_prompt: 'Necesitas consultar algo mas sobre ciberseguridad o ciberdelitos?',
+      answer: 'Puedo responder solo sobre ciberseguridad, ciberdelitos, privacidad, fraude digital, contraseñas, MFA, phishing, ransomware o protección de dispositivos.',
+      ask_more_prompt: '¿Necesitas consultar algo más sobre ciberseguridad o ciberdelitos?',
     }
   }
 
@@ -216,7 +243,7 @@ async function localSenseiAnswer(question: string): Promise<SenseiAnswer> {
         is_cybersecurity: true,
         validation_reason: 'Pregunta de vocabulario detectada.',
         answer: `Definición breve para «${vocab}»: ${def}`,
-        ask_more_prompt: 'Quieres otra definición o un ejemplo práctico?',
+        ask_more_prompt: '¿Quieres otra definición o un ejemplo práctico?',
       }
     }
   }
@@ -247,14 +274,14 @@ async function localSenseiAnswer(question: string): Promise<SenseiAnswer> {
   const recommendation = actionRecommendation(question)
   const answer = match
     ? `Respuesta corta: ${recommendation || correctOptionText(match.options) || match.answer_text}. ${match.explanation ?? ''}`
-    : 'No encontre una coincidencia directa en el banco, pero aplica esta regla: no compartas codigos ni claves, verifica por canal oficial, guarda evidencias y cambia credenciales desde un dispositivo seguro si ya interactuaste.'
+    : 'No encontré una coincidencia directa en el banco, pero aplica esta regla: no compartas códigos ni claves, verifica por canal oficial, guarda evidencias y cambia credenciales desde un dispositivo seguro si ya interactuaste.'
 
   return {
     is_cybersecurity: true,
     validation_reason: 'Tema aceptado por reglas locales de ciberseguridad.',
     answer,
     sources: match ? [{ type: 'question_bank', id: match.id, title: match.question_text }] : [],
-    ask_more_prompt: 'Necesitas algo mas del Sensei?',
+    ask_more_prompt: '¿Necesitas algo más del Sensei?',
   }
 }
 
@@ -266,10 +293,10 @@ function validateCyberTopic(value: string) {
 function actionRecommendation(value: string) {
   const text = normalize(value)
   if ((text.includes('codigo') || text.includes('clave') || text.includes('token')) && (text.includes('whatsapp') || text.includes('banco') || text.includes('llamada') || text.includes('mensaje'))) {
-    return 'no compartas el codigo ni la clave; corta la conversacion y contacta al banco o servicio por su aplicacion, web o telefono oficial'
+    return 'no compartas el código ni la clave; corta la conversación y contacta al banco o servicio por su aplicación, web o teléfono oficial'
   }
   if (text.includes('enlace') || text.includes('link') || text.includes('correo') || text.includes('phishing')) {
-    return 'no abras el enlace ni adjuntos; entra por la web o aplicacion oficial y reporta el mensaje'
+    return 'no abras el enlace ni adjuntos; entra por la web o aplicación oficial y reporta el mensaje'
   }
   if (text.includes('ransomware') || text.includes('rescate') || text.includes('archivos bloqueados')) {
     return 'aisla el equipo de la red, documenta evidencias, no pagues el rescate y busca respaldo limpio'

@@ -133,10 +133,10 @@ test.describe('shell autenticado: cajón en pantallas bajas', () => {
     await page.getByRole('button', { name: 'Más' }).click()
     const dialog = page.getByRole('dialog', { name: 'Menú principal' })
     const perfil = dialog.getByRole('link', { name: 'Perfil' })
-    await perfil.scrollIntoViewIfNeeded()
+    await perfil.evaluate(e => e.scrollIntoView({ block: 'nearest', behavior: 'instant' })) // evita la espera de "estable" de WebKit bajo carga
     await expect(perfil).toBeInViewport({ ratio: 0.9 })
     const logout = dialog.getByRole('button', { name: /salir de la aplicación/i })
-    await logout.scrollIntoViewIfNeeded()
+    await logout.evaluate(e => e.scrollIntoView({ block: 'nearest', behavior: 'instant' }))
     await expect(logout).toBeInViewport({ ratio: 0.9 })
     // el cajón entero es el que hace scroll: ningún hijo queda recortado dentro de un contenedor con altura fija
     const clipped = await dialog.evaluate(el => [...el.children].filter(c => (c as HTMLElement).offsetHeight < c.scrollHeight - 1).map(c => c.className))

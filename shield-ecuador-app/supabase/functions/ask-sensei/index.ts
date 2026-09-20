@@ -46,17 +46,29 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
 )
 
+const MAX_QUESTION_CHARS = 1000
+const RATE_WINDOW_MS = 10 * 60 * 1000
+const RATE_MAX_PER_WINDOW = 20
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
 
   try {
-    const body = await req.json()
-    const questionText = String(body.question ?? "").trim()
-    if (!questionText) return jsonResponse({ error: "La consulta esta vacia." }, 400)
-
+    // The answer path calls a paid auditor model and web search, so it is not open to anonymous callers
+    // (the app only shows Sensei to registered users), is bounded in size and is rate limited per user.
     const user = await getUser(req)
+    if (!user || user.is_anonymous) return jsonResponse({ error: "Inicia sesión con tu cuenta para consultar al sensei." }, 401)
+    let body: { question?: unknown }
+    try { body = await req.json() } catch { return jsonResponse({ error: "La consulta no es válida." }, 400) }
+    const questionText = String(body?.question ?? "").trim()
+    if (!questionText) return jsonResponse({ error: "La consulta esta vacia." }, 400)
+    if (questionText.length > MAX_QUESTION_CHARS) return jsonResponse({ error: `Escribe tu duda en menos de ${MAX_QUESTION_CHARS} caracteres.` }, 400)
+    const since = new Date(Date.now() - RATE_WINDOW_MS).toISOString()
+    const { count } = await supabase.from("sensei_consultations").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since)
+    if ((count ?? 0) >= RATE_MAX_PER_WINDOW) return jsonResponse({ error: "Hiciste muchas consultas seguidas. Espera unos minutos e inténtalo de nuevo." }, 429)
+
     const vocabularyAnswer = buildVocabularyAnswer(questionText)
     if (vocabularyAnswer) {
       const draft: DraftAnswer = {
@@ -163,7 +175,7 @@ serve(async (req) => {
     })
   } catch (error) {
     console.error("ask-sensei failed:", error)
-    return jsonResponse({ error: (error as Error).message }, 500)
+    return jsonResponse({ error: "No pudimos responder tu consulta ahora. Inténtalo de nuevo en unos minutos." }, 500)
   }
 })
 

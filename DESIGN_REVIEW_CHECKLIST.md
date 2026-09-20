@@ -41,7 +41,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | 9 | `/dojos` `DojoListPage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 10 | `/dojo/:id` `DojoDetailPage` (+ `LearningHelpers`, `DojoCompanion`) | ✅ | ✅ | ✅ | ✅ | **done** |
 | 11 | `/kata/:code` `KataExamPage` | ✅ | ✅ | ✅ | ✅ | **done** |
-| 12 | `/sensei` `SenseiConsultPage` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| 12 | `/sensei` `SenseiConsultPage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 13 | `SenseiChallengeModal` ("Desafiando al Sensei") | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 14 | `/escaner` `VulnScannerPage` + `components/VulnScanner/*` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | 15 | `/ranking` `LeaderboardPage` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -141,3 +141,10 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Presentación HD:** la opción elegida solo se distinguía por un contorno cian → ahora lleva el texto "✓ Elegida" (no depende del color). El estado "examen inexistente" era un botón sin estilo → `NeonButton` en un panel `role=alert`.
 - **Testing:** `tests/frontend/kata-exam.spec.ts` × 7 perfiles (7 pruebas): targets/scroll/"Enviar" desactivado, elección cambiable con marca textual, recorrido de los 5 casos con foco y resultado (4 de 5 = 80 %), sin explicaciones ni respuestas antes de terminar, invitado bloqueado, error sin detalles del servidor, examen inexistente.
 - **OWASP:** A04/A01 — verificado en `026_learning_progress.sql`: la corrección, el puntaje y el premio (cinturón/250 puntos) se calculan en el servidor (`learning_exam_answer`), exige responder en orden y las 30 preguntas previas, y `learning_exam_view` oculta `correct`/explicaciones hasta terminar; el cliente solo envía el índice. Los invitados no llegan al kata (`GuestRegisterPrompt`, probado). Sin hallazgos nuevos.
+
+### 12 — `/sensei` (2026-09-20) · done
+- **Responsive:** sin scroll horizontal en 7 perfiles; botones Sí/No y "Preguntar" ≥44 px; en teléfono los mensajes usan casi todo el ancho (márgenes 42→12 px) y la foto del panel lateral se acorta. El registro de la conversación baja solo hasta el último mensaje.
+- **Presentación HD:** faltaban tildes y signos en casi todo el texto visible ("Necesitas algo mas?", "Fue de ayuda?", "Si ayudo", "cuentanos", "quedo registrada", "analisis estadistico", respuestas locales) → corregido.
+- **A11y:** el registro es `role=log` con `aria-live` y foco por teclado; el mensaje "preparando una explicación" es `role=status`; Sí/No con `aria-pressed`; "Preguntar" desactivado sin texto o mientras carga; el error de guardar la opinión se anuncia con `role=alert` (antes decía "Gracias" aunque fallara).
+- **Testing:** `tests/frontend/sensei.spec.ts` × 7 perfiles (7 pruebas): primera pantalla y límites, preguntar y scroll, opinión (solo columnas de feedback), error al guardar con reintento, 429, fallo 500 con reglas locales, invitado bloqueado.
+- **OWASP:** **A04/A06 (hallazgo real)** — la Edge Function `ask-sensei` aceptaba llamadas anónimas (incluso sin sesión), sin límite de tamaño ni de frecuencia, y llama a un modelo auditor de pago y a búsqueda web → costo/DoS. Ahora exige usuario registrado (401 a invitados/anónimos), pregunta ≤1000 caracteres, máx. 20 consultas cada 10 min por usuario (429), JSON inválido = 400 y los errores 500 ya no devuelven el mensaje interno (A10). **A01/A08 (hallazgo real)** — `authenticated` tenía INSERT/UPDATE en toda la tabla `sensei_consultations` (RLS solo comprobaba propiedad): un usuario podía reescribir la respuesta/estado de su fila e insertar filas inventadas y sesgar la analítica del admin. **Migración 060** (aplicada en producción) limita UPDATE a las 4 columnas de opinión y quita INSERT. Verificado en vivo: llamada sin sesión → 401. Ambos desplegados (función + migración).
