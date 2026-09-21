@@ -247,8 +247,7 @@ function bindActions() {
   $("#addDojo").addEventListener("click", addDojo);
   $("#questionDojoSelect").addEventListener("change", (e) => { state.selectedDojoId = e.target.value; ensureQuestionBanks(); renderDojos(); renderQuestions(); });
   $("#saveQuestions").addEventListener("click", saveQuestionsFromForm);
-  $("#addAiProvider").addEventListener("click", addAiProvider);
-  $("#testAiFlow").addEventListener("click", testAiFlow);
+  $("#refreshAiProviders").addEventListener("click", loadNewsProvidersFromSupabase);
   $("#simulateOpenQuestion").addEventListener("click", simulateOpenQuestion);
   $("#bulkSuspend").addEventListener("click", suspendSelectedUsers);
   $("#addOccupation").addEventListener("click", addOccupation);
@@ -598,128 +597,68 @@ async function saveQuestionsFromForm() {
   renderQuestions();
 }
 
+// Real providers (table ai_providers). "Probar algoritmo" and the draft chain used to live here: the button only showed
+// "Algoritmo probado" without testing anything, and the draft prompts described the old 20+30 model and were saved nowhere.
+const MIN_PROVIDER_KEY_LENGTH = 12;
+
 function renderAiProviders() {
-  $("#aiProviders").innerHTML = state.aiProviders
-    .sort((a, b) => a.order - b.order)
-    .map((provider, index) => `
-      <div class="ai-provider">
-        <label class="ai-provider-name">
-          IA ${index + 1}
-          <input value="${esc(provider.name)}" data-ai-index="${index}" data-field="name" placeholder="Nombre de la IA" />
-        </label>
-        <div class="ai-provider-meta">
-          <label class="ai-provider-meta-field">
-            Timeout ms
-            <input type="number" value="${provider.timeoutMs}" data-ai-index="${index}" data-field="timeoutMs" />
-          </label>
-          <label class="ai-provider-meta-field">
-            Orden
-            <input type="number" value="${provider.order}" data-ai-index="${index}" data-field="order" />
-          </label>
-          <label class="ai-provider-meta-field ai-provider-key-field">
-            API Key
-            <span class="ai-provider-key-row">
-              <input
-                type="password"
-                class="ai-provider-key-input"
-                value="${provider.hasKey ? MASKED_KEY_PLACEHOLDER : ""}"
-                placeholder="Sin clave"
-                title="Clave de API (oculta). Escribe una nueva para reemplazarla."
-                autocomplete="off"
-                data-ai-index="${index}"
-                data-field="apiKey"
-              />
-              <button type="button" class="btn secondary small ai-provider-key-save" data-ai-index="${index}">Guardar</button>
-            </span>
-          </label>
-        </div>
+  const list = Array.isArray(state.newsProviders) ? state.newsProviders : [];
+  const note = $("#aiProvidersNote");
+  const box = $("#aiProviders");
+  if (!state.newsProvidersLoaded) {
+    note.textContent = state.newsProvidersError ? "No se pudieron leer los proveedores. Pulsa Actualizar." : "Cargando proveedores…";
+    box.innerHTML = "";
+    return;
+  }
+  note.textContent = list.length ? `${list.length} proveedores. ${list.filter((p) => p.api_key_secret_id).length} con clave guardada.` : "No hay proveedores configurados.";
+  box.innerHTML = list.map((p) => `
+    <article class="ai-provider" data-provider-key="${esc(p.provider_key)}">
+      <div class="ai-provider-name">
+        <strong>${esc(p.label || p.provider_key)}</strong>
+        <span class="muted">${esc(p.model_name || "—")} · ${esc(p.provider_type || "—")}${p.default_timeout_seconds ? ` · ${esc(String(p.default_timeout_seconds))} s` : ""}</span>
       </div>
-    `).join("");
+      <div class="ai-provider-badges">
+        <span class="badge ${p.active === false ? "audit" : "ai"}">${p.active === false ? "inactivo" : "activo"}</span>
+        <span class="badge ${p.api_key_secret_id ? "manual" : "audit"}">${p.api_key_secret_id ? "clave guardada" : "sin clave"}</span>
+      </div>
+      <form class="ai-provider-key-row" data-key-form="${esc(p.provider_key)}" autocomplete="off">
+        <label>
+          <span class="sr-only">Nueva clave de API para ${esc(p.label || p.provider_key)}</span>
+          <input type="password" name="apiKey" autocomplete="new-password" spellcheck="false"
+            placeholder="${p.api_key_secret_id ? "Escribe una clave nueva para reemplazarla" : "Pega la clave de API"}" />
+        </label>
+        <button type="submit" class="btn secondary small">${p.api_key_secret_id ? "Reemplazar clave" : "Guardar clave"}</button>
+      </form>
+    </article>`).join("");
 
-  $$("input[data-ai-index]").forEach((input) => {
-    if (input.dataset.field === "apiKey") return;
-    input.addEventListener("input", () => {
-      const provider = state.aiProviders[Number(input.dataset.aiIndex)];
-      const field = input.dataset.field;
-      provider[field] = field === "name" ? input.value : Number(input.value);
-      persist("Cadena IA actualizada.");
+  $$("form[data-key-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void saveProviderKey(form.dataset.keyForm, form.querySelector("input"), form.querySelector("button"));
     });
   });
-
-  // The key never lives in local state / localStorage in plain text — it
-  // goes straight to the same Vault-backed save-provider-key function the
-  // real news-agent provider chain uses, keyed by a slug of the IA's name.
-  // These three default rows (DeepSeek/Kimi/Claude) slug to the exact
-  // provider_key values the real ai_providers table already uses, so
-  // saving here updates the same underlying credential, not a separate one.
-  $$(".ai-provider-key-input").forEach((input) => {
-    input.addEventListener("focus", () => {
-      if (input.value === MASKED_KEY_PLACEHOLDER) input.value = "";
-    });
-    input.addEventListener("blur", () => {
-      const provider = state.aiProviders[Number(input.dataset.aiIndex)];
-      if (!input.value && provider.hasKey) input.value = MASKED_KEY_PLACEHOLDER;
-    });
-  });
-  $$(".ai-provider-key-save").forEach((button) => {
-    button.addEventListener("click", () => {
-      const index = Number(button.dataset.aiIndex);
-      const input = $$(".ai-provider-key-input").find((el) => Number(el.dataset.aiIndex) === index);
-      void saveAiProviderKeyInline(index, input);
-    });
-  });
-
-  $("#generatorPrompt").value = "Genera 30 preguntas por dojo, intercaladas con 20 manuales. Aumenta dificultad gradualmente. Devuelve JSON con pregunta, opciones, respuesta, explicacion, dificultad, control ISO y sugerencia de kata.";
-  $("#auditorPrompt").value = "Audita y reformula preguntas generadas. Valida que el tema sea ciberseguridad, que la respuesta sea correcta, que la explicacion sea clara y que la dificultad coincida con el cinturon.";
 }
 
-function slugifyProviderName(name) {
-  const slug = name
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "ia";
-}
-
-async function saveAiProviderKeyInline(index, inputEl) {
-  const provider = state.aiProviders[index];
-  const value = inputEl.value;
-  if (value === MASKED_KEY_PLACEHOLDER) {
-    notify("Escribe una clave nueva para reemplazarla (no cambio).");
+async function saveProviderKey(providerKey, input, button) {
+  const value = input.value.trim();
+  if (value.length < MIN_PROVIDER_KEY_LENGTH) {
+    notify(`La clave parece incompleta (mínimo ${MIN_PROVIDER_KEY_LENGTH} caracteres). No se guardó nada.`);
     return;
   }
-  if (!value.trim()) {
-    notify("Escribe la clave antes de guardar.");
-    return;
-  }
-
-  const providerKey = slugifyProviderName(provider.name);
-  // Only send provider_type/model_name defaults when this slug isn't one of
-  // the real, already-configured providers — otherwise this would silently
-  // overwrite a correctly configured provider (e.g. Claude's real
-  // provider_type is "messages", not the generic default below).
-  const knownProvider = state.newsProviders.find((p) => p.provider_key === providerKey);
-  const payload = { provider_key: providerKey, api_key: value.trim() };
-  if (!knownProvider) {
-    payload.label = provider.name;
-    payload.provider_type = "chat_completion";
-    payload.model_name = provider.name;
-  }
-
-  inputEl.disabled = true;
+  input.disabled = true;
+  button.disabled = true;
   try {
-    await supabaseFunctionInvoke("save-provider-key", payload);
-    provider.hasKey = true;
-    persist("Clave guardada de forma cifrada.");
-    inputEl.value = MASKED_KEY_PLACEHOLDER;
-    void loadNewsProvidersFromSupabase();
+    // Only the provider id and the key travel; the row is never re-created from a display name (that used to be possible).
+    await supabaseFunctionInvoke("save-provider-key", { provider_key: providerKey, api_key: value });
+    notify("Clave guardada de forma cifrada. No se puede volver a ver.");
+    await loadNewsProvidersFromSupabase();
   } catch (error) {
-    console.warn("No se pudo guardar la clave:", error);
+    // Never echo the key: only the server's own message.
     notify(`No se pudo guardar la clave: ${error.message}`);
   } finally {
-    inputEl.disabled = false;
+    input.value = "";
+    input.disabled = false;
+    button.disabled = false;
   }
 }
 
@@ -874,25 +813,15 @@ async function loadNewsProvidersFromSupabase() {
   try {
     const rows = await supabaseRest("ai_providers?select=*&order=label.asc");
     state.newsProviders = Array.isArray(rows) ? rows : [];
+    state.newsProvidersLoaded = true;
+    state.newsProvidersError = false;
     renderNewsProviderList();
     renderNewsChain();
-
-    // Keep the local/draft "Configuracion de IA" panel's key indicators
-    // honest: if a row's name slugs to a real provider_key that already has
-    // a Vault key, show it as masked there too instead of blank.
-    const byKey = new Map(state.newsProviders.map((p) => [p.provider_key, p]));
-    let changed = false;
-    state.aiProviders.forEach((provider) => {
-      const real = byKey.get(slugifyProviderName(provider.name));
-      const hasKey = Boolean(real && real.api_key_secret_id);
-      if (provider.hasKey !== hasKey) {
-        provider.hasKey = hasKey;
-        changed = true;
-      }
-    });
-    if (changed && $("#aiProviders")) renderAiProviders();
+    renderAiProviders();
   } catch (error) {
     console.warn("No se pudieron cargar los proveedores de IA:", error);
+    state.newsProvidersError = true;
+    renderAiProviders();
   }
 }
 
@@ -2177,16 +2106,6 @@ function addDojo() {
   renderAll();
 }
 
-function addAiProvider() {
-  state.aiProviders.push({
-    name: "Nueva IA",
-    timeoutMs: 2000,
-    order: state.aiProviders.length + 1,
-  });
-  persist("Proveedor IA agregado.");
-  renderAiProviders();
-}
-
 function addCampaign() {
   state.selectedCampaignId = null;
   pendingCampaignImage = null;
@@ -2312,11 +2231,6 @@ function logout() {
   } catch (e) {
     window.location.href = "/logged-out";
   }
-}
-
-function testAiFlow() {
-  const ordered = [...state.aiProviders].sort((a, b) => a.order - b.order);
-  notify(`Algoritmo probado: ${ordered.map((ia) => `${ia.name} (${ia.timeoutMs}ms)`).join(" -> ")} -> auditor.`);
 }
 
 function simulateOpenQuestion() {

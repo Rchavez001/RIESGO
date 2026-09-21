@@ -421,31 +421,14 @@
         <section id="ai" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">CONFIGURACION DE IA <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
-              <h2>Orden de consulta, tiempos y revision</h2>
+              <span class="label">EN VIVO · BASE DE DATOS Y VAULT</span>
+              <h2>IA y auditoría: proveedores y claves</h2>
+              <p class="muted">Estos son los proveedores de IA reales que usan el Sensei, el auditor y el agente de noticias. Las claves se guardan cifradas en Supabase Vault: nunca se muestran ni se devuelven, solo se pueden reemplazar. El orden de consulta, los tiempos y las instrucciones se configuran en <strong>Agente noticias</strong>.</p>
             </div>
-            <button id="testAiFlow" class="btn secondary">Probar algoritmo</button>
+            <button id="refreshAiProviders" class="btn secondary" type="button">Actualizar</button>
           </div>
-
-          <div class="ai-layout">
-            <article class="card">
-              <h2>Cadena de consulta</h2>
-              <div id="aiProviders" class="ai-provider-list"></div>
-              <button id="addAiProvider" class="btn secondary full">Agregar IA</button>
-            </article>
-
-            <article class="card">
-              <h2>Instrucciones de la inteligencia artificial</h2>
-              <label>
-                Instrucciones para generar preguntas
-                <textarea id="generatorPrompt" rows="8"></textarea>
-              </label>
-              <label>
-                Instrucciones para revisar y mejorar preguntas
-                <textarea id="auditorPrompt" rows="8"></textarea>
-              </label>
-            </article>
-          </div>
+          <p id="aiProvidersNote" class="muted" role="status">Cargando proveedores…</p>
+          <div id="aiProviders" class="ai-provider-list"></div>
         </section>
 
         <section id="senseiStats" class="panel">

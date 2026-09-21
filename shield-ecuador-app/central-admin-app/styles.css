@@ -1963,3 +1963,16 @@ body.menu-open { overflow: hidden; }
 .placeholder-note { color: #f59e0b; }
 .question-editor-head, .question-editor label { min-width: 0; }
 @media (max-width: 720px) { .toolbar-actions, .toolbar-actions .btn { width: 100%; } }
+
+/* ── Row A4: proveedores de IA ─────────────────────────────────────────── */
+.ai-provider-list { display: grid; gap: 12px; margin-top: 12px; }
+.ai-provider { display: grid; grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.6fr); gap: 12px; align-items: center; border: 1px solid var(--line-subtle); background: var(--soft); border-radius: 8px; padding: 12px; }
+.ai-provider-name { min-width: 0; overflow-wrap: anywhere; }
+.ai-provider-name strong, .ai-provider-name span { display: block; }
+.ai-provider-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.ai-provider .ai-provider-key-row { display: flex; gap: 8px; min-width: 0; }
+.ai-provider .ai-provider-key-row label { flex: 1; min-width: 0; }
+.ai-provider input[type="password"] { width: 100%; min-height: 44px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 900px) { .ai-provider { grid-template-columns: 1fr; } .ai-provider .ai-provider-key-row { flex-direction: column; } .ai-provider .ai-provider-key-row .btn { width: 100%; } }
+#ai .btn.small, .btn.small { min-height: 44px; }

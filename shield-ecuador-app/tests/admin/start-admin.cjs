@@ -32,6 +32,13 @@ http.createServer((req, res) => {
       const belts = ['blanco', 'amarillo', 'naranja', 'verde', 'azul', 'marron', 'negro']
       body = JSON.stringify(belts.map((belt, rank) => ({ id: `dojo-${rank}`, rank, title: `Dojo ${rank + 1} <b>x</b>`, belt, exam_code: `EXAM_${rank}` })))
     }
+    if (url.startsWith('/rest/v1/ai_providers')) {
+      body = JSON.stringify([
+        { provider_key: 'claude', label: 'Claude <b>x</b>', model_name: 'claude-sonnet', provider_type: 'messages', active: true, default_timeout_seconds: 30, api_key_secret_id: 'secret-1' },
+        { provider_key: 'deepseek', label: 'DeepSeek', model_name: 'deepseek-chat', provider_type: 'chat_completion', active: true, default_timeout_seconds: 20, api_key_secret_id: null },
+        { provider_key: 'kimi', label: 'Kimi', model_name: 'moonshot', provider_type: 'chat_completion', active: false, default_timeout_seconds: 25, api_key_secret_id: 'secret-3' },
+      ])
+    }
     if (url.startsWith('/rest/v1/rpc/admin_dojo_stats')) {
       const belts = ['blanco', 'amarillo', 'naranja', 'verde', 'azul', 'marron', 'negro']
       body = JSON.stringify(belts.map((belt, rank) => ({ id: `dojo-${rank}`, rank, title: `Dojo ${rank + 1} <i>x</i>`, belt, exam_code: `EXAM_${rank}`, version: '3.0.0', questions: 140, cases: 60, started: 1234 - rank, finished_practice: 500, exam_takers: 200, passed: 150 })))
