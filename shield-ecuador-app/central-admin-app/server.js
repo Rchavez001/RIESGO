@@ -73,7 +73,8 @@ const server = http.createServer((req, res) => {
   if (
     (req.url || '').startsWith('/api/rest/v1/') ||
     (req.url || '').startsWith('/api/auth/v1/') ||
-    (req.url || '').startsWith('/api/storage/v1/')
+    (req.url || '').startsWith('/api/storage/v1/') ||
+    (req.url || '').startsWith('/api/functions/v1/')
   ) {
     proxySupabase(req, res);
     return;

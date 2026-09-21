@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+    <script src="https://js.puter.com/v2/"></script>
   </head>
   <body>
     <div id="app" class="central-app">
@@ -16,20 +17,6 @@
           <div>
             <strong>Ciber Dojo</strong>
             <em>Central Admin</em>
-          </div>
-        </div>
-
-        <!-- Forgot password modal -->
-        <div id="forgotPasswordModal" class="modal hidden">
-          <div class="modal-content">
-            <h3>Recuperar contraseña</h3>
-            <p>Ingresa el correo asociado para recibir instrucciones.</p>
-            <input id="forgotEmail" type="email" placeholder="correo@empresa.com" />
-            <div class="modal-actions">
-              <button id="forgotSend" class="btn primary">Enviar</button>
-              <button id="forgotCancel" class="btn secondary">Cancelar</button>
-            </div>
-            <div id="forgotStatus" class="muted"></div>
           </div>
         </div>
 
@@ -48,6 +35,8 @@
           <button class="nav-item" data-panel="senseiStats">Sensei IA</button>
           <button class="nav-item" data-panel="threatIntel">Inteligencia de Amenazas</button>
           <button class="nav-item" data-panel="openQuestions">Preguntas abiertas</button>
+          <button class="nav-item" data-panel="championship">Campeonato</button>
+          <button class="nav-item" data-panel="securityCenter">Centro de Seguridad</button>
           <button class="nav-item" data-panel="users">Usuarios</button>
           <button class="nav-item" data-panel="occupations">Ocupaciones</button>
           <button class="nav-item" data-panel="ads">Propaganda</button>
@@ -70,7 +59,6 @@
             <p>Gestiona dojos, bancos de preguntas, reglas de avance, inteligencia artificial, revision de respuestas, usuarios y propaganda.</p>
           </div>
           <div class="top-actions">
-            <button id="forgotPassword" class="btn secondary">¿Olvidó contraseña?</button>
             <button id="saveAll" class="btn secondary">Guardar borrador</button>
             <button id="publishAll" class="btn primary">Publicar configuracion</button>
             <button id="logoutBtn" class="btn danger">Salir</button>
@@ -234,11 +222,85 @@
               <span class="label">AGENTE IA DE NOTICIAS</span>
               <h2>Fuentes, horario y katas generadas</h2>
               <p class="muted">Ultima ejecucion: <strong id="newsAgentLastRun">Pendiente</strong></p>
+              <p class="muted">"Probar" y "Ejecutar ahora" usan Puter.js (IA en el navegador, cuenta del administrador, sin clave de servidor). Ademas, a la hora configurada abajo, un job automatico en el servidor (sin navegador) ejecuta la cadena de proveedores de IA de la derecha — ve el resultado en el historial.</p>
             </div>
             <div class="toolbar-actions">
-              <button id="saveNewsAgent" class="btn secondary">Guardar agente</button>
+              <button id="saveNewsAgent" class="btn secondary">Guardar configuracion</button>
+              <button id="testNewsAgent" class="btn secondary">Probar</button>
               <button id="runNewsAgent" class="btn primary">Ejecutar ahora</button>
             </div>
+          </div>
+
+          <div class="split">
+            <article class="card">
+              <div class="section-toolbar compact">
+                <h2>Cadena de proveedores (ejecucion automatica)</h2>
+              </div>
+              <p class="muted">Orden en que el job automatico prueba cada proveedor de IA. Si uno falla o se demora, pasa al siguiente.</p>
+              <div id="newsProviderChain" class="news-provider-chain"></div>
+              <div class="form-grid compact news-source-add">
+                <label>
+                  Agregar proveedor a la cadena
+                  <select id="newsChainAddSelect"></select>
+                </label>
+              </div>
+              <button id="newsChainAddBtn" class="btn secondary small">Agregar a la cadena</button>
+            </article>
+
+            <article class="card">
+              <div class="section-toolbar compact">
+                <h2>Proveedores de IA configurados</h2>
+                <button id="newsProviderAddNew" class="btn secondary small">Nuevo proveedor</button>
+              </div>
+              <p class="muted">La clave se guarda cifrada (Vault) y nunca se vuelve a mostrar aqui.</p>
+              <div id="newsProviderList" class="news-provider-list"></div>
+
+              <div id="newsProviderForm" class="news-provider-form hidden">
+                <div class="form-grid compact">
+                  <label>
+                    Identificador (provider_key)
+                    <input id="npKey" type="text" placeholder="ej. mi-proveedor" />
+                  </label>
+                  <label>
+                    Nombre visible
+                    <input id="npLabel" type="text" placeholder="ej. Mi Proveedor" />
+                  </label>
+                  <label>
+                    Tipo de API
+                    <select id="npType">
+                      <option value="chat_completion">chat_completion (compatible OpenAI)</option>
+                      <option value="messages">messages (Anthropic)</option>
+                      <option value="generative_language">generative_language (Google Gemini)</option>
+                    </select>
+                  </label>
+                  <label>
+                    Modelo
+                    <input id="npModel" type="text" placeholder="ej. gpt-4o-mini" />
+                  </label>
+                  <label>
+                    Base URL (opcional, usa el default del tipo si se deja vacio)
+                    <input id="npBaseUrl" type="text" placeholder="https://..." />
+                  </label>
+                  <label>
+                    Timeout por defecto (segundos)
+                    <input id="npTimeout" type="number" min="1" max="120" value="30" />
+                  </label>
+                  <label class="check-row">
+                    <input id="npActive" type="checkbox" checked />
+                    Proveedor activo
+                  </label>
+                  <label>
+                    Clave de API (se cifra en Vault; dejar vacio para no cambiarla)
+                    <input id="npApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+                  </label>
+                </div>
+                <p id="newsProviderFormStatus" class="muted"></p>
+                <div class="modal-actions">
+                  <button id="npCancel" type="button" class="btn secondary small">Cancelar</button>
+                  <button id="npSave" type="button" class="btn primary small">Guardar proveedor</button>
+                </div>
+              </div>
+            </article>
           </div>
 
           <div class="split">
@@ -250,25 +312,79 @@
                   Agente activo
                 </label>
                 <label>
-                  Hora de activacion
+                  Hora de activacion (job automatico diario)
                   <input id="newsAgentTime" type="time" />
                 </label>
               </div>
               <label>
-                Paginas principales donde buscar noticias
-                <textarea id="newsAgentUrls" rows="7"></textarea>
-              </label>
-              <label>
                 Instrucciones para el agente de inteligencia artificial
                 <textarea id="newsAgentPrompt" rows="5"></textarea>
               </label>
+              <p id="newsAgentSaveStatus" class="muted"></p>
             </article>
 
             <article class="card">
-              <h2>Simulaciones KATAS generadas</h2>
-              <div id="generatedKatas" class="generated-katas"></div>
+              <h2>Fuentes</h2>
+              <p class="muted">Paginas donde el agente busca noticias de ciberataques.</p>
+              <div id="newsSourceList" class="news-source-list"></div>
+              <div class="form-grid compact news-source-add">
+                <label>
+                  Nombre
+                  <input id="newsSourceName" type="text" placeholder="Ej. BleepingComputer" />
+                </label>
+                <label>
+                  URL
+                  <input id="newsSourceUrl" type="url" placeholder="https://..." />
+                </label>
+              </div>
+              <button id="addNewsSource" class="btn secondary small">Agregar fuente</button>
             </article>
           </div>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Agregar contenido manual</h2>
+            </div>
+            <p class="muted">Para noticias o novedades de ciberseguridad que estan en otros sitios (no en la lista de Fuentes de arriba): pega el texto, pega una URL, o sube un documento/imagen. La IA lee ese contenido y genera preguntas/katas a partir de el.</p>
+            <div class="form-grid compact">
+              <label>
+                Fuente (nombre libre, ej. "Reporte interno" o el sitio de origen)
+                <input id="manualContentSourceName" type="text" placeholder="Ej. Boletin CERT interno" />
+              </label>
+              <label>
+                URL de referencia (opcional si pegas texto o subes un archivo)
+                <input id="manualContentUrl" type="url" placeholder="https://..." />
+              </label>
+            </div>
+            <label>
+              Pegar texto de la noticia/documento
+              <textarea id="manualContentText" rows="6" placeholder="Pega aqui el texto completo..."></textarea>
+            </label>
+            <label>
+              O subir un archivo (.txt, .md, .pdf, .docx, .png, .jpg, .webp)
+              <input id="manualContentFile" type="file" accept=".txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.webp" />
+            </label>
+            <p id="manualContentStatus" class="muted"></p>
+            <div class="toolbar-actions">
+              <button id="manualContentTest" class="btn secondary">Probar (no guarda)</button>
+              <button id="manualContentGenerate" class="btn primary">Generar y guardar</button>
+            </div>
+            <div id="manualContentResult"></div>
+          </article>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Historial de ejecuciones</h2>
+              <button id="refreshNewsRuns" class="btn secondary small">Actualizar</button>
+            </div>
+            <div id="newsRunLog" class="news-run-log"></div>
+          </article>
+
+          <article class="card">
+            <h2>Reporte: preguntas y katas generadas</h2>
+            <p class="muted">Contenido generado por el agente, pendiente de revision antes de activarse para los usuarios.</p>
+            <div id="newsGeneratedReport" class="news-generated-report"></div>
+          </article>
         </section>
 
         <section id="newsAlerts" class="panel">
@@ -419,6 +535,343 @@
           </div>
         </section>
 
+        <section id="championship" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">CAMPEONATO</span>
+              <h2>Reglas, inscripciones y combates</h2>
+            </div>
+          </div>
+
+          <div class="split">
+            <article class="card">
+              <h2>Configuracion del campeonato activo</h2>
+              <div class="form-grid compact">
+                <label>
+                  Nombre
+                  <input id="champName" type="text" placeholder="Ej. Campeonato CiberDojo 2026" />
+                </label>
+                <label>
+                  Estado
+                  <select id="champStatus">
+                    <option value="draft">Borrador (nadie lo ve todavia)</option>
+                    <option value="registration_open">Inscripciones abiertas</option>
+                    <option value="registration_closed">Inscripciones cerradas</option>
+                    <option value="in_progress">En curso</option>
+                    <option value="completed">Finalizado</option>
+                  </select>
+                </label>
+                <label>
+                  Cinturon requerido
+                  <select id="champMinBelt">
+                    <option value="white">Blanco</option>
+                    <option value="yellow">Amarillo</option>
+                    <option value="orange">Naranja</option>
+                    <option value="green">Verde</option>
+                    <option value="blue">Azul</option>
+                    <option value="brown">Marron</option>
+                    <option value="black" selected>Negro</option>
+                  </select>
+                </label>
+                <label>
+                  Edad maxima
+                  <input id="champMaxAge" type="number" min="1" value="18" />
+                </label>
+                <label>
+                  Inscripcion abre
+                  <input id="champRegOpens" type="datetime-local" />
+                </label>
+                <label>
+                  Inscripcion cierra
+                  <input id="champRegCloses" type="datetime-local" />
+                </label>
+                <label>
+                  Preguntas por combate
+                  <input id="champQuestionsPerMatch" type="number" min="1" value="5" />
+                </label>
+                <label>
+                  Tiempo pregunta facil (seg)
+                  <input id="champTimeEasy" type="number" min="1" value="60" />
+                </label>
+                <label>
+                  Tiempo pregunta media (seg)
+                  <input id="champTimeMedium" type="number" min="1" value="90" />
+                </label>
+                <label>
+                  Tiempo pregunta dificil (seg)
+                  <input id="champTimeHard" type="number" min="1" value="120" />
+                </label>
+              </div>
+              <label>
+                Reglas (texto que veran los estudiantes)
+                <textarea id="champRulesText" rows="5" placeholder="Ej. Participan cinturones negros hasta 18 anos. Cada combate consiste en 5 preguntas..."></textarea>
+              </label>
+              <p id="champConfigStatus" class="muted"></p>
+              <button id="champSaveConfig" class="btn primary">Guardar configuracion</button>
+            </article>
+
+            <article class="card">
+              <h2>Correo para avisos de combate (Resend)</h2>
+              <p class="muted">Se usa para avisar fecha y hora del combate a cada inscrito. Crea una cuenta gratuita en resend.com y pega tu API key aqui.</p>
+              <label>
+                API Key de Resend
+                <span class="news-provider-key-row">
+                  <input id="champResendKey" type="password" placeholder="re_..." autocomplete="off" />
+                  <button id="champResendKeySave" class="btn secondary small">Guardar clave</button>
+                </span>
+              </label>
+              <p id="champResendStatus" class="muted"></p>
+
+              <div class="section-toolbar compact" style="margin-top:20px;">
+                <h2>Sortear ronda 1</h2>
+              </div>
+              <p class="muted">Empareja aleatoriamente a todos los inscritos y les envia un correo con la fecha/hora de su combate.</p>
+              <div class="form-grid compact">
+                <label>
+                  Fecha y hora del combate
+                  <input id="champDrawScheduledAt" type="datetime-local" />
+                </label>
+                <label>
+                  Ventana para completarlo (horas)
+                  <input id="champDrawWindowHours" type="number" min="1" value="24" />
+                </label>
+              </div>
+              <button id="champDrawRound1" class="btn primary">Sortear ronda 1 y enviar correos</button>
+              <div id="champDrawResult" class="muted"></div>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Inscritos</h2>
+              <button id="champRefreshRegistrations" class="btn secondary small">Actualizar</button>
+            </div>
+            <div id="champRegistrationList" class="news-run-log"></div>
+          </article>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Combates</h2>
+              <button id="champRefreshMatches" class="btn secondary small">Actualizar</button>
+            </div>
+            <div id="champMatchList" class="news-run-log"></div>
+          </article>
+        </section>
+
+        <section id="securityCenter" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">CENTRO DE SEGURIDAD</span>
+              <h2>Eventos, alertas, diagnostico IA e inventario</h2>
+            </div>
+            <button id="secCheckAlertsNow" class="btn secondary">Verificar alertas ahora</button>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric">
+              <span>Eventos (7 dias)</span>
+              <strong id="secMetricEvents">0</strong>
+            </article>
+            <article class="metric">
+              <span>Bloqueos por rate limit (7 dias)</span>
+              <strong id="secMetricBlocks">0</strong>
+            </article>
+            <article class="metric">
+              <span>Alertas activas configuradas</span>
+              <strong id="secMetricAlerts">0</strong>
+            </article>
+            <article class="metric">
+              <span>Endpoints distintos atacados (7 dias)</span>
+              <strong id="secMetricEndpoints">0</strong>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Eventos de seguridad</h2>
+              <div>
+                <button id="secExportCsv" class="btn secondary small">Exportar CSV</button>
+                <button id="secExportPdf" class="btn secondary small">Exportar PDF</button>
+                <button id="secRefreshFeed" class="btn secondary small">Actualizar</button>
+              </div>
+            </div>
+            <div class="form-grid compact">
+              <label>
+                Severidad
+                <select id="secFilterSeverity">
+                  <option value="">Todas</option>
+                  <option value="baja">Baja</option>
+                  <option value="media">Media</option>
+                  <option value="alta">Alta</option>
+                  <option value="critica">Critica</option>
+                </select>
+              </label>
+              <label>
+                Endpoint (contiene)
+                <input id="secFilterEndpoint" type="text" list="secEndpointOptions" placeholder="Ej. secure-register-user" autocomplete="off" />
+                <datalist id="secEndpointOptions"></datalist>
+              </label>
+              <label>
+                Desde
+                <input id="secFilterFrom" type="datetime-local" />
+              </label>
+              <label>
+                Hasta
+                <input id="secFilterTo" type="datetime-local" />
+              </label>
+            </div>
+            <div id="secEventFeed" class="news-run-log"></div>
+            <div class="modal-actions">
+              <button id="secFeedPrev" class="btn secondary small">Anterior</button>
+              <span id="secFeedPageInfo" class="muted"></span>
+              <button id="secFeedNext" class="btn secondary small">Siguiente</button>
+            </div>
+          </article>
+
+          <div class="split">
+            <article class="threat-card">
+              <h3>Top 5 endpoints atacados (7 dias)</h3>
+              <div id="secTopEndpoints"></div>
+            </article>
+            <article class="threat-card">
+              <h3>Tendencia diaria de eventos (14 dias)</h3>
+              <div id="secTrendChart"></div>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Umbrales de alerta</h2>
+            </div>
+            <div class="form-grid compact">
+              <input id="secAlertId" type="hidden" />
+              <label>
+                Nombre
+                <input id="secAlertName" type="text" placeholder="Ej. Ataques de fuerza bruta a login" />
+              </label>
+              <label>
+                Severidad minima
+                <select id="secAlertSeverity">
+                  <option value="baja">Baja</option>
+                  <option value="media" selected>Media</option>
+                  <option value="alta">Alta</option>
+                  <option value="critica">Critica</option>
+                </select>
+              </label>
+              <label>
+                Cantidad de eventos
+                <input id="secAlertCount" type="number" min="1" value="5" />
+              </label>
+              <label>
+                Ventana (minutos)
+                <input id="secAlertWindow" type="number" min="1" value="60" />
+              </label>
+              <label>
+                Correo de aviso
+                <input id="secAlertEmail" type="email" placeholder="club@ciberdojo.ec" />
+              </label>
+              <label>
+                Webhook (opcional)
+                <input id="secAlertWebhook" type="text" placeholder="https://..." />
+              </label>
+            </div>
+            <div class="modal-actions">
+              <button id="secAlertSave" class="btn primary">Guardar umbral</button>
+              <button id="secAlertNew" class="btn secondary">Nuevo</button>
+              <button id="secAlertDelete" class="btn danger">Eliminar</button>
+            </div>
+            <p id="secAlertStatus" class="muted"></p>
+            <div id="secAlertList" class="news-run-log"></div>
+          </article>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Diagnostico con IA</h2>
+              <button id="secRunDiagnosis" class="btn primary">Generar diagnostico ahora</button>
+            </div>
+            <p class="muted">Corre automaticamente cada lunes. El boton genera uno adicional bajo demanda, analizando los eventos de los ultimos 7 dias.</p>
+            <p id="secDiagnosisStatus" class="muted"></p>
+            <div id="secDiagnosisList" class="news-run-log"></div>
+          </article>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Inventario de superficie de ataque (EASM)</h2>
+              <button id="secRunEasm" class="btn primary">Ejecutar inventario ahora</button>
+            </div>
+            <p class="muted">Corre automaticamente el dia 1 de cada mes: buckets publicos, variables de entorno esperadas y endpoints publicos conocidos.</p>
+            <p id="secEasmStatus" class="muted"></p>
+            <div id="secEasmList" class="news-run-log"></div>
+          </article>
+
+          <div id="secFindingModal" class="modal">
+            <div class="modal-backdrop" onclick="closeSecFindingModal()"></div>
+            <div class="modal-card">
+              <h2 id="secFindingModalTitle"></h2>
+              <div id="secFindingModalBody"></div>
+              <div class="modal-actions">
+                <button class="btn secondary" onclick="closeSecFindingModal()">Cerrar</button>
+              </div>
+            </div>
+          </div>
+
+          <article class="card">
+            <div class="section-toolbar compact">
+              <h2>Convertir incidente en kata</h2>
+            </div>
+            <div class="split">
+              <div id="secKataList" class="news-run-log"></div>
+              <article class="card">
+                <h2>Editor de borrador</h2>
+                <input id="secKataId" type="hidden" />
+                <label>
+                  Titulo
+                  <input id="secKataTitle" type="text" placeholder="Ej. Intento de fuerza bruta en registro" />
+                </label>
+                <label>
+                  Contenido (markdown)
+                  <textarea id="secKataBody" rows="5" placeholder="Que paso, por que importa, que aprendimos..."></textarea>
+                </label>
+                <div class="modal-actions">
+                  <button id="secKataSaveDraft" class="btn secondary">Guardar borrador</button>
+                  <button id="secKataSubmitReview" class="btn secondary">Enviar a revision</button>
+                  <button id="secKataReject" class="btn secondary">Regresar a borrador</button>
+                </div>
+
+                <div id="secKataPublishFields" class="hidden">
+                  <h2>Publicar como pregunta de kata</h2>
+                  <label>
+                    Dojo
+                    <select id="secKataDojo"></select>
+                  </label>
+                  <label>
+                    Etiqueta de kata
+                    <input id="secKataLabel" type="text" value="Kata 1" />
+                  </label>
+                  <label>
+                    Dificultad (1-5)
+                    <input id="secKataDifficulty" type="number" min="1" max="5" value="1" />
+                  </label>
+                  <label>
+                    Pregunta
+                    <textarea id="secKataQuestion" rows="3"></textarea>
+                  </label>
+                  <label>
+                    Respuesta correcta
+                    <input id="secKataAnswer" type="text" />
+                  </label>
+                  <label>
+                    Explicacion
+                    <textarea id="secKataExplanation" rows="3"></textarea>
+                  </label>
+                  <button id="secKataPublish" class="btn primary">Publicar</button>
+                </div>
+                <p id="secKataStatus" class="muted"></p>
+              </article>
+            </div>
+          </article>
+        </section>
+
         <section id="users" class="panel">
           <div class="section-toolbar">
             <div>
@@ -520,6 +973,16 @@
             </div>
           </article>
 
+          <article class="card">
+            <h2>Prioridad de propaganda por valor de donacion</h2>
+            <p class="muted">Un valor mas alto se exhibe con mas frecuencia, en proporcion directa a su prioridad (peso). Ajusta los rangos en USD o el peso de cada nivel sin necesidad de un despliegue de codigo.</p>
+            <div id="tierWeightsGrid" class="tier-weights-grid"></div>
+            <div class="modal-actions">
+              <button id="saveTierWeights" class="btn secondary">Guardar prioridades</button>
+              <span id="tierWeightsStatus" class="muted"></span>
+            </div>
+          </article>
+
           <div class="ads-layout">
             <div id="campaignList" class="campaign-list"></div>
             <article class="card">
@@ -573,6 +1036,27 @@
                   Todos los sectores
                 </label>
                 <div id="adSectorList" class="sector-check-list"></div>
+              </div>
+              <div class="donation-priority-box">
+                <span class="label">Donacion y prioridad de exhibicion</span>
+                <div class="form-grid compact">
+                  <label>
+                    Tipo de donacion
+                    <select id="adDonationType">
+                      <option value="unica">Unica</option>
+                      <option value="continua">Continua</option>
+                    </select>
+                  </label>
+                  <label id="adDonationPeriodField">
+                    Periodo (meses)
+                    <input id="adDonationPeriod" type="number" min="1" placeholder="Ej. 12" />
+                  </label>
+                </div>
+                <label>
+                  Valor de la donacion
+                  <select id="adValueTier"></select>
+                </label>
+                <p id="adPriorityHint" class="muted"></p>
               </div>
               <label>
                 Imagen de la campana

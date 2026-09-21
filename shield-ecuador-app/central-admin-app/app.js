@@ -1,5 +1,13 @@
 const STORAGE_KEY = "ciber-dojo-central-admin-v2";
 
+// Rendered as an API-key input's value (not just a placeholder) whenever a
+// key is already saved, so the box itself shows "hay una clave guardada" at
+// a glance — type="password" turns it into dots on screen either way, and
+// typing over it is how you replace it. Shared by both places that manage
+// AI provider keys (the real news-agent provider chain and the local/draft
+// "Configuracion de IA" panel), so the masked look is consistent.
+const MASKED_KEY_PLACEHOLDER = "••••••••••••";
+
 const baseState = {
   selectedDojoId: "dojo-phishing",
   selectedCampaignId: null,
@@ -41,26 +49,23 @@ const baseState = {
     { name: "Claude", timeoutMs: 2600, order: 3 },
   ],
   newsAgent: {
+    id: null,
     active: true,
     runTime: "07:30",
-    urls: [
-      "https://www.cisa.gov/news-events/cybersecurity-advisories",
-      "https://www.bleepingcomputer.com/",
-      "https://thehackernews.com/",
-    ],
     lastRun: "Pendiente",
-    lastAutoRunDay: "",
-    prompt: "Buscar noticias recientes de ciberataques, extraer tactica, impacto, control preventivo y convertirlas en preguntas y katas practicas.",
+    prompt: "",
   },
-  generatedKatas: [
-    {
-      title: "Kata de revision de mensaje falso",
-      source: "cisa.gov",
-      scenario: "Un correo urgente solicita cambiar datos bancarios de un proveedor.",
-      task: "Identifica senales de fraude, valida por canal alterno y redacta el reporte inicial.",
-      difficulty: 2,
-    },
-  ],
+  newsSources: [],
+  newsRuns: [],
+  newsGenerated: [],
+  newsAgentBusy: false,
+  manualContentBusy: false,
+  championship: null,
+  championshipRegistrations: [],
+  championshipMatches: [],
+  newsProviders: [],
+  newsChain: [],
+  newsProviderEditingKey: undefined,
   users: [
     { id: "u1", name: "Ana Paredes", dojo: "Mensajes falsos", progress: 36, questions: 18, topic: "Fraude bancario por mensaje", status: "activo" },
     { id: "u2", name: "Luis Mora", dojo: "Verificacion en dos pasos", progress: 21, questions: 12, topic: "Contrasenas", status: "activo" },
@@ -75,6 +80,7 @@ const baseState = {
   campaigns: [],
   campaignSettings: { max_image_kb: 500, max_image_width: 1920, max_image_height: 1920 },
   campaignAudit: [],
+  tierWeights: [],
   availableSectors: [],
   lastEntryRows: [],
   lastImpressionRows: [],
@@ -102,10 +108,17 @@ function init() {
   void loadCampaignsFromSupabase();
   void loadCampaignSettingsFromSupabase();
   void loadCampaignAuditFromSupabase();
+  void loadTierWeightsFromSupabase();
   void loadOccupationsFromSupabase();
   void loadAvailableSectorsFromSupabase();
   void runReport();
-  startNewsAgentScheduler();
+  void loadNewsAgentConfigFromSupabase();
+  void loadNewsSourcesFromSupabase();
+  void loadNewsRunsFromSupabase();
+  void loadNewsGeneratedFromSupabase();
+  void loadNewsProvidersFromSupabase();
+  void loadNewsChainFromSupabase();
+  void loadChampionshipConfig();
 }
 
 function loadState() {
@@ -155,6 +168,9 @@ function bindNavigation() {
           if (chart) chart.resize();
         });
       }
+      if (button.dataset.panel === "securityCenter") {
+        void loadSecurityCenter();
+      }
     });
   });
 }
@@ -175,13 +191,44 @@ function bindActions() {
   $("#saveAdsSettings").addEventListener("click", saveCampaignSettings);
   $("#adImageFile").addEventListener("change", handleCampaignImageSelected);
   $("#adTargetAll").addEventListener("change", (e) => setTargetAllUI(e.target.checked));
+  $("#adDonationType").addEventListener("change", (e) => setDonationTypeUI(e.target.value));
+  $("#adValueTier").addEventListener("change", updatePriorityHint);
+  $("#saveTierWeights").addEventListener("click", saveTierWeights);
   $("#runReport").addEventListener("click", runReport);
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
+  $("#testNewsAgent").addEventListener("click", testNewsAgent);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
   $("#forceNewsReview").addEventListener("click", runNewsAgent);
-  $("#forgotPassword").addEventListener("click", openForgotPasswordModal);
+  $("#addNewsSource").addEventListener("click", addNewsSource);
+  $("#refreshNewsRuns").addEventListener("click", loadNewsRunsFromSupabase);
+  $("#newsProviderAddNew").addEventListener("click", () => openNewsProviderForm(null));
+  $("#npCancel").addEventListener("click", closeNewsProviderForm);
+  $("#npSave").addEventListener("click", saveNewsProviderForm);
+  $("#newsChainAddBtn").addEventListener("click", addNewsChainAssignment);
+  $("#manualContentTest").addEventListener("click", testManualContent);
+  $("#manualContentGenerate").addEventListener("click", generateManualContent);
+  $("#champSaveConfig").addEventListener("click", saveChampionshipConfig);
+  $("#champResendKeySave").addEventListener("click", saveChampionshipResendKey);
+  $("#champDrawRound1").addEventListener("click", runChampionshipDraw);
+  $("#champRefreshRegistrations").addEventListener("click", loadChampionshipRegistrations);
+  $("#champRefreshMatches").addEventListener("click", loadChampionshipMatches);
   $("#logoutBtn").addEventListener("click", logout);
   $("#refreshSenseiStats").addEventListener("click", loadSenseiStats);
+  $("#secCheckAlertsNow").addEventListener("click", runSecurityAlertCheck);
+  $("#secRefreshFeed").addEventListener("click", () => { state.secFeedOffset = 0; void loadSecurityFeed(); });
+  $("#secFeedPrev").addEventListener("click", () => { state.secFeedOffset = Math.max(0, (state.secFeedOffset || 0) - SEC_FEED_PAGE_SIZE); void loadSecurityFeed(); });
+  $("#secFeedNext").addEventListener("click", () => { state.secFeedOffset = (state.secFeedOffset || 0) + SEC_FEED_PAGE_SIZE; void loadSecurityFeed(); });
+  $("#secExportCsv").addEventListener("click", exportSecurityEventsCsv);
+  $("#secExportPdf").addEventListener("click", exportSecurityEventsPdf);
+  $("#secAlertSave").addEventListener("click", saveSecurityAlertConfig);
+  $("#secAlertNew").addEventListener("click", clearSecurityAlertForm);
+  $("#secAlertDelete").addEventListener("click", deleteSecurityAlertConfig);
+  $("#secRunDiagnosis").addEventListener("click", runSecurityDiagnosis);
+  $("#secRunEasm").addEventListener("click", runSecurityEasmScan);
+  $("#secKataSaveDraft").addEventListener("click", saveSecurityKataDraft);
+  $("#secKataSubmitReview").addEventListener("click", submitSecurityKataForReview);
+  $("#secKataReject").addEventListener("click", rejectSecurityKataDraft);
+  $("#secKataPublish").addEventListener("click", publishSecurityKataDraft);
   $$(".threat-nav button").forEach((button) => {
     button.addEventListener("click", () => {
       $$(".threat-nav button").forEach((item) => item.classList.remove("active"));
@@ -210,7 +257,6 @@ function renderAll() {
   renderCampaigns();
   renderNewsAgent();
   renderNewsAlerts();
-  renderKatas();
   void loadTpotView(state.threatView || "dashboard");
   void loadSenseiStats();
 }
@@ -281,6 +327,8 @@ function ensureQuestionBanks() {
 }
 
 function createDefaultQuestions(dojo) {
+  const now = new Date().toISOString();
+
   const manual = Array.from({ length: 20 }, (_, index) => ({
     id: `${dojo.id}-manual-${index + 1}`,
     number: index + 1,
@@ -291,6 +339,10 @@ function createDefaultQuestions(dojo) {
     text: `Pregunta manual ${index + 1} sobre ${dojo.theme}`,
     answer: "Respuesta correcta pendiente de ajustar.",
     explanation: "Explicacion pendiente de ajustar.",
+    createdAt: now,
+    // Manual questions start out already "aprobada" — stamp the approval
+    // date at creation instead of leaving it blank until someone re-saves.
+    approvedAt: now,
   }));
 
   const ai = Array.from({ length: 30 }, (_, index) => ({
@@ -303,6 +355,8 @@ function createDefaultQuestions(dojo) {
     text: `Pregunta IA ${index + 21} sobre ${dojo.theme}`,
     answer: "Respuesta generada pendiente de auditoria.",
     explanation: "Justificacion generada pendiente de auditoria.",
+    createdAt: now,
+    approvedAt: null,
   }));
 
   return [...manual, ...ai];
@@ -328,6 +382,15 @@ function questionEditor(question) {
         <textarea data-field="text" rows="3">${esc(question.text)}</textarea>
       </label>
       <div class="muted small">Explicación simple: ${esc(explainText(question.text))}</div>
+      <label>
+        Respuesta correcta
+        <textarea data-field="answer" rows="2">${esc(question.answer)}</textarea>
+      </label>
+      <div class="muted small">Explicación simple: ${esc(explainText(question.answer))}</div>
+      <label>
+        Explicacion
+        <textarea data-field="explanation" rows="2">${esc(question.explanation)}</textarea>
+      </label>
       <div class="question-mini-grid">
         <label>
           Dificultad
@@ -346,15 +409,10 @@ function questionEditor(question) {
           </select>
         </label>
       </div>
-      <label>
-        Respuesta correcta
-        <textarea data-field="answer" rows="2">${esc(question.answer)}</textarea>
-      </label>
-      <div class="muted small">Explicación simple: ${esc(explainText(question.answer))}</div>
-      <label>
-        Explicacion
-        <textarea data-field="explanation" rows="2">${esc(question.explanation)}</textarea>
-      </label>
+      <div class="question-dates muted small">
+        Generada: ${question.createdAt ? new Date(question.createdAt).toLocaleString("es-EC") : "Sin fecha"}
+        ${question.approvedAt ? ` · Aprobada: ${new Date(question.approvedAt).toLocaleString("es-EC")}` : ""}
+      </div>
     </div>
   `;
 }
@@ -364,10 +422,15 @@ async function saveQuestionsFromForm() {
   $$(".question-editor").forEach((editor) => {
     const question = bank.find((item) => item.id === editor.dataset.questionId);
     if (!question) return;
+    const wasApproved = question.status === "aprobada";
     editor.querySelectorAll("[data-field]").forEach((field) => {
       const key = field.dataset.field;
       question[key] = key === "difficulty" ? Number(field.value) : field.value;
     });
+    if (!question.createdAt) question.createdAt = new Date().toISOString();
+    if (question.status === "aprobada" && !wasApproved) {
+      question.approvedAt = new Date().toISOString();
+    }
   });
   persist("Preguntas modificadas y guardadas.");
   await saveQuestionsToSupabase(bank, getSelectedDojo());
@@ -388,22 +451,41 @@ function renderAiProviders() {
     .sort((a, b) => a.order - b.order)
     .map((provider, index) => `
       <div class="ai-provider">
-        <label>
+        <label class="ai-provider-name">
           IA ${index + 1}
-          <input value="${esc(provider.name)}" data-ai-index="${index}" data-field="name" />
+          <input value="${esc(provider.name)}" data-ai-index="${index}" data-field="name" placeholder="Nombre de la IA" />
         </label>
-        <label>
-          Timeout ms
-          <input type="number" value="${provider.timeoutMs}" data-ai-index="${index}" data-field="timeoutMs" />
-        </label>
-        <label>
-          Orden
-          <input type="number" value="${provider.order}" data-ai-index="${index}" data-field="order" />
-        </label>
+        <div class="ai-provider-meta">
+          <label class="ai-provider-meta-field">
+            Timeout ms
+            <input type="number" value="${provider.timeoutMs}" data-ai-index="${index}" data-field="timeoutMs" />
+          </label>
+          <label class="ai-provider-meta-field">
+            Orden
+            <input type="number" value="${provider.order}" data-ai-index="${index}" data-field="order" />
+          </label>
+          <label class="ai-provider-meta-field ai-provider-key-field">
+            API Key
+            <span class="ai-provider-key-row">
+              <input
+                type="password"
+                class="ai-provider-key-input"
+                value="${provider.hasKey ? MASKED_KEY_PLACEHOLDER : ""}"
+                placeholder="Sin clave"
+                title="Clave de API (oculta). Escribe una nueva para reemplazarla."
+                autocomplete="off"
+                data-ai-index="${index}"
+                data-field="apiKey"
+              />
+              <button type="button" class="btn secondary small ai-provider-key-save" data-ai-index="${index}">Guardar</button>
+            </span>
+          </label>
+        </div>
       </div>
     `).join("");
 
-  $$("[data-ai-index]").forEach((input) => {
+  $$("input[data-ai-index]").forEach((input) => {
+    if (input.dataset.field === "apiKey") return;
     input.addEventListener("input", () => {
       const provider = state.aiProviders[Number(input.dataset.aiIndex)];
       const field = input.dataset.field;
@@ -412,16 +494,882 @@ function renderAiProviders() {
     });
   });
 
+  // The key never lives in local state / localStorage in plain text — it
+  // goes straight to the same Vault-backed save-provider-key function the
+  // real news-agent provider chain uses, keyed by a slug of the IA's name.
+  // These three default rows (DeepSeek/Kimi/Claude) slug to the exact
+  // provider_key values the real ai_providers table already uses, so
+  // saving here updates the same underlying credential, not a separate one.
+  $$(".ai-provider-key-input").forEach((input) => {
+    input.addEventListener("focus", () => {
+      if (input.value === MASKED_KEY_PLACEHOLDER) input.value = "";
+    });
+    input.addEventListener("blur", () => {
+      const provider = state.aiProviders[Number(input.dataset.aiIndex)];
+      if (!input.value && provider.hasKey) input.value = MASKED_KEY_PLACEHOLDER;
+    });
+  });
+  $$(".ai-provider-key-save").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.aiIndex);
+      const input = $$(".ai-provider-key-input").find((el) => Number(el.dataset.aiIndex) === index);
+      void saveAiProviderKeyInline(index, input);
+    });
+  });
+
   $("#generatorPrompt").value = "Genera 30 preguntas por dojo, intercaladas con 20 manuales. Aumenta dificultad gradualmente. Devuelve JSON con pregunta, opciones, respuesta, explicacion, dificultad, control ISO y sugerencia de kata.";
   $("#auditorPrompt").value = "Audita y reformula preguntas generadas. Valida que el tema sea ciberseguridad, que la respuesta sea correcta, que la explicacion sea clara y que la dificultad coincida con el cinturon.";
+}
+
+function slugifyProviderName(name) {
+  const slug = name
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "ia";
+}
+
+async function saveAiProviderKeyInline(index, inputEl) {
+  const provider = state.aiProviders[index];
+  const value = inputEl.value;
+  if (value === MASKED_KEY_PLACEHOLDER) {
+    notify("Escribe una clave nueva para reemplazarla (no cambio).");
+    return;
+  }
+  if (!value.trim()) {
+    notify("Escribe la clave antes de guardar.");
+    return;
+  }
+
+  const providerKey = slugifyProviderName(provider.name);
+  // Only send provider_type/model_name defaults when this slug isn't one of
+  // the real, already-configured providers — otherwise this would silently
+  // overwrite a correctly configured provider (e.g. Claude's real
+  // provider_type is "messages", not the generic default below).
+  const knownProvider = state.newsProviders.find((p) => p.provider_key === providerKey);
+  const payload = { provider_key: providerKey, api_key: value.trim() };
+  if (!knownProvider) {
+    payload.label = provider.name;
+    payload.provider_type = "chat_completion";
+    payload.model_name = provider.name;
+  }
+
+  inputEl.disabled = true;
+  try {
+    await supabaseFunctionInvoke("save-provider-key", payload);
+    provider.hasKey = true;
+    persist("Clave guardada de forma cifrada.");
+    inputEl.value = MASKED_KEY_PLACEHOLDER;
+    void loadNewsProvidersFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo guardar la clave:", error);
+    notify(`No se pudo guardar la clave: ${error.message}`);
+  } finally {
+    inputEl.disabled = false;
+  }
 }
 
 function renderNewsAgent() {
   $("#newsAgentActive").checked = Boolean(state.newsAgent.active);
   $("#newsAgentTime").value = state.newsAgent.runTime;
-  $("#newsAgentUrls").value = state.newsAgent.urls.join("\n");
   $("#newsAgentPrompt").value = state.newsAgent.prompt;
   $("#newsAgentLastRun").textContent = state.newsAgent.lastRun;
+}
+
+async function loadNewsAgentConfigFromSupabase() {
+  try {
+    const rows = await supabaseRest("agent_configs?select=*&agent_code=eq.ciber-dojo-news-agent");
+    const config = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    if (config) {
+      state.newsAgent.id = config.id;
+      state.newsAgent.active = Boolean(config.enabled);
+      state.newsAgent.runTime = (config.trigger_time || "07:30:00").slice(0, 5);
+      state.newsAgent.prompt = config.prompt_template || "";
+      state.newsAgent.lastRun = config.last_run_at ? new Date(config.last_run_at).toLocaleString("es-EC") : "Pendiente";
+      void loadNewsChainFromSupabase();
+    }
+    renderNewsAgent();
+  } catch (error) {
+    console.warn("No se pudo cargar la configuracion del agente de noticias:", error);
+  }
+}
+
+async function saveNewsAgentFromForm() {
+  const statusEl = $("#newsAgentSaveStatus");
+  state.newsAgent.active = $("#newsAgentActive").checked;
+  state.newsAgent.runTime = $("#newsAgentTime").value || "07:30";
+  state.newsAgent.prompt = $("#newsAgentPrompt").value.trim();
+
+  if (!state.newsAgent.id) {
+    statusEl.textContent = "No se encontro la configuracion del agente en Supabase.";
+    return;
+  }
+
+  try {
+    await supabaseRest(`agent_configs?id=eq.${state.newsAgent.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        enabled: state.newsAgent.active,
+        trigger_time: `${state.newsAgent.runTime}:00`,
+        prompt_template: state.newsAgent.prompt,
+      }),
+    });
+    statusEl.textContent = "Configuracion guardada.";
+    notify("Agente de noticias configurado.");
+  } catch (error) {
+    console.warn("No se pudo guardar la configuracion del agente de noticias:", error);
+    statusEl.textContent = "No se pudo guardar. Intenta de nuevo.";
+  }
+}
+
+async function loadNewsSourcesFromSupabase() {
+  try {
+    const rows = await supabaseRest("cyber_news_sources?select=*&order=priority.asc");
+    state.newsSources = Array.isArray(rows) ? rows : [];
+    renderNewsSources();
+  } catch (error) {
+    console.warn("No se pudieron cargar las fuentes de noticias:", error);
+  }
+}
+
+function renderNewsSources() {
+  const list = $("#newsSourceList");
+  if (state.newsSources.length === 0) {
+    list.innerHTML = `<p class="muted">No hay fuentes configuradas todavia.</p>`;
+    return;
+  }
+
+  list.innerHTML = state.newsSources.map((source) => `
+    <div class="news-source-row" data-id="${esc(source.id)}">
+      <label class="check-row">
+        <input type="checkbox" class="news-source-toggle" ${source.enabled ? "checked" : ""} />
+      </label>
+      <div class="news-source-info">
+        <strong>${esc(source.name)}</strong>
+        <span class="muted">${esc(source.url)}</span>
+      </div>
+      <button type="button" class="btn danger small news-source-delete">Eliminar</button>
+    </div>
+  `).join("");
+
+  [...list.querySelectorAll(".news-source-toggle")].forEach((checkbox) => {
+    checkbox.addEventListener("change", (event) => {
+      const id = event.target.closest(".news-source-row").dataset.id;
+      void toggleNewsSource(id, event.target.checked);
+    });
+  });
+  [...list.querySelectorAll(".news-source-delete")].forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const id = event.target.closest(".news-source-row").dataset.id;
+      void deleteNewsSource(id);
+    });
+  });
+}
+
+async function addNewsSource() {
+  const name = $("#newsSourceName").value.trim();
+  const url = $("#newsSourceUrl").value.trim();
+  if (!name || !url) {
+    notify("Completa nombre y URL de la fuente.");
+    return;
+  }
+
+  try {
+    await supabaseRest("cyber_news_sources", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ name, url, priority: (state.newsSources.length + 1) * 10 }),
+    });
+    $("#newsSourceName").value = "";
+    $("#newsSourceUrl").value = "";
+    await loadNewsSourcesFromSupabase();
+    notify("Fuente agregada.");
+  } catch (error) {
+    console.warn("No se pudo agregar la fuente:", error);
+    notify("No se pudo agregar la fuente. Verifica que la URL no este repetida.");
+  }
+}
+
+async function toggleNewsSource(id, enabled) {
+  try {
+    await supabaseRest(`cyber_news_sources?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    });
+    const source = state.newsSources.find((item) => item.id === id);
+    if (source) source.enabled = enabled;
+  } catch (error) {
+    console.warn("No se pudo actualizar la fuente:", error);
+    notify("No se pudo actualizar la fuente.");
+    await loadNewsSourcesFromSupabase();
+  }
+}
+
+async function deleteNewsSource(id) {
+  if (!window.confirm("¿Eliminar esta fuente?")) return;
+  try {
+    await supabaseRest(`cyber_news_sources?id=eq.${id}`, { method: "DELETE" });
+    await loadNewsSourcesFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo eliminar la fuente:", error);
+    notify("No se pudo eliminar la fuente.");
+  }
+}
+
+async function loadNewsProvidersFromSupabase() {
+  try {
+    const rows = await supabaseRest("ai_providers?select=*&order=label.asc");
+    state.newsProviders = Array.isArray(rows) ? rows : [];
+    renderNewsProviderList();
+    renderNewsChain();
+
+    // Keep the local/draft "Configuracion de IA" panel's key indicators
+    // honest: if a row's name slugs to a real provider_key that already has
+    // a Vault key, show it as masked there too instead of blank.
+    const byKey = new Map(state.newsProviders.map((p) => [p.provider_key, p]));
+    let changed = false;
+    state.aiProviders.forEach((provider) => {
+      const real = byKey.get(slugifyProviderName(provider.name));
+      const hasKey = Boolean(real && real.api_key_secret_id);
+      if (provider.hasKey !== hasKey) {
+        provider.hasKey = hasKey;
+        changed = true;
+      }
+    });
+    if (changed && $("#aiProviders")) renderAiProviders();
+  } catch (error) {
+    console.warn("No se pudieron cargar los proveedores de IA:", error);
+  }
+}
+
+async function loadNewsChainFromSupabase() {
+  if (!state.newsAgent.id) return;
+  try {
+    const rows = await supabaseRest(
+      `agent_provider_assignments?select=*&agent_config_id=eq.${state.newsAgent.id}&order=priority.asc`
+    );
+    state.newsChain = Array.isArray(rows) ? rows : [];
+    renderNewsChain();
+  } catch (error) {
+    console.warn("No se pudo cargar la cadena de proveedores:", error);
+  }
+}
+
+function renderNewsProviderList() {
+  const container = $("#newsProviderList");
+  if (state.newsProviders.length === 0) {
+    container.innerHTML = `<p class="muted">No hay proveedores de IA configurados todavia.</p>`;
+    return;
+  }
+
+  container.innerHTML = state.newsProviders.map((provider) => `
+    <div class="news-provider-row" data-key="${esc(provider.provider_key)}">
+      <div class="news-provider-head">
+        <label class="check-row">
+          <input type="checkbox" class="news-provider-toggle" ${provider.active ? "checked" : ""} />
+        </label>
+        <div class="news-provider-info">
+          <strong>${esc(provider.label)} <span class="muted">(${esc(provider.provider_key)})</span></strong>
+          <span class="muted">${esc(provider.provider_type)} · ${esc(provider.model_name)} · timeout ${esc(String(provider.default_timeout_seconds ?? 30))}s</span>
+        </div>
+        <div class="news-provider-head-actions">
+          <button type="button" class="btn secondary small news-provider-edit">Editar</button>
+          <button type="button" class="btn danger small news-provider-delete">Eliminar</button>
+        </div>
+      </div>
+      <label class="news-provider-key-field">
+        Clave de API
+        <span class="news-provider-key-row">
+          <input
+            type="password"
+            class="news-provider-key-input"
+            value="${provider.api_key_secret_id ? MASKED_KEY_PLACEHOLDER : ""}"
+            placeholder="Sin clave guardada"
+            title="Clave de API (oculta). Escribe una nueva para reemplazarla."
+            autocomplete="off"
+          />
+          <button type="button" class="btn secondary small news-provider-key-save">Guardar clave</button>
+        </span>
+      </label>
+    </div>
+  `).join("");
+
+  [...container.querySelectorAll(".news-provider-toggle")].forEach((checkbox) => {
+    checkbox.addEventListener("change", (event) => {
+      const key = event.target.closest(".news-provider-row").dataset.key;
+      void toggleNewsProviderActive(key, event.target.checked);
+    });
+  });
+  [...container.querySelectorAll(".news-provider-key-input")].forEach((input) => {
+    // Clicking into the masked placeholder to type a real key shouldn't
+    // start with the dots already selected-and-ready-to-overwrite being
+    // ambiguous with "the key starts with these dots" — clear it on focus
+    // so whatever the admin types is unambiguously the new value, and
+    // restore the mask on blur if they leave it untouched.
+    input.addEventListener("focus", () => {
+      if (input.value === MASKED_KEY_PLACEHOLDER) input.value = "";
+    });
+    input.addEventListener("blur", () => {
+      const key = input.closest(".news-provider-row").dataset.key;
+      const provider = state.newsProviders.find((p) => p.provider_key === key);
+      if (!input.value && provider && provider.api_key_secret_id) input.value = MASKED_KEY_PLACEHOLDER;
+    });
+  });
+  [...container.querySelectorAll(".news-provider-key-save")].forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const row = event.target.closest(".news-provider-row");
+      const key = row.dataset.key;
+      const input = row.querySelector(".news-provider-key-input");
+      void saveNewsProviderKeyInline(key, input);
+    });
+  });
+  [...container.querySelectorAll(".news-provider-edit")].forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const key = event.target.closest(".news-provider-row").dataset.key;
+      openNewsProviderForm(key);
+    });
+  });
+  [...container.querySelectorAll(".news-provider-delete")].forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const key = event.target.closest(".news-provider-row").dataset.key;
+      void deleteNewsProvider(key);
+    });
+  });
+}
+
+async function saveNewsProviderKeyInline(providerKey, inputEl) {
+  const value = inputEl.value;
+  if (value === MASKED_KEY_PLACEHOLDER) {
+    notify("Escribe una clave nueva para reemplazarla (no cambio).");
+    return;
+  }
+  if (!value.trim()) {
+    notify("Escribe la clave antes de guardar.");
+    return;
+  }
+
+  inputEl.disabled = true;
+  try {
+    await supabaseFunctionInvoke("save-provider-key", { provider_key: providerKey, api_key: value.trim() });
+    await loadNewsProvidersFromSupabase();
+    notify("Clave guardada de forma cifrada.");
+  } catch (error) {
+    console.warn("No se pudo guardar la clave:", error);
+    notify(`No se pudo guardar la clave: ${error.message}`);
+    inputEl.disabled = false;
+  }
+}
+
+async function toggleNewsProviderActive(providerKey, active) {
+  try {
+    await supabaseRest(`ai_providers?provider_key=eq.${encodeURIComponent(providerKey)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ active }),
+    });
+    const provider = state.newsProviders.find((p) => p.provider_key === providerKey);
+    if (provider) provider.active = active;
+  } catch (error) {
+    console.warn("No se pudo actualizar el proveedor:", error);
+    notify("No se pudo actualizar el proveedor.");
+    await loadNewsProvidersFromSupabase();
+  }
+}
+
+async function deleteNewsProvider(providerKey) {
+  if (!window.confirm(`¿Eliminar el proveedor "${providerKey}"? Tambien se quitara de cualquier cadena donde este asignado.`)) return;
+  try {
+    await supabaseRest(`ai_providers?provider_key=eq.${encodeURIComponent(providerKey)}`, { method: "DELETE" });
+    await loadNewsProvidersFromSupabase();
+    await loadNewsChainFromSupabase();
+    notify("Proveedor eliminado.");
+  } catch (error) {
+    console.warn("No se pudo eliminar el proveedor:", error);
+    notify("No se pudo eliminar el proveedor.");
+  }
+}
+
+function openNewsProviderForm(providerKey) {
+  state.newsProviderEditingKey = providerKey;
+  const form = $("#newsProviderForm");
+  const provider = providerKey ? state.newsProviders.find((p) => p.provider_key === providerKey) : null;
+
+  $("#npKey").value = provider ? provider.provider_key : "";
+  $("#npKey").disabled = Boolean(provider);
+  $("#npLabel").value = provider ? provider.label : "";
+  $("#npType").value = provider ? provider.provider_type : "chat_completion";
+  $("#npModel").value = provider ? provider.model_name : "";
+  $("#npBaseUrl").value = provider && provider.base_url ? provider.base_url : "";
+  $("#npTimeout").value = provider ? provider.default_timeout_seconds ?? 30 : 30;
+  $("#npActive").checked = provider ? Boolean(provider.active) : true;
+  $("#npApiKey").value = "";
+  $("#npApiKey").placeholder = provider && provider.api_key_secret_id ? "Dejar vacio para no cambiar la clave actual" : "sk-...";
+  $("#newsProviderFormStatus").textContent = "";
+  form.classList.remove("hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function closeNewsProviderForm() {
+  state.newsProviderEditingKey = undefined;
+  $("#newsProviderForm").classList.add("hidden");
+}
+
+async function saveNewsProviderForm() {
+  const statusEl = $("#newsProviderFormStatus");
+  const providerKey = $("#npKey").value.trim();
+  const label = $("#npLabel").value.trim();
+  const modelName = $("#npModel").value.trim();
+  const apiKey = $("#npApiKey").value.trim();
+  const isNew = state.newsProviderEditingKey === null;
+
+  if (!providerKey || !label || !modelName) {
+    statusEl.textContent = "Completa identificador, nombre y modelo.";
+    return;
+  }
+  if (isNew && !apiKey) {
+    statusEl.textContent = "Un proveedor nuevo necesita una clave de API.";
+    return;
+  }
+
+  statusEl.textContent = "Guardando...";
+  try {
+    const payload = {
+      provider_key: providerKey,
+      label,
+      provider_type: $("#npType").value,
+      model_name: modelName,
+      base_url: $("#npBaseUrl").value.trim() || undefined,
+      default_timeout_seconds: Number($("#npTimeout").value) || 30,
+      active: $("#npActive").checked,
+    };
+    if (apiKey) payload.api_key = apiKey;
+
+    await supabaseFunctionInvoke("save-provider-key", payload);
+    closeNewsProviderForm();
+    await loadNewsProvidersFromSupabase();
+    notify("Proveedor guardado.");
+  } catch (error) {
+    console.warn("No se pudo guardar el proveedor:", error);
+    statusEl.textContent = `No se pudo guardar: ${error.message}`;
+  }
+}
+
+function renderNewsChain() {
+  const container = $("#newsProviderChain");
+  const providerByKey = new Map(state.newsProviders.map((p) => [p.provider_key, p]));
+
+  if (!state.newsAgent.id) {
+    container.innerHTML = `<p class="muted">Guarda la configuracion del agente primero.</p>`;
+  } else if (state.newsChain.length === 0) {
+    container.innerHTML = `<p class="muted">No hay proveedores asignados a la ejecucion automatica todavia.</p>`;
+  } else {
+    container.innerHTML = state.newsChain.map((assignment) => {
+      const provider = providerByKey.get(assignment.provider_key);
+      return `
+      <div class="news-chain-row" data-id="${esc(assignment.id)}">
+        <input type="number" class="news-chain-priority" min="1" value="${esc(String(assignment.priority))}" title="Prioridad (menor = primero)" />
+        <div class="news-chain-info">
+          <strong>${esc(provider ? provider.label : assignment.provider_key)}</strong>
+          <span class="muted">${provider ? (provider.api_key_secret_id ? "Clave guardada" : "Sin clave guardada (fallara)") : "Proveedor no encontrado"}</span>
+        </div>
+        <div class="news-provider-actions">
+          <label class="check-row">
+            <input type="checkbox" class="news-chain-toggle" ${assignment.active ? "checked" : ""} />
+            Activo
+          </label>
+          <button type="button" class="btn danger small news-chain-remove">Quitar</button>
+        </div>
+      </div>
+    `;
+    }).join("");
+  }
+
+  const select = $("#newsChainAddSelect");
+  const assignedKeys = new Set(state.newsChain.map((a) => a.provider_key));
+  const available = state.newsProviders.filter((p) => !assignedKeys.has(p.provider_key));
+  select.innerHTML = available.length > 0
+    ? available.map((p) => `<option value="${esc(p.provider_key)}">${esc(p.label)}</option>`).join("")
+    : `<option value="">No hay proveedores disponibles</option>`;
+
+  [...container.querySelectorAll(".news-chain-priority")].forEach((input) => {
+    input.addEventListener("change", (event) => {
+      const id = event.target.closest(".news-chain-row").dataset.id;
+      const priority = Number(event.target.value) || 1;
+      void updateNewsChainAssignment(id, { priority });
+    });
+  });
+  [...container.querySelectorAll(".news-chain-toggle")].forEach((checkbox) => {
+    checkbox.addEventListener("change", (event) => {
+      const id = event.target.closest(".news-chain-row").dataset.id;
+      void updateNewsChainAssignment(id, { active: event.target.checked });
+    });
+  });
+  [...container.querySelectorAll(".news-chain-remove")].forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const id = event.target.closest(".news-chain-row").dataset.id;
+      void removeNewsChainAssignment(id);
+    });
+  });
+}
+
+async function updateNewsChainAssignment(id, patch) {
+  try {
+    await supabaseRest(`agent_provider_assignments?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    await loadNewsChainFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo actualizar la cadena:", error);
+    notify("No se pudo actualizar la cadena de proveedores.");
+    await loadNewsChainFromSupabase();
+  }
+}
+
+async function removeNewsChainAssignment(id) {
+  if (!window.confirm("¿Quitar este proveedor de la cadena automatica?")) return;
+  try {
+    await supabaseRest(`agent_provider_assignments?id=eq.${id}`, { method: "DELETE" });
+    await loadNewsChainFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo quitar el proveedor de la cadena:", error);
+    notify("No se pudo quitar el proveedor de la cadena.");
+  }
+}
+
+async function addNewsChainAssignment() {
+  const providerKey = $("#newsChainAddSelect").value;
+  if (!providerKey) {
+    notify("No hay proveedores disponibles para agregar.");
+    return;
+  }
+  if (!state.newsAgent.id) {
+    notify("Guarda la configuracion del agente antes de armar la cadena.");
+    return;
+  }
+  const nextPriority = state.newsChain.length > 0 ? Math.max(...state.newsChain.map((a) => a.priority)) + 1 : 1;
+  try {
+    await supabaseRest("agent_provider_assignments", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        agent_config_id: state.newsAgent.id,
+        provider_key: providerKey,
+        priority: nextPriority,
+        active: true,
+      }),
+    });
+    await loadNewsChainFromSupabase();
+    notify("Proveedor agregado a la cadena.");
+  } catch (error) {
+    console.warn("No se pudo agregar a la cadena:", error);
+    notify("No se pudo agregar el proveedor a la cadena.");
+  }
+}
+
+async function loadNewsRunsFromSupabase() {
+  try {
+    const rows = await supabaseRest(
+      "agent_runs?select=*,agent_configs!inner(agent_code)&agent_configs.agent_code=eq.ciber-dojo-news-agent&order=started_at.desc&limit=20"
+    );
+    state.newsRuns = Array.isArray(rows) ? rows : [];
+    renderNewsRunLog();
+  } catch (error) {
+    console.warn("No se pudo cargar el historial del agente de noticias:", error);
+  }
+}
+
+const NEWS_RUN_STATUS_LABEL = { running: "En curso", completed: "Completado", failed: "Error", partial: "Parcial (revisar)" };
+const NEWS_RUN_STATUS_BADGE = { running: "audit", completed: "ai", failed: "danger", partial: "audit" };
+const NEWS_RUN_TRIGGER_LABEL = { pg_cron: "automatico (pg_cron)", quiz_generator: "manual (quiz-generator)", "central-admin": "manual (panel admin)" };
+
+function renderNewsRunLog() {
+  const container = $("#newsRunLog");
+  if (state.newsRuns.length === 0) {
+    container.innerHTML = `<p class="muted">Todavia no se ha ejecutado el agente.</p>`;
+    return;
+  }
+
+  container.innerHTML = state.newsRuns.map((run, index) => {
+    const attempts = run.output_payload && Array.isArray(run.output_payload.attempts) ? run.output_payload.attempts : null;
+    const rowId = `newsRunAttempts-${index}`;
+    return `
+    <div class="progress-row">
+      <div class="news-run-head">
+        <span class="badge ${NEWS_RUN_STATUS_BADGE[run.status] || "audit"}">${NEWS_RUN_STATUS_LABEL[run.status] || run.status}</span>
+        <strong>${esc(new Date(run.started_at).toLocaleString("es-EC"))}</strong>
+        <span class="muted">disparado por ${esc(NEWS_RUN_TRIGGER_LABEL[run.triggered_by] || run.triggered_by || "desconocido")}</span>
+      </div>
+      ${run.summary ? `<p>${esc(run.summary)}</p>` : ""}
+      ${run.error_message ? `<p class="news-run-error">${esc(run.error_message)}</p>` : ""}
+      ${attempts && attempts.length > 0 ? `
+        <button type="button" class="news-run-toggle" data-target="${rowId}">Ver intentos por proveedor (${attempts.length})</button>
+        <div id="${rowId}" class="news-run-attempts hidden">
+          ${attempts.map((a) => `
+            <div class="news-run-attempt-row">
+              <span class="badge ${a.status === "success" ? "ai" : a.status === "timeout" ? "audit" : "danger"}">${esc(a.provider_key)}</span>
+              <span class="muted">${esc(a.status)} · ${esc(String(a.latency_ms))}ms</span>
+              ${a.error ? `<span class="news-run-error">${esc(a.error)}</span>` : ""}
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
+  }).join("");
+
+  [...container.querySelectorAll(".news-run-toggle")].forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = $(`#${button.dataset.target}`);
+      target.classList.toggle("hidden");
+    });
+  });
+}
+
+async function loadNewsGeneratedFromSupabase() {
+  try {
+    const rows = await supabaseRest(
+      "questions?select=id,dojo_id,question_text,answer_text,explanation,kata_label,difficulty,audit_status,active,source_url,source_title,extracted_at&source_type=eq.news_generated&order=extracted_at.desc&limit=50"
+    );
+    state.newsGenerated = Array.isArray(rows) ? rows : [];
+    renderNewsGeneratedReport();
+  } catch (error) {
+    console.warn("No se pudo cargar el reporte de contenido generado:", error);
+  }
+}
+
+function renderNewsGeneratedReport() {
+  const container = $("#newsGeneratedReport");
+  if (state.newsGenerated.length === 0) {
+    container.innerHTML = `<p class="muted">Todavia no hay preguntas ni katas generadas por el agente.</p>`;
+    return;
+  }
+
+  container.innerHTML = state.newsGenerated.map((item) => `
+    <div class="news-generated-row" data-id="${esc(item.id)}">
+      <div class="news-generated-head">
+        <span class="badge ${item.audit_status === "approved" ? "ai" : item.audit_status === "rejected" ? "danger" : "audit"}">${item.audit_status === "approved" ? "Aprobada" : item.audit_status === "rejected" ? "Rechazada" : "Pendiente"}</span>
+        <span class="muted">${item.extracted_at ? new Date(item.extracted_at).toLocaleString("es-EC") : "Sin fecha"}</span>
+      </div>
+      <strong>${esc(item.question_text)}</strong>
+      <p class="muted">Respuesta: ${esc(item.answer_text || "")}</p>
+      <p class="muted">Kata: ${esc(item.kata_label || "-")} · Dojo: ${esc(item.dojo_id || "-")} · Dificultad: ${esc(String(item.difficulty || 1))}</p>
+      ${item.source_url ? `<p class="muted">Fuente: <a href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer">${esc(item.source_title || item.source_url)}</a></p>` : ""}
+      ${item.audit_status === "pending" ? `
+        <div class="modal-actions">
+          <button type="button" class="btn secondary small news-generated-approve">Aprobar y activar</button>
+          <button type="button" class="btn danger small news-generated-reject">Rechazar</button>
+        </div>
+      ` : ""}
+    </div>
+  `).join("");
+
+  [...container.querySelectorAll(".news-generated-approve")].forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const id = event.target.closest(".news-generated-row").dataset.id;
+      void reviewNewsGenerated(id, "approved");
+    });
+  });
+  [...container.querySelectorAll(".news-generated-reject")].forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const id = event.target.closest(".news-generated-row").dataset.id;
+      void reviewNewsGenerated(id, "rejected");
+    });
+  });
+}
+
+async function reviewNewsGenerated(id, decision) {
+  try {
+    await supabaseRest(`questions?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ audit_status: decision, active: decision === "approved", reviewed_at: new Date().toISOString() }),
+    });
+    await loadNewsGeneratedFromSupabase();
+    notify(decision === "approved" ? "Pregunta aprobada y activada." : "Pregunta rechazada.");
+  } catch (error) {
+    console.warn("No se pudo actualizar la revision:", error);
+    notify("No se pudo guardar la revision.");
+  }
+}
+
+async function supabaseFunctionInvoke(name, body) {
+  const response = await fetch(`/api/functions/v1/${name}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `${response.status}`);
+  return data;
+}
+
+async function testNewsAgent() {
+  await executeNewsAgent(true);
+}
+
+async function runNewsAgent() {
+  if (!window.confirm("Esto generara preguntas y katas reales pendientes de revision. ¿Continuar?")) return;
+  await executeNewsAgent(false);
+}
+
+async function executeNewsAgent(dryRun) {
+  if (state.newsAgentBusy) return;
+  if (typeof puter === "undefined" || !puter.ai || !puter.ai.chat) {
+    notify("Puter.js no esta disponible. Verifica tu conexion e intenta de nuevo.");
+    return;
+  }
+
+  state.newsAgentBusy = true;
+  const runButton = dryRun ? $("#testNewsAgent") : $("#runNewsAgent");
+  const originalLabel = runButton.textContent;
+  runButton.disabled = true;
+  runButton.textContent = "Buscando noticias...";
+
+  try {
+    const prepared = await supabaseFunctionInvoke("run-news-agent", {
+      action: "prepare",
+      dry_run: dryRun,
+      triggered_by: state.actor || "central-admin",
+    });
+
+    runButton.textContent = "Generando con IA...";
+    let aiContent = "";
+    let aiError = null;
+    try {
+      const response = await puter.ai.chat(
+        `${prepared.prompt_template}\n\nDatos de entrada (JSON): ${JSON.stringify(prepared.ai_payload)}\n\nResponde unicamente con JSON valido (sin texto adicional, sin bloques de codigo) siguiendo instructions.response_format.`,
+        { model: "gpt-5.6-luna" }
+      );
+      aiContent = typeof response === "string" ? response : (response?.message?.content ?? response?.text ?? JSON.stringify(response));
+    } catch (error) {
+      aiError = (error && error.message) || String(error);
+    }
+
+    runButton.textContent = "Guardando resultado...";
+    const completed = await supabaseFunctionInvoke("run-news-agent", {
+      action: "complete",
+      run_id: prepared.run_id,
+      dry_run: dryRun,
+      ai_content: aiContent,
+      ai_error: aiError,
+      provider_key: "puter-gpt-5.6-luna",
+      fetched_sources: prepared.fetched_sources,
+    });
+
+    if (completed.error) {
+      notify(`El agente fallo: ${completed.error}`);
+    } else {
+      notify(completed.summary || "Agente ejecutado.");
+    }
+
+    await Promise.all([loadNewsAgentConfigFromSupabase(), loadNewsRunsFromSupabase(), loadNewsGeneratedFromSupabase()]);
+  } catch (error) {
+    console.error("Error ejecutando el agente de noticias:", error);
+    notify(`No se pudo ejecutar el agente: ${error.message || error}`);
+    await loadNewsRunsFromSupabase();
+  } finally {
+    state.newsAgentBusy = false;
+    runButton.disabled = false;
+    runButton.textContent = originalLabel;
+  }
+}
+
+async function uploadManualContentFile(file) {
+  const safeExt = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  const filePath = `manual/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+
+  const response = await fetch(`/api/storage/v1/object/news-agent-uploads/${filePath}`, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error(`${response.status} ${await response.text()}`);
+  }
+
+  return filePath;
+}
+
+async function testManualContent() {
+  await runManualContent(true);
+}
+
+async function generateManualContent() {
+  if (!window.confirm("Esto generara preguntas y katas reales pendientes de revision a partir de este contenido. ¿Continuar?")) return;
+  await runManualContent(false);
+}
+
+async function runManualContent(dryRun) {
+  if (state.manualContentBusy) return;
+
+  const sourceName = $("#manualContentSourceName").value.trim();
+  const url = $("#manualContentUrl").value.trim();
+  const text = $("#manualContentText").value.trim();
+  const file = $("#manualContentFile").files[0] || null;
+  const statusEl = $("#manualContentStatus");
+  const resultEl = $("#manualContentResult");
+  resultEl.innerHTML = "";
+
+  if (!text && !file && !url) {
+    statusEl.textContent = "Pega texto, pega una URL, o sube un archivo antes de continuar.";
+    return;
+  }
+
+  state.manualContentBusy = true;
+  const testButton = $("#manualContentTest");
+  const generateButton = $("#manualContentGenerate");
+  testButton.disabled = true;
+  generateButton.disabled = true;
+
+  try {
+    const sources = [];
+
+    if (file) {
+      statusEl.textContent = "Subiendo archivo...";
+      const filePath = await uploadManualContentFile(file);
+      sources.push({ file_path: filePath, name: sourceName || file.name, url: url || undefined });
+    }
+    if (text) {
+      sources.push({ content: text, name: sourceName || undefined, url: url || sourceName || undefined });
+    }
+    if (!file && !text && url) {
+      sources.push({ url, name: sourceName || undefined });
+    }
+
+    statusEl.textContent = dryRun ? "Generando (prueba, no se guarda)..." : "Generando y guardando...";
+    const result = await supabaseFunctionInvoke("quiz-generator", { sources, dry_run: dryRun });
+
+    if (result.error) {
+      statusEl.textContent = "";
+      resultEl.innerHTML = `<p class="news-run-error">${esc(result.error)}</p>`;
+    } else if (result.validation_status === "invalid") {
+      statusEl.textContent = "";
+      resultEl.innerHTML = `
+        <p class="news-run-error">${esc(result.summary)}</p>
+        <ul>${result.validation_errors.map((e) => `<li class="muted">${esc(e)}</li>`).join("")}</ul>
+      `;
+    } else {
+      statusEl.textContent = "";
+      resultEl.innerHTML = `<p>${esc(result.summary)}</p>`;
+      if (!dryRun) {
+        $("#manualContentText").value = "";
+        $("#manualContentFile").value = "";
+        $("#manualContentUrl").value = "";
+        $("#manualContentSourceName").value = "";
+        await Promise.all([loadNewsRunsFromSupabase(), loadNewsGeneratedFromSupabase()]);
+      }
+    }
+  } catch (error) {
+    console.error("Error generando contenido manual:", error);
+    statusEl.textContent = "";
+    resultEl.innerHTML = `<p class="news-run-error">${esc(error.message || String(error))}</p>`;
+  } finally {
+    state.manualContentBusy = false;
+    testButton.disabled = false;
+    generateButton.disabled = false;
+  }
 }
 
 function renderNewsAlerts() {
@@ -469,75 +1417,6 @@ function renderNewsAlerts() {
       <p>${esc(question.kata)}</p>
     </div>
   `).join('');
-}
-
-function saveNewsAgentFromForm() {
-  state.newsAgent.active = $("#newsAgentActive").checked;
-  state.newsAgent.runTime = $("#newsAgentTime").value || "07:30";
-  state.newsAgent.urls = $("#newsAgentUrls").value.split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
-  state.newsAgent.prompt = $("#newsAgentPrompt").value.trim();
-  persist("Agente de noticias configurado.");
-  renderNewsAgent();
-}
-
-function runNewsAgent() {
-  saveNewsAgentFromForm();
-  const sources = state.newsAgent.urls.length ? state.newsAgent.urls : baseState.newsAgent.urls;
-  const bank = state.questionsByDojo[state.selectedDojoId];
-  const dojo = getSelectedDojo();
-  const nextAi = bank.filter((question) => question.source === "ia").slice(0, 6);
-
-  nextAi.forEach((question, index) => {
-    const domain = sourceDomain(sources[index % sources.length]);
-    question.text = `Segun una noticia revisada en ${explainDomain(domain)}, un atacante explota ${topicForIndex(index)}. Que control reduce mejor el riesgo en ${dojo.name}?`;
-    question.answer = answerForIndex(index);
-    question.explanation = `La respuesta conecta el incidente con ${dojo.iso}, priorizando prevencion, deteccion y respuesta medible.`;
-    question.status = "pendiente";
-    question.kata = `Kata noticia ${index + 1}`;
-  });
-
-  state.generatedKatas.unshift(...sources.slice(0, 3).map((url, index) => ({
-    title: `Kata de noticia ${index + 1}: ${topicForIndex(index)}`,
-    source: sourceDomain(url),
-    scenario: `El agente detecta una noticia de ciberataque en ${sourceDomain(url)} y la convierte en un escenario de entrenamiento.`,
-    task: `Analizar indicadores, elegir controles, redactar comunicacion interna y definir una accion de mejora para ${dojo.name}.`,
-    difficulty: Math.min(5, index + 2),
-  })));
-
-  const alertTime = new Date().toLocaleString("es-EC");
-  const alertEntry = {
-    id: `news-alert-${Date.now()}`,
-    createdAt: alertTime,
-    dojo: dojo.name,
-    sources: sources.map((url) => sourceDomain(url)),
-    urls: sources,
-    summary: `La IA revisó ${sources.length} sitios y generó ${nextAi.length} preguntas para ${dojo.name}.`,
-    persisted: false,
-    questions: nextAi.map((question, index) => ({
-      id: question.id,
-      text: question.text,
-      kata: question.kata,
-      status: question.status,
-      severity: ["Baja", "Media", "Alta"][index % 3],
-    })),
-  };
-
-  state.newsAlerts.unshift(alertEntry);
-  state.newsAlerts = state.newsAlerts.slice(0, 20);
-  state.generatedKatas = state.generatedKatas.slice(0, 8);
-  state.newsAgent.lastRun = alertTime;
-  persist("Agente ejecutado: preguntas y katas generadas en borrador local (sin sobrescribir base de datos).");
-  void saveNewsAlertToSupabase(alertEntry).then((saved) => {
-    if (saved) {
-      alertEntry.persisted = true;
-      persist("Alerta IA guardada en Supabase.");
-      renderNewsAlerts();
-    }
-  });
-  // NOTA DE SEGURIDAD OPERATIVA:
-  // No se invoca automáticamente saveQuestionsToSupabase(bank, dojo) para evitar
-  // que texto generado por plantillas fijas en JS destruya preguntas curriculares reales en Postgres.
-  renderAll();
 }
 
 async function loadQuestionsFromSupabase() {
@@ -595,36 +1474,30 @@ async function loadNewsAlertsFromSupabase() {
   }
 }
 
-async function saveNewsAlertToSupabase(alertEntry) {
-  try {
-    await supabaseRest("alerts", {
-      method: "POST",
-      body: JSON.stringify([
-        {
-          title: alertEntry.summary,
-          description: alertEntry.questions.map((q) => `- ${q.severity}: ${q.text}`).join("\n"),
-          threat_type: "ciberataque",
-          severity: alertEntry.questions.some((q) => q.severity === "Alta") ? "alta" : "media",
-          source: alertEntry.sources[0] || "IA review",
-          source_url: alertEntry.urls.join(", "),
-          approved_by: null,
-          active: true,
-          published_at: new Date().toISOString(),
-        },
-      ]),
-    });
-    return true;
-  } catch (error) {
-    console.error("No se pudo guardar la alerta en Supabase:", error);
-    alertEntry.persisted = false;
-    persist("Alerta generada localmente, pero no se pudo guardar en Supabase.");
-    renderNewsAlerts();
-    return false;
-  }
+const DOJO_STATUS_TO_SUPABASE = { activo: "active", borrador: "draft", pausado: "paused" };
+
+// questions.dojo_id has a FK to cyber_dojos(id) (migration 007), but this
+// panel's dojo list only ever lived in localStorage (addDojo/edits never
+// synced) — so saving a question bank for a dojo Supabase had never heard of
+// failed the FK constraint with no clue why. Upserting the dojo first closes
+// that gap without requiring a separate "sync dojos" step.
+async function ensureDojoSyncedToSupabase(dojo) {
+  await supabaseRest("cyber_dojos?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([{
+      id: dojo.id,
+      name: dojo.name,
+      theme: dojo.theme,
+      iso_control: dojo.iso || null,
+      status: DOJO_STATUS_TO_SUPABASE[dojo.status] || "draft",
+    }]),
+  });
 }
 
 async function saveQuestionsToSupabase(bank, dojo) {
   try {
+    await ensureDojoSyncedToSupabase(dojo);
     const payload = bank.map((question) => questionToSupabase(question, dojo));
     await supabaseRest("questions?on_conflict=id", {
       method: "POST",
@@ -634,7 +1507,11 @@ async function saveQuestionsToSupabase(bank, dojo) {
     notify("Preguntas guardadas en Supabase para Cyber Dojo.");
   } catch (error) {
     console.error("No se pudieron guardar preguntas en Supabase:", error);
-    notify("Guardado local listo. Supabase no acepto el banco; verifica la migracion 007.");
+    // A toast auto-dismisses in 3.2s — too fast to read a variable-length
+    // Postgres/PostgREST error. This path is rare (only on save failure),
+    // so the extra interruption of a blocking alert is worth it here to
+    // make the real cause visible instead of a generic dead-end message.
+    window.alert(`Guardado local listo. Supabase no acepto el banco:\n\n${error.message}`);
   }
 }
 
@@ -654,51 +1531,6 @@ async function supabaseRest(path, options = {}) {
   if (response.status === 204) return null;
   return response.json();
 }
-
-async function sendPasswordRecovery() {
-  // kept for compatibility: call with explicit email
-  console.warn('sendPasswordRecovery called without UI; use sendPasswordRecoveryFromModal(email)')
-}
-
-function openForgotPasswordModal() {
-  const modal = $("#forgotPasswordModal")
-  modal.classList.remove('hidden')
-}
-
-function closeForgotPasswordModal() {
-  const modal = $("#forgotPasswordModal")
-  modal.classList.add('hidden')
-}
-
-$("#forgotCancel").addEventListener('click', () => {
-  closeForgotPasswordModal()
-})
-
-$("#forgotSend").addEventListener('click', async () => {
-  const emailEl = $("#forgotEmail")
-  const statusEl = $("#forgotStatus")
-  const email = emailEl.value
-  statusEl.textContent = ''
-  if (!email) return statusEl.textContent = 'Ingrese un correo válido.'
-  try {
-    const resp = await fetch('/api/auth/v1/recover', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email }),
-    })
-    if (!resp.ok) {
-      const txt = await resp.text()
-      throw new Error(txt || resp.statusText)
-    }
-    statusEl.textContent = 'Se envió un correo con instrucciones para restablecer la contraseña.'
-    setTimeout(() => closeForgotPasswordModal(), 1500)
-  } catch (err) {
-    console.error('Error enviando recuperación desde modal:', err)
-    statusEl.textContent = 'Error al enviar. Verifica el correo e intenta nuevamente.'
-  }
-})
 
 function questionFromSupabase(row) {
   return {
@@ -751,31 +1583,6 @@ function firstCorrectOptionText(options) {
   return option?.texto || "";
 }
 
-function startNewsAgentScheduler() {
-  window.setInterval(() => {
-    if (!state.newsAgent.active) return;
-    const now = new Date();
-    const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    const currentDay = now.toISOString().slice(0, 10);
-    if (currentTime === state.newsAgent.runTime && state.newsAgent.lastAutoRunDay !== currentDay) {
-      state.newsAgent.lastAutoRunDay = currentDay;
-      runNewsAgent();
-    }
-  }, 30000);
-}
-
-function renderKatas() {
-  $("#generatedKatas").innerHTML = state.generatedKatas.map((kata) => `
-    <div class="kata-card">
-      <div>
-        <strong>${esc(kata.title)}</strong>
-        <span class="muted">${esc(kata.source)} - Dificultad ${kata.difficulty}</span>
-      </div>
-      <p>${esc(kata.scenario)}</p>
-      <p><strong>Accion:</strong> ${esc(kata.task)}</p>
-    </div>
-  `).join("");
-}
 
 async function loadSenseiStats() {
   try {
@@ -921,6 +1728,108 @@ async function saveCampaignSettings() {
   }
 }
 
+async function loadTierWeightsFromSupabase() {
+  try {
+    const rows = await supabaseRest("central_admin_campaign_tier_weights?select=*&order=value_tier.asc");
+    if (Array.isArray(rows) && rows.length > 0) state.tierWeights = rows;
+    renderTierWeightsForm();
+    populateValueTierSelect();
+    // Only refresh the tier field itself, not the whole form: a full
+    // renderCampaigns() here could overwrite fields the admin is already
+    // editing if this load resolves after the initial page load.
+    const campaign = getSelectedCampaign();
+    if (campaign) $("#adValueTier").value = campaign.value_tier || 1;
+    updatePriorityHint();
+  } catch (error) {
+    console.warn("No se pudieron cargar las prioridades de propaganda:", error);
+  }
+}
+
+function renderTierWeightsForm() {
+  const grid = $("#tierWeightsGrid");
+  grid.innerHTML = state.tierWeights.map((tier) => `
+    <div class="tier-weights-row" data-tier="${tier.value_tier}">
+      <div class="tier-badge">
+        <strong>${tier.value_tier}</strong>
+        <span>Valor</span>
+      </div>
+      <label>
+        Minimo (USD)
+        <input type="number" min="0" class="tier-min" value="${tier.min_usd}" />
+      </label>
+      <label>
+        Maximo (USD)
+        <input type="number" min="0" class="tier-max" value="${tier.max_usd ?? ""}" placeholder="Sin tope" />
+      </label>
+      <label>
+        Prioridad (veces mas frecuente)
+        <input type="number" min="0.1" step="0.1" class="tier-weight" value="${tier.weight}" />
+      </label>
+    </div>
+  `).join("");
+}
+
+function populateValueTierSelect() {
+  const select = $("#adValueTier");
+  const previous = select.value;
+  select.innerHTML = state.tierWeights.map((tier) => {
+    const range = tier.max_usd == null
+      ? `${tier.min_usd} USD en adelante`
+      : `${tier.min_usd} a ${tier.max_usd} USD`;
+    return `<option value="${tier.value_tier}">${tier.value_tier} - ${range}</option>`;
+  }).join("");
+  if (previous) select.value = previous;
+  updatePriorityHint();
+}
+
+function updatePriorityHint() {
+  const hintEl = $("#adPriorityHint");
+  const tier = state.tierWeights.find((t) => String(t.value_tier) === $("#adValueTier").value);
+  if (!tier) {
+    hintEl.textContent = "";
+    return;
+  }
+  const lowest = state.tierWeights.reduce((min, t) => (t.weight < min.weight ? t : min), tier);
+  const multiple = (tier.weight / lowest.weight);
+  hintEl.textContent = multiple > 1
+    ? `Esta propaganda se exhibira aproximadamente ${multiple % 1 === 0 ? multiple : multiple.toFixed(1)} veces mas seguido que una de valor ${lowest.value_tier}. Si otra propaganda del mismo sector tiene el mismo valor, se alternaran entre si.`
+    : `Prioridad base: esta propaganda solo se exhibira despues de que las de mayor valor hayan tenido su turno.`;
+}
+
+async function saveTierWeights() {
+  const statusEl = $("#tierWeightsStatus");
+  const rows = $$(".tier-weights-row").map((row) => ({
+    value_tier: Number(row.dataset.tier),
+    min_usd: Number(row.querySelector(".tier-min").value),
+    max_usd: row.querySelector(".tier-max").value === "" ? null : Number(row.querySelector(".tier-max").value),
+    weight: Number(row.querySelector(".tier-weight").value),
+  }));
+
+  if (rows.some((r) => !(r.weight > 0) || r.min_usd < 0 || (r.max_usd !== null && r.max_usd < r.min_usd))) {
+    statusEl.textContent = "Revisa los valores: minimo/maximo/prioridad deben ser validos.";
+    return;
+  }
+
+  try {
+    await Promise.all(rows.map((row) => supabaseRest(`central_admin_campaign_tier_weights?value_tier=eq.${row.value_tier}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        min_usd: row.min_usd,
+        max_usd: row.max_usd,
+        weight: row.weight,
+        updated_by: state.actor || "central-admin",
+      }),
+    })));
+    state.tierWeights = state.tierWeights.map((tier) => ({ ...tier, ...rows.find((r) => r.value_tier === tier.value_tier) }));
+    populateValueTierSelect();
+    statusEl.textContent = "Prioridades guardadas.";
+    notify("Prioridades de propaganda actualizadas.");
+  } catch (error) {
+    console.warn("No se pudieron guardar las prioridades:", error);
+    statusEl.textContent = "No se pudo guardar. Intenta de nuevo.";
+  }
+}
+
 function handleCampaignImageSelected(event) {
   const file = event.target.files && event.target.files[0];
   const statusEl = $("#adImageStatus");
@@ -988,15 +1897,21 @@ function renderCampaigns() {
   if (state.campaigns.length === 0) {
     list.innerHTML = `<p class="muted">Todavia no hay campanas. Usa "Agregar campana" para crear la primera.</p>`;
   } else {
-    list.innerHTML = state.campaigns.map((campaign) => `
+    list.innerHTML = state.campaigns.map((campaign) => {
+      const donationLabel = campaign.donation_type === "continua"
+        ? `Continua (${campaign.donation_period_months || "?"}m)`
+        : "Unica";
+      return `
       <button class="campaign-row ${campaign.id === state.selectedCampaignId ? "active" : ""}" data-id="${esc(campaign.id)}">
         <div>
           <strong>${esc(campaign.name)}</strong>
           <div class="muted">${esc(campaign.moment)} - ${campaign.duration_seconds}s - ${esc(campaign.validity_type)}</div>
+          <div class="muted">Valor ${campaign.value_tier ?? 1} - ${donationLabel}</div>
         </div>
         <span class="badge ${CAMPAIGN_STATUS_BADGE[campaign.status] || "audit"}">${CAMPAIGN_STATUS_LABEL[campaign.status] || campaign.status}</span>
       </button>
-    `).join("");
+    `;
+    }).join("");
   }
 
   $$(".campaign-row").forEach((button) => {
@@ -1023,6 +1938,10 @@ function renderCampaigns() {
     $("#adMessage").value = campaign.message;
     renderSectorCheckboxes(campaign.target_sectors);
     setTargetAllUI(campaign.target_all !== false);
+    setDonationTypeUI(campaign.donation_type || "unica");
+    if (campaign.donation_period_months) $("#adDonationPeriod").value = campaign.donation_period_months;
+    $("#adValueTier").value = campaign.value_tier || 1;
+    updatePriorityHint();
     if (campaign.image_url) {
       previewImg.src = campaign.image_url;
       previewWrap.classList.remove("hidden");
@@ -1039,6 +1958,9 @@ function renderCampaigns() {
     $("#adMessage").value = "";
     renderSectorCheckboxes([]);
     setTargetAllUI(true);
+    setDonationTypeUI("unica");
+    $("#adValueTier").value = 1;
+    updatePriorityHint();
     previewWrap.classList.add("hidden");
   }
 }
@@ -1117,6 +2039,13 @@ async function saveCampaign() {
     return;
   }
 
+  const donationType = $("#adDonationType").value;
+  const donationPeriod = Number($("#adDonationPeriod").value) || null;
+  if (donationType === "continua" && !donationPeriod) {
+    notify("Indica el periodo en meses para una donacion continua.");
+    return;
+  }
+
   const existing = getSelectedCampaign();
   const targetAll = $("#adTargetAll").checked;
   const payload = {
@@ -1129,6 +2058,9 @@ async function saveCampaign() {
     message,
     target_all: targetAll,
     target_sectors: targetAll ? [] : getTargetSectorsFromForm(),
+    donation_type: donationType,
+    donation_period_months: donationType === "continua" ? donationPeriod : null,
+    value_tier: Number($("#adValueTier").value) || 1,
   };
 
   try {
@@ -1284,6 +2216,15 @@ function getTargetSectorsFromForm() {
 function setTargetAllUI(targetAll) {
   $("#adTargetAll").checked = targetAll;
   $("#adSectorList").classList.toggle("disabled", targetAll);
+}
+
+function setDonationTypeUI(donationType) {
+  $("#adDonationType").value = donationType;
+  const periodField = $("#adDonationPeriodField");
+  const periodInput = $("#adDonationPeriod");
+  const isContinua = donationType === "continua";
+  periodField.classList.toggle("hidden", !isContinua);
+  if (!isContinua) periodInput.value = "";
 }
 
 const REPORT_PERIOD_DAYS = { quincenal: 15, mensual: 30, trimestral: 90 };
@@ -1859,26 +2800,6 @@ async function deleteOccupation() {
   }
 }
 
-const DOMAIN_EXPLANATIONS = {
-  "cisa.gov": "la agencia de ciberseguridad del gobierno de Estados Unidos",
-  "bleepingcomputer.com": "un sitio web que reporta noticias de ciberataques",
-  "thehackernews.com": "un sitio web que reporta noticias de ciberseguridad",
-  "ecucert.gob.ec": "el equipo de respuesta a incidentes de ciberseguridad de Ecuador",
-};
-
-function explainDomain(domain) {
-  const explanation = DOMAIN_EXPLANATIONS[domain];
-  return explanation ? `${domain} (${explanation})` : domain;
-}
-
-function sourceDomain(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url.replace(/^https?:\/\//, "").split("/")[0] || "fuente";
-  }
-}
-
 function tpotFilters() {
   return Object.fromEntries(Object.entries({
     from: $("#threatFrom")?.value || "",
@@ -2389,21 +3310,6 @@ function publishThreatJob() {
   $("#tpotStatus").textContent = "Publicacion registrada en UI. La persistencia final debe quedar conectada al backend de aprobacion.";
 }
 
-function topicForIndex(index) {
-  return ["mensaje falso dirigido", "archivos bloqueados por extorsion", "robo de claves", "falla critica de seguridad", "fuga de datos", "abuso de verificacion en dos pasos"][index % 6];
-}
-
-function answerForIndex(index) {
-  return [
-    "Validar quien envia el mensaje, revisar si mete urgencia y confirmar por otro canal antes de actuar.",
-    "Mantener copias de seguridad separadas y probadas, junto con pasos claros para contener el problema.",
-    "Activar verificacion en dos pasos, que es cuando ademas de tu clave recibes un codigo o permiso en el celular, y usar un gestor de contraseñas: es una aplicacion segura que guarda tus claves y las completa por ti, para que no tengas que recordar ni escribir todas las contraseñas manualmente.",
-    "Instalar actualizaciones segun la gravedad y si el equipo esta expuesto a internet.",
-    "Ordenar los datos importantes, dar acceso solo a quien lo necesita y revisar entradas.",
-    "Usar confirmaciones por otro canal y alertas cuando haya demasiados pedidos de aprobacion.",
-  ][index % 6];
-}
-
 function esc(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -2445,6 +3351,769 @@ function notify(message) {
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3200);
+}
+
+// --- Campeonato -------------------------------------------------------
+
+function isoToDatetimeLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function loadChampionshipConfig() {
+  try {
+    const rows = await supabaseRest("championships?select=*&order=created_at.desc&limit=1");
+    state.championship = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    renderChampionshipConfig();
+    if (state.championship) {
+      await Promise.all([loadChampionshipRegistrations(), loadChampionshipMatches()]);
+    }
+  } catch (error) {
+    console.warn("No se pudo cargar la configuracion del campeonato:", error);
+  }
+}
+
+function renderChampionshipConfig() {
+  const c = state.championship;
+  $("#champName").value = c?.name ?? "";
+  $("#champStatus").value = c?.status ?? "draft";
+  $("#champMinBelt").value = c?.min_belt ?? "black";
+  $("#champMaxAge").value = c?.max_age ?? 18;
+  $("#champRegOpens").value = isoToDatetimeLocal(c?.registration_opens_at);
+  $("#champRegCloses").value = isoToDatetimeLocal(c?.registration_closes_at);
+  $("#champQuestionsPerMatch").value = c?.questions_per_match ?? 5;
+  $("#champTimeEasy").value = c?.time_limit_easy_seconds ?? 60;
+  $("#champTimeMedium").value = c?.time_limit_medium_seconds ?? 90;
+  $("#champTimeHard").value = c?.time_limit_hard_seconds ?? 120;
+  $("#champRulesText").value = c?.rules_text ?? "";
+}
+
+async function saveChampionshipConfig() {
+  const statusEl = $("#champConfigStatus");
+  const opensLocal = $("#champRegOpens").value;
+  const closesLocal = $("#champRegCloses").value;
+  if (!$("#champName").value.trim() || !opensLocal || !closesLocal) {
+    statusEl.textContent = "Completa nombre, apertura y cierre de inscripcion.";
+    return;
+  }
+
+  const payload = {
+    name: $("#champName").value.trim(),
+    status: $("#champStatus").value,
+    min_belt: $("#champMinBelt").value,
+    max_age: Number($("#champMaxAge").value) || 18,
+    registration_opens_at: new Date(opensLocal).toISOString(),
+    registration_closes_at: new Date(closesLocal).toISOString(),
+    questions_per_match: Number($("#champQuestionsPerMatch").value) || 5,
+    time_limit_easy_seconds: Number($("#champTimeEasy").value) || 60,
+    time_limit_medium_seconds: Number($("#champTimeMedium").value) || 90,
+    time_limit_hard_seconds: Number($("#champTimeHard").value) || 120,
+    rules_text: $("#champRulesText").value.trim() || null,
+  };
+
+  statusEl.textContent = "Guardando...";
+  try {
+    if (state.championship?.id) {
+      await supabaseRest(`championships?id=eq.${state.championship.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await supabaseRest("championships", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify(payload),
+      });
+    }
+    statusEl.textContent = "";
+    notify("Configuracion del campeonato guardada.");
+    await loadChampionshipConfig();
+  } catch (error) {
+    console.error("No se pudo guardar el campeonato:", error);
+    statusEl.textContent = `No se pudo guardar: ${error.message}`;
+  }
+}
+
+async function saveChampionshipResendKey() {
+  const input = $("#champResendKey");
+  const statusEl = $("#champResendStatus");
+  const value = input.value.trim();
+  if (!value) {
+    statusEl.textContent = "Pega tu API key de Resend antes de guardar.";
+    return;
+  }
+  statusEl.textContent = "Guardando...";
+  try {
+    await supabaseFunctionInvoke("save-app-secret", { name: "resend_api_key", value });
+    input.value = "";
+    statusEl.textContent = "Clave guardada de forma cifrada.";
+    notify("Clave de Resend guardada.");
+  } catch (error) {
+    console.error("No se pudo guardar la clave de Resend:", error);
+    statusEl.textContent = `No se pudo guardar: ${error.message}`;
+  }
+}
+
+async function runChampionshipDraw() {
+  if (!state.championship?.id) {
+    notify("Guarda la configuracion del campeonato primero.");
+    return;
+  }
+  const scheduledLocal = $("#champDrawScheduledAt").value;
+  if (!scheduledLocal) {
+    notify("Elige la fecha y hora del combate.");
+    return;
+  }
+  if (!window.confirm("Esto sorteara la ronda 1 entre todos los inscritos y les enviara un correo. Esta accion no se puede deshacer. ¿Continuar?")) return;
+
+  const resultEl = $("#champDrawResult");
+  resultEl.textContent = "Sorteando y enviando correos...";
+  try {
+    const result = await supabaseFunctionInvoke("championship-draw-round1", {
+      championship_id: state.championship.id,
+      scheduled_at: new Date(scheduledLocal).toISOString(),
+      window_hours: Number($("#champDrawWindowHours").value) || 24,
+    });
+    if (result.error) {
+      resultEl.innerHTML = `<p class="news-run-error">${esc(result.error)}</p>`;
+    } else {
+      const failedEmails = (result.emails || []).filter((e) => !e.ok);
+      resultEl.innerHTML = `
+        <p>${result.matches_created} combates creados (${result.byes} bye${result.byes === 1 ? "" : "s"}).</p>
+        ${failedEmails.length > 0 ? `<p class="news-run-error">${failedEmails.length} correo(s) no se pudieron enviar: ${esc(failedEmails[0].error)}</p>` : "<p>Correos enviados correctamente.</p>"}
+      `;
+      await loadChampionshipMatches();
+    }
+  } catch (error) {
+    console.error("Error al sortear la ronda 1:", error);
+    resultEl.innerHTML = `<p class="news-run-error">${esc(error.message)}</p>`;
+  }
+}
+
+async function loadChampionshipRegistrations() {
+  if (!state.championship?.id) return;
+  try {
+    const rows = await supabaseRest(
+      `championship_registrations?championship_id=eq.${state.championship.id}&select=*&order=registered_at.desc`
+    );
+    state.championshipRegistrations = Array.isArray(rows) ? rows : [];
+    renderChampionshipRegistrations();
+  } catch (error) {
+    console.warn("No se pudieron cargar los inscritos:", error);
+  }
+}
+
+function renderChampionshipRegistrations() {
+  const container = $("#champRegistrationList");
+  if (state.championshipRegistrations.length === 0) {
+    container.innerHTML = `<p class="muted">Todavia no hay inscritos.</p>`;
+    return;
+  }
+  container.innerHTML = state.championshipRegistrations.map((r) => `
+    <div class="progress-row">
+      <div class="news-run-head">
+        <span class="badge ai">Inscrito</span>
+        <strong>${esc(new Date(r.registered_at).toLocaleString("es-EC"))}</strong>
+        <span class="muted">usuario ${esc(r.user_id)} · cinturon ${esc(r.belt_at_registration)} · nacimiento ${esc(r.birthdate)}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+const CHAMP_MATCH_STATUS_LABEL = { scheduled: "Programado", in_progress: "En curso", completed: "Completado", bye: "Bye (avanza directo)" };
+
+async function loadChampionshipMatches() {
+  if (!state.championship?.id) return;
+  try {
+    const rows = await supabaseRest(
+      `championship_matches?championship_id=eq.${state.championship.id}&select=*&order=round.asc`
+    );
+    state.championshipMatches = Array.isArray(rows) ? rows : [];
+    renderChampionshipMatches();
+  } catch (error) {
+    console.warn("No se pudieron cargar los combates:", error);
+  }
+}
+
+function renderChampionshipMatches() {
+  const container = $("#champMatchList");
+  if (state.championshipMatches.length === 0) {
+    container.innerHTML = `<p class="muted">Todavia no se ha sorteado ninguna ronda.</p>`;
+    return;
+  }
+  container.innerHTML = state.championshipMatches.map((m) => `
+    <div class="progress-row">
+      <div class="news-run-head">
+        <span class="badge ${m.status === "completed" ? "ai" : m.status === "bye" ? "audit" : "manual"}">${esc(CHAMP_MATCH_STATUS_LABEL[m.status] || m.status)}</span>
+        <strong>Ronda ${esc(String(m.round))}</strong>
+        <span class="muted">${esc(new Date(m.scheduled_at).toLocaleString("es-EC"))}</span>
+      </div>
+      <p class="muted">Jugador 1: ${esc(m.player1_id)}${m.player2_id ? ` · Jugador 2: ${esc(m.player2_id)}` : " · (bye, sin oponente)"}</p>
+      ${m.winner_id ? `<p>Ganador: ${esc(m.winner_id)}</p>` : ""}
+    </div>
+  `).join("");
+}
+
+const SEC_FEED_PAGE_SIZE = 25;
+const SEC_SEVERITY_CLASS = { critica: "critical", alta: "high", media: "medium", baja: "low" };
+const SEC_SEVERITY_LABEL = { critica: "Critica", alta: "Alta", media: "Media", baja: "Baja" };
+
+function secSeverityBadge(severity) {
+  const cls = SEC_SEVERITY_CLASS[severity] || "info";
+  const label = SEC_SEVERITY_LABEL[severity] || severity || "n/d";
+  return `<span class="severity-badge ${cls}">${esc(label)}</span>`;
+}
+
+async function loadSecurityCenter() {
+  state.secFilters = state.secFilters || { severity: "", endpoint: "", from: "", to: "" };
+  state.secFeedOffset = state.secFeedOffset || 0;
+  $("#secFilterSeverity").value = state.secFilters.severity;
+  $("#secFilterEndpoint").value = state.secFilters.endpoint;
+  $("#secFilterFrom").value = state.secFilters.from;
+  $("#secFilterTo").value = state.secFilters.to;
+  ["secFilterSeverity", "secFilterEndpoint", "secFilterFrom", "secFilterTo"].forEach((id) => {
+    $(`#${id}`).onchange = () => {
+      state.secFilters.severity = $("#secFilterSeverity").value;
+      state.secFilters.endpoint = $("#secFilterEndpoint").value.trim();
+      state.secFilters.from = $("#secFilterFrom").value;
+      state.secFilters.to = $("#secFilterTo").value;
+      state.secFeedOffset = 0;
+      void loadSecurityFeed();
+    };
+  });
+
+  await Promise.all([
+    loadSecurityFeed(),
+    loadSecurityMetrics(),
+    loadSecurityAlertConfigs(),
+    loadSecurityDiagnoses(),
+    loadSecurityEasmFindings(),
+    loadSecurityKataDrafts(),
+    loadSecurityEndpointOptions(),
+  ]);
+}
+
+// Known endpoints even before any real event has landed for them, so the
+// dropdown isn't empty on a fresh project — merged with whatever real
+// distinct endpoints show up in security_events, so a new instrumented
+// endpoint appears automatically without touching this list.
+const SEC_KNOWN_ENDPOINTS = ["secure-register-user", "login"];
+
+async function loadSecurityEndpointOptions() {
+  try {
+    const rows = await supabaseRest("security_events?select=endpoint&order=created_at.desc&limit=1000");
+    const seen = new Set(Array.isArray(rows) ? rows.map((r) => r.endpoint) : []);
+    SEC_KNOWN_ENDPOINTS.forEach((e) => seen.add(e));
+    $("#secEndpointOptions").innerHTML = [...seen].sort().map((e) => `<option value="${esc(e)}"></option>`).join("");
+  } catch (error) {
+    console.warn("No se pudieron cargar los endpoints conocidos:", error);
+  }
+}
+
+function buildSecFeedQuery(extra = "") {
+  const filters = state.secFilters || {};
+  const parts = ["select=*", "order=created_at.desc"];
+  if (filters.severity) parts.push(`severity=eq.${filters.severity}`);
+  if (filters.endpoint) parts.push(`endpoint=ilike.*${encodeURIComponent(filters.endpoint)}*`);
+  if (filters.from) parts.push(`created_at=gte.${new Date(filters.from).toISOString()}`);
+  if (filters.to) parts.push(`created_at=lte.${new Date(filters.to).toISOString()}`);
+  return `security_events?${parts.join("&")}${extra}`;
+}
+
+async function loadSecurityFeed() {
+  try {
+    const offset = state.secFeedOffset || 0;
+    const rows = await supabaseRest(`${buildSecFeedQuery()}&limit=${SEC_FEED_PAGE_SIZE + 1}&offset=${offset}`);
+    const list = Array.isArray(rows) ? rows : [];
+    state.secHasNextPage = list.length > SEC_FEED_PAGE_SIZE;
+    state.secEvents = list.slice(0, SEC_FEED_PAGE_SIZE);
+    renderSecurityFeed();
+  } catch (error) {
+    console.warn("No se pudieron cargar los eventos de seguridad:", error);
+    $("#secEventFeed").innerHTML = `<p class="muted">No se pudieron cargar los eventos. Verifica la migracion 052.</p>`;
+  }
+}
+
+function renderSecurityFeed() {
+  const rows = state.secEvents || [];
+  $("#secEventFeed").innerHTML = rows.length ? `
+    <table class="data-table"><thead><tr><th>Fecha/hora</th><th>Endpoint</th><th>Tipo</th><th>Severidad</th><th>Detalle</th></tr></thead>
+    <tbody>${rows.map((event) => `
+      <tr>
+        <td>${esc(new Date(event.created_at).toLocaleString("es-EC"))}</td>
+        <td><code>${esc(event.endpoint)}</code></td>
+        <td>${esc(event.event_type)}</td>
+        <td>${secSeverityBadge(event.severity)}</td>
+        <td class="muted">${esc(JSON.stringify(event.metadata || {}))}</td>
+      </tr>
+    `).join("")}</tbody></table>
+  ` : `<p class="muted">No hay eventos para los filtros seleccionados.</p>`;
+
+  const offset = state.secFeedOffset || 0;
+  $("#secFeedPageInfo").textContent = `Mostrando ${rows.length ? offset + 1 : 0}-${offset + rows.length}`;
+  $("#secFeedPrev").disabled = offset === 0;
+  $("#secFeedNext").disabled = !state.secHasNextPage;
+}
+
+async function loadSecurityMetrics() {
+  try {
+    const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const rows = await supabaseRest(`security_events?select=created_at,endpoint,event_type,severity&created_at=gte.${since14d}&order=created_at.desc&limit=1000`);
+    const events14d = Array.isArray(rows) ? rows : [];
+    const events7d = events14d.filter((e) => e.created_at >= since7d);
+
+    $("#secMetricEvents").textContent = String(events7d.length);
+    $("#secMetricBlocks").textContent = String(events7d.filter((e) => e.event_type === "rate_limit_exceeded").length);
+    $("#secMetricEndpoints").textContent = String(new Set(events7d.map((e) => e.endpoint)).size);
+
+    const topEndpoints = countBy(events7d, "endpoint").sort((a, b) => b.count - a.count).slice(0, 5);
+    $("#secTopEndpoints").innerHTML = renderSecBarChart(topEndpoints);
+
+    const trend = trendByDay(events14d).sort((a, b) => String(a.value).localeCompare(String(b.value)));
+    $("#secTrendChart").innerHTML = renderSecBarChart(trend, 14);
+  } catch (error) {
+    console.warn("No se pudieron cargar las metricas de seguridad:", error);
+  }
+}
+
+function renderSecBarChart(items, max = 10) {
+  const capped = items.slice(0, max);
+  if (capped.length === 0) return "<p class='muted'>Sin datos.</p>";
+  const maxVal = Math.max(1, ...capped.map((item) => item.count));
+  return capped.map((item) => `
+    <div class="bar-row">
+      <span>${esc(String(item.value))}</span>
+      <div class="bar-track"><i style="width:${Math.max(8, Math.round((item.count / maxVal) * 100))}%"></i></div>
+      <strong>${item.count}</strong>
+    </div>
+  `).join("");
+}
+
+async function runSecurityAlertCheck() {
+  try {
+    const result = await supabaseFunctionInvoke("check-security-alerts", {});
+    const breached = (result.results || []).filter((r) => r.breached);
+    notify(breached.length ? `${breached.length} umbral(es) en estado de alerta.` : "Sin umbrales superados por ahora.");
+    await loadSecurityAlertConfigs();
+  } catch (error) {
+    notify(`No se pudo verificar alertas: ${error.message}`);
+  }
+}
+
+function secEventsToCsvRows(events) {
+  const header = ["fecha", "endpoint", "tipo", "severidad", "metadata"];
+  const lines = [header.join(",")];
+  events.forEach((event) => {
+    const row = [
+      new Date(event.created_at).toISOString(),
+      event.endpoint,
+      event.event_type,
+      event.severity,
+      JSON.stringify(event.metadata || {}).replaceAll('"', '""'),
+    ].map((value) => `"${String(value).replaceAll('"', '""')}"`);
+    lines.push(row.join(","));
+  });
+  return lines.join("\n");
+}
+
+async function exportSecurityEventsCsv() {
+  try {
+    const rows = await supabaseRest(`${buildSecFeedQuery()}&limit=1000`);
+    const csv = secEventsToCsvRows(Array.isArray(rows) ? rows : []);
+    downloadTextFile(csv, `centro-de-seguridad-eventos-${Date.now()}.csv`, "text/csv");
+  } catch (error) {
+    notify(`No se pudo exportar CSV: ${error.message}`);
+  }
+}
+
+async function exportSecurityEventsPdf() {
+  try {
+    const rows = await supabaseRest(`${buildSecFeedQuery()}&limit=1000`);
+    const events = Array.isArray(rows) ? rows : [];
+    const win = window.open("", "_blank");
+    if (!win) { notify("El navegador bloqueo la ventana de impresion."); return; }
+    win.document.write(`
+      <html><head><title>Centro de Seguridad - Eventos</title>
+      <style>body{font-family:sans-serif;font-size:12px;} table{width:100%;border-collapse:collapse;} td,th{border:1px solid #ccc;padding:4px;text-align:left;}</style>
+      </head><body>
+      <h2>Centro de Seguridad — Eventos de seguridad</h2>
+      <p>Generado: ${esc(new Date().toLocaleString("es-EC"))} — ${events.length} eventos</p>
+      <table><thead><tr><th>Fecha</th><th>Endpoint</th><th>Tipo</th><th>Severidad</th></tr></thead>
+      <tbody>${events.map((e) => `<tr><td>${esc(new Date(e.created_at).toLocaleString("es-EC"))}</td><td>${esc(e.endpoint)}</td><td>${esc(e.event_type)}</td><td>${esc(e.severity)}</td></tr>`).join("")}</tbody>
+      </table></body></html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  } catch (error) {
+    notify(`No se pudo exportar PDF: ${error.message}`);
+  }
+}
+
+function downloadTextFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+async function loadSecurityAlertConfigs() {
+  try {
+    const rows = await supabaseRest("security_alert_config?select=*&order=created_at.desc");
+    state.secAlertConfigs = Array.isArray(rows) ? rows : [];
+    $("#secMetricAlerts").textContent = String(state.secAlertConfigs.filter((c) => c.active).length);
+    renderSecurityAlertConfigs();
+  } catch (error) {
+    console.warn("No se pudieron cargar los umbrales de alerta:", error);
+  }
+}
+
+function renderSecurityAlertConfigs() {
+  const rows = state.secAlertConfigs || [];
+  $("#secAlertList").innerHTML = rows.length ? rows.map((cfg) => `
+    <div class="question-row compact-row">
+      <strong>${esc(cfg.name)}</strong>
+      <span>${secSeverityBadge(cfg.severity_threshold)} +${cfg.event_count_threshold} eventos / ${cfg.window_minutes} min</span>
+      <span class="muted">${esc(cfg.notify_email || cfg.notify_webhook_url || "sin destino")}</span>
+      <span class="badge ${cfg.active ? "ai" : "manual"}">${cfg.active ? "activo" : "inactivo"}</span>
+      <button class="btn secondary small" data-sec-alert-edit="${esc(cfg.id)}">Editar</button>
+    </div>
+  `).join("") : `<p class="muted">Todavia no hay umbrales configurados.</p>`;
+
+  $$("[data-sec-alert-edit]").forEach((button) => {
+    button.addEventListener("click", () => loadSecurityAlertIntoForm(button.dataset.secAlertEdit));
+  });
+}
+
+function loadSecurityAlertIntoForm(id) {
+  const cfg = (state.secAlertConfigs || []).find((c) => c.id === id);
+  if (!cfg) return;
+  $("#secAlertId").value = cfg.id;
+  $("#secAlertName").value = cfg.name;
+  $("#secAlertSeverity").value = cfg.severity_threshold;
+  $("#secAlertCount").value = cfg.event_count_threshold;
+  $("#secAlertWindow").value = cfg.window_minutes;
+  $("#secAlertEmail").value = cfg.notify_email || "";
+  $("#secAlertWebhook").value = cfg.notify_webhook_url || "";
+  $("#secAlertStatus").textContent = "";
+}
+
+function clearSecurityAlertForm() {
+  $("#secAlertId").value = "";
+  $("#secAlertName").value = "";
+  $("#secAlertSeverity").value = "media";
+  $("#secAlertCount").value = "5";
+  $("#secAlertWindow").value = "60";
+  $("#secAlertEmail").value = "";
+  $("#secAlertWebhook").value = "";
+  $("#secAlertStatus").textContent = "";
+}
+
+async function saveSecurityAlertConfig() {
+  const payload = {
+    id: $("#secAlertId").value || undefined,
+    name: $("#secAlertName").value.trim(),
+    severity_threshold: $("#secAlertSeverity").value,
+    event_count_threshold: Number($("#secAlertCount").value),
+    window_minutes: Number($("#secAlertWindow").value),
+    notify_email: $("#secAlertEmail").value.trim() || undefined,
+    notify_webhook_url: $("#secAlertWebhook").value.trim() || undefined,
+    active: true,
+  };
+  try {
+    const result = await supabaseFunctionInvoke("save-security-alert-config", payload);
+    $("#secAlertId").value = result.config.id;
+    $("#secAlertStatus").textContent = "Guardado.";
+    await loadSecurityAlertConfigs();
+  } catch (error) {
+    $("#secAlertStatus").textContent = `Error: ${error.message}`;
+  }
+}
+
+async function deleteSecurityAlertConfig() {
+  const id = $("#secAlertId").value;
+  if (!id) return;
+  if (!window.confirm("¿Eliminar este umbral de alerta?")) return;
+  try {
+    await supabaseFunctionInvoke("save-security-alert-config", { action: "delete", id });
+    clearSecurityAlertForm();
+    await loadSecurityAlertConfigs();
+  } catch (error) {
+    $("#secAlertStatus").textContent = `Error: ${error.message}`;
+  }
+}
+
+async function loadSecurityDiagnoses() {
+  try {
+    const rows = await supabaseRest("security_diagnoses?select=*&order=created_at.desc&limit=20");
+    state.secDiagnoses = Array.isArray(rows) ? rows : [];
+    renderSecurityDiagnoses();
+  } catch (error) {
+    console.warn("No se pudieron cargar los diagnosticos:", error);
+  }
+}
+
+function renderSecurityDiagnoses() {
+  const rows = state.secDiagnoses || [];
+  $("#secDiagnosisList").innerHTML = rows.length ? rows.map((d) => `
+    <div class="progress-row">
+      <div class="news-run-head">
+        ${secSeverityBadge(d.severity)}
+        <strong>${esc(new Date(d.created_at).toLocaleString("es-EC"))}</strong>
+        <span class="muted">${d.event_count} eventos${d.validation_status === "partial" ? " · respuesta IA invalida" : ""}</span>
+      </div>
+      <p>${esc(d.summary_es)}</p>
+      ${Array.isArray(d.recommendations) && d.recommendations.length ? `<ul>${d.recommendations.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+      <div class="modal-actions">
+        <button class="btn secondary small" data-sec-diag-feedback="${esc(d.id)}" data-rating="correcto">👍 Correcto</button>
+        <button class="btn secondary small" data-sec-diag-feedback="${esc(d.id)}" data-rating="incorrecto">👎 Incorrecto</button>
+        <button class="btn secondary small" data-sec-diag-kata="${esc(d.id)}">Convertir en kata</button>
+      </div>
+    </div>
+  `).join("") : `<p class="muted">Todavia no se ha generado ningun diagnostico.</p>`;
+
+  $$("[data-sec-diag-feedback]").forEach((button) => {
+    button.addEventListener("click", () => submitSecurityDiagnosisFeedback(button.dataset.secDiagFeedback, button.dataset.rating));
+  });
+  $$("[data-sec-diag-kata]").forEach((button) => {
+    button.addEventListener("click", () => startSecurityKataFromDiagnosis(button.dataset.secDiagKata));
+  });
+}
+
+async function submitSecurityDiagnosisFeedback(diagnosisId, rating) {
+  try {
+    await supabaseRest("security_diagnosis_feedback", {
+      method: "POST",
+      body: JSON.stringify({ diagnosis_id: diagnosisId, rating, submitted_by: "central-admin" }),
+    });
+    notify("Gracias, feedback registrado.");
+  } catch (error) {
+    notify(`No se pudo registrar el feedback: ${error.message}`);
+  }
+}
+
+function startSecurityKataFromDiagnosis(diagnosisId) {
+  const diagnosis = (state.secDiagnoses || []).find((d) => d.id === diagnosisId);
+  if (!diagnosis) return;
+  $("#secKataId").value = "";
+  $("#secKataTitle").value = `Incidente: ${SEC_SEVERITY_LABEL[diagnosis.severity] || diagnosis.severity}`;
+  $("#secKataBody").value = `${diagnosis.summary_es}\n\nRecomendaciones:\n${(diagnosis.recommendations || []).map((r) => `- ${r}`).join("\n")}`;
+  state.secKataSourceDiagnosisId = diagnosisId;
+  $("#secKataPublishFields").classList.add("hidden");
+  $("#secKataStatus").textContent = "Borrador prellenado desde el diagnostico. Guarda y envia a revision.";
+}
+
+async function runSecurityDiagnosis() {
+  $("#secDiagnosisStatus").textContent = "Generando diagnostico...";
+  try {
+    const result = await supabaseFunctionInvoke("security-diagnose", {});
+    $("#secDiagnosisStatus").textContent = result.skipped ? result.reason : "Diagnostico generado.";
+    await loadSecurityDiagnoses();
+  } catch (error) {
+    $("#secDiagnosisStatus").textContent = `Error: ${error.message}`;
+  }
+}
+
+async function loadSecurityEasmFindings() {
+  try {
+    const rows = await supabaseRest("security_easm_findings?select=*&order=created_at.desc&limit=100");
+    state.secEasmFindings = Array.isArray(rows) ? rows : [];
+    renderSecurityEasmFindings();
+  } catch (error) {
+    console.warn("No se pudieron cargar los hallazgos EASM:", error);
+  }
+}
+
+const SEC_FINDING_TYPE_LABEL = { public_endpoint: "Endpoint publico", public_bucket: "Bucket publico", missing_env_var: "Variable de entorno faltante", other: "Otro" };
+
+function renderSecurityEasmFindings() {
+  const rows = state.secEasmFindings || [];
+  $("#secEasmList").innerHTML = rows.length ? `
+    <table class="data-table"><thead><tr><th>Mes</th><th>Tipo</th><th>Objetivo</th><th>Severidad</th><th>Estado</th></tr></thead>
+    <tbody>${rows.map((f) => `
+      <tr>
+        <td>${esc(f.scan_month)}</td>
+        <td>${esc(SEC_FINDING_TYPE_LABEL[f.finding_type] || f.finding_type)}</td>
+        <td><code>${esc(f.target)}</code></td>
+        <td>${secSeverityBadge(f.severity)}</td>
+        <td><button class="badge ${f.resolved ? "ai" : "audit"}" data-sec-finding-detail="${esc(f.id)}" style="cursor:pointer;border:0;">${f.resolved ? "resuelto" : "pendiente"}</button></td>
+      </tr>
+    `).join("")}</tbody></table>
+  ` : `<p class="muted">Todavia no se ha ejecutado el inventario EASM.</p>`;
+
+  $$("[data-sec-finding-detail]").forEach((button) => {
+    button.addEventListener("click", () => openSecFindingModal(button.dataset.secFindingDetail));
+  });
+}
+
+function secFindingExplanation(finding) {
+  const target = finding.target;
+  if (finding.finding_type === "public_endpoint") {
+    return `Este endpoint (<code>${esc(target)}</code>) es publico a proposito: pg_cron lo llama sin sesion de usuario, por eso tiene <code>verify_jwt = false</code> en <code>supabase/config.toml</code>. No requiere ninguna accion.`;
+  }
+  if (finding.finding_type === "public_bucket") {
+    return finding.resolved
+      ? `El bucket <code>${esc(target)}</code> ya fue revisado y confirmado como publico a proposito.`
+      : `El bucket <code>${esc(target)}</code> esta marcado como publico en Supabase Storage y no esta en la lista de buckets que deberian serlo (solo <code>campaign-ads</code>). Revisalo en Supabase &rarr; Storage: si no necesita ser publico, cambialo a privado.`;
+  }
+  if (finding.finding_type === "missing_env_var") {
+    return finding.resolved
+      ? `La variable <code>${esc(target)}</code> ya fue configurada.`
+      : `La variable de entorno <code>${esc(target)}</code> no esta definida en los secretos de las Edge Functions. Configurala en Supabase &rarr; Edge Functions &rarr; Secrets. Mientras falte, las funciones que dependen de ella pueden fallar o quedar menos protegidas.`;
+  }
+  return finding.resolved ? "Este hallazgo ya fue resuelto." : "Este hallazgo todavia no se ha resuelto.";
+}
+
+function openSecFindingModal(id) {
+  const finding = (state.secEasmFindings || []).find((f) => f.id === id);
+  if (!finding) return;
+  $("#secFindingModalTitle").textContent = `${SEC_FINDING_TYPE_LABEL[finding.finding_type] || finding.finding_type}: ${finding.target}`;
+  $("#secFindingModalBody").innerHTML = `
+    <p>${secFindingExplanation(finding)}</p>
+    <p class="muted">Mes del escaneo: ${esc(finding.scan_month)} &middot; Severidad: ${secSeverityBadge(finding.severity)} &middot; Estado: ${finding.resolved ? "resuelto" : "pendiente"}${finding.resolved_at ? ` (${esc(new Date(finding.resolved_at).toLocaleString("es-EC"))})` : ""}</p>
+    ${finding.details && Object.keys(finding.details).length ? `<p class="muted">Detalle tecnico: <code>${esc(JSON.stringify(finding.details))}</code></p>` : ""}
+  `;
+  $("#secFindingModal").classList.add("active");
+}
+
+function closeSecFindingModal() {
+  $("#secFindingModal").classList.remove("active");
+}
+
+async function runSecurityEasmScan() {
+  $("#secEasmStatus").textContent = "Ejecutando inventario...";
+  try {
+    const result = await supabaseFunctionInvoke("security-easm-scan", {});
+    $("#secEasmStatus").textContent = `${result.findings_count} hallazgo(s) registrados, ${result.unresolved_serious} sin resolver.`;
+    await loadSecurityEasmFindings();
+  } catch (error) {
+    $("#secEasmStatus").textContent = `Error: ${error.message}`;
+  }
+}
+
+const SEC_KATA_STATUS_LABEL = { borrador: "Borrador", en_revision: "En revision", publicado: "Publicado" };
+
+async function loadSecurityKataDrafts() {
+  try {
+    const rows = await supabaseRest("security_kata_drafts?select=*&order=created_at.desc&limit=50");
+    state.secKataDrafts = Array.isArray(rows) ? rows : [];
+    renderSecurityKataDrafts();
+  } catch (error) {
+    console.warn("No se pudieron cargar los borradores de kata:", error);
+  }
+}
+
+function renderSecurityKataDrafts() {
+  const rows = state.secKataDrafts || [];
+  $("#secKataList").innerHTML = rows.length ? rows.map((k) => `
+    <div class="question-row compact-row" data-sec-kata-select="${esc(k.id)}">
+      <strong>${esc(k.title)}</strong>
+      <span class="badge ${k.status === "publicado" ? "ai" : k.status === "en_revision" ? "manual" : "audit"}">${esc(SEC_KATA_STATUS_LABEL[k.status] || k.status)}</span>
+      <span class="muted">${esc(new Date(k.created_at).toLocaleDateString("es-EC"))}</span>
+    </div>
+  `).join("") : `<p class="muted">Todavia no hay borradores de kata.</p>`;
+
+  $$("[data-sec-kata-select]").forEach((row) => {
+    row.addEventListener("click", () => loadSecurityKataIntoEditor(row.dataset.secKataSelect));
+  });
+}
+
+function populateSecKataDojoSelect() {
+  const select = $("#secKataDojo");
+  select.innerHTML = (state.dojos || []).map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
+}
+
+function loadSecurityKataIntoEditor(id) {
+  const draft = (state.secKataDrafts || []).find((k) => k.id === id);
+  if (!draft) return;
+  $("#secKataId").value = draft.id;
+  $("#secKataTitle").value = draft.title;
+  $("#secKataBody").value = draft.body_md;
+  $("#secKataStatus").textContent = `Estado actual: ${SEC_KATA_STATUS_LABEL[draft.status] || draft.status}`;
+  if (draft.status === "en_revision") {
+    populateSecKataDojoSelect();
+    $("#secKataPublishFields").classList.remove("hidden");
+    $("#secKataQuestion").value = "";
+    $("#secKataAnswer").value = "";
+    $("#secKataExplanation").value = "";
+  } else {
+    $("#secKataPublishFields").classList.add("hidden");
+  }
+}
+
+async function saveSecurityKataDraft() {
+  const id = $("#secKataId").value;
+  const title = $("#secKataTitle").value.trim();
+  const bodyMd = $("#secKataBody").value.trim();
+  if (!title || !bodyMd) { $("#secKataStatus").textContent = "Completa titulo y contenido."; return; }
+  try {
+    const result = id
+      ? await supabaseFunctionInvoke("security-kata-convert", { action: "update", id, title, body_md: bodyMd })
+      : await supabaseFunctionInvoke("security-kata-convert", { action: "create", title, body_md: bodyMd, source_diagnosis_id: state.secKataSourceDiagnosisId });
+    $("#secKataId").value = result.draft.id;
+    $("#secKataStatus").textContent = "Borrador guardado.";
+    state.secKataSourceDiagnosisId = null;
+    await loadSecurityKataDrafts();
+  } catch (error) {
+    $("#secKataStatus").textContent = `Error: ${error.message}`;
+  }
+}
+
+async function submitSecurityKataForReview() {
+  const id = $("#secKataId").value;
+  if (!id) { $("#secKataStatus").textContent = "Guarda el borrador primero."; return; }
+  try {
+    await supabaseFunctionInvoke("security-kata-convert", { action: "submit_review", id });
+    $("#secKataStatus").textContent = "Enviado a revision.";
+    await loadSecurityKataDrafts();
+    loadSecurityKataIntoEditor(id);
+  } catch (error) {
+    $("#secKataStatus").textContent = `Error: ${error.message}`;
+  }
+}
+
+async function rejectSecurityKataDraft() {
+  const id = $("#secKataId").value;
+  if (!id) return;
+  try {
+    await supabaseFunctionInvoke("security-kata-convert", { action: "reject", id });
+    $("#secKataStatus").textContent = "Regresado a borrador.";
+    await loadSecurityKataDrafts();
+    loadSecurityKataIntoEditor(id);
+  } catch (error) {
+    $("#secKataStatus").textContent = `Error: ${error.message}`;
+  }
+}
+
+async function publishSecurityKataDraft() {
+  const id = $("#secKataId").value;
+  if (!id) return;
+  const payload = {
+    action: "publish",
+    id,
+    dojo_id: $("#secKataDojo").value,
+    kata_label: $("#secKataLabel").value.trim() || "Kata 1",
+    difficulty: Number($("#secKataDifficulty").value) || 1,
+    question_text: $("#secKataQuestion").value.trim(),
+    answer_text: $("#secKataAnswer").value.trim(),
+    explanation: $("#secKataExplanation").value.trim(),
+  };
+  try {
+    await supabaseFunctionInvoke("security-kata-convert", payload);
+    $("#secKataStatus").textContent = "Publicado como pregunta de kata.";
+    $("#secKataPublishFields").classList.add("hidden");
+    await loadSecurityKataDrafts();
+  } catch (error) {
+    $("#secKataStatus").textContent = `Error: ${error.message}`;
+  }
 }
 
 init();

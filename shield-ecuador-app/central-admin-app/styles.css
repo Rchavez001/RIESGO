@@ -47,6 +47,17 @@
   box-sizing: border-box;
 }
 
+/* Same scanline texture the main app renders on every screen via
+   ScanlineOverlay — admin had no equivalent. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,240,255,0.015) 3px, rgba(0,240,255,0.016) 4px);
+  pointer-events: none;
+  z-index: 40;
+}
+
 body {
   margin: 0;
   background:
@@ -281,7 +292,9 @@ p {
   justify-content: center;
   min-height: 40px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  /* Same angular cut-corner treatment as the main app's .neon-button /
+     .btn-katana, instead of the rounded corners this used to have. */
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
   padding: 0 14px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--ink);
@@ -289,6 +302,8 @@ p {
   letter-spacing: 0.02em;
   transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
 }
+
+.btn:hover { transform: translateY(-2px); }
 
 .btn.primary {
   background: rgba(0, 180, 216, 0.1);
@@ -417,6 +432,190 @@ p {
 
 .alert-card {
   display: grid;
+  gap: 10px;
+}
+
+.news-source-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.news-source-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line-subtle);
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.news-source-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.news-source-info span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.news-source-add {
+  margin-bottom: 10px;
+}
+
+.news-run-log,
+.news-generated-report {
+  display: grid;
+  gap: 10px;
+}
+
+.news-provider-chain,
+.news-provider-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.news-chain-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line-subtle);
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* Provider rows stack the identity/actions line above a full-width, clearly
+   labeled API-key line — cramming the key input into the same row as the
+   name/type/model text left it either overlapping or squeezed to nothing. */
+.news-provider-row {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line-subtle);
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.news-provider-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.news-provider-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.news-chain-info,
+.news-provider-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.news-chain-info span,
+.news-provider-info span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.news-chain-priority {
+  width: 56px;
+}
+
+.news-provider-key-field {
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-subtle);
+}
+
+.news-provider-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.news-provider-key-input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.news-run-attempts {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-subtle);
+}
+
+.news-run-attempts.hidden {
+  display: none;
+}
+
+.news-run-attempt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.news-run-toggle {
+  background: none;
+  border: none;
+  color: var(--accent, #5b8cff);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+#newsProviderForm.hidden {
+  display: none;
+}
+
+#secKataPublishFields.hidden {
+  display: none;
+}
+
+.news-run-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.news-run-error {
+  color: var(--red);
+  font-size: 13px;
+}
+
+.news-generated-row {
+  border: 1px solid var(--line-subtle);
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.news-generated-head {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
@@ -682,6 +881,73 @@ textarea:focus {
   pointer-events: none;
 }
 
+.donation-priority-box {
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--soft);
+}
+.donation-priority-box > .label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--blue);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.donation-priority-box .form-grid.compact {
+  margin-bottom: 12px;
+}
+#adDonationPeriodField.hidden {
+  visibility: hidden;
+}
+#adPriorityHint {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+#adPriorityHint:not(:empty) {
+  padding-top: 8px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.tier-weights-grid {
+  display: grid;
+  gap: 10px;
+}
+.tier-weights-row {
+  display: grid;
+  grid-template-columns: 90px repeat(3, 1fr);
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 8px;
+  background: var(--soft);
+}
+.tier-weights-row .tier-badge {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.tier-weights-row .tier-badge strong {
+  font-family: var(--font-impact);
+  font-size: 28px;
+  line-height: 1;
+  color: var(--blue);
+}
+.tier-weights-row .tier-badge span {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tier-weights-row label {
+  font-size: 12px;
+}
+
 .ad-image-preview {
   margin: 10px 0;
   border: 1px solid var(--line-subtle);
@@ -721,13 +987,44 @@ textarea:focus {
 
 .ai-provider {
   display: grid;
-  grid-template-columns: 1fr 120px 110px;
   gap: 10px;
-  align-items: center;
   padding: 12px;
   border: 1px solid var(--line-subtle);
   background: var(--soft);
   border-radius: 8px;
+}
+
+.ai-provider-name input {
+  width: 100%;
+  font-size: 15px;
+}
+
+.ai-provider-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.ai-provider-meta-field {
+  flex: 1 1 100px;
+  min-width: 100px;
+}
+
+.ai-provider-key-field {
+  flex: 2 1 220px;
+  min-width: 200px;
+}
+
+.ai-provider-key-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ai-provider-key-input {
+  min-width: 0;
+  flex: 1;
 }
 
 .form-grid.compact {
@@ -1094,6 +1391,10 @@ textarea:focus {
 }
 
 @media (max-width: 720px) {
+  .news-provider-head {
+    grid-template-columns: 1fr;
+  }
+
   .report-hero h2 {
     font-size: 32px;
   }
@@ -1579,6 +1880,7 @@ textarea:focus {
   min-height: 30px;
   padding: 0 10px;
   font-size: 12px;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
 }
 
 @media (max-width: 760px) {
