@@ -228,22 +228,22 @@
             <div>
               <span class="label">AGENTE IA DE NOTICIAS</span>
               <h2>Fuentes, horario y katas generadas</h2>
-              <p class="muted">Ultima ejecucion: <strong id="newsAgentLastRun">Pendiente</strong></p>
-              <p class="muted">"Probar" y "Ejecutar ahora" usan Puter.js (IA en el navegador, cuenta del administrador, sin clave de servidor). Ademas, a la hora configurada abajo, un job automatico en el servidor (sin navegador) ejecuta la cadena de proveedores de IA de la derecha — ve el resultado en el historial.</p>
+              <p class="muted">Última ejecución: <strong id="newsAgentLastRun">Pendiente</strong></p>
+              <p class="muted">"Probar" y "Ejecutar ahora" usan Puter.js (IA en el navegador, cuenta del administrador, sin clave de servidor). Además, a la hora configurada abajo, un job automático en el servidor (sin navegador) ejecuta la cadena de proveedores de IA de la derecha — ve el resultado en el historial.</p>
             </div>
             <div class="toolbar-actions">
-              <button id="saveNewsAgent" class="btn secondary">Guardar configuracion</button>
-              <button id="testNewsAgent" class="btn secondary">Probar</button>
-              <button id="runNewsAgent" class="btn primary">Ejecutar ahora</button>
+              <button id="saveNewsAgent" class="btn secondary" type="button">Guardar configuración</button>
+              <button id="testNewsAgent" class="btn secondary" type="button">Probar</button>
+              <button id="runNewsAgent" class="btn primary" type="button">Ejecutar ahora</button>
             </div>
           </div>
 
           <div class="split">
             <article class="card">
               <div class="section-toolbar compact">
-                <h2>Cadena de proveedores (ejecucion automatica)</h2>
+                <h2>Cadena de proveedores (ejecución automática)</h2>
               </div>
-              <p class="muted">Orden en que el job automatico prueba cada proveedor de IA. Si uno falla o se demora, pasa al siguiente.</p>
+              <p class="muted">Orden en que el job automático prueba cada proveedor de IA. Si uno falla o se demora, pasa al siguiente.</p>
               <div id="newsProviderChain" class="news-provider-chain"></div>
               <div class="form-grid compact news-source-add">
                 <label>
@@ -251,15 +251,15 @@
                   <select id="newsChainAddSelect"></select>
                 </label>
               </div>
-              <button id="newsChainAddBtn" class="btn secondary small">Agregar a la cadena</button>
+              <button id="newsChainAddBtn" class="btn secondary small" type="button">Agregar a la cadena</button>
             </article>
 
             <article class="card">
               <div class="section-toolbar compact">
                 <h2>Proveedores de IA configurados</h2>
-                <button id="newsProviderAddNew" class="btn secondary small">Nuevo proveedor</button>
+                <button id="newsProviderAddNew" class="btn secondary small" type="button">Nuevo proveedor</button>
               </div>
-              <p class="muted">La clave se guarda cifrada (Vault) y nunca se vuelve a mostrar aqui.</p>
+              <p class="muted">La clave se guarda cifrada (Vault) y nunca se vuelve a mostrar aquí.</p>
               <div id="newsProviderList" class="news-provider-list"></div>
 
               <div id="newsProviderForm" class="news-provider-form hidden">
@@ -285,7 +285,7 @@
                     <input id="npModel" type="text" placeholder="ej. gpt-4o-mini" />
                   </label>
                   <label>
-                    Base URL (opcional, usa el default del tipo si se deja vacio)
+                    Base URL (opcional; solo https:// público; si se deja vacío usa la del tipo)
                     <input id="npBaseUrl" type="text" placeholder="https://..." />
                   </label>
                   <label>
@@ -297,8 +297,8 @@
                     Proveedor activo
                   </label>
                   <label>
-                    Clave de API (se cifra en Vault; dejar vacio para no cambiarla)
-                    <input id="npApiKey" type="password" autocomplete="off" placeholder="sk-..." />
+                    Clave de API (se cifra en Vault; dejar vacío para no cambiarla)
+                    <input id="npApiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="sk-..." />
                   </label>
                 </div>
                 <p id="newsProviderFormStatus" class="muted"></p>
@@ -312,14 +312,14 @@
 
           <div class="split">
             <article class="card">
-              <h2>Configuracion</h2>
+              <h2>Configuración</h2>
               <div class="form-grid compact">
                 <label class="check-row">
                   <input id="newsAgentActive" type="checkbox" />
                   Agente activo
                 </label>
                 <label>
-                  Hora de activacion (job automatico diario)
+                  Hora de activación (job automático diario)
                   <input id="newsAgentTime" type="time" />
                 </label>
               </div>
@@ -332,7 +332,7 @@
 
             <article class="card">
               <h2>Fuentes</h2>
-              <p class="muted">Paginas donde el agente busca noticias de ciberataques.</p>
+              <p class="muted">Páginas donde el agente busca noticias de ciberataques.</p>
               <div id="newsSourceList" class="news-source-list"></div>
               <div class="form-grid compact news-source-add">
                 <label>
@@ -344,7 +344,7 @@
                   <input id="newsSourceUrl" type="url" placeholder="https://..." />
                 </label>
               </div>
-              <button id="addNewsSource" class="btn secondary small">Agregar fuente</button>
+              <button id="addNewsSource" class="btn secondary small" type="button">Agregar fuente</button>
             </article>
           </div>
 
@@ -352,11 +352,11 @@
             <div class="section-toolbar compact">
               <h2>Agregar contenido manual</h2>
             </div>
-            <p class="muted">Para noticias o novedades de ciberseguridad que estan en otros sitios (no en la lista de Fuentes de arriba): pega el texto, pega una URL, o sube un documento/imagen. La IA lee ese contenido y genera preguntas/katas a partir de el.</p>
+            <p class="muted">Para noticias o novedades de ciberseguridad que están en otros sitios (no en la lista de Fuentes de arriba): pega el texto, pega una URL, o sube un documento/imagen. La IA lee ese contenido y genera preguntas/katas a partir de él.</p>
             <div class="form-grid compact">
               <label>
                 Fuente (nombre libre, ej. "Reporte interno" o el sitio de origen)
-                <input id="manualContentSourceName" type="text" placeholder="Ej. Boletin CERT interno" />
+                <input id="manualContentSourceName" type="text" placeholder="Ej. Boletín CERT interno" />
               </label>
               <label>
                 URL de referencia (opcional si pegas texto o subes un archivo)
@@ -365,7 +365,7 @@
             </div>
             <label>
               Pegar texto de la noticia/documento
-              <textarea id="manualContentText" rows="6" placeholder="Pega aqui el texto completo..."></textarea>
+              <textarea id="manualContentText" rows="6" placeholder="Pega aquí el texto completo..."></textarea>
             </label>
             <label>
               O subir un archivo (.txt, .md, .pdf, .docx, .png, .jpg, .webp)
@@ -373,8 +373,8 @@
             </label>
             <p id="manualContentStatus" class="muted"></p>
             <div class="toolbar-actions">
-              <button id="manualContentTest" class="btn secondary">Probar (no guarda)</button>
-              <button id="manualContentGenerate" class="btn primary">Generar y guardar</button>
+              <button id="manualContentTest" class="btn secondary" type="button">Probar (no guarda)</button>
+              <button id="manualContentGenerate" class="btn primary" type="button">Generar y guardar</button>
             </div>
             <div id="manualContentResult"></div>
           </article>
@@ -382,14 +382,14 @@
           <article class="card">
             <div class="section-toolbar compact">
               <h2>Historial de ejecuciones</h2>
-              <button id="refreshNewsRuns" class="btn secondary small">Actualizar</button>
+              <button id="refreshNewsRuns" class="btn secondary small" type="button">Actualizar</button>
             </div>
             <div id="newsRunLog" class="news-run-log"></div>
           </article>
 
           <article class="card">
             <h2>Reporte: preguntas y katas generadas</h2>
-            <p class="muted">Contenido generado por el agente, pendiente de revision antes de activarse para los usuarios.</p>
+            <p class="muted">Contenido generado por el agente, pendiente de revisión antes de activarse para los usuarios.</p>
             <div id="newsGeneratedReport" class="news-generated-report"></div>
           </article>
         </section>

@@ -1,13 +1,5 @@
 const STORAGE_KEY = "ciber-dojo-central-admin-v2";
 
-// Rendered as an API-key input's value (not just a placeholder) whenever a
-// key is already saved, so the box itself shows "hay una clave guardada" at
-// a glance — type="password" turns it into dots on screen either way, and
-// typing over it is how you replace it. Shared by both places that manage
-// AI provider keys (the real news-agent provider chain and the local/draft
-// "Configuracion de IA" panel), so the masked look is consistent.
-const MASKED_KEY_PLACEHOLDER = "••••••••••••";
-
 const baseState = {
   selectedDojoId: "dojo-phishing",
   selectedCampaignId: null,
@@ -766,6 +758,11 @@ async function addNewsSource() {
     notify("Completa nombre y URL de la fuente.");
     return;
   }
+  const urlProblem = publicUrlProblem(url);
+  if (urlProblem) {
+    notify(`La URL de la fuente no es válida: ${urlProblem}`);
+    return;
+  }
 
   try {
     await supabaseRest("cyber_news_sources", {
@@ -779,7 +776,7 @@ async function addNewsSource() {
     notify("Fuente agregada.");
   } catch (error) {
     console.warn("No se pudo agregar la fuente:", error);
-    notify("No se pudo agregar la fuente. Verifica que la URL no este repetida.");
+    notify("No se pudo agregar la fuente. Verifica que la URL no esté repetida.");
   }
 }
 
@@ -841,7 +838,7 @@ async function loadNewsChainFromSupabase() {
 function renderNewsProviderList() {
   const container = $("#newsProviderList");
   if (state.newsProviders.length === 0) {
-    container.innerHTML = `<p class="muted">No hay proveedores de IA configurados todavia.</p>`;
+    container.innerHTML = `<p class="muted">No hay proveedores de IA configurados todavía.</p>`;
     return;
   }
 
@@ -849,7 +846,7 @@ function renderNewsProviderList() {
     <div class="news-provider-row" data-key="${esc(provider.provider_key)}">
       <div class="news-provider-head">
         <label class="check-row">
-          <input type="checkbox" class="news-provider-toggle" ${provider.active ? "checked" : ""} />
+          <input type="checkbox" class="news-provider-toggle" aria-label="Proveedor ${esc(provider.label)} activo" ${provider.active ? "checked" : ""} />
         </label>
         <div class="news-provider-info">
           <strong>${esc(provider.label)} <span class="muted">(${esc(provider.provider_key)})</span></strong>
@@ -866,10 +863,10 @@ function renderNewsProviderList() {
           <input
             type="password"
             class="news-provider-key-input"
-            value="${provider.api_key_secret_id ? MASKED_KEY_PLACEHOLDER : ""}"
-            placeholder="Sin clave guardada"
-            title="Clave de API (oculta). Escribe una nueva para reemplazarla."
-            autocomplete="off"
+            value=""
+            placeholder="${provider.api_key_secret_id ? "Clave guardada · escribe otra para reemplazarla" : "Sin clave guardada"}"
+            autocomplete="new-password"
+            spellcheck="false"
           />
           <button type="button" class="btn secondary small news-provider-key-save">Guardar clave</button>
         </span>
@@ -881,21 +878,6 @@ function renderNewsProviderList() {
     checkbox.addEventListener("change", (event) => {
       const key = event.target.closest(".news-provider-row").dataset.key;
       void toggleNewsProviderActive(key, event.target.checked);
-    });
-  });
-  [...container.querySelectorAll(".news-provider-key-input")].forEach((input) => {
-    // Clicking into the masked placeholder to type a real key shouldn't
-    // start with the dots already selected-and-ready-to-overwrite being
-    // ambiguous with "the key starts with these dots" — clear it on focus
-    // so whatever the admin types is unambiguously the new value, and
-    // restore the mask on blur if they leave it untouched.
-    input.addEventListener("focus", () => {
-      if (input.value === MASKED_KEY_PLACEHOLDER) input.value = "";
-    });
-    input.addEventListener("blur", () => {
-      const key = input.closest(".news-provider-row").dataset.key;
-      const provider = state.newsProviders.find((p) => p.provider_key === key);
-      if (!input.value && provider && provider.api_key_secret_id) input.value = MASKED_KEY_PLACEHOLDER;
     });
   });
   [...container.querySelectorAll(".news-provider-key-save")].forEach((button) => {
@@ -921,24 +903,25 @@ function renderNewsProviderList() {
 }
 
 async function saveNewsProviderKeyInline(providerKey, inputEl) {
-  const value = inputEl.value;
-  if (value === MASKED_KEY_PLACEHOLDER) {
-    notify("Escribe una clave nueva para reemplazarla (no cambio).");
+  const value = inputEl.value.trim();
+  if (!value) {
+    notify("Escribe la clave antes de guardar.");
     return;
   }
-  if (!value.trim()) {
-    notify("Escribe la clave antes de guardar.");
+  if (value.length < MIN_PROVIDER_KEY_LENGTH) {
+    notify(`La clave parece incompleta (mínimo ${MIN_PROVIDER_KEY_LENGTH} caracteres). No se guardó nada.`);
     return;
   }
 
   inputEl.disabled = true;
   try {
-    await supabaseFunctionInvoke("save-provider-key", { provider_key: providerKey, api_key: value.trim() });
+    await supabaseFunctionInvoke("save-provider-key", { provider_key: providerKey, api_key: value });
     await loadNewsProvidersFromSupabase();
-    notify("Clave guardada de forma cifrada.");
+    notify("Clave guardada de forma cifrada. No se puede volver a ver.");
   } catch (error) {
-    console.warn("No se pudo guardar la clave:", error);
     notify(`No se pudo guardar la clave: ${error.message}`);
+  } finally {
+    inputEl.value = "";
     inputEl.disabled = false;
   }
 }
@@ -959,7 +942,7 @@ async function toggleNewsProviderActive(providerKey, active) {
 }
 
 async function deleteNewsProvider(providerKey) {
-  if (!window.confirm(`¿Eliminar el proveedor "${providerKey}"? Tambien se quitara de cualquier cadena donde este asignado.`)) return;
+  if (!window.confirm(`¿Eliminar el proveedor "${providerKey}"? También se quitará de cualquier cadena donde esté asignado.`)) return;
   try {
     await supabaseRest(`ai_providers?provider_key=eq.${encodeURIComponent(providerKey)}`, { method: "DELETE" });
     await loadNewsProvidersFromSupabase();
@@ -1012,6 +995,21 @@ async function saveNewsProviderForm() {
     statusEl.textContent = "Un proveedor nuevo necesita una clave de API.";
     return;
   }
+  if (isNew && !/^[a-z0-9][a-z0-9-]{1,39}$/.test(providerKey)) {
+    statusEl.textContent = "El identificador solo puede tener minúsculas, números y guiones (2 a 40 caracteres).";
+    return;
+  }
+  if (apiKey && apiKey.length < MIN_PROVIDER_KEY_LENGTH) {
+    statusEl.textContent = `La clave parece incompleta (mínimo ${MIN_PROVIDER_KEY_LENGTH} caracteres). No se guardó nada.`;
+    return;
+  }
+  const baseUrl = $("#npBaseUrl").value.trim();
+  const baseProblem = baseUrl ? publicUrlProblem(baseUrl, true) : null;
+  if (baseProblem) {
+    // The API key and every prompt are sent to this address, so it must be a public https endpoint.
+    statusEl.textContent = `Base URL no permitida: ${baseProblem}`;
+    return;
+  }
 
   statusEl.textContent = "Guardando...";
   try {
@@ -1021,7 +1019,7 @@ async function saveNewsProviderForm() {
       provider_type: $("#npType").value,
       model_name: modelName,
       base_url: $("#npBaseUrl").value.trim() || undefined,
-      default_timeout_seconds: Number($("#npTimeout").value) || 30,
+      default_timeout_seconds: Math.min(120, Math.max(1, Math.round(Number($("#npTimeout").value)) || 30)),
       active: $("#npActive").checked,
     };
     if (apiKey) payload.api_key = apiKey;
@@ -1236,7 +1234,7 @@ function renderNewsGeneratedReport() {
       <strong>${esc(item.question_text)}</strong>
       <p class="muted">Respuesta: ${esc(item.answer_text || "")}</p>
       <p class="muted">Kata: ${esc(item.kata_label || "-")} · Dojo: ${esc(item.dojo_id || "-")} · Dificultad: ${esc(String(item.difficulty || 1))}</p>
-      ${item.source_url ? `<p class="muted">Fuente: <a href="${esc(item.source_url)}" target="_blank" rel="noopener noreferrer">${esc(item.source_title || item.source_url)}</a></p>` : ""}
+      ${item.source_url ? (safeHttpUrl(item.source_url) ? `<p class="muted">Fuente: <a href="${esc(safeHttpUrl(item.source_url))}" target="_blank" rel="noopener noreferrer">${esc(item.source_title || item.source_url)}</a></p>` : `<p class="muted">Fuente: ${esc(item.source_title || item.source_url)} <em>(enlace no seguro, no se muestra como enlace)</em></p>`) : ""}
       ${item.audit_status === "pending" ? `
         <div class="modal-actions">
           <button type="button" class="btn secondary small news-generated-approve">Aprobar y activar</button>
@@ -1394,7 +1392,27 @@ async function testManualContent() {
   await runManualContent(true);
 }
 
+const MAX_MANUAL_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_MANUAL_TEXT_CHARS = 60000;
+
+// Checks the manual-content form; used before asking for confirmation so a bad form never reaches the "¿Continuar?" dialog.
+function manualContentProblem() {
+  const url = $("#manualContentUrl").value.trim();
+  const text = $("#manualContentText").value.trim();
+  const file = $("#manualContentFile").files[0] || null;
+  if (!text && !file && !url) return "Pega texto, pega una URL, o sube un archivo antes de continuar.";
+  if (url) {
+    const urlProblem = publicUrlProblem(url);
+    if (urlProblem) return `La URL no es válida: ${urlProblem}`;
+  }
+  if (file && file.size > MAX_MANUAL_FILE_BYTES) return `El archivo pesa ${(file.size / 1048576).toFixed(1)} MB; el máximo es ${MAX_MANUAL_FILE_BYTES / 1048576} MB.`;
+  if (text.length > MAX_MANUAL_TEXT_CHARS) return `El texto tiene ${text.length.toLocaleString("es-EC")} caracteres; el máximo es ${MAX_MANUAL_TEXT_CHARS.toLocaleString("es-EC")}.`;
+  return null;
+}
+
 async function generateManualContent() {
+  const problem = manualContentProblem();
+  if (problem) { $("#manualContentStatus").textContent = problem; return; }
   if (!window.confirm("Esto generara preguntas y katas reales pendientes de revision a partir de este contenido. ¿Continuar?")) return;
   await runManualContent(false);
 }
@@ -1410,10 +1428,8 @@ async function runManualContent(dryRun) {
   const resultEl = $("#manualContentResult");
   resultEl.innerHTML = "";
 
-  if (!text && !file && !url) {
-    statusEl.textContent = "Pega texto, pega una URL, o sube un archivo antes de continuar.";
-    return;
-  }
+  const problem = manualContentProblem();
+  if (problem) { statusEl.textContent = problem; return; }
 
   state.manualContentBusy = true;
   const testButton = $("#manualContentTest");
@@ -3395,6 +3411,36 @@ async function rejectThreatJob(jobId) {
 
 function publishThreatJob() {
   $("#tpotStatus").textContent = "Publicacion registrada en UI. La persistencia final debe quedar conectada al backend de aprobacion.";
+}
+
+// href values that come from the database (many originate in AI output built from web pages) may only be http(s):
+// esc() alone lets javascript:… through.
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+// Client-side hint before saving a URL the server will fetch (the Edge Function enforces the same rules).
+function publicUrlProblem(raw, httpsOnly = false) {
+  let url;
+  try { url = new URL(String(raw || "").trim()); } catch { return "La dirección no es válida."; }
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && !httpsOnly)) return httpsOnly ? "Solo se permiten direcciones https://." : "Solo se permiten direcciones http:// o https://.";
+  if (url.username || url.password) return "La dirección no puede incluir usuario ni contraseña.";
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (!host || host === "localhost" || /\.(localhost|local|internal|intranet|lan|home|corp|private)$/.test(host)) return "No se permiten servidores locales o internos.";
+  if (host.includes(":") || host.startsWith("[")) return "No se permiten direcciones IPv6 directas.";
+  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224) return "No se permiten direcciones IP privadas o reservadas.";
+  }
+  if (/^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host)) return "No se permiten direcciones IP escritas en formato numérico.";
+  if (!host.includes(".")) return "La dirección debe usar un dominio público.";
+  return null;
 }
 
 function esc(value) {
