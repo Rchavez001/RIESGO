@@ -3366,3 +3366,10 @@ code { font-family: var(--font-mono); }
 .profile-step.current { color: var(--gold-belt, #f5c518); font-weight: 700; }
 .profile-page select { min-height: 44px; }
 @media (max-width: 960px) { .profile-grid { grid-template-columns: 1fr; } }
+
+/* /tenant-admin prototype (checklist row 19) */
+.tenant-proto-banner { margin: 0 0 14px; padding: 12px 14px; border: 1px solid #b45309; background: #fffbeb; color: #78350f; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+.tenant-admin button:disabled { cursor: not-allowed; opacity: .55; }
+.tenant-admin button, .tenant-admin select, .tenant-admin input:not([type="checkbox"]) { min-height: 44px; }
+.tenant-admin :focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
+.tenant-message { line-height: 1.5; }

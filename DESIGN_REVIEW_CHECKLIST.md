@@ -48,7 +48,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | 16 | `/campeonato` `ChampionshipPage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 17 | `/campeonato/combate/:id` `ChampionshipMatchPage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 18 | `/perfil` `ProfilePage` | ✅ | ✅ | ✅ | ✅ | **done** |
-| 19 | `/tenant-admin` `TenantAdminPage` + `AdminShell` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| 19 | `/tenant-admin` `TenantAdminPage` + `AdminShell` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 20 | Overlays globales: `PWAInstallPrompt`, `CyberToast`/`ToastContext`, `PageTransition` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A0 | Admin: shell, navegación lateral, auth (`central-admin-app`) | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A1 | Admin › Resumen | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -198,3 +198,12 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Corrección:** la barra de XP tenía una meta fija de 5000; un usuario con más puntos veía "9000/5000". La meta ahora es `max(5000, XP)` (la meta es solo visual: los cinturones se ganan aprobando katas, no acumulando XP).
 - **OWASP:** la pantalla solo muestra datos del propio usuario (`get-private-profile` con su token; nombre y correo se descifran en el servidor y se muestran con el escape de React, sin `dangerouslySetInnerHTML`). Los invitados no llegan a la pantalla (probado). Sin hallazgos nuevos.
 - **Decisión del dueño (ya listada):** el perfil no ofrece ver/exportar/eliminar los propios datos ni cambiar el nombre; para cumplir la LOPDP (derechos ARCO) conviene añadir esas acciones o, al menos, el contacto institucional de la persona delegada (correo por definir).
+
+### 19 — `/tenant-admin` + `AdminShell` (2026-09-20) · done
+- **Qué es realmente `/tenant-admin`:** un **prototipo sin backend** (tres inquilinos inventados en el código, no existe tabla de inquilinos en las migraciones, ningún enlace de la app lleva a él y solo un administrador llega a la ruta). Su botón "Guardar cambios" mostraba **"Configuración guardada para…"** aunque nada se guardaba en ningún sitio, y "Generar/Auditar" decían "Solicitud lista" sin hacer nada; la lista "Checklist operativo" estaba siempre marcada. → Un aviso fijo "Vista de prototipo", mensajes que dicen la verdad ("no se generó nada", "se pierden al recargar"), los controles sin función (menú lateral, "Nuevo") deshabilitados con "Próximamente" y la lista de verificación calculada a partir del formulario.
+- **Responsive:** la pantalla ya colapsaba ≤1180 px; se verificó sin scroll horizontal en 7 perfiles y todos los controles activos ≥44 px (antes había inputs/selects más bajos).
+- **Presentación HD:** tildes ("Configuración", "Revisión", "auditoría", "administración", "multi-inquilino"); campos numéricos con `min`/`max` (teclear 0 en "preguntas base" lo convertía en 10 sin avisar; ahora se limita al rango) y `inputMode` numérico; foco visible.
+- **AdminShell (lo que ve un administrador al entrar a pantallas de la app):** en teléfono el cajón cerrado estaba fuera de pantalla pero **sus enlaces seguían recibiendo foco de teclado** → `inert` cuando está cerrado; el botón de menú ahora tiene `aria-expanded`/`aria-controls` y nombre que cambia (Abrir/Cerrar); al abrir el foco entra al cajón, Escape lo cierra y devuelve el foco al botón, y se bloquea el scroll de fondo; el contenido es `<main>` con enlace "Saltar al contenido"; objetivos ≥44 px (los enlaces medían ~30 px); tilde en "Panel de administración".
+- **Testing:** `tests/frontend/tenant-admin.spec.ts` × 7 perfiles (8 pruebas): usuario normal no ve la pantalla, aviso de prototipo y mensajes veraces, sin desborde/targets/controles deshabilitados, selección de inquilino y límites numéricos, checklist derivada; AdminShell: main/skip link/targets, cajón (inert, foco, Escape, scroll), "Ver como usuario".
+- **OWASP:** A01 — la ruta se protege en el cliente (`role === 'admin'`), pero la pantalla no consulta ni escribe datos reales, así que no hay nada que proteger detrás; cuando se conecte un backend real, cada operación deberá autorizarse en servidor (RLS/RPC con `is_admin()`), no por la ruta. Sin hallazgos de seguridad nuevos.
+- **Decisión del dueño:** ¿se construye el módulo multi-inquilino o se retira `TenantAdminPage`? Hoy es código muerto que puede confundir a un administrador; lo dejé marcado como prototipo en lugar de borrarlo.

@@ -112,16 +112,18 @@ export function TenantAdminPage() {
     )))
   }
 
+  // This screen is a prototype: there is no tenants table or backend behind it yet. The messages below
+  // say so plainly — they used to claim "Configuración guardada" although nothing was stored anywhere.
   function saveTenantConfig() {
-    setMessage(`Configuracion guardada para ${selectedTenant.name}. En integracion backend, esto debe persistir en tabla tenants/tenant_ai_configs.`)
+    setMessage(`Prototipo: los cambios de ${selectedTenant.name} solo existen en esta pantalla y se pierden al recargar. Aún no hay base de datos de inquilinos.`)
   }
 
   function runGeneration() {
-    setMessage(`Solicitud lista: generar ${selectedTenant.aiQuestionsPerDojo} preguntas IA por dojo para ${selectedTenant.name} usando ${selectedTenant.generatorProvider}.`)
+    setMessage(`Prototipo: no se generó nada. Cuando exista el backend se pedirán ${selectedTenant.aiQuestionsPerDojo} preguntas IA por dojo para ${selectedTenant.name} con ${selectedTenant.generatorProvider}.`)
   }
 
   function runAudit() {
-    setMessage(`Solicitud lista: auditar preguntas generadas de ${selectedTenant.name} usando ${selectedTenant.auditorProvider}.`)
+    setMessage(`Prototipo: no se auditó nada. Cuando exista el backend se auditarán las preguntas de ${selectedTenant.name} con ${selectedTenant.auditorProvider}.`)
   }
 
   return (
@@ -139,14 +141,14 @@ export function TenantAdminPage() {
           {[
             [Building2, 'Inquilinos'],
             [FileQuestion, 'Preguntas'],
-            [Bot, 'IA y Auditoria'],
+            [Bot, 'IA y auditoría'],
             [Database, 'Base de datos'],
             [ShieldCheck, 'Seguridad'],
           ].map(([Icon, label]) => {
             const TypedIcon = Icon as typeof Building2
             return (
-              <button key={String(label)}>
-                <TypedIcon size={17} />
+              <button key={String(label)} type="button" disabled title="Próximamente">
+                <TypedIcon size={17} aria-hidden="true" />
                 {label as string}
               </button>
             )
@@ -155,31 +157,32 @@ export function TenantAdminPage() {
 
         <div className="tenant-rail-note">
           <KeyRound size={16} />
-          <p>Front separado para administracion SaaS multi-tenant. No es el dojo del usuario final.</p>
+          <p>Front separado para administración SaaS multi-inquilino. No es el dojo del usuario final.</p>
         </div>
       </aside>
 
       <main className="tenant-workspace">
+        <p className="tenant-proto-banner" role="note"><strong>Vista de prototipo.</strong> Los datos de los inquilinos son de ejemplo y nada se guarda todavía.</p>
         <header className="tenant-header">
           <div>
             <p>ADMINISTRADOR CENTRAL DE INQUILINOS</p>
             <h1>Operaciones SaaS · Tenants</h1>
           </div>
           <div className="tenant-header-actions">
-            <button onClick={runGeneration}>
-              <Play size={16} />
+            <button type="button" onClick={runGeneration}>
+              <Play size={16} aria-hidden="true" />
               Generar preguntas IA
             </button>
-            <button onClick={saveTenantConfig} className="primary">
-              <Save size={16} />
+            <button type="button" onClick={saveTenantConfig} className="primary">
+              <Save size={16} aria-hidden="true" />
               Guardar cambios
             </button>
           </div>
         </header>
 
         {message && (
-          <div className="tenant-message">
-            <CheckCircle2 size={18} />
+          <div className="tenant-message" role="status">
+            <CheckCircle2 size={18} aria-hidden="true" />
             {message}
           </div>
         )}
@@ -198,13 +201,15 @@ export function TenantAdminPage() {
                 <p>DIRECTORIO</p>
                 <h2>Inquilinos</h2>
               </div>
-              <button>Nuevo</button>
+              <button type="button" disabled title="Próximamente">Nuevo</button>
             </div>
 
             <div className="tenant-list">
               {tenants.map((tenant) => (
                 <button
                   key={tenant.id}
+                  type="button"
+                  aria-pressed={tenant.id === selectedTenant.id}
                   className={tenant.id === selectedTenant.id ? 'active' : ''}
                   onClick={() => setSelectedTenantId(tenant.id)}
                 >
@@ -222,7 +227,7 @@ export function TenantAdminPage() {
           <div className="tenant-config-panel">
             <div className="tenant-panel-head">
               <div>
-                <p>CONFIGURACION DEL INQUILINO</p>
+                <p>CONFIGURACIÓN DEL INQUILINO</p>
                 <h2>{selectedTenant.name}</h2>
               </div>
               <span className={`tenant-status ${selectedTenant.status}`}>{selectedTenant.status}</span>
@@ -245,7 +250,7 @@ export function TenantAdminPage() {
               <TenantField label="Estado">
                 <select value={selectedTenant.status} onChange={(event) => updateSelectedTenant({ status: event.target.value as TenantStatus })}>
                   <option value="activo">Activo</option>
-                  <option value="revision">Revision</option>
+                  <option value="revision">Revisión</option>
                   <option value="suspendido">Suspendido</option>
                 </select>
               </TenantField>
@@ -255,31 +260,19 @@ export function TenantAdminPage() {
               <div>
                 <div className="tenant-rule-icon"><FileQuestion size={19} /></div>
                 <TenantField label="Preguntas base por dojo">
-                  <input
-                    type="number"
-                    value={selectedTenant.baseQuestionsPerDojo}
-                    onChange={(event) => updateSelectedTenant({ baseQuestionsPerDojo: Number(event.target.value) || 10 })}
-                  />
+                  <input type="number" inputMode="numeric" min={1} max={50} value={selectedTenant.baseQuestionsPerDojo} onChange={(event) => updateSelectedTenant({ baseQuestionsPerDojo: Math.min(50, Math.max(1, Math.round(Number(event.target.value)) || 1)) })} />
                 </TenantField>
               </div>
               <div>
                 <div className="tenant-rule-icon"><Bot size={19} /></div>
                 <TenantField label="Preguntas generadas por IA por dojo">
-                  <input
-                    type="number"
-                    value={selectedTenant.aiQuestionsPerDojo}
-                    onChange={(event) => updateSelectedTenant({ aiQuestionsPerDojo: Number(event.target.value) || 10 })}
-                  />
+                  <input type="number" inputMode="numeric" min={0} max={50} value={selectedTenant.aiQuestionsPerDojo} onChange={(event) => updateSelectedTenant({ aiQuestionsPerDojo: Math.min(50, Math.max(0, Math.round(Number(event.target.value)) || 0)) })} />
                 </TenantField>
               </div>
               <div>
                 <div className="tenant-rule-icon"><Gauge size={19} /></div>
                 <TenantField label="Dojos activos">
-                  <input
-                    type="number"
-                    value={selectedTenant.activeDojoCount}
-                    onChange={(event) => updateSelectedTenant({ activeDojoCount: Number(event.target.value) || 1 })}
-                  />
+                  <input type="number" inputMode="numeric" min={1} max={20} value={selectedTenant.activeDojoCount} onChange={(event) => updateSelectedTenant({ activeDojoCount: Math.min(20, Math.max(1, Math.round(Number(event.target.value)) || 1)) })} />
                 </TenantField>
               </div>
             </div>
@@ -300,12 +293,12 @@ export function TenantAdminPage() {
                     <option>Claude</option>
                   </select>
                 </TenantField>
-                <TenantField label="Prompt de generacion">
+                <TenantField label="Prompt de generación">
                   <textarea rows={8} value={generatorPrompt} onChange={(event) => setGeneratorPrompt(event.target.value)} />
                 </TenantField>
-                <button className="tenant-action" onClick={runGeneration}>
+                <button type="button" className="tenant-action" onClick={runGeneration}>
                   <Play size={16} />
-                  Ejecutar generacion
+                  Ejecutar generación
                 </button>
               </div>
 
@@ -324,12 +317,12 @@ export function TenantAdminPage() {
                     <option>Kimi</option>
                   </select>
                 </TenantField>
-                <TenantField label="Prompt de auditoria">
+                <TenantField label="Prompt de auditoría">
                   <textarea rows={8} value={auditorPrompt} onChange={(event) => setAuditorPrompt(event.target.value)} />
                 </TenantField>
-                <button className="tenant-action" onClick={runAudit}>
+                <button type="button" className="tenant-action" onClick={runAudit}>
                   <ShieldCheck size={16} />
-                  Ejecutar auditoria
+                  Ejecutar auditoría
                 </button>
               </div>
             </div>
@@ -350,28 +343,28 @@ export function TenantAdminPage() {
               <SummaryRow label="IA por dojo" value={String(selectedTenant.aiQuestionsPerDojo)} />
               <SummaryRow label="Total base" value={String(selectedTenant.activeDojoCount * selectedTenant.baseQuestionsPerDojo)} />
               <SummaryRow label="Total IA" value={String(selectedTenant.activeDojoCount * selectedTenant.aiQuestionsPerDojo)} />
-              <SummaryRow label="Ultima corrida" value={selectedTenant.lastRun} />
+              <SummaryRow label="Última corrida" value={selectedTenant.lastRun} />
             </div>
 
             <div className="tenant-checklist">
               <h3><SlidersHorizontal size={17} /> Checklist operativo</h3>
               {[
-                '10 preguntas base por dojo',
-                '10 preguntas IA por dojo',
-                'Prompt generador configurado',
-                'Prompt auditor configurado',
-                'Proveedor auditor asignado',
-              ].map((item) => (
-                <label key={item}>
-                  <input type="checkbox" defaultChecked />
-                  {item}
+                [`${selectedTenant.baseQuestionsPerDojo} preguntas base por dojo`, selectedTenant.baseQuestionsPerDojo === 10],
+                [`${selectedTenant.aiQuestionsPerDojo} preguntas IA por dojo`, selectedTenant.aiQuestionsPerDojo === 10],
+                ['Prompt generador configurado', generatorPrompt.trim().length > 0],
+                ['Prompt auditor configurado', auditorPrompt.trim().length > 0],
+                ['Proveedor auditor asignado', Boolean(selectedTenant.auditorProvider)],
+              ].map(([item, ok]) => (
+                <label key={String(item)}>
+                  <input type="checkbox" checked={Boolean(ok)} readOnly aria-readonly="true" tabIndex={-1} />
+                  {item as string}
                 </label>
               ))}
             </div>
 
-            <button className="tenant-save-wide" onClick={saveTenantConfig}>
-              <Settings2 size={16} />
-              Publicar configuracion
+            <button type="button" className="tenant-save-wide" onClick={saveTenantConfig}>
+              <Settings2 size={16} aria-hidden="true" />
+              Guardar configuración (prototipo)
             </button>
           </aside>
         </section>
