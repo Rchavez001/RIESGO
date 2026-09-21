@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { usePWAInstall } from '../hooks/usePWAInstall'
+import { useModalA11y } from '../hooks/useModalA11y'
 
 // ── SVG icons ──────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ function IOSInstructions({ onDismiss }: { onDismiss: () => void }) {
           </li>
         ))}
       </ol>
-      <button style={S.primaryBtn} onClick={onDismiss}>
+      <button type="button" style={S.primaryBtn} onClick={onDismiss}>
         Entendido, lo haré ahora
       </button>
     </>
@@ -113,6 +114,7 @@ function AndroidInstructions({
     <>
       {hasNativePrompt && (
         <button
+          type="button"
           style={S.primaryBtn}
           onClick={onInstall}
         >
@@ -141,7 +143,7 @@ function AndroidInstructions({
       </div>
 
       {!hasNativePrompt && (
-        <button style={S.primaryBtn} onClick={onDismiss}>
+        <button type="button" style={S.primaryBtn} onClick={onDismiss}>
           Entendido
         </button>
       )}
@@ -150,6 +152,78 @@ function AndroidInstructions({
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
+
+function InstallDrawer({ platform, hasNativePrompt, onInstall, dismiss }: {
+  platform: 'ios' | 'android'
+  hasNativePrompt: boolean
+  onInstall: () => Promise<boolean>
+  dismiss: () => void
+}) {
+  const drawerRef = useRef<HTMLDivElement>(null)
+  // Mounted only while visible, so the hook's focus/Escape/trap/scroll-lock lifecycle matches the drawer's.
+  useModalA11y(drawerRef, dismiss)
+  return (
+    <>
+      {/* Backdrop: a mouse/touch convenience; keyboard users have Escape and the close buttons */}
+      <motion.div
+        key="backdrop"
+        aria-hidden="true"
+        style={S.backdrop}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={dismiss}
+      />
+
+      <motion.div
+        key="drawer"
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Instalar Ciber Dojo"
+        tabIndex={-1}
+        style={S.drawer}
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 340, damping: 34 }}
+      >
+        <div style={S.handle} aria-hidden="true" />
+
+        <div style={S.header}>
+          <div style={S.appInfo}>
+            <span style={S.torii} aria-hidden="true">⛩</span>
+            <div>
+              <div style={S.appName}>CIBER DOJO</div>
+              <div style={S.appSub}>
+                {platform === 'ios' ? 'Safari · iOS' : 'Chrome · Android'}
+              </div>
+            </div>
+            <span style={S.badge}>INSTALAR</span>
+          </div>
+          <button type="button" style={S.closeBtn} onClick={dismiss} aria-label="Cerrar">
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+
+        <p style={S.valueProp}>
+          Lleva el Dojo siempre contigo —{' '}
+          <strong>acceso instantáneo</strong>, sin abrir el navegador.
+        </p>
+
+        {platform === 'ios' ? (
+          <IOSInstructions onDismiss={dismiss} />
+        ) : (
+          <AndroidInstructions hasNativePrompt={hasNativePrompt} onInstall={onInstall} onDismiss={dismiss} />
+        )}
+
+        <button type="button" style={S.laterBtn} onClick={dismiss}>
+          Más tarde
+        </button>
+      </motion.div>
+    </>
+  )
+}
 
 export function PWAInstallPrompt() {
   const { platform, visible, hasNativePrompt, triggerAndroidInstall, dismiss } =
@@ -160,76 +234,7 @@ export function PWAInstallPrompt() {
   return (
     <AnimatePresence>
       {visible && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="backdrop"
-            style={S.backdrop}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={dismiss}
-          />
-
-          {/* Drawer */}
-          <motion.div
-            key="drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Instalar Ciber Dojo"
-            style={S.drawer}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 340, damping: 34 }}
-          >
-            {/* Drag handle */}
-            <div style={S.handle} />
-
-            {/* Header */}
-            <div style={S.header}>
-              <div style={S.appInfo}>
-                <span style={S.torii}>⛩</span>
-                <div>
-                  <div style={S.appName}>CIBER DOJO</div>
-                  <div style={S.appSub}>
-                    {platform === 'ios' ? 'Safari · iOS' : 'Chrome · Android'}
-                  </div>
-                </div>
-                <span style={S.badge}>INSTALAR</span>
-              </div>
-              <button
-                style={S.closeBtn}
-                onClick={dismiss}
-                aria-label="Cerrar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Value prop */}
-            <p style={S.valueProp}>
-              Lleva el Dojo siempre contigo —{' '}
-              <strong>acceso instantáneo</strong>, sin abrir el navegador.
-            </p>
-
-            {/* Platform-specific body */}
-            {platform === 'ios' ? (
-              <IOSInstructions onDismiss={dismiss} />
-            ) : (
-              <AndroidInstructions
-                hasNativePrompt={hasNativePrompt}
-                onInstall={triggerAndroidInstall}
-                onDismiss={dismiss}
-              />
-            )}
-
-            {/* Later link */}
-            <button style={S.laterBtn} onClick={dismiss}>
-              Más tarde
-            </button>
-          </motion.div>
-        </>
+        <InstallDrawer platform={platform} hasNativePrompt={hasNativePrompt} onInstall={triggerAndroidInstall} dismiss={dismiss} />
       )}
     </AnimatePresence>
   )
@@ -258,7 +263,9 @@ const S = {
     borderLeft: '1px solid rgba(0,200,232,0.10)',
     borderRight: '1px solid rgba(0,200,232,0.10)',
     borderRadius: '20px 20px 0 0',
-    padding: '0 20px 32px',
+    padding: '0 20px calc(32px + env(safe-area-inset-bottom, 0px))',
+    maxHeight: '92dvh',
+    overflowY: 'auto' as const,
     zIndex: 9999,
     boxShadow: '0 -8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,200,232,0.06)',
   },
@@ -301,7 +308,7 @@ const S = {
 
   appSub: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.7)',
     letterSpacing: '0.05em',
     marginTop: 2,
   },
@@ -324,6 +331,8 @@ const S = {
     borderRadius: 8,
     color: 'rgba(255,255,255,0.6)',
     cursor: 'pointer',
+    minWidth: 44,
+    minHeight: 44,
     padding: 7,
     display: 'flex',
     alignItems: 'center',
@@ -335,7 +344,7 @@ const S = {
   valueProp: {
     fontSize: 14,
     lineHeight: 1.55,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.82)',
     margin: '0 0 18px',
   },
 
@@ -372,7 +381,7 @@ const S = {
   stepText: {
     fontSize: 13.5,
     lineHeight: 1.5,
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.88)',
     paddingTop: 4,
   },
 
@@ -388,8 +397,8 @@ const S = {
     alignItems: 'center',
     gap: 10,
     margin: '16px 0',
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
     letterSpacing: '0.05em',
   },
 
@@ -418,9 +427,10 @@ const S = {
     width: '100%',
     background: 'none',
     border: 'none',
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 14,
     cursor: 'pointer',
+    minHeight: 44,
     padding: '10px 0 0',
     textAlign: 'center' as const,
     transition: 'color 0.15s',

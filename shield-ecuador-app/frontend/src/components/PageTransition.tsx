@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { motion, useReducedMotion, Variants } from 'framer-motion'
 
 const pageVariants: Variants = {
@@ -30,8 +30,18 @@ const pageVariants: Variants = {
   },
 }
 
+// The very first page load keeps the browser's own focus behaviour; every later mount is an in-app route
+// change, after which focus would otherwise stay on the link that was just clicked (now removed), leaving
+// keyboard and screen-reader users at the top of nowhere.
+let firstMount = true
+
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const reduceMotion = useReducedMotion()
+  useEffect(() => {
+    if (firstMount) { firstMount = false; return }
+    const main = document.getElementById('contenido') ?? document.getElementById('adm-contenido')
+    if (main && !main.contains(document.activeElement)) main.focus({ preventScroll: true })
+  }, [])
 
   if (reduceMotion) {
     return <div className="page-transition">{children}</div>

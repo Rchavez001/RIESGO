@@ -601,7 +601,7 @@ export function DojoShell({
           playSound('tap')
           setSidebarOpen(false)
         }} />
-        <main id="contenido" className="dojo-main">
+        <main id="contenido" className="dojo-main" tabIndex={-1}>
           <nav className="mobile-bottom-nav" aria-label="Navegación principal">
             {nav.filter((item) => bottomNavPaths.includes(item.to)).map((item) => {
               const Icon = item.icon

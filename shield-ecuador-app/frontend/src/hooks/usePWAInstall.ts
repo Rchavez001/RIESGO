@@ -13,6 +13,7 @@ const DELAY_MS    = 4000
 export function usePWAInstall() {
   const [platform, setPlatform]         = useState<PWAPlatform>('desktop')
   const [visible, setVisible]           = useState(false)
+  const [hasNativePrompt, setHasNativePrompt] = useState(false)
   const deferredRef = useRef<BeforeInstallPromptEvent | null>(null)
 
   // Capture Android native prompt event as early as possible
@@ -20,6 +21,7 @@ export function usePWAInstall() {
     const onBefore = (e: Event) => {
       e.preventDefault()
       deferredRef.current = e as BeforeInstallPromptEvent
+      setHasNativePrompt(true) // the ref alone would not re-render a drawer that is already open
     }
     window.addEventListener('beforeinstallprompt', onBefore)
     return () => window.removeEventListener('beforeinstallprompt', onBefore)
@@ -44,7 +46,12 @@ export function usePWAInstall() {
     const hiddenUntil = parseInt(localStorage.getItem(STORAGE_KEY) ?? '0', 10)
     if (Date.now() < hiddenUntil) return
 
-    const timer = setTimeout(() => setVisible(true), DELAY_MS)
+    const timer = setTimeout(() => {
+      // A modal that grabs focus while someone is typing (login, registration) would eat their input.
+      const active = document.activeElement
+      if (active && /^(input|textarea|select)$/i.test(active.tagName)) return
+      setVisible(true)
+    }, DELAY_MS)
     return () => clearTimeout(timer)
   }, [])
 
@@ -53,6 +60,7 @@ export function usePWAInstall() {
     await deferredRef.current.prompt()
     const { outcome } = await deferredRef.current.userChoice
     deferredRef.current = null
+    setHasNativePrompt(false)
     if (outcome === 'accepted') { hide(365) } // permanently on accept
     else                       { hide(14) }
     return outcome === 'accepted'
@@ -66,7 +74,7 @@ export function usePWAInstall() {
   return {
     platform,
     visible,
-    hasNativePrompt: !!deferredRef.current,
+    hasNativePrompt,
     triggerAndroidInstall,
     dismiss: () => hide(14),
   }

@@ -3373,3 +3373,10 @@ code { font-family: var(--font-mono); }
 .tenant-admin button, .tenant-admin select, .tenant-admin input:not([type="checkbox"]) { min-height: 44px; }
 .tenant-admin :focus-visible { outline: 3px solid #1d4ed8; outline-offset: 2px; }
 .tenant-message { line-height: 1.5; }
+
+/* Row 20: toast close target, drawer focus ring */
+.cyber-toast { grid-template-columns: 20px 1fr 44px; }
+.toast-close { min-width: 44px; min-height: 44px; cursor: pointer; }
+.toast-close:focus-visible { outline: 3px solid #fde68a; outline-offset: 2px; }
+#contenido:focus { outline: none; }
+.dojo-main:focus, .cinematic-public main:focus { outline: none; }

@@ -21,17 +21,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const notify = useCallback((message: string, tone: ToastTone = 'info') => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`
     setToasts((current) => [{ id, message, tone }, ...current])
-    window.setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id))
-    }, 4500)
+    // Auto-dismiss lives in CyberToastList so it can pause while the toast is hovered or focused.
   }, [])
 
+  const dismiss = useCallback((id: string) => setToasts((current) => current.filter((toast) => toast.id !== id)), [])
   const value = useMemo(() => ({ notify }), [notify])
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <CyberToastList toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
+      <CyberToastList toasts={toasts} onDismiss={dismiss} />
     </ToastContext.Provider>
   )
 }

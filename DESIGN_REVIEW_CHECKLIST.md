@@ -49,7 +49,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | 17 | `/campeonato/combate/:id` `ChampionshipMatchPage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 18 | `/perfil` `ProfilePage` | ✅ | ✅ | ✅ | ✅ | **done** |
 | 19 | `/tenant-admin` `TenantAdminPage` + `AdminShell` | ✅ | ✅ | ✅ | ✅ | **done** |
-| 20 | Overlays globales: `PWAInstallPrompt`, `CyberToast`/`ToastContext`, `PageTransition` | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| 20 | Overlays globales: `PWAInstallPrompt`, `CyberToast`/`ToastContext`, `PageTransition` | ✅ | ✅ | ✅ | ✅ | **done** |
 | A0 | Admin: shell, navegación lateral, auth (`central-admin-app`) | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A1 | Admin › Resumen | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A2 | Admin › Dojos y progreso | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -207,3 +207,11 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Testing:** `tests/frontend/tenant-admin.spec.ts` × 7 perfiles (8 pruebas): usuario normal no ve la pantalla, aviso de prototipo y mensajes veraces, sin desborde/targets/controles deshabilitados, selección de inquilino y límites numéricos, checklist derivada; AdminShell: main/skip link/targets, cajón (inert, foco, Escape, scroll), "Ver como usuario".
 - **OWASP:** A01 — la ruta se protege en el cliente (`role === 'admin'`), pero la pantalla no consulta ni escribe datos reales, así que no hay nada que proteger detrás; cuando se conecte un backend real, cada operación deberá autorizarse en servidor (RLS/RPC con `is_admin()`), no por la ruta. Sin hallazgos de seguridad nuevos.
 - **Decisión del dueño:** ¿se construye el módulo multi-inquilino o se retira `TenantAdminPage`? Hoy es código muerto que puede confundir a un administrador; lo dejé marcado como prototipo en lugar de borrarlo.
+
+### 20 — Overlays globales (2026-09-20) · done
+- **PWAInstallPrompt (iOS/Android, 4 s tras cargar):** declaraba `aria-modal` pero no era modal de verdad: sin foco dentro, sin Escape, sin trampa de Tab, scroll de fondo activo → ahora usa `useModalA11y` (foco en el diálogo, Escape/Tab, bloqueo de scroll, devuelve el foco). **Aparecía y robaba el foco mientras la persona escribía en el login/registro** → si hay un campo de formulario enfocado a los 4 s, no se muestra. El botón "Instalar en este dispositivo" no aparecía si el evento `beforeinstallprompt` llegaba con el cajón ya abierto (se guardaba en un `ref` sin re-render) → estado React. Objetivos ≥44 px (cerrar y "Más tarde" medían ~32), texto más contrastado (alfas .3–.4 → .65–.88), `safe-area-inset-bottom` y altura máxima con scroll para pantallas bajas/horizontales; iconos decorativos `aria-hidden`.
+- **CyberToast / ToastContext:** los avisos desaparecían a los 4,5 s aunque se estuvieran leyendo (WCAG 2.2.1) → el temporizador se pausa con puntero o foco encima y se reinicia al salir; los de riesgo (`danger`) usan `role=alert`; botón Cerrar de 44×44 (columna de 22 px); "EXITO" → "ÉXITO"; con movimiento reducido solo se desvanecen. Nota: `notify()` **no se llama desde ninguna pantalla hoy** (el proveedor existe pero nadie lo usa) → cubierto con pruebas Jest.
+- **PageTransition:** tras un cambio de ruta dentro de la app el foco se quedaba en el enlace pulsado (ya eliminado) → lectores de pantalla y teclado sin contexto. Ahora el foco pasa al `<main id="contenido">` (o al de la consola admin) en cada navegación posterior a la carga inicial; los `main` son enfocables (`tabIndex=-1`, sin contorno). Las pantallas que enfocan su propio título al cargar datos siguen mandando (llegan después).
+- **Testing:** `tests/frontend/overlays.spec.ts` × 7 perfiles (6 pruebas PWA en móviles iOS/Android + 1 de cambio de ruta) y `ToastContext.test.tsx` (6 pruebas Jest: aria-live, alerta, 4,5 s, pausa por puntero, pausa por foco, cerrar).
+- **OWASP:** sin superficie de datos (no hay red ni entrada de usuario). A04 — el aviso de instalación no puede secuestrar un formulario en curso (ver arriba). Sin hallazgos de seguridad.
+- **Pendiente de dispositivo real:** el flujo "Añadir a pantalla de inicio" de iOS y el aviso nativo de Android no se pueden probar en emuladores; el aviso nativo se simuló con un evento sintético.
