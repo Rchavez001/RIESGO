@@ -397,25 +397,20 @@
         <section id="newsAlerts" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">ALERTAS DE SEGURIDAD IA</span>
-              <h2>Preguntas y alertas generadas con fecha y hora</h2>
-              <p class="muted">Última revisión: <strong id="newsAlertsLastRun">Pendiente</strong></p>
+              <span class="label">EN VIVO · LO QUE VEN LOS USUARIOS</span>
+              <h2>Alertas de seguridad</h2>
+              <p class="muted">Las alertas <strong>activas</strong> aparecen en el panel de todas las personas usuarias. Las generan el agente investigador y el auditor de preguntas a partir de noticias. Desde aquí puedes ocultar una alerta incorrecta, volver a publicarla o eliminarla. Para generar contenido nuevo usa <strong>Agente noticias</strong>.</p>
+              <p class="muted">Última ejecución del agente: <strong id="newsAlertsLastRun">Pendiente</strong></p>
             </div>
-            <div class="toolbar-actions">
-              <button id="forceNewsReview" class="btn primary">Forzar revisión IA</button>
-            </div>
+            <button id="refreshNewsAlerts" class="btn secondary" type="button">Actualizar</button>
           </div>
-
-          <div class="split">
-            <article class="card">
-              <h2>Historial de alertas</h2>
-              <div id="newsAlertList" class="alert-list"></div>
-            </article>
-            <article class="card">
-              <h2>Preguntas IA generadas</h2>
-              <div id="newsQuestionList" class="question-list"></div>
-            </article>
+          <p id="newsAlertsNote" class="muted" role="status">Cargando alertas…</p>
+          <div class="alert-filters" role="group" aria-label="Filtrar alertas">
+            <button type="button" class="btn secondary small alert-filter active" data-filter="all" aria-pressed="true">Todas</button>
+            <button type="button" class="btn secondary small alert-filter" data-filter="active" aria-pressed="false">Activas</button>
+            <button type="button" class="btn secondary small alert-filter" data-filter="hidden" aria-pressed="false">Ocultas</button>
           </div>
+          <div id="newsAlertList" class="alert-list" aria-live="polite"></div>
         </section>
 
         <section id="ai" class="panel">

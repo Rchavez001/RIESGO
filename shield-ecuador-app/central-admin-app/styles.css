@@ -1976,3 +1976,13 @@ body.menu-open { overflow: hidden; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 900px) { .ai-provider { grid-template-columns: 1fr; } .ai-provider .ai-provider-key-row { flex-direction: column; } .ai-provider .ai-provider-key-row .btn { width: 100%; } }
 #ai .btn.small, .btn.small { min-height: 44px; }
+
+/* ── Row A6: alertas ───────────────────────────────────────────────────── */
+.alert-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+.alert-filter[aria-pressed="true"] { border-color: var(--blue); color: var(--blue); }
+.alert-list { display: grid; gap: 12px; }
+.alert-card { min-width: 0; overflow-wrap: anywhere; }
+.alert-card .alert-header { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.alert-card a { color: var(--blue); text-decoration: underline; }
+.alert-card .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 720px) { .alert-card .modal-actions .btn { width: 100%; } }

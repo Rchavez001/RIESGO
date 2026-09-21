@@ -257,7 +257,8 @@ function bindActions() {
   $("#saveNewsAgent").addEventListener("click", saveNewsAgentFromForm);
   $("#testNewsAgent").addEventListener("click", testNewsAgent);
   $("#runNewsAgent").addEventListener("click", runNewsAgent);
-  $("#forceNewsReview").addEventListener("click", runNewsAgent);
+  $("#refreshNewsAlerts").addEventListener("click", loadNewsAlertsFromSupabase);
+  $$(".alert-filter").forEach((button) => button.addEventListener("click", () => { alertsAdmin.filter = button.dataset.filter; renderNewsAlerts(); }));
   $("#addNewsSource").addEventListener("click", addNewsSource);
   $("#refreshNewsRuns").addEventListener("click", loadNewsRunsFromSupabase);
   $("#newsProviderAddNew").addEventListener("click", () => openNewsProviderForm(null));
@@ -1486,51 +1487,106 @@ async function runManualContent(dryRun) {
   }
 }
 
+// Alertas de seguridad: the real `alerts` table. Every active row is shown to all users, so the admin must be able to
+// hide a wrong AI-generated alert, republish it, or delete it. (The panel used to list only active rows from the
+// database plus a local copy in localStorage, with no way to act on them.)
+const alertsAdmin = { rows: [], filter: "all", loaded: false, error: false };
+
+async function loadNewsAlertsFromSupabase() {
+  try {
+    const rows = await supabaseRest(
+      "alerts?select=id,title,description,threat_type,severity,source,source_url,published_at,active,source_agent&order=published_at.desc&limit=50"
+    );
+    alertsAdmin.rows = Array.isArray(rows) ? rows : [];
+    alertsAdmin.loaded = true;
+    alertsAdmin.error = false;
+  } catch (error) {
+    console.warn("No se pudieron cargar alertas desde Supabase:", error);
+    alertsAdmin.error = true;
+  }
+  renderNewsAlerts();
+}
+
+const ALERT_SEVERITY_LABEL = { baja: "Baja", media: "Media", alta: "Alta", critica: "Crítica" };
+
+function alertSourceLinks(urlField) {
+  return String(urlField || "").split(",").map((u) => u.trim()).filter(Boolean).map((u) => {
+    const safe = safeHttpUrl(u);
+    return safe ? `<a href="${esc(safe)}" target="_blank" rel="noopener noreferrer">${esc(new URL(safe).hostname)}</a>` : `<span class="muted">${esc(u)} (enlace no seguro)</span>`;
+  }).join(" · ");
+}
+
 function renderNewsAlerts() {
   $("#newsAlertsLastRun").textContent = state.newsAgent.lastRun;
-
-  if (!state.newsAlerts.length) {
-    $("#newsAlertList").innerHTML = `<p class="muted">Aún no se han generado alertas de noticias.</p>`;
-    $("#newsQuestionList").innerHTML = `<p class="muted">Las preguntas generadas por IA aparecerán aquí con fecha y hora.</p>`;
+  const note = $("#newsAlertsNote");
+  const list = $("#newsAlertList");
+  if (!alertsAdmin.loaded) {
+    note.textContent = alertsAdmin.error ? "No se pudieron leer las alertas. Pulsa Actualizar." : "Cargando alertas…";
+    list.innerHTML = "";
     return;
   }
-
-  $("#newsAlertList").innerHTML = state.newsAlerts.map((alert) => `
-    <div class="alert-card">
+  const activeCount = alertsAdmin.rows.filter((a) => a.active).length;
+  const shown = alertsAdmin.rows.filter((a) => alertsAdmin.filter === "all" || (alertsAdmin.filter === "active" ? a.active : !a.active));
+  note.textContent = `${alertsAdmin.rows.length} alertas (${activeCount} activas para los usuarios, ${alertsAdmin.rows.length - activeCount} ocultas).`;
+  $$(".alert-filter").forEach((button) => {
+    const on = button.dataset.filter === alertsAdmin.filter;
+    button.classList.toggle("active", on);
+    button.setAttribute("aria-pressed", String(on));
+  });
+  if (!shown.length) {
+    list.innerHTML = `<p class="muted">No hay alertas en este filtro.</p>`;
+    return;
+  }
+  const titleCount = new Map();
+  alertsAdmin.rows.forEach((a) => titleCount.set(a.title, (titleCount.get(a.title) || 0) + 1));
+  list.innerHTML = shown.map((alert) => `
+    <article class="alert-card" data-alert-id="${esc(alert.id)}">
       <div class="alert-header">
-        <strong>${esc(alert.summary)}</strong>
-        <span>${esc(alert.createdAt)}</span>
+        <strong>${esc(alert.title)}</strong>
+        <span class="badge ${alert.active ? "ai" : "audit"}">${alert.active ? "Activa · la ven los usuarios" : "Oculta"}</span>
       </div>
-      <div class="alert-status">Estado: ${esc(alert.persisted ? "Guardada" : "Pendiente local")}</div>
-      <p class="muted">Dojo: ${esc(alert.dojo)}</p>
-      <p class="muted">Sitios revisados: ${esc(alert.sources.join(', '))}</p>
-      <ul class="alert-items">
-        ${alert.questions.map((question) => `
-          <li>
-            <strong>${esc(question.severity)}</strong> · ${esc(explainText(question.text))}
-            <div class="muted">Kata: ${esc(question.kata)} · Estado: ${esc(question.status)}</div>
-          </li>
-        `).join('')}
-      </ul>
-    </div>
-  `).join('');
+      <p class="muted">${esc(alert.published_at ? new Date(alert.published_at).toLocaleString("es-EC") : "Sin fecha")} · Severidad: ${esc(ALERT_SEVERITY_LABEL[alert.severity] || "—")} · Tipo: ${esc(alert.threat_type || "—")}${alert.source_agent ? ` · Origen: ${esc(alert.source_agent)}` : ""}</p>
+      <p>${esc(explainText(alert.description))}</p>
+      ${alert.source || alert.source_url ? `<p class="muted">Fuente: ${esc(alert.source || "")} ${alertSourceLinks(alert.source_url)}</p>` : ""}
+      ${titleCount.get(alert.title) > 1 ? `<p class="muted">Hay ${titleCount.get(alert.title)} alertas con este mismo título: puede ser una repetición.</p>` : ""}
+      <div class="modal-actions">
+        <button type="button" class="btn secondary small alert-toggle">${alert.active ? "Ocultar a los usuarios" : "Publicar"}</button>
+        <button type="button" class="btn danger small alert-delete">Eliminar</button>
+      </div>
+    </article>`).join("");
+  $$("#newsAlertList .alert-toggle").forEach((button) => button.addEventListener("click", () => void toggleAlertActive(button.closest(".alert-card").dataset.alertId)));
+  $$("#newsAlertList .alert-delete").forEach((button) => button.addEventListener("click", () => void deleteAlert(button.closest(".alert-card").dataset.alertId)));
+}
 
-  const questions = state.newsAlerts.flatMap((alert) =>
-    alert.questions.map((question) => ({
-      ...question,
-      createdAt: alert.createdAt,
-      dojo: alert.dojo,
-      sourceList: alert.sources,
-    }))
-  );
+async function toggleAlertActive(id) {
+  const alert = alertsAdmin.rows.find((a) => a.id === id);
+  if (!alert) return;
+  const next = !alert.active;
+  if (next && !window.confirm(`¿Publicar esta alerta? La verán todas las personas usuarias.\n\n${alert.title}`)) return;
+  try {
+    await supabaseRest(`alerts?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ active: next }) });
+    alert.active = next;
+    renderNewsAlerts();
+    notify(next ? "Alerta publicada." : "Alerta oculta: ya no la ven los usuarios.");
+  } catch (error) {
+    console.warn("No se pudo cambiar la alerta:", error);
+    notify("No se pudo cambiar la alerta. Inténtalo de nuevo.");
+  }
+}
 
-  $("#newsQuestionList").innerHTML = questions.map((question) => `
-    <div class="question-row">
-      <strong>${esc(explainText(question.text))}</strong>
-      <div class="muted">${esc(question.createdAt)} · ${esc(question.dojo)} · Severidad: ${esc(question.severity)}</div>
-      <p>${esc(question.kata)}</p>
-    </div>
-  `).join('');
+async function deleteAlert(id) {
+  const alert = alertsAdmin.rows.find((a) => a.id === id);
+  if (!alert) return;
+  if (!window.confirm(`¿Eliminar esta alerta para siempre?\n\n${alert.title}\n\nSi solo quieres que los usuarios dejen de verla, usa "Ocultar".`)) return;
+  try {
+    await supabaseRest(`alerts?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+    alertsAdmin.rows = alertsAdmin.rows.filter((a) => a.id !== id);
+    renderNewsAlerts();
+    notify("Alerta eliminada.");
+  } catch (error) {
+    console.warn("No se pudo eliminar la alerta:", error);
+    notify("No se pudo eliminar la alerta. Inténtalo de nuevo.");
+  }
 }
 
 async function loadQuestionsFromSupabase() {
@@ -1551,40 +1607,6 @@ async function loadQuestionsFromSupabase() {
     notify("Preguntas cargadas desde Supabase.");
   } catch (error) {
     console.warn("No se pudieron cargar preguntas desde Supabase:", error);
-  }
-}
-
-async function loadNewsAlertsFromSupabase() {
-  try {
-    const rows = await supabaseRest(
-      "alerts?select=id,title,description,threat_type,severity,source,source_url,published_at,active&active=eq.true&order=published_at.desc&limit=20"
-    );
-    if (!Array.isArray(rows)) return;
-
-    const remoteAlerts = rows.map((row) => ({
-      id: row.id,
-      createdAt: new Date(row.published_at).toLocaleString("es-EC"),
-      dojo: row.threat_type || "Revisión IA",
-      sources: row.source ? [row.source] : [],
-      urls: row.source_url ? row.source_url.split(",").map((url) => url.trim()) : [],
-      summary: row.title || "Alerta generada por IA",
-      persisted: true,
-      questions: [
-        {
-          id: `${row.id}-summary`,
-          text: row.description || "Descripción de la alerta no disponible.",
-          kata: "Resumen de alerta",
-          status: "publicado",
-          severity: row.severity ? row.severity.charAt(0).toUpperCase() + row.severity.slice(1) : "Media",
-        },
-      ],
-    }));
-
-    const existingIds = new Set(state.newsAlerts.map((alert) => alert.id));
-    state.newsAlerts = [...remoteAlerts, ...state.newsAlerts.filter((alert) => !existingIds.has(alert.id))].slice(0, 20);
-    renderNewsAlerts();
-  } catch (error) {
-    console.warn("No se pudieron cargar alertas desde Supabase:", error);
   }
 }
 
