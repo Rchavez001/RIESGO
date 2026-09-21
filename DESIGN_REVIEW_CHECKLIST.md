@@ -57,7 +57,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | A4 | Admin › IA y auditoría | ✅ | ✅ | ✅ | ✅ | **done** |
 | A5 | Admin › Agente noticias | ✅ | ✅ | ✅ | ✅ | **done** |
 | A6 | Admin › Alertas IA | ✅ | ✅ | ✅ | ✅ | **done** |
-| A7 | Admin › Sensei IA | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| A7 | Admin › Sensei IA | ✅ | ✅ | ✅ | ✅ | **done** |
 | A8 | Admin › Inteligencia de Amenazas | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A9 | Admin › Preguntas abiertas | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A10 | Admin › Campeonato | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -288,3 +288,11 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **OWASP A03/A08:** título, descripción, fuente y tipo se escapan (probado con `<b>` y `<img onerror>`); los enlaces de fuente (`source_url` puede traer varios separados por comas, y proviene de salida de IA) solo se convierten en enlaces si son http(s); un `javascript:` queda como texto "enlace no seguro".
 - **Testing:** `tests/admin/alerts.spec.ts` × 7 perfiles (8 pruebas): lista completa y recuentos, datos hostiles como texto y enlaces seguros, filtros, ocultar (PATCH exacto), publicar con confirmación y cancelación, eliminar con confirmación (DELETE solo de esa fila), fallo de lectura, sin desbordes/targets. Suite admin completa sin fallos.
 - **Decisión del dueño (riesgo real de integridad, A04/A08):** `audit-generated-questions` y `run-incident-investigator` insertan las alertas con `active: true`, o sea que **se publican a todos los usuarios sin revisión humana**, y su texto sale de un modelo de IA leyendo páginas web (susceptible a instrucciones inyectadas). Con el panel actual ya se pueden retirar a posteriori, pero lo prudente es que nazcan **ocultas** y pasen por "Publicar". No lo cambié porque altera lo que ven hoy los usuarios; es un cambio de una línea en cada función (`active: false`) más un aviso al administrador cuando haya alertas pendientes.
+
+### A7 — Admin › Sensei IA (2026-09-21) · done
+- **Hallazgo (cifras engañosas):** las cuatro métricas ("Consultas", "Fuera de alcance", "Ayudó", "Sentimiento positivo") se calculaban sobre **las últimas 20 filas descargadas**, así que "Consultas" no podía pasar de 20 aunque hubiera cientos. → Ahora son **recuentos exactos de toda la tabla** (`Prefer: count=exact`, con 4 consultas en paralelo) y la nota lo dice ("Cifras de toda la base de datos en vivo (N consultas). Abajo, las 20 más recientes."). Hoy en producción: 23 consultas, 6 fuera de alcance. Si la lectura falla: "—" y aviso, nunca ceros que parezcan datos.
+- **Privacidad (A02):** la lista muestra el texto que escribió cada persona, que puede incluir datos personales aunque el Sensei pide no hacerlo → se recorta a 200 caracteres y el panel lo advierte; no muestra identificador de usuario. Todo se escapa (probado con `<b>`).
+- **Resumen diario:** ordenado por día descendente, cifras convertidas a número antes de pintarlas (antes se interpolaban tal cual), "útiles/positivas" con tildes.
+- **HD / A11y / responsive:** etiquetas claras ("Marcadas como útiles", "Con sentimiento positivo", "Últimas consultas", "fuera de alcance", "sin opinión"; antes "Ayudo", "Ultimas", "Aun"), `aria-busy` y `role=status`, filas que se ajustan en móvil, botones ≥44 px.
+- **Testing:** `tests/admin/sensei-stats.spec.ts` × 7 perfiles (5 pruebas): totales (128/17/64/50), texto recortado y escapado con aviso, resumen diario, fallo de lectura, sin desbordes/targets. Vista `sensei_consultation_stats` verificada en producción.
+- **OWASP:** sin hallazgos de seguridad nuevos. Recordatorio de A0/A2: el acceso de lectura a `sensei_consultations` desde el admin usa la clave de servicio (control total por diseño).

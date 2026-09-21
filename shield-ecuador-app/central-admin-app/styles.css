@@ -1986,3 +1986,7 @@ body.menu-open { overflow: hidden; }
 .alert-card a { color: var(--blue); text-decoration: underline; }
 .alert-card .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 720px) { .alert-card .modal-actions .btn { width: 100%; } }
+
+/* ── Row A7: Sensei IA ─────────────────────────────────────────────────── */
+.compact-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.compact-row span:nth-of-type(1) { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }

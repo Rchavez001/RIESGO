@@ -1724,38 +1724,54 @@ function firstCorrectOptionText(options) {
 }
 
 
+// The four figures used to be computed from the last 20 rows that were fetched, so "Consultas" could never exceed 20.
+// They are exact counts of the whole table now.
 async function loadSenseiStats() {
+  const grid = $("#senseiMetricGrid");
+  const note = $("#senseiStatsNote");
+  grid.setAttribute("aria-busy", "true");
+  const put = (id, value) => { $(id).textContent = value === null ? "—" : Number(value).toLocaleString("es-EC"); };
   try {
-    const [consultations, daily] = await Promise.all([
+    const [consultations, daily, total, out, helpful, positive] = await Promise.all([
       supabaseRest("sensei_consultations?select=id,question_text,is_cybersecurity,feedback_helpful,sentiment_label,created_at&order=created_at.desc&limit=20"),
-      supabaseRest("sensei_consultation_stats?select=*&limit=14"),
+      supabaseRest("sensei_consultation_stats?select=*&order=day.desc&limit=14"),
+      countRows("sensei_consultations"),
+      countRows("sensei_consultations", "&is_cybersecurity=eq.false"),
+      countRows("sensei_consultations", "&feedback_helpful=eq.true"),
+      countRows("sensei_consultations", "&sentiment_label=eq.positivo"),
     ]);
+    put("#senseiMetricTotal", total);
+    put("#senseiMetricOut", out);
+    put("#senseiMetricHelpful", helpful);
+    put("#senseiMetricPositive", positive);
+    note.textContent = `Cifras de toda la base de datos en vivo (${total.toLocaleString("es-EC")} consultas). Abajo, las 20 más recientes.`;
 
     const rows = Array.isArray(consultations) ? consultations : [];
-    $("#senseiMetricTotal").textContent = String(rows.length);
-    $("#senseiMetricOut").textContent = String(rows.filter((item) => !item.is_cybersecurity).length);
-    $("#senseiMetricHelpful").textContent = String(rows.filter((item) => item.feedback_helpful === true).length);
-    $("#senseiMetricPositive").textContent = String(rows.filter((item) => item.sentiment_label === "positivo").length);
-
+    const clip = (text) => { const t = String(text || ""); return t.length > 200 ? `${t.slice(0, 200)}…` : t; };
     $("#senseiConsultationList").innerHTML = rows.length ? rows.map((item) => `
       <div class="question-row compact-row">
         <strong>${esc(new Date(item.created_at).toLocaleDateString("es-EC"))}</strong>
-        <span>${esc(item.question_text)}</span>
-        <span class="badge ${item.is_cybersecurity ? "ai" : "audit"}">${item.is_cybersecurity ? "ciber" : "fuera"}</span>
-        <span class="badge ${item.sentiment_label === "positivo" ? "ai" : item.sentiment_label === "negativo" ? "audit" : "manual"}">${esc(item.sentiment_label || "sin feedback")}</span>
+        <span>${esc(clip(item.question_text))}</span>
+        <span class="badge ${item.is_cybersecurity ? "ai" : "audit"}">${item.is_cybersecurity ? "ciber" : "fuera de alcance"}</span>
+        <span class="badge ${item.sentiment_label === "positivo" ? "ai" : item.sentiment_label === "negativo" ? "audit" : "manual"}">${esc(item.sentiment_label || "sin opinión")}</span>
       </div>
-    `).join("") : `<p class="muted">Aun no hay consultas registradas.</p>`;
+    `).join("") : `<p class="muted">Aún no hay consultas registradas.</p>`;
 
     const dailyRows = Array.isArray(daily) ? daily : [];
     $("#senseiDailyStats").innerHTML = dailyRows.length ? dailyRows.map((item) => `
       <div class="topic-row">
         <strong>${esc(item.day)}</strong>
-        <span>${item.total_consultations} consultas - ${item.helpful_yes} utiles - ${item.positive_feedback} positivas</span>
+        <span>${esc(String(Number(item.total_consultations) || 0))} consultas · ${esc(String(Number(item.helpful_yes) || 0))} útiles · ${esc(String(Number(item.positive_feedback) || 0))} positivas</span>
       </div>
-    `).join("") : `<p class="muted">Sin estadistica diaria todavia.</p>`;
+    `).join("") : `<p class="muted">Sin estadística diaria todavía.</p>`;
   } catch (error) {
-    console.error("No se pudieron cargar estadisticas del Sensei:", error);
-    $("#senseiConsultationList").innerHTML = `<p class="muted">No se pudieron cargar estadisticas. Verifica la migracion 008.</p>`;
+    console.error("No se pudieron cargar estadísticas del Sensei:", error);
+    ["#senseiMetricTotal", "#senseiMetricOut", "#senseiMetricHelpful", "#senseiMetricPositive"].forEach((id) => put(id, null));
+    note.textContent = "No se pudieron leer las estadísticas. Pulsa Actualizar.";
+    $("#senseiConsultationList").innerHTML = "";
+    $("#senseiDailyStats").innerHTML = "";
+  } finally {
+    grid.setAttribute("aria-busy", "false");
   }
 }
 

@@ -429,34 +429,36 @@
         <section id="senseiStats" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">CONSULTAS DEL SENSEI IA</span>
+              <span class="label">EN VIVO · CONSULTAS DEL SENSEI IA</span>
               <h2>Utilidad, sentimiento y temas consultados</h2>
+              <p id="senseiStatsNote" class="muted" role="status">Cargando…</p>
             </div>
-            <button id="refreshSenseiStats" class="btn secondary">Actualizar</button>
+            <button id="refreshSenseiStats" class="btn secondary" type="button">Actualizar</button>
           </div>
 
-          <div class="metric-grid">
+          <div class="metric-grid" id="senseiMetricGrid" aria-busy="true">
             <article class="metric">
-              <span>Consultas</span>
-              <strong id="senseiMetricTotal">0</strong>
+              <span>Consultas (total)</span>
+              <strong id="senseiMetricTotal">…</strong>
             </article>
             <article class="metric">
               <span>Fuera de alcance</span>
-              <strong id="senseiMetricOut">0</strong>
+              <strong id="senseiMetricOut">…</strong>
             </article>
             <article class="metric">
-              <span>Ayudo</span>
-              <strong id="senseiMetricHelpful">0</strong>
+              <span>Marcadas como útiles</span>
+              <strong id="senseiMetricHelpful">…</strong>
             </article>
             <article class="metric">
-              <span>Sentimiento positivo</span>
-              <strong id="senseiMetricPositive">0</strong>
+              <span>Con sentimiento positivo</span>
+              <strong id="senseiMetricPositive">…</strong>
             </article>
           </div>
 
           <div class="split">
             <article class="card">
-              <h2>Ultimas consultas</h2>
+              <h2>Últimas consultas</h2>
+              <p class="muted">Texto tal como lo escribió la persona; puede contener datos personales. Se recorta a 200 caracteres.</p>
               <div id="senseiConsultationList" class="question-list"></div>
             </article>
             <article class="card">
