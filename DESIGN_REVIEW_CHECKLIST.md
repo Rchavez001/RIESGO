@@ -63,7 +63,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | A10 | Admin › Campeonato | ✅ | ✅ | ✅ | ✅ | **done** |
 | A11 | Admin › Centro de Seguridad | ✅ | ✅ | ✅ | ✅ | **done** |
 | A12 | Admin › Usuarios | ✅ | ✅ | ✅ | ✅ | **done** |
-| A13 | Admin › Ocupaciones | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| A13 | Admin › Ocupaciones | ✅ | ✅ | ✅ | ✅ | **done** |
 | A14 | Admin › Propaganda | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A15 | Admin › Reportes | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 
@@ -352,3 +352,13 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Responsive / A11y:** tabla con `<caption>`, `scope` y celda de identificador como `<th scope="row">`, dentro de una caja con scroll horizontal; paginador con estado `role=status`; filtros y botones ≥44 px; sin desbordes.
 - **Testing:** `tests/admin/users.spec.ts` × 7 perfiles (7 pruebas): cifras y lista reales (y ausencia de los tres inventados), sin "dar de baja" simulado + explicación de privacidad, campos pedidos sin PII, id corto y datos como texto, paginación y filtros (parámetros exactos), fallo, tabla/targets. Suite admin completa sin fallos.
 - **Decisión del dueño:** hoy **no hay forma de suspender a un usuario desde la consola** (nunca la hubo: era simulada). Hacerlo bien exige una acción real —p. ej. bloquear la cuenta en Supabase Auth— con confirmación, motivo, registro de quién la hizo (hoy la credencial es compartida) y una vía de reversión. También faltan las funciones de derechos ARCO (acceso, rectificación, eliminación) sobre estos datos.
+
+### A13 — Admin › Ocupaciones (2026-09-21) · done
+- **Qué es:** panel real (`business_sectors`): las ocupaciones/sectores que ven las personas en “¿A qué te dedicas?” al registrarse (81 en producción, 78 activas). Sin backend nuevo.
+- **Hallazgo (integridad de datos y de las campañas):** `users.sector` guarda el **texto** de la industria (p. ej. "Comercio y Ventas": 68 de 86 personas), **no un código ni una clave foránea**, y las campañas dirigidas a un sector coinciden por ese texto. Cambiar el nombre del sector de una ocupación dejaba a las personas ya registradas con el nombre antiguo y **fuera de las campañas** dirigidas al nombre nuevo, sin ningún aviso. → Al elegir una ocupación el panel dice **cuántas personas** tienen ese sector; al cambiar el sector pide confirmación explicando cuántas quedan con el nombre anterior; al eliminar dice cuántas conservan el valor y sugiere "Inactiva" si solo se quiere ocultar.
+- **Validación (antes: solo "nombre no vacío"):** nombre y sector ≤80 caracteres; orden entero 0–9999 (**`Number(x) || 100` convertía un 0 explícito en 100**); nombre repetido sin distinguir mayúsculas se rechaza con el nombre del duplicado; el **código** de una ocupación nueva se genera único (`contador_2`) — dos nombres podían dar el mismo código y la base respondía con un error genérico ("revisa que el nombre no esté repetido").
+- **Seguridad menor:** el código se usa en la URL de PATCH/DELETE → `encodeURIComponent` (viene de la base, pero no debe concatenarse sin codificar).
+- **UX / A11y / responsive / HD:** resumen "81 ocupaciones (78 activas…)", título del editor que dice "Nueva ocupación"/"Editar: X", filas con `aria-pressed` y estado en texto, tildes ("Ocupación", "Profesión", "¿A qué te dedicas?", "Todavía"), botones `type=button` y ≥44 px, a ancho completo en móvil, textos largos con `overflow-wrap`.
+- **Testing:** `tests/admin/occupations.spec.ts` × 7 perfiles (8 pruebas): lista/resumen/texto, recuento de personas por sector, cambio de sector con confirmación (cancelar no escribe; aceptar → PATCH exacto), cambio de solo el nombre sin avisos, validaciones (duplicado, longitud, rango, 0 se respeta), código único, eliminar con recuento y sugerencia, targets/desborde.
+- **OWASP:** sin hallazgos de seguridad; datos escapados (probado con `<b>`). Nota A01: el panel escribe con la clave de servicio (control total por diseño de la consola, ver A0).
+- **Decisión del dueño:** conviene que `users` guarde el **código** de la ocupación/sector (o una clave foránea) en lugar del texto: así renombrar un sector no rompería estadísticas ni campañas, y el aviso de este panel dejaría de ser necesario. Requiere una migración de datos (68 + 7 + 1 usuarios hoy).

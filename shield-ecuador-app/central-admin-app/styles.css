@@ -2036,3 +2036,10 @@ ol.decision-list { padding-left: 20px; display: grid; gap: 8px; }
 .user-table th, .user-table td { white-space: nowrap; }
 .user-table th[scope="row"] { font-weight: 600; }
 #users select { min-height: 44px; }
+
+/* ── Row A13: Ocupaciones ──────────────────────────────────────────────── */
+#occupations input, #occupations select { min-height: 44px; }
+#occupations .campaign-row { min-height: 44px; text-align: left; width: 100%; overflow-wrap: anywhere; }
+#occupations .campaign-row > div { min-width: 0; }
+#occupations .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 720px) { #occupations .modal-actions .btn, #occupations .section-toolbar .btn { width: 100%; } }

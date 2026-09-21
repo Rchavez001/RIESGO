@@ -939,25 +939,27 @@
               <span class="label">REGISTRO DE USUARIOS</span>
               <h2>Ocupaciones y sectores</h2>
             </div>
-            <button id="addOccupation" class="btn primary">Agregar ocupacion</button>
+            <button id="addOccupation" class="btn primary" type="button">Agregar ocupación</button>
           </div>
-          <p class="muted">Esta lista aparece en "A que te dedicas" cuando alguien se registra. Solo las ocupaciones activas se muestran a los usuarios.</p>
+          <p id="occSummary" class="muted" role="status"></p>
+          <p class="muted">Esta lista aparece en “¿A qué te dedicas?” cuando alguien se registra. Solo las ocupaciones activas se muestran a los usuarios.</p>
           <div class="ads-layout">
             <div id="occupationList" class="campaign-list"></div>
             <article class="card">
-              <h2>Editor de ocupacion</h2>
+              <h2 id="occEditorTitle">Editor de ocupación</h2>
+              <p id="occUsage" class="muted" role="status"></p>
               <div class="form-grid compact">
                 <label>
-                  Ocupacion / Profesion
-                  <input id="occLabel" type="text" placeholder="Ej: Contador/a" />
+                  Ocupación / Profesión
+                  <input id="occLabel" type="text" maxlength="80" placeholder="Ej: Contador/a" />
                 </label>
                 <label>
                   Sector / Industria
-                  <input id="occIndustry" type="text" placeholder="Ej: Administracion, Finanzas y Oficina" />
+                  <input id="occIndustry" type="text" maxlength="80" placeholder="Ej: Administración, Finanzas y Oficina" />
                 </label>
                 <label>
                   Orden
-                  <input id="occOrder" type="number" min="0" />
+                  <input id="occOrder" type="number" min="0" max="9999" />
                 </label>
                 <label>
                   Estado
@@ -968,8 +970,8 @@
                 </label>
               </div>
               <div class="modal-actions">
-                <button id="saveOccupation" class="btn primary">Guardar</button>
-                <button id="deleteOccupation" class="btn danger">Eliminar</button>
+                <button id="saveOccupation" class="btn primary" type="button">Guardar</button>
+                <button id="deleteOccupation" class="btn danger" type="button">Eliminar</button>
               </div>
               <p id="occupationStatus" class="muted"></p>
             </article>

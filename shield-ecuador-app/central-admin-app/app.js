@@ -2900,10 +2900,10 @@ function slugifyOccupationCode(label) {
 function renderOccupations() {
   const list = $("#occupationList");
   if (state.occupations.length === 0) {
-    list.innerHTML = `<p class="muted">Todavia no hay ocupaciones cargadas.</p>`;
+    list.innerHTML = `<p class="muted">Todavía no hay ocupaciones cargadas.</p>`;
   } else {
     list.innerHTML = state.occupations.map((item) => `
-      <button class="campaign-row ${item.code === state.selectedOccupationCode ? "active" : ""}" data-code="${esc(item.code)}">
+      <button type="button" class="campaign-row ${item.code === state.selectedOccupationCode ? "active" : ""}" data-code="${esc(item.code)}" aria-pressed="${item.code === state.selectedOccupationCode}">
         <div>
           <strong>${esc(item.label)}</strong>
           <div class="muted">${esc(item.industry || "Sin sector")}</div>
@@ -2923,6 +2923,10 @@ function renderOccupations() {
   const occupation = getSelectedOccupation();
   const statusEl = $("#occupationStatus");
   if (statusEl) statusEl.textContent = "";
+  const activeCount = state.occupations.filter((item) => item.active).length;
+  $("#occSummary").textContent = `${state.occupations.length} ocupaciones (${activeCount} activas: son las que ven las personas al registrarse).`;
+  $("#occEditorTitle").textContent = occupation ? `Editar: ${occupation.label}` : "Nueva ocupación";
+  void showOccupationUsage(occupation);
 
   if (occupation) {
     $("#occLabel").value = occupation.label;
@@ -2939,6 +2943,24 @@ function renderOccupations() {
   }
 }
 
+// users.sector stores the industry TEXT (e.g. "Comercio y Ventas"), not the occupation code, and nothing links it back to
+// business_sectors. Renaming an industry therefore leaves everyone already registered under the old name — and campaigns
+// aimed at a sector match by that text — so the panel says how many people are affected before it lets you do it.
+async function occupationUsers(industry) {
+  if (!industry) return 0;
+  try { return await countRows("users", `&sector=eq.${encodeURIComponent(industry)}`); } catch { return null; }
+}
+
+async function showOccupationUsage(occupation) {
+  const el = $("#occUsage");
+  if (!occupation || !occupation.industry) { el.textContent = ""; return; }
+  const code = occupation.code;
+  el.textContent = "Contando personas con este sector…";
+  const n = await occupationUsers(occupation.industry);
+  if (state.selectedOccupationCode !== code) return; // the selection moved while counting
+  el.textContent = n === null ? "" : `${n.toLocaleString("es-EC")} ${n === 1 ? "persona registrada tiene" : "personas registradas tienen"} el sector “${occupation.industry}”.`;
+}
+
 function addOccupation() {
   state.selectedOccupationCode = null;
   renderOccupations();
@@ -2947,30 +2969,51 @@ function addOccupation() {
 async function saveOccupation() {
   const label = $("#occLabel").value.trim();
   const industry = $("#occIndustry").value.trim();
-  const displayOrder = Number($("#occOrder").value) || 100;
+  const orderRaw = $("#occOrder").value.trim();
+  const displayOrder = orderRaw === "" ? 100 : Number(orderRaw);
   const active = $("#occStatus").value === "activa";
   const statusEl = $("#occupationStatus");
 
   if (!label) {
-    statusEl.textContent = "Ingresa el nombre de la ocupacion.";
+    statusEl.textContent = "Ingresa el nombre de la ocupación.";
+    return;
+  }
+  if (label.length > 80 || industry.length > 80) {
+    statusEl.textContent = "El nombre y el sector pueden tener como máximo 80 caracteres.";
+    return;
+  }
+  // `Number(x) || 100` used to turn an explicit 0 into 100.
+  if (!Number.isInteger(displayOrder) || displayOrder < 0 || displayOrder > 9999) {
+    statusEl.textContent = "El orden debe ser un número entero entre 0 y 9999.";
     return;
   }
 
   const existing = getSelectedOccupation();
+  const sameLabel = state.occupations.find((item) => item.code !== existing?.code && item.label.trim().toLowerCase() === label.toLowerCase());
+  if (sameLabel) {
+    statusEl.textContent = `Ya existe una ocupación llamada “${sameLabel.label}”.`;
+    return;
+  }
+  if (existing && (existing.industry || "") !== industry) {
+    const n = await occupationUsers(existing.industry);
+    if (n && !window.confirm(`Estás cambiando el sector “${existing.industry}” por “${industry || "(vacío)"}”.\n\n${n.toLocaleString("es-EC")} persona(s) ya registradas conservarán el nombre anterior y quedarán fuera de las campañas dirigidas al sector nuevo.\n\n¿Continuar?`)) return;
+  }
   const payload = { label, industry: industry || null, display_order: displayOrder, active };
 
   try {
     if (existing) {
-      const rows = await supabaseRest(`business_sectors?code=eq.${existing.code}`, {
+      const rows = await supabaseRest(`business_sectors?code=eq.${encodeURIComponent(existing.code)}`, {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
         body: JSON.stringify(payload),
       });
       const updated = Array.isArray(rows) && rows[0] ? rows[0] : { ...existing, ...payload };
       state.occupations = state.occupations.map((item) => (item.code === updated.code ? updated : item));
-      notify("Ocupacion actualizada.");
+      notify("Ocupación actualizada.");
     } else {
-      const code = slugifyOccupationCode(label);
+      let code = slugifyOccupationCode(label);
+      // two different names can slug to the same code (“Contador/a” and “Contador a”): keep codes unique
+      for (let n = 2; state.occupations.some((item) => item.code === code); n += 1) code = `${slugifyOccupationCode(label).slice(0, 36)}_${n}`;
       const rows = await supabaseRest("business_sectors", {
         method: "POST",
         headers: { Prefer: "return=representation" },
@@ -2981,30 +3024,32 @@ async function saveOccupation() {
         state.occupations.push(created);
         state.selectedOccupationCode = created.code;
       }
-      notify("Ocupacion agregada.");
+      notify("Ocupación agregada.");
     }
 
     renderOccupations();
   } catch (error) {
     console.warn("No se pudo guardar la ocupacion:", error);
-    statusEl.textContent = "No se pudo guardar. Revisa que el nombre no este repetido.";
+    statusEl.textContent = "No se pudo guardar. Revisa que el nombre no esté repetido.";
   }
 }
 
 async function deleteOccupation() {
   const occupation = getSelectedOccupation();
   if (!occupation) return;
-  if (!window.confirm(`Eliminar "${occupation.label}" de la lista de ocupaciones?`)) return;
+  const n = await occupationUsers(occupation.industry);
+  const usage = n ? `\n\n${n.toLocaleString("es-EC")} persona(s) ya registradas conservan el sector “${occupation.industry}”; no se les borra nada, pero la opción dejará de ofrecerse. Si solo quieres ocultarla, ponla como Inactiva.` : "";
+  if (!window.confirm(`¿Eliminar “${occupation.label}” de la lista de ocupaciones?${usage}`)) return;
 
   try {
-    await supabaseRest(`business_sectors?code=eq.${occupation.code}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    await supabaseRest(`business_sectors?code=eq.${encodeURIComponent(occupation.code)}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
     state.occupations = state.occupations.filter((item) => item.code !== occupation.code);
     state.selectedOccupationCode = null;
     renderOccupations();
-    notify("Ocupacion eliminada.");
+    notify("Ocupación eliminada.");
   } catch (error) {
     console.warn("No se pudo eliminar la ocupacion:", error);
-    notify("No se pudo eliminar la ocupacion.");
+    notify("No se pudo eliminar la ocupación.");
   }
 }
 
