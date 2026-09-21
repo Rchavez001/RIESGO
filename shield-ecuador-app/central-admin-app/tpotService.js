@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const DEFAULT_ALLOWED_INDEXES = ['logstash-*', 'tpot-*', 'cowrie-*', 'suricata-*', 'dionaea-*'];
 const MAX_PAGE_SIZE = 200;
 const MEMORY_JOBS = new Map();
+const MAX_MEMORY_JOBS = 200;
 const MEMORY_AUDIT = [];
 const MEMORY_IOCS = new Map();
 
@@ -191,6 +192,8 @@ async function createAiAnalysisJob(config, filters = {}, options = {}, actor = '
     approved_at: null,
   };
   MEMORY_JOBS.set(id, job);
+  // Jobs live in server memory: bound them so repeated requests cannot grow the process without limit.
+  while (MEMORY_JOBS.size > MAX_MEMORY_JOBS) MEMORY_JOBS.delete(MEMORY_JOBS.keys().next().value);
   auditMemory(actor, 'ai-analysis:create', filters, sanitized.length, 'accepted', { job_id: id });
   setTimeout(() => runAiJob(config, id, sanitized, options).catch(() => markJobFailed(id)), 0);
   return { job_id: id, status: job.status, requires_approval: config.aiOutputRequiresApproval };
@@ -211,6 +214,8 @@ function getAiAnalysisJob(config, jobId) {
 async function auditAiAnalysis(config, jobId, actor = 'admin') {
   const job = MEMORY_JOBS.get(jobId);
   if (!job) return null;
+  if (['pending', 'running'].includes(job.status)) throw conflict('El análisis todavía se está generando.');
+  if (job.status === 'approved') throw conflict('El análisis ya está aprobado.');
   const audit = localAudit(job.raw_ai_output);
   job.audit_status = audit.audit_status;
   job.audit_notes = audit.audit_notes;
@@ -221,9 +226,19 @@ async function auditAiAnalysis(config, jobId, actor = 'admin') {
   return audit;
 }
 
+// A job may only be approved after the automatic audit passed it (status 'audited'). It used to approve ANY job —
+// pending, running, failed or one the audit had rejected for leaking credentials — while the UI promised otherwise.
+function conflict(message) {
+  return Object.assign(new Error(message), { status: 409 });
+}
+
 function approveAiAnalysis(config, jobId, actor = 'admin') {
   const job = MEMORY_JOBS.get(jobId);
   if (!job) return null;
+  if (job.status !== 'audited') {
+    auditMemory(actor, 'ai-analysis:approve', job.filters_json, 0, 'blocked', { job_id: jobId, from_status: job.status });
+    throw conflict('Solo se puede aprobar un análisis auditado sin observaciones. Estado actual: ' + job.status + '.');
+  }
   job.status = 'approved';
   job.approved_by = actor;
   job.approved_at = new Date().toISOString();
@@ -261,6 +276,9 @@ function getSettings(config) {
     verify_tls: config.verifyTls,
     allowed_indexes: config.allowedIndexes,
     ai_analysis_enabled: config.aiAnalysisEnabled,
+    // Honest engine name: callAiProvider is still a local rules placeholder, so no language model is involved today.
+    analysis_engine: 'reglas_locales',
+    storage: 'memoria_del_servidor',
     ai_provider: config.aiProvider,
     ai_model: config.aiModel,
     ai_audit_enabled: config.aiAuditEnabled,

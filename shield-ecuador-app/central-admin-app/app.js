@@ -158,7 +158,6 @@ const DELEGATED_ACTIONS = {
   auditThreatJob: (id) => auditThreatJob(id),
   approveThreatJob: (id) => approveThreatJob(id),
   rejectThreatJob: (id) => rejectThreatJob(id),
-  publishThreatJob: (id) => publishThreatJob(id),
   closeThreatDrilldown: () => $("#threatDrilldown").classList.add("hidden"),
   closeSecFindingModal: () => closeSecFindingModal(),
 };
@@ -291,8 +290,9 @@ function bindActions() {
   $("#secKataPublish").addEventListener("click", publishSecurityKataDraft);
   $$(".threat-nav button").forEach((button) => {
     button.addEventListener("click", () => {
-      $$(".threat-nav button").forEach((item) => item.classList.remove("active"));
+      $$(".threat-nav button").forEach((item) => { item.classList.remove("active"); item.removeAttribute("aria-current"); });
       button.classList.add("active");
+      button.setAttribute("aria-current", "page");
       state.threatView = button.dataset.threatView;
       void loadTpotView(state.threatView);
     });
@@ -2960,7 +2960,7 @@ async function loadTpotView(view = "dashboard") {
   const status = $("#tpotStatus");
   if (!content || !status) return;
   state.threatView = view;
-  status.textContent = "Consultando integracion T-Pot...";
+  status.textContent = "Consultando integración T-Pot...";
   $("#threatDrilldown")?.classList.add("hidden");
   content.innerHTML = `<div class="empty-state">Cargando ${esc(view)}...</div>`;
 
@@ -2986,7 +2986,7 @@ async function loadTpotView(view = "dashboard") {
     }
   } catch (error) {
     status.textContent = "No se pudo consultar T-Pot.";
-    content.innerHTML = `<div class="empty-state danger">Endpoint T-Pot no disponible o configuracion incompleta.</div>`;
+    content.innerHTML = `<div class="empty-state danger">Endpoint T-Pot no disponible o configuración incompleta.</div>`;
   }
 }
 
@@ -2997,7 +2997,15 @@ async function tpotApi(path, options = {}, includeFilters = true) {
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
-  if (!response.ok) throw new Error("tpot api failed");
+  // The server says whether it answered with the built-in DEMO events (no T-Pot connected) or live data.
+  const demo = response.headers.get("X-Tpot-Data-Mode") === "demo";
+  const banner = $("#tpotDemoBanner");
+  if (banner) banner.hidden = !demo;
+  if (!response.ok) {
+    let message = "";
+    try { message = (await response.json()).error || ""; } catch { /* not JSON */ }
+    throw Object.assign(new Error("tpot api failed"), { detail: response.status === 409 ? message : "" });
+  }
   return response.json();
 }
 
@@ -3009,14 +3017,14 @@ function renderThreatDashboard(summary, health, iocs, auditData) {
   $("#tpotStatus").textContent = `Dashboard defensivo: ${summary.total_events} eventos normalizados. Los datos sensibles se muestran enmascarados.`;
   $("#tpotContent").innerHTML = `
     <div class="threat-kpi-grid">
-      ${threatKpi("Alertas criticas hoy", severity.critical || 0, "critical", "severity", "critical", "Alertas criticas")}
+      ${threatKpi("Alertas críticas hoy", severity.critical || 0, "critical", "severity", "critical", "Alertas críticas")}
       ${threatKpi("Alertas altas", severity.high || 0, "high", "severity", "high", "Alertas altas")}
       ${threatKpi("Sensores activos", honeypots.length || (health.connected ? 1 : 0), "info", "sensor", "", "Sensores activos")}
       ${threatKpi("IPs sospechosas", summary.top_source_ips?.length || 0, "medium", "source_ip", "", "IPs sospechosas")}
       ${threatKpi("IOCs detectados", iocs.total || 0, "medium", "ioc", "", "Indicadores de compromiso")}
-      ${threatKpi("Analisis IA pendientes", pendingAi, "high", "ai", "", "Cola de analisis IA")}
-      ${threatKpi("Incidentes publicados", published, "low", "published", "", "Analisis publicados")}
-      ${threatKpi("Ultima sincronizacion T-Pot", health.last_event_at ? health.last_event_at.slice(0, 16) : "n/d", "info", "last_sync", "", "Ultima sincronizacion")}
+      ${threatKpi("Análisis IA pendientes", pendingAi, "high", "ai", "", "Cola de análisis IA")}
+      ${threatKpi("Análisis aprobados", published, "low", "published", "", "Análisis aprobados")}
+      ${threatKpi("Última sincronización T-Pot", health.last_event_at ? health.last_event_at.slice(0, 16) : "n/d", "info", "last_sync", "", "Última sincronización")}
     </div>
     <div class="threat-grid">
       ${threatChart("Alertas por severidad", Object.entries(severity).map(([value, count]) => ({ value, count })), "severity")}
@@ -3024,13 +3032,13 @@ function renderThreatDashboard(summary, health, iocs, auditData) {
       ${threatChart("Top 10 IPs origen", summary.top_source_ips || [], "source_ip")}
       ${threatChart("Tendencia diaria de ataques", trendByDay(summary.events_recent || []), "trend")}
       ${threatChart("Sensores con mayor actividad", honeypots, "sensor")}
-      ${threatChart("IOCs por categoria", countBy(iocs.iocs || [], "indicator_type"), "ioc")}
+      ${threatChart("IOCs por categoría", countBy(iocs.iocs || [], "indicator_type"), "ioc")}
     </div>
     <article class="threat-card">
       <div class="card-heading">
         <div>
-          <h3>Ultimas alertas relevantes</h3>
-          <p class="muted">Vista ejecutiva. Los logs crudos quedan en el detalle tecnico.</p>
+          <h3>Últimas alertas relevantes</h3>
+          <p class="muted">Vista ejecutiva. Los logs crudos quedan en el detalle técnico.</p>
         </div>
         <button class="btn secondary" data-act="switchThreatView" data-a1="alerts">Ver alertas</button>
       </div>
@@ -3040,7 +3048,7 @@ function renderThreatDashboard(summary, health, iocs, auditData) {
 }
 
 function renderThreatAlerts(data) {
-  $("#tpotStatus").textContent = `Alertas filtrables: ${data.events.length} de ${data.total}. Usa filtros simples para llegar al detalle tecnico.`;
+  $("#tpotStatus").textContent = `Alertas filtrables: ${data.events.length} de ${data.total}. Usa filtros simples para llegar al detalle técnico.`;
   $("#tpotContent").innerHTML = `
     <div class="card-heading">
       <div>
@@ -3060,12 +3068,12 @@ function renderThreatReports(report, auditData) {
   $("#tpotContent").innerHTML = `
     <div class="threat-grid three">
       <article class="threat-card"><h3>Reporte ejecutivo</h3><p>${esc(report.executive_report.risk_summary)}</p><ul>${report.executive_report.key_findings.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></article>
-      <article class="threat-card"><h3>Reporte tecnico</h3><p>IOCs: ${report.technical_report.iocs.length}. MITRE: ${report.technical_report.mitre_mapping.length}.</p><p class="muted">Usar para analistas y auditoria.</p></article>
+      <article class="threat-card"><h3>Reporte técnico</h3><p>IOCs: ${report.technical_report.iocs.length}. MITRE: ${report.technical_report.mitre_mapping.length}.</p><p class="muted">Usar para analistas y auditoría.</p></article>
       <article class="threat-card"><h3>Reporte educativo CiberDojo</h3><ul>${report.educational_report.suggested_questions.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></article>
     </div>
     <article class="threat-card">
       <h3>Historial aprobado</h3>
-      ${approved.length ? approved.map((item) => `<div class="audit-row"><strong>${esc(item.action)}</strong><span>${esc(item.status)}</span><small>${esc(item.created_at)}</small></div>`).join("") : "<p class='muted'>Aun no hay analisis aprobados para publicar.</p>"}
+      ${approved.length ? approved.map((item) => `<div class="audit-row"><strong>${esc(item.action)}</strong><span>${esc(item.status)}</span><small>${esc(item.created_at)}</small></div>`).join("") : "<p class='muted'>Aún no hay análisis aprobados para publicar.</p>"}
     </article>
   `;
 }
@@ -3075,71 +3083,46 @@ function renderThreatAi(data) {
   $("#tpotContent").innerHTML = `
     <div class="ai-page-heading">
       <div>
-        <h3>Analisis IA de Amenazas</h3>
-        <p>Genera analisis de eventos de seguridad y valida los resultados antes de publicarlos.</p>
-        <p class="muted">Todo analisis generado por IA pasa por auditoria antes de mostrarse como resultado final.</p>
+        <h3>Análisis IA de Amenazas</h3>
+        <p>Genera análisis de eventos de seguridad y valida los resultados antes de publicarlos.</p>
+        <p class="muted">Todo análisis generado por IA pasa por auditoría antes de mostrarse como resultado final.</p>
       </div>
     </div>
     ${renderThreatFilters(true)}
     <div class="ai-form-actions">
       <button class="btn secondary" data-act="clearThreatFilters">Limpiar filtros</button>
-      <button class="btn primary" data-act="createTpotAiAnalysis">Generar analisis IA</button>
+      <button class="btn primary" data-act="createTpotAiAnalysis">Generar análisis IA</button>
     </div>
     ${renderAiStepper(rows[0]?.status || "draft")}
     <article class="threat-card">
       <div class="card-heading">
         <div>
-          <h3>Historial de analisis IA</h3>
-          <p class="muted">Los resultados finales se bloquean hasta que la auditoria los apruebe.</p>
+          <h3>Historial de análisis IA</h3>
+          <p class="muted">Los resultados finales se bloquean hasta que la auditoría los apruebe.</p>
         </div>
       </div>
       ${renderAiHistoryTable(rows)}
     </article>
     <article class="threat-card">
-      <h3>Cola de auditoria</h3>
-      ${rows.length ? rows.map((item) => `<div class="audit-row"><strong>${esc(item.action)}</strong><span>${aiStatusBadge(mapAiStatus(item.status))}</span><small>${esc(item.created_at)}</small></div>`).join("") : "<p class='muted'>Sin analisis pendientes. Selecciona un periodo y presiona Generar analisis IA.</p>"}
+      <h3>Cola de auditoría</h3>
+      ${rows.length ? rows.map((item) => `<div class="audit-row"><strong>${esc(item.action)}</strong><span>${aiStatusBadge(mapAiStatus(item.status))}</span><small>${esc(item.created_at)}</small></div>`).join("") : "<p class='muted'>Sin análisis pendientes. Seleccióna un periodo y presiona Generar análisis IA.</p>"}
     </article>
   `;
-  $("#tpotStatus").textContent = "Analisis IA centralizado: generar, auditar, aprobar y publicar desde un solo flujo.";
+  $("#tpotStatus").textContent = "Análisis IA centralizado: generar, auditar, aprobar y publicar desde un solo flujo.";
 }
 
 function renderThreatConfig(settings, health) {
-  $("#tpotStatus").textContent = "Configuracion avanzada separada de la operacion diaria. Los secretos se gestionan por variables de entorno.";
+  $("#tpotStatus").textContent = "Configuración avanzada separada de la operacion diaria. Los secretos se gestionan por variables de entorno.";
   $("#tpotContent").innerHTML = `
     <div class="threat-config-grid">
       <article class="config-block">
-        <h3>Agente multimodal</h3>
-        <label>Proveedor IA <input value="${esc(settings.ai_provider || "local")}" readonly /></label>
-        <label>Modelo <input value="${esc(settings.ai_model || "local-tpot-threat-agent")}" readonly /></label>
-        <label>Nombre del agente <input value="TpotThreatAnalysisAgent" readonly /></label>
-        <label>Prompt del sistema <textarea readonly>No concluir sin evidencia. Citar eventos relevantes. Separar hechos, inferencias y recomendaciones.</textarea></label>
-        <div class="check-grid">
-          <label><input type="checkbox" checked disabled /> Logs T-Pot</label>
-          <label><input type="checkbox" checked disabled /> IOCs</label>
-          <label><input type="checkbox" checked disabled /> Evidencia manual</label>
-        </div>
-        <div class="toolbar-actions"><button class="btn secondary" disabled>Probar agente</button><button class="btn secondary" disabled>Restaurar recomendados</button></div>
-      </article>
-      <article class="config-block">
-        <h3>IA auditora</h3>
-        <label>Proveedor IA auditora <input value="${esc(settings.ai_provider || "local")}" readonly /></label>
-        <label>Modelo auditor <input value="${esc(settings.ai_audit_model || "local-tpot-auditor")}" readonly /></label>
-        <label>Umbral minimo de confianza <input value="0.80" readonly /></label>
-        <div class="check-grid">
-          <label><input type="checkbox" checked disabled /> Auditoria automatica</label>
-          <label><input type="checkbox" checked disabled /> Rechazar sin evidencias</label>
-          <label><input type="checkbox" checked disabled /> Rechazar recomendaciones inseguras</label>
-          <label><input type="checkbox" checked disabled /> Revision humana si severidad critica</label>
-        </div>
-        <div class="toolbar-actions"><button class="btn secondary" disabled>Probar auditor</button><button class="btn secondary" disabled>Ejecutar prueba</button></div>
-      </article>
-      <article class="config-block">
-        <h3>Flujo de aprobacion</h3>
-        ${approvalRule("Generar analisis", "admin, analyst")}
-        ${approvalRule("Auditar", "admin, auditor")}
-        ${approvalRule("Publicar", "admin")}
-        ${approvalRule("Publicacion", settings.ai_output_requires_approval ? "manual obligatoria" : "automatica si auditoria aprueba")}
-        <p class="muted">No se puede publicar un analisis pendiente, rechazado o con revision humana abierta.</p>
+        <h3>Cómo funciona el análisis hoy</h3>
+        ${approvalRule("Motor de análisis", settings.analysis_engine === "reglas_locales" ? "reglas locales (sin modelo de IA)" : esc(settings.ai_model || "—"))}
+        ${approvalRule("Auditoría automática", "reglas: credenciales, secretos y contenido ofensivo")}
+        ${approvalRule("Aprobación", settings.ai_output_requires_approval ? "manual obligatoria" : "automática si la auditoría aprueba")}
+        ${approvalRule("Dónde se guarda", settings.storage === "memoria_del_servidor" ? "memoria del servidor" : esc(settings.storage || "—"))}
+        <p class="muted">Solo se puede aprobar un análisis que la auditoría dejó sin observaciones. Los análisis y el registro de auditoría <strong>se pierden al reiniciar</strong> el servicio y no se comparten entre instancias: no son un registro de auditoría duradero.</p>
+        <p class="muted">Estos valores son informativos: se fijan en el servidor (variables de entorno), no se editan desde esta pantalla.</p>
       </article>
       <article class="config-block">
         <div class="card-heading">
@@ -3147,7 +3130,7 @@ function renderThreatConfig(settings, health) {
             <h3>Integraciones</h3>
             <p class="muted">T-Pot debe correr aislado. Esta app solo consulta APIs controladas.</p>
           </div>
-          <button class="btn secondary" data-act="testThreatConnection">Probar conexion</button>
+          <button class="btn secondary" data-act="testThreatConnection">Probar conexión</button>
         </div>
         ${tpotKpi("Elastic configurado", settings.elastic_url_configured ? "Si" : "No")}
         ${tpotKpi("T-Pot API", settings.base_url_configured ? "Si" : "No")}
@@ -3160,7 +3143,7 @@ function renderThreatConfig(settings, health) {
 }
 
 async function createTpotAiAnalysis() {
-  $("#tpotStatus").textContent = "Generando analisis IA y enviando a auditoria...";
+  $("#tpotStatus").textContent = "Generando análisis y enviando a auditoría...";
   const body = {
     filters: tpotFilters(),
     options: {
@@ -3170,7 +3153,7 @@ async function createTpotAiAnalysis() {
     },
   };
   const response = await tpotApi("ai-analysis", { method: "POST", body: JSON.stringify(body) }, false);
-  $("#tpotStatus").textContent = `Analisis IA creado: ${response.job_id}. Estado: ${mapAiStatus(response.status)}. Resultado final bloqueado hasta auditoria.`;
+  $("#tpotStatus").textContent = `Análisis IA creado: ${response.job_id}. Estado: ${mapAiStatus(response.status)}. Resultado final bloqueado hasta auditoría.`;
   setTimeout(() => checkTpotAiJob(response.job_id), 900);
 }
 
@@ -3180,13 +3163,13 @@ async function checkTpotAiJob(jobId) {
   const visible = ["approved", "published"].includes(status);
   $("#tpotContent").innerHTML = `
     <article class="threat-card">
-      <h3>Detalle del analisis ${esc(jobId)}</h3>
+      <h3>Detalle del análisis ${esc(jobId)}</h3>
       ${renderAiStepper(status)}
-      <p>${visible ? "Resultado aprobado para visualizacion." : "El resultado final esta oculto hasta que la auditoria lo apruebe."}</p>
-      <pre class="safe-json">${esc(JSON.stringify({ ...job, raw_ai_output: visible ? job.raw_ai_output : "[bloqueado hasta auditoria]" }, null, 2))}</pre>
+      <p>${visible ? "Resultado aprobado para visualización." : "El resultado final está oculto hasta que la auditoría lo apruebe."}</p>
+      <pre class="safe-json">${esc(JSON.stringify({ ...job, raw_ai_output: visible ? job.raw_ai_output : "[bloqueado hasta auditoría]" }, null, 2))}</pre>
     </article>
   `;
-  $("#tpotStatus").textContent = `Analisis ${jobId}: ${status}. Auditoria obligatoria antes de publicar.`;
+  $("#tpotStatus").textContent = `Análisis ${jobId}: ${status}. Auditoría obligatoria antes de publicar.`;
 }
 
 function tpotKpi(label, value) {
@@ -3206,7 +3189,7 @@ function renderThreatFilters(includeIoc = false) {
       <label>Severidad
         <select id="threatSeverity">
           <option value="">Todas</option>
-          <option value="critical">Critica</option>
+          <option value="critical">Crítica</option>
           <option value="high">Alta</option>
           <option value="medium">Media</option>
           <option value="low">Baja</option>
@@ -3222,8 +3205,8 @@ function renderThreatFilters(includeIoc = false) {
 }
 
 function renderThreatEventTable(events, withAction = false) {
-  return `<table class="data-table threat-table"><thead><tr><th>Fecha/hora</th><th>Severidad</th><th>Tipo de amenaza</th><th>IP origen</th><th>Sensor</th><th>Estado</th>${withAction ? "<th>Accion</th>" : ""}</tr></thead>
-  <tbody>${events.map((event) => `<tr><td>${esc(event.timestamp)}</td><td>${severityBadge(event.severity)}</td><td>${esc(event.event_type)}</td><td><code>${esc(event.source_ip)}</code></td><td>${esc(event.honeypot)}</td><td>Nuevo</td>${withAction ? `<td><button class="btn secondary small" data-act="openThreatEventDetail" data-a1="${esc(JSON.stringify(event))}">Ver detalle</button></td>` : ""}</tr>`).join("") || `<tr><td colspan="${withAction ? 7 : 6}">No hay alertas para los filtros seleccionados. Prueba ampliar el rango de fechas.</td></tr>`}</tbody></table>`;
+  return `<div class="table-scroll"><table class="data-table threat-table"><thead><tr><th>Fecha/hora</th><th>Severidad</th><th>Tipo de amenaza</th><th>IP origen</th><th>Sensor</th><th>Estado</th>${withAction ? "<th>Acción</th>" : ""}</tr></thead>
+  <tbody>${events.map((event) => `<tr><td>${esc(event.timestamp)}</td><td>${severityBadge(event.severity)}</td><td>${esc(event.event_type)}</td><td><code>${esc(event.source_ip)}</code></td><td>${esc(event.honeypot)}</td><td>Nuevo</td>${withAction ? `<td><button class="btn secondary small" data-act="openThreatEventDetail" data-a1="${esc(JSON.stringify(event))}">Ver detalle</button></td>` : ""}</tr>`).join("") || `<tr><td colspan="${withAction ? 7 : 6}">No hay alertas para los filtros seleccionados. Prueba ampliar el rango de fechas.</td></tr>`}</tbody></table></div>`;
 }
 
 function threatKpi(label, value, severity, filterType, filterValue, title) {
@@ -3231,7 +3214,7 @@ function threatKpi(label, value, severity, filterType, filterValue, title) {
 }
 
 function severityBadge(severity = "info") {
-  const labels = { critical: "Critica", high: "Alta", medium: "Media", low: "Baja", info: "Info" };
+  const labels = { critical: "Crítica", high: "Alta", medium: "Media", low: "Baja", info: "Info" };
   return `<span class="severity-badge ${esc(severity)}">${esc(labels[severity] || severity)}</span>`;
 }
 
@@ -3262,10 +3245,10 @@ function trendByDay(events) {
 function renderAiStepper(status) {
   const normalized = mapAiStatus(status);
   const steps = [
-    ["draft", "Seleccion de eventos"],
-    ["analyzing", "Analisis IA"],
-    ["pending_audit", "Auditoria"],
-    ["published", "Publicacion"],
+    ["draft", "Selección de eventos"],
+    ["analyzing", "Análisis IA"],
+    ["pending_audit", "Auditoría"],
+    ["approved", "Aprobación"],
   ];
   const order = ["draft", "queued", "analyzing", "pending_audit", "needs_human_review", "audit_failed", "approved", "published", "archived"];
   const current = order.indexOf(normalized);
@@ -3277,13 +3260,13 @@ function renderAiStepper(status) {
 }
 
 function renderAiHistoryTable(rows) {
-  return `<table class="data-table"><thead><tr><th>ID</th><th>Fecha de creacion</th><th>Rango analizado</th><th>Sensor</th><th>Severidad</th><th>Eventos</th><th>Estado</th><th>Confianza IA</th><th>Auditoria</th><th>Accion</th></tr></thead>
+  return `<div class="table-scroll"><table class="data-table"><thead><tr><th>ID</th><th>Fecha de creación</th><th>Rango analizado</th><th>Sensor</th><th>Severidad</th><th>Eventos</th><th>Estado</th><th>Confianza IA</th><th>Auditoría</th><th>Acción</th></tr></thead>
   <tbody>${rows.map((item, index) => {
     const status = mapAiStatus(item.status);
     const jobId = item.id || item.metadata?.job_id || "";
     const eventCount = item.input_summary_json?.event_count || item.records_count || 0;
     return `<tr><td>${esc(jobId ? jobId.slice(0, 8) : `AI-${index + 1}`)}</td><td>${esc(item.created_at || "")}</td><td>${esc(filterRange(item.filters_json))}</td><td>${esc(filterValue(item.filters_json, "honeypot") || "Todos")}</td><td>${severityBadge(filterValue(item.filters_json, "severity") || "info")}</td><td>${esc(String(eventCount))}</td><td>${aiStatusBadge(status)}</td><td>${status === "approved" ? "0.86" : "Pendiente"}</td><td>${auditStatusText(status)}</td><td>${aiActionButtons(status, jobId)}</td></tr>`;
-  }).join("") || "<tr><td colspan='10'>Todavia no hay analisis generados. Selecciona un periodo y presiona Generar analisis IA.</td></tr>"}</tbody></table>`;
+  }).join("") || "<tr><td colspan='10'>Todavía no hay análisis generados. Seleccióna un periodo y presiona Generar análisis IA.</td></tr>"}</tbody></table></div>`;
 }
 
 function mapAiStatus(status = "draft") {
@@ -3291,7 +3274,7 @@ function mapAiStatus(status = "draft") {
     accepted: "queued",
     pending: "queued",
     running: "analyzing",
-    audited: "pending_audit",
+    audited: "needs_human_review",
     approved: "approved",
     rejected: "audit_failed",
     failed: "audit_failed",
@@ -3303,11 +3286,11 @@ function aiStatusBadge(status) {
     draft: "Borrador",
     queued: "En cola",
     analyzing: "Analizando",
-    pending_audit: "Pendiente de auditoria",
-    audit_failed: "Auditoria rechazada",
-    needs_human_review: "Requiere revision humana",
+    pending_audit: "Pendiente de auditoría",
+    audit_failed: "Auditoría rechazada",
+    needs_human_review: "Auditado · pendiente de aprobación",
     approved: "Aprobado",
-    published: "Publicado",
+    published: "Aprobado",
     archived: "Archivado",
   };
   return `<span class="ai-status ${esc(status)}">${esc(labels[status] || status)}</span>`;
@@ -3316,20 +3299,19 @@ function aiStatusBadge(status) {
 function auditStatusText(status) {
   if (status === "approved" || status === "published") return "Aprobada";
   if (status === "audit_failed") return "Rechazada";
-  if (status === "needs_human_review") return "Revision humana";
+  if (status === "needs_human_review") return "Revisión humana";
   return "Pendiente";
 }
 
 function aiActionButtons(status, jobId) {
   if (status === "pending_audit") return `<button class="btn secondary small" data-act="auditThreatJob" data-a1="${esc(jobId)}">Auditar</button>`;
   if (status === "needs_human_review") return `<button class="btn secondary small" data-act="approveThreatJob" data-a1="${esc(jobId)}">Aprobar</button> <button class="btn secondary small" data-act="rejectThreatJob" data-a1="${esc(jobId)}">Rechazar</button>`;
-  if (status === "approved") return `<button class="btn secondary small" data-act="publishThreatJob" data-a1="${esc(jobId)}">Publicar</button>`;
-  if (status === "published") return `<button class="btn secondary small" disabled>Publicado</button>`;
+  if (status === "approved") return `<span class="muted">Aprobado</span>`;
   return `<button class="btn secondary small" disabled>Ver detalle</button>`;
 }
 
 function stepStatusLabel(stateClass) {
-  return { done: "Completado", progress: "En progreso", review: "Requiere revision", rejected: "Rechazado", pending: "Pendiente" }[stateClass] || "Pendiente";
+  return { done: "Completado", progress: "En progreso", review: "Requiere revisión", rejected: "Rechazado", pending: "Pendiente" }[stateClass] || "Pendiente";
 }
 
 function filterValue(filtersJson, key) {
@@ -3393,7 +3375,7 @@ function openThreatEventDetail(event) {
   panel.innerHTML = `
     <article class="drilldown-panel">
       <div class="card-heading">
-        <div><h3>Detalle tecnico del evento</h3><p class="muted">Resumen, IOCs, timeline, evidencia, analisis IA y auditoria.</p></div>
+        <div><h3>Detalle técnico del evento</h3><p class="muted">Resumen, IOCs, timeline, evidencia, análisis IA y auditoría.</p></div>
         <button class="btn secondary" data-act="closeThreatDrilldown">Cerrar</button>
       </div>
       <div class="event-detail-grid">
@@ -3412,8 +3394,8 @@ function openThreatEventDetail(event) {
         <article><h4>Resumen</h4><p>Actividad detectada por ${esc(event.honeypot)} desde ${esc(event.source_ip)}.</p></article>
         <article><h4>Logs</h4><pre class="safe-json">${esc(JSON.stringify(event.normalizedLog || event, null, 2))}</pre></article>
         <article><h4>IOCs</h4><p>${esc(event.source_ip)} / puerto ${esc(String(event.destination_port || "n/d"))}</p></article>
-        <article><h4>Analisis IA</h4><p class="muted">Disponible solo cuando exista un analisis auditado y aprobado.</p></article>
-        <article><h4>Auditoria</h4><p class="muted">Sin aprobacion final registrada para este evento.</p></article>
+        <article><h4>Análisis IA</h4><p class="muted">Disponible solo cuando exista un análisis auditado y aprobado.</p></article>
+        <article><h4>Auditoría</h4><p class="muted">Sin aprobación final registrada para este evento.</p></article>
       </div>
     </article>
   `;
@@ -3424,31 +3406,35 @@ function detailItem(label, value) {
 }
 
 async function testThreatConnection() {
-  $("#tpotStatus").textContent = "Probando conexion con sensor T-Pot/Elastic...";
+  $("#tpotStatus").textContent = "Probando conexión con sensor T-Pot/Elastic...";
   const health = await tpotApi("health", {}, false);
   $("#tpotStatus").textContent = `${health.status}. Latencia: ${health.latency_ms}ms. Modo: ${health.mode}.`;
 }
 
-async function auditThreatJob(jobId) {
+// Job actions used to fail silently (unhandled rejection). Show the server's reason (e.g. "solo se puede aprobar un
+// análisis auditado") in the status strip and keep the current view.
+async function threatJobAction(jobId, action, options, doneMessage) {
   if (!jobId) return;
-  await tpotApi(`ai-analysis/${jobId}/audit`, { method: "POST" }, false);
-  void loadTpotView("ai");
+  try {
+    await tpotApi(`ai-analysis/${encodeURIComponent(jobId)}/${action}`, { method: "POST", ...options }, false);
+    await loadTpotView("ai");
+    $("#tpotStatus").textContent = doneMessage;
+  } catch (error) {
+    $("#tpotStatus").textContent = error.detail || "No se pudo completar la acción. Inténtalo de nuevo.";
+  }
+}
+
+async function auditThreatJob(jobId) {
+  await threatJobAction(jobId, "audit", {}, "Auditoría ejecutada.");
 }
 
 async function approveThreatJob(jobId) {
-  if (!jobId) return;
-  await tpotApi(`ai-analysis/${jobId}/approve`, { method: "POST" }, false);
-  void loadTpotView("ai");
+  if (!window.confirm("¿Aprobar este análisis? Quedará marcado como aprobado por ti.")) return;
+  await threatJobAction(jobId, "approve", {}, "Análisis aprobado.");
 }
 
 async function rejectThreatJob(jobId) {
-  if (!jobId) return;
-  await tpotApi(`ai-analysis/${jobId}/reject`, { method: "POST", body: JSON.stringify({ reason: "Rechazado desde revision manual" }) }, false);
-  void loadTpotView("ai");
-}
-
-function publishThreatJob() {
-  $("#tpotStatus").textContent = "Publicacion registrada en UI. La persistencia final debe quedar conectada al backend de aprobacion.";
+  await threatJobAction(jobId, "reject", { body: JSON.stringify({ reason: "Rechazado desde revisión manual" }) }, "Análisis rechazado.");
 }
 
 // href values that come from the database (many originate in AI output built from web pages) may only be http(s):

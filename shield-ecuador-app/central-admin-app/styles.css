@@ -1990,3 +1990,15 @@ body.menu-open { overflow: hidden; }
 /* ── Row A7: Sensei IA ─────────────────────────────────────────────────── */
 .compact-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
 .compact-row span:nth-of-type(1) { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+
+/* ── Row A8: Inteligencia de Amenazas ──────────────────────────────────── */
+.tpot-demo-banner { margin: 0 0 12px; padding: 12px 14px; border: 2px solid #f59e0b; background: rgba(245, 158, 11, .12); color: #fde68a; border-radius: 8px; line-height: 1.5; }
+.tpot-demo-banner[hidden] { display: none; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.threat-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.threat-nav button { min-height: 44px; }
+.threat-nav button[aria-current="page"] { font-weight: 800; }
+.threat-kpi, .bar-row, .threat-filter-bar input, .threat-filter-bar select { min-height: 44px; }
+.threat-card, .config-block, .drilldown-panel { min-width: 0; overflow-wrap: anywhere; }
+.safe-json { max-width: 100%; overflow-x: auto; }
+@media (max-width: 720px) { .threat-filter-bar { grid-template-columns: 1fr; } .threat-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

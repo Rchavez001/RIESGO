@@ -270,7 +270,11 @@ function readBody(req) {
   });
 }
 
+// Without TPOT_* endpoints the service answers with built-in DEMO events. The console must be able to say so.
+const tpotDemo = !process.env.TPOT_ELASTIC_URL && !process.env.TPOT_API_BASE_URL;
+
 async function handleTpotApi(req, res) {
+  res.setHeader('X-Tpot-Data-Mode', tpotDemo ? 'demo' : 'live');
   if (!rateLimit(req)) {
     sendJson(res, 429, { error: 'Too many requests' });
     return;
@@ -299,15 +303,19 @@ async function handleTpotApi(req, res) {
       const job = await tpotService.getAiAnalysisJob(jobMatch[1]);
       return job ? sendJson(res, 200, job) : sendJson(res, 404, { error: 'Job not found' });
     }
-    if (jobMatch && req.method === 'POST' && jobMatch[2] === 'audit') return sendJson(res, 200, await tpotService.auditAiAnalysis(jobMatch[1], actor));
-    if (jobMatch && req.method === 'POST' && jobMatch[2] === 'approve') return sendJson(res, 200, await tpotService.approveAiAnalysis(jobMatch[1], actor));
+    // audit / approve / reject answer null for an unknown id: that is a 404, not "200 null"
+    const found = (result) => (result ? sendJson(res, 200, result) : sendJson(res, 404, { error: 'Job not found' }));
+    if (jobMatch && req.method === 'POST' && jobMatch[2] === 'audit') return found(await tpotService.auditAiAnalysis(jobMatch[1], actor));
+    if (jobMatch && req.method === 'POST' && jobMatch[2] === 'approve') return found(await tpotService.approveAiAnalysis(jobMatch[1], actor));
     if (jobMatch && req.method === 'POST' && jobMatch[2] === 'reject') {
       const body = await readJson(req);
-      return sendJson(res, 200, await tpotService.rejectAiAnalysis(jobMatch[1], body.reason || 'Rechazado', actor));
+      return found(await tpotService.rejectAiAnalysis(jobMatch[1], String(body.reason || 'Rechazado').slice(0, 500), actor));
     }
 
     sendJson(res, 404, { error: 'Not found' });
-  } catch {
+  } catch (error) {
+    // Business-rule refusals (409) carry a message meant for the administrator; everything else stays generic.
+    if (error && error.status === 409) return sendJson(res, 409, { error: error.message });
     sendJson(res, 500, { error: 'T-Pot integration request failed' });
   }
 }

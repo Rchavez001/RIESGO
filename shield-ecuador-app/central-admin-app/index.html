@@ -473,24 +473,25 @@
             <div>
               <span class="label">T-POT / HONEYPOT / SIEM</span>
               <h2>Inteligencia de Amenazas</h2>
-              <p>Vista ejecutiva para entender amenazas, sensores, IOCs y analisis defensivo auditado.</p>
+              <p>Vista ejecutiva para entender amenazas, sensores, IOCs y análisis defensivo auditado.</p>
             </div>
           </div>
 
           <div class="threat-hero">
-            <strong>Operacion guiada para principiantes</strong>
-            <span>Empieza en el Dashboard, revisa Alertas y usa Análisis IA solo cuando necesites una interpretacion auditada.</span>
+            <strong>Operación guiada para principiantes</strong>
+            <span>Empieza en el Dashboard, revisa Alertas y usa Análisis solo cuando necesites una interpretación auditada.</span>
           </div>
 
-          <nav class="threat-nav" aria-label="Navegacion de inteligencia de amenazas">
-            <button class="active" data-threat-view="dashboard">Dashboard</button>
-            <button data-threat-view="alerts">Alertas</button>
-            <button data-threat-view="ai">Analisis IA</button>
-            <button data-threat-view="reports">Reportes</button>
-            <button data-threat-view="config">Configuracion</button>
+          <nav class="threat-nav" aria-label="Navegación de inteligencia de amenazas">
+            <button class="active" type="button" aria-current="page" data-threat-view="dashboard">Dashboard</button>
+            <button type="button" data-threat-view="alerts">Alertas</button>
+            <button type="button" data-threat-view="ai">Análisis</button>
+            <button type="button" data-threat-view="reports">Reportes</button>
+            <button type="button" data-threat-view="config">Configuración</button>
           </nav>
 
-          <div id="tpotStatus" class="status-strip">Sin consultar.</div>
+          <p id="tpotDemoBanner" class="tpot-demo-banner" role="note" hidden><strong>DATOS DE DEMOSTRACIÓN.</strong> T-Pot no está conectado a esta consola: todo lo que ves (eventos, IPs, sensores, indicadores) es de ejemplo y no refleja ataques reales. Se conecta con las variables TPOT_* de Cloud Run.</p>
+          <div id="tpotStatus" class="status-strip" role="status">Sin consultar.</div>
           <div id="threatDrilldown" class="threat-drilldown hidden"></div>
           <div id="tpotContent" class="tpot-content"></div>
         </section>
