@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ciber Dojo Central Admin</title>
     <link rel="stylesheet" href="./styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
-    <script src="https://js.puter.com/v2/"></script>
+    <!-- Pinned versions + Subresource Integrity: a changed or tampered file is refused by the browser.
+         (This page can reach the service-role proxy, so nothing third-party may run here unverified.)
+         js.puter.com is NOT loaded here: it is a mutable third-party script and is now loaded on demand (see ensurePuter in app.js). -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" integrity="sha384-Mx5lkUEQPM1pOJCwFtUICyX45KNojXbkWdYhkKUKsbv391mavbfoAmONbzkgYPzR" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js" integrity="sha384-f4gAUkb5Y6LE9n50CbiH1hCBCw7021OeJu0ZrgRpgW6G1CZjPR8cu33e8rCFLqCl" crossorigin="anonymous"></script>
   </head>
   <body>
+    <a class="skip-link" href="#workspace">Saltar al contenido</a>
     <div id="app" class="central-app">
-      <aside class="rail">
+      <button id="menuBackdrop" class="menu-backdrop" type="button" tabindex="-1" aria-label="Cerrar el menú" hidden></button>
+      <aside id="rail" class="rail">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">&#9163;</span>
           <div>
@@ -26,10 +30,10 @@
         </div>
 
         <nav class="nav" aria-label="Secciones">
-          <button class="nav-item active" data-panel="overview">Resumen</button>
+          <button class="nav-item active" data-panel="overview" aria-current="page">Resumen</button>
           <button class="nav-item" data-panel="dojos">Dojos y progreso</button>
           <button class="nav-item" data-panel="questions">Preguntas</button>
-          <button class="nav-item" data-panel="ai">IA y auditoria</button>
+          <button class="nav-item" data-panel="ai">IA y auditoría</button>
           <button class="nav-item" data-panel="newsAgent">Agente noticias</button>
           <button class="nav-item" data-panel="newsAlerts">Alertas IA</button>
           <button class="nav-item" data-panel="senseiStats">Sensei IA</button>
@@ -46,22 +50,23 @@
         <div class="rail-card">
           <span class="label">Ambiente</span>
           <strong>Cloud Run</strong>
-          <p>Aplicacion separada para configurar el producto Ciber Dojo.</p>
+          <p>Aplicación separada para configurar el producto Ciber Dojo.</p>
         </div>
       </aside>
 
-      <main class="workspace">
+      <main id="workspace" class="workspace" tabindex="-1">
         <header class="topbar">
+          <button id="menuToggle" class="btn secondary menu-toggle" type="button" aria-controls="rail" aria-expanded="false">☰ Menú</button>
           <div class="topbar-heading">
             <div class="kanji-bg">道場</div>
-            <span class="eyebrow">CONSOLA CENTRAL DE CONFIGURACION</span>
+            <span class="eyebrow">CONSOLA CENTRAL DE CONFIGURACIÓN</span>
               <h1>Administrador de Ciber Dojo</h1>
             <p>Gestiona dojos, bancos de preguntas, reglas de avance, inteligencia artificial, revision de respuestas, usuarios y propaganda.</p>
           </div>
           <div class="top-actions">
-            <button id="saveAll" class="btn secondary">Guardar borrador</button>
-            <button id="publishAll" class="btn primary">Publicar configuracion</button>
-            <button id="logoutBtn" class="btn danger">Salir</button>
+            <button id="saveAll" class="btn secondary" type="button">Guardar borrador</button>
+            <button id="publishAll" class="btn primary" type="button">Publicar configuración</button>
+            <button id="logoutBtn" class="btn danger" type="button">Salir</button>
           </div>
         </header>
 
@@ -805,12 +810,12 @@
           </article>
 
           <div id="secFindingModal" class="modal">
-            <div class="modal-backdrop" onclick="closeSecFindingModal()"></div>
+            <div class="modal-backdrop" data-act="closeSecFindingModal"></div>
             <div class="modal-card">
               <h2 id="secFindingModalTitle"></h2>
               <div id="secFindingModalBody"></div>
               <div class="modal-actions">
-                <button class="btn secondary" onclick="closeSecFindingModal()">Cerrar</button>
+                <button class="btn secondary" data-act="closeSecFindingModal">Cerrar</button>
               </div>
             </div>
           </div>

@@ -13,6 +13,37 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const tpotService = createTpotService(getConfigFromEnv(process.env));
 const rateBuckets = new Map();
 
+// Only these files are public assets of the console. The static handler used to serve anything under this
+// directory (server.js, tpotService.js, package.json, *.log …) to any authenticated request.
+const STATIC_FILES = new Set(['index.html', 'app.js', 'styles.css', 'cyber-sensei.gif']);
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const MAX_FAILED_AUTH = 10; // per client and 10 minutes
+const failedAuth = new Map();
+
+// script-src has no 'unsafe-inline': inline event handlers were replaced by data-act delegation (a real XSS sink).
+// puter.js is allowed because the news agent loads it on demand; its API calls need connect-src.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://cdn.jsdelivr.net https://js.puter.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https://*.puter.com wss://*.puter.com https://puter.com",
+  "frame-src 'self' https://*.puter.com",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': CSP,
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+};
+
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -45,6 +76,8 @@ const LOGGED_OUT_HTML = `<!doctype html>
 </body></html>`;
 
 const server = http.createServer((req, res) => {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+
   if ((req.url || '/').split('?')[0] === '/logged-out') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(LOGGED_OUT_HTML);
@@ -60,7 +93,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const client = req.socket.remoteAddress || 'unknown';
   if (!isAuthorized(req)) {
+    // Basic auth had no brake: unlimited password guesses. Throttle wrong credentials per client address. A request
+    // with no Authorization header is only the browser asking for the challenge, so it is never counted (otherwise
+    // ordinary browsing would use up the budget and lock the real administrator out of the challenge itself).
+    const now = Date.now();
+    const entry = failedAuth.get(client);
+    const fresh = entry && now < entry.resetAt ? entry : { count: 0, resetAt: now + 10 * 60 * 1000 };
+    if (req.headers.authorization) fresh.count += 1;
+    failedAuth.set(client, fresh);
+    if (req.headers.authorization && fresh.count > MAX_FAILED_AUTH) {
+      res.writeHead(429, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '600', 'Cache-Control': 'no-store' });
+      res.end('Too many failed attempts');
+      return;
+    }
     res.writeHead(401, {
       'Content-Type': 'text/plain; charset=utf-8',
       'WWW-Authenticate': 'Basic realm="Ciber Dojo Central Admin"',
@@ -90,16 +137,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const rawPath = decodeURIComponent((req.url || '/').split('?')[0]);
-  const safePath = path.normalize(rawPath).replace(/^(\.\.[/\\])+/, '');
-  const requestedPath = safePath === '/' || safePath === '\\' ? 'index.html' : safePath.replace(/^[/\\]+/, '');
-  const filePath = path.join(root, requestedPath);
-
-  if (!filePath.startsWith(root)) {
-    res.writeHead(403);
-    res.end('Forbidden');
+  let rawPath;
+  try {
+    rawPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  } catch {
+    // A malformed escape such as /%E0%A4%A (or a stray %) used to throw here and take the whole process down.
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Bad request');
     return;
   }
+  const requestedPath = rawPath === '/' ? 'index.html' : rawPath.replace(/^\/+/, '');
+  if (!STATIC_FILES.has(requestedPath)) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not found');
+    return;
+  }
+  const filePath = path.join(root, requestedPath);
 
   fs.readFile(filePath, (error, data) => {
     if (error) {
@@ -162,7 +215,14 @@ async function proxySupabase(req, res) {
   const originalUrl = req.url || '';
   const targetPath = originalUrl.replace(/^\/api/, '');
   const targetUrl = `${supabaseUrl}${targetPath}`;
-  const body = await readBody(req);
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'close' });
+    res.end(JSON.stringify({ error: 'Request body too large' }));
+    return;
+  }
 
   try {
     const response = await fetch(targetUrl, {
@@ -191,7 +251,17 @@ async function proxySupabase(req, res) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
+    let size = 0;
+    let rejected = false;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        // Keep draining (without storing) so the client can still receive the 413 instead of a reset connection.
+        if (!rejected) { rejected = true; chunks.length = 0; reject(new Error('Body too large')); }
+        return;
+      }
+      if (!rejected) chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });

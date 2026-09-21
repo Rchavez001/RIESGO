@@ -100,6 +100,8 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 function init() {
   ensureQuestionBanks();
   bindNavigation();
+  bindMobileMenu();
+  bindDelegatedActions();
   bindActions();
   renderAll();
   void loadQuestionsFromSupabase();
@@ -151,13 +153,77 @@ function persist(message = "Cambios guardados.") {
   notify(message);
 }
 
+// Actions reachable from data-act="..." attributes (data-a1..a3 carry the arguments as plain text).
+const DELEGATED_ACTIONS = {
+  switchThreatView: (view) => switchThreatView(view),
+  clearThreatFilters: () => clearThreatFilters(),
+  createTpotAiAnalysis: () => createTpotAiAnalysis(),
+  testThreatConnection: () => testThreatConnection(),
+  openThreatDrilldown: (type, value, title) => openThreatDrilldown(type, value, title),
+  openThreatEventDetail: (json) => { try { openThreatEventDetail(JSON.parse(json)); } catch { notify("No se pudo abrir el detalle del evento."); } },
+  auditThreatJob: (id) => auditThreatJob(id),
+  approveThreatJob: (id) => approveThreatJob(id),
+  rejectThreatJob: (id) => rejectThreatJob(id),
+  publishThreatJob: (id) => publishThreatJob(id),
+  closeThreatDrilldown: () => $("#threatDrilldown").classList.add("hidden"),
+  closeSecFindingModal: () => closeSecFindingModal(),
+};
+
+function bindDelegatedActions() {
+  document.addEventListener("click", (event) => {
+    const el = event.target instanceof Element ? event.target.closest("[data-act]") : null;
+    const action = el && Object.prototype.hasOwnProperty.call(DELEGATED_ACTIONS, el.dataset.act) ? DELEGATED_ACTIONS[el.dataset.act] : null;
+    if (action) action(el.dataset.a1, el.dataset.a2, el.dataset.a3);
+  });
+}
+
+// Below 1180 px the navigation rail is an off-canvas menu instead of ~800 px of buttons stacked above the content.
+const mobileNavQuery = window.matchMedia("(max-width: 1180px)");
+
+function syncMobileMenu() {
+  const rail = $("#rail");
+  const open = rail.classList.contains("open");
+  rail.inert = mobileNavQuery.matches && !open;
+  $("#menuToggle").setAttribute("aria-expanded", String(open));
+  $("#menuBackdrop").hidden = !(mobileNavQuery.matches && open);
+  document.body.classList.toggle("menu-open", mobileNavQuery.matches && open);
+}
+
+function openMobileMenu() {
+  $("#rail").classList.add("open");
+  syncMobileMenu();
+  $("#rail .nav-item.active, #rail .nav-item")?.focus();
+}
+
+function closeMobileMenu(returnFocus = true) {
+  const rail = $("#rail");
+  if (!rail.classList.contains("open")) return;
+  rail.classList.remove("open");
+  syncMobileMenu();
+  if (returnFocus) $("#menuToggle").focus();
+}
+
+function bindMobileMenu() {
+  $("#menuToggle").addEventListener("click", () => ($("#rail").classList.contains("open") ? closeMobileMenu() : openMobileMenu()));
+  $("#menuBackdrop").addEventListener("click", () => closeMobileMenu());
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMobileMenu(); });
+  mobileNavQuery.addEventListener("change", () => { $("#rail").classList.remove("open"); syncMobileMenu(); });
+  syncMobileMenu();
+}
+
 function bindNavigation() {
   $$(".nav-item").forEach((button) => {
     button.addEventListener("click", () => {
-      $$(".nav-item").forEach((item) => item.classList.remove("active"));
+      $$(".nav-item").forEach((item) => { item.classList.remove("active"); item.removeAttribute("aria-current"); });
       $$(".panel").forEach((panel) => panel.classList.remove("active"));
       button.classList.add("active");
+      button.setAttribute("aria-current", "page");
       $(`#${button.dataset.panel}`).classList.add("active");
+      closeMobileMenu(false);
+      // A section swap replaces the visible content: start at its top and tell keyboard/screen-reader users.
+      window.scrollTo(0, 0);
+      const heading = $(`#${button.dataset.panel}`).querySelector("h2");
+      if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus({ preventScroll: true }); }
       if (button.dataset.panel === "questions" || button.dataset.panel === "newsAlerts") {
         renderQuestions();
         renderNewsAlerts();
@@ -1213,10 +1279,27 @@ async function runNewsAgent() {
   await executeNewsAgent(false);
 }
 
+// js.puter.com/v2 is a mutable third-party script. It used to run on every page load, in the same origin as the
+// service-role proxy; now it is fetched only when the news agent is actually run.
+let puterLoading = null;
+function ensurePuter() {
+  if (typeof puter !== "undefined" && puter.ai && puter.ai.chat) return Promise.resolve(true);
+  if (!puterLoading) {
+    puterLoading = new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "https://js.puter.com/v2/";
+      script.onload = () => resolve(typeof puter !== "undefined" && Boolean(puter.ai && puter.ai.chat));
+      script.onerror = () => { puterLoading = null; resolve(false); };
+      document.head.appendChild(script);
+    });
+  }
+  return puterLoading;
+}
+
 async function executeNewsAgent(dryRun) {
   if (state.newsAgentBusy) return;
-  if (typeof puter === "undefined" || !puter.ai || !puter.ai.chat) {
-    notify("Puter.js no esta disponible. Verifica tu conexion e intenta de nuevo.");
+  if (!(await ensurePuter())) {
+    notify("Puter.js no está disponible. Verifica tu conexión e inténtalo de nuevo.");
     return;
   }
 
@@ -2891,7 +2974,7 @@ function renderThreatDashboard(summary, health, iocs, auditData) {
           <h3>Ultimas alertas relevantes</h3>
           <p class="muted">Vista ejecutiva. Los logs crudos quedan en el detalle tecnico.</p>
         </div>
-        <button class="btn secondary" onclick="switchThreatView('alerts')">Ver alertas</button>
+        <button class="btn secondary" data-act="switchThreatView" data-a1="alerts">Ver alertas</button>
       </div>
       ${renderThreatEventTable(summary.events_recent || [], true)}
     </article>
@@ -2906,7 +2989,7 @@ function renderThreatAlerts(data) {
         <h3>Alertas</h3>
         <p class="muted">Evento: actividad capturada por un sensor. Severidad: prioridad para revisarla.</p>
       </div>
-      <button class="btn secondary" onclick="clearThreatFilters()">Limpiar filtros</button>
+      <button class="btn secondary" data-act="clearThreatFilters">Limpiar filtros</button>
     </div>
     ${renderThreatFilters()}
     ${renderThreatEventTable(data.events || [], true)}
@@ -2941,8 +3024,8 @@ function renderThreatAi(data) {
     </div>
     ${renderThreatFilters(true)}
     <div class="ai-form-actions">
-      <button class="btn secondary" onclick="clearThreatFilters()">Limpiar filtros</button>
-      <button class="btn primary" onclick="createTpotAiAnalysis()">Generar analisis IA</button>
+      <button class="btn secondary" data-act="clearThreatFilters">Limpiar filtros</button>
+      <button class="btn primary" data-act="createTpotAiAnalysis">Generar analisis IA</button>
     </div>
     ${renderAiStepper(rows[0]?.status || "draft")}
     <article class="threat-card">
@@ -3006,7 +3089,7 @@ function renderThreatConfig(settings, health) {
             <h3>Integraciones</h3>
             <p class="muted">T-Pot debe correr aislado. Esta app solo consulta APIs controladas.</p>
           </div>
-          <button class="btn secondary" onclick="testThreatConnection()">Probar conexion</button>
+          <button class="btn secondary" data-act="testThreatConnection">Probar conexion</button>
         </div>
         ${tpotKpi("Elastic configurado", settings.elastic_url_configured ? "Si" : "No")}
         ${tpotKpi("T-Pot API", settings.base_url_configured ? "Si" : "No")}
@@ -3082,11 +3165,11 @@ function renderThreatFilters(includeIoc = false) {
 
 function renderThreatEventTable(events, withAction = false) {
   return `<table class="data-table threat-table"><thead><tr><th>Fecha/hora</th><th>Severidad</th><th>Tipo de amenaza</th><th>IP origen</th><th>Sensor</th><th>Estado</th>${withAction ? "<th>Accion</th>" : ""}</tr></thead>
-  <tbody>${events.map((event) => `<tr><td>${esc(event.timestamp)}</td><td>${severityBadge(event.severity)}</td><td>${esc(event.event_type)}</td><td><code>${esc(event.source_ip)}</code></td><td>${esc(event.honeypot)}</td><td>Nuevo</td>${withAction ? `<td><button class="btn secondary small" onclick='openThreatEventDetail(${JSON.stringify(event).replaceAll("'", "&#39;")})'>Ver detalle</button></td>` : ""}</tr>`).join("") || `<tr><td colspan="${withAction ? 7 : 6}">No hay alertas para los filtros seleccionados. Prueba ampliar el rango de fechas.</td></tr>`}</tbody></table>`;
+  <tbody>${events.map((event) => `<tr><td>${esc(event.timestamp)}</td><td>${severityBadge(event.severity)}</td><td>${esc(event.event_type)}</td><td><code>${esc(event.source_ip)}</code></td><td>${esc(event.honeypot)}</td><td>Nuevo</td>${withAction ? `<td><button class="btn secondary small" data-act="openThreatEventDetail" data-a1="${esc(JSON.stringify(event))}">Ver detalle</button></td>` : ""}</tr>`).join("") || `<tr><td colspan="${withAction ? 7 : 6}">No hay alertas para los filtros seleccionados. Prueba ampliar el rango de fechas.</td></tr>`}</tbody></table>`;
 }
 
 function threatKpi(label, value, severity, filterType, filterValue, title) {
-  return `<button class="threat-kpi ${esc(severity)}" onclick="openThreatDrilldown('${esc(filterType)}','${esc(filterValue)}','${esc(title)}')"><span>${esc(label)}</span><strong>${esc(String(value))}</strong><small>Ver detalle</small></button>`;
+  return `<button class="threat-kpi ${esc(severity)}" data-act="openThreatDrilldown" data-a1="${esc(filterType)}" data-a2="${esc(filterValue)}" data-a3="${esc(title)}"><span>${esc(label)}</span><strong>${esc(String(value))}</strong><small>Ver detalle</small></button>`;
 }
 
 function severityBadge(severity = "info") {
@@ -3098,7 +3181,7 @@ function threatChart(title, items = [], type) {
   const normalized = items.slice(0, 10).map((item) => ({ value: item.value || item[0] || "n/d", count: Number(item.count || item[1] || 0) }));
   const max = Math.max(1, ...normalized.map((item) => item.count));
   return `<article class="threat-card"><h3>${esc(title)}</h3>${normalized.map((item) => `
-    <button class="bar-row" onclick="openThreatDrilldown('${esc(type)}','${esc(String(item.value))}','${esc(title)}: ${esc(String(item.value))}')">
+    <button class="bar-row" data-act="openThreatDrilldown" data-a1="${esc(type)}" data-a2="${esc(String(item.value))}" data-a3="${esc(title)}: ${esc(String(item.value))}">
       <span>${esc(String(item.value))}</span>
       <div class="bar-track"><i style="width:${Math.max(8, Math.round((item.count / max) * 100))}%"></i></div>
       <strong>${item.count}</strong>
@@ -3180,9 +3263,9 @@ function auditStatusText(status) {
 }
 
 function aiActionButtons(status, jobId) {
-  if (status === "pending_audit") return `<button class="btn secondary small" onclick="auditThreatJob('${esc(jobId)}')">Auditar</button>`;
-  if (status === "needs_human_review") return `<button class="btn secondary small" onclick="approveThreatJob('${esc(jobId)}')">Aprobar</button> <button class="btn secondary small" onclick="rejectThreatJob('${esc(jobId)}')">Rechazar</button>`;
-  if (status === "approved") return `<button class="btn secondary small" onclick="publishThreatJob('${esc(jobId)}')">Publicar</button>`;
+  if (status === "pending_audit") return `<button class="btn secondary small" data-act="auditThreatJob" data-a1="${esc(jobId)}">Auditar</button>`;
+  if (status === "needs_human_review") return `<button class="btn secondary small" data-act="approveThreatJob" data-a1="${esc(jobId)}">Aprobar</button> <button class="btn secondary small" data-act="rejectThreatJob" data-a1="${esc(jobId)}">Rechazar</button>`;
+  if (status === "approved") return `<button class="btn secondary small" data-act="publishThreatJob" data-a1="${esc(jobId)}">Publicar</button>`;
   if (status === "published") return `<button class="btn secondary small" disabled>Publicado</button>`;
   return `<button class="btn secondary small" disabled>Ver detalle</button>`;
 }
@@ -3238,7 +3321,7 @@ async function openThreatDrilldown(filterType, filterValue, title) {
     <article class="drilldown-panel">
       <div class="card-heading">
         <div><h3>${esc(title)}</h3><p class="muted">Drill-down desde el dashboard hasta eventos normalizados.</p></div>
-        <button class="btn secondary" onclick="document.querySelector('#threatDrilldown').classList.add('hidden')">Cerrar</button>
+        <button class="btn secondary" data-act="closeThreatDrilldown">Cerrar</button>
       </div>
       ${renderThreatEventTable(data.events || [], true)}
     </article>
@@ -3253,7 +3336,7 @@ function openThreatEventDetail(event) {
     <article class="drilldown-panel">
       <div class="card-heading">
         <div><h3>Detalle tecnico del evento</h3><p class="muted">Resumen, IOCs, timeline, evidencia, analisis IA y auditoria.</p></div>
-        <button class="btn secondary" onclick="document.querySelector('#threatDrilldown').classList.add('hidden')">Cerrar</button>
+        <button class="btn secondary" data-act="closeThreatDrilldown">Cerrar</button>
       </div>
       <div class="event-detail-grid">
         ${detailItem("ID del evento", event.event_id || "n/d")}
