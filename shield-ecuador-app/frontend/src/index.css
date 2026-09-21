@@ -3356,3 +3356,13 @@ code { font-family: var(--font-mono); }
 /* Target size must not depend on font metrics (web font swap changed these by 1–3px). */
 .neon-button { min-height: 44px; }
 .brand-lockup { min-height: 44px; }
+
+/* /perfil (checklist row 18) */
+.profile-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.profile-name, .profile-meta { overflow-wrap: anywhere; }
+.profile-path { list-style: none; margin: 0; padding: 0; }
+.profile-step { display: block; margin-top: 4px; font-size: 12px; font-family: var(--font-mono); letter-spacing: .06em; color: var(--text-muted, #9fb3c8); }
+.profile-step.done { color: #4ade80; }
+.profile-step.current { color: var(--gold-belt, #f5c518); font-weight: 700; }
+.profile-page select { min-height: 44px; }
+@media (max-width: 960px) { .profile-grid { grid-template-columns: 1fr; } }

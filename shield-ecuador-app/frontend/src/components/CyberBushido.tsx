@@ -143,15 +143,17 @@ export function BeltBadge({
 }
 
 export function XPBar({ current, max, belt }: { current: number; max: number; belt: BeltLevel }) {
-  const pct = Math.min((current / max) * 100, 100)
+  // The XP goal is a display target, not a gate (belts are earned by passing katas): never show "9000/5000".
+  const goal = Math.max(max, current)
+  const pct = Math.min((current / goal) * 100, 100)
   const beltColor = beltPath.find((item) => item.level === belt)?.color ?? '#00f0ff'
   return (
     <div className="xp-wrap">
       <div className="xp-meta">
         <span>PUNTOS DE APRENDIZAJE</span>
-        <strong>{current}/{max} XP</strong>
+        <strong>{current}/{goal} XP</strong>
       </div>
-      <div className="xp-track">
+      <div className="xp-track" role="progressbar" aria-label="Puntos de aprendizaje" aria-valuemin={0} aria-valuemax={goal} aria-valuenow={current}>
         <div className="xp-fill" style={{ width: `${pct}%`, boxShadow: `0 0 18px ${beltColor}`, background: beltColor }} />
       </div>
     </div>

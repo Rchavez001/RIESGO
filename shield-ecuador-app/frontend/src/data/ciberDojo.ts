@@ -11,12 +11,12 @@ export const beltPath: Array<{
   iso: string
   xp: number
 }> = [
-  { level: 'blanco', label: 'Blanco', kanji: 'B', color: '#eeeeee', iso: 'Conciencia basica', xp: 0 },
+  { level: 'blanco', label: 'Blanco', kanji: 'B', color: '#eeeeee', iso: 'Conciencia básica', xp: 0 },
   { level: 'amarillo', label: 'Amarillo', kanji: 'A', color: '#f5c518', iso: 'Reglas claras de seguridad', xp: 600 },
   { level: 'naranja', label: 'Naranja', kanji: 'N', color: '#f97316', iso: 'Cuidar equipos, cuentas y datos', xp: 1300 },
   { level: 'verde', label: 'Verde', kanji: 'V', color: '#22c55e', iso: 'Control de entradas', xp: 2200 },
-  { level: 'azul', label: 'Azul', kanji: 'Z', color: '#3b82f6', iso: 'Proteger informacion importante', xp: 3400 },
-  { level: 'marron', label: 'Marron', kanji: 'M', color: '#8b5a2b', iso: 'Cuidar lugares, equipos y responder ante problemas', xp: 6000 },
+  { level: 'azul', label: 'Azul', kanji: 'Z', color: '#3b82f6', iso: 'Proteger información importante', xp: 3400 },
+  { level: 'marron', label: 'Marrón', kanji: 'M', color: '#8b5a2b', iso: 'Cuidar lugares, equipos y responder ante problemas', xp: 6000 },
   { level: 'negro', label: 'Negro', kanji: 'X', color: '#101827', iso: 'Revision completa de seguridad', xp: 9000 },
 ]
 
