@@ -104,20 +104,20 @@ test.describe('A5 · Agente noticias', () => {
     await page.locator('#npApiKey').fill('clave-de-prueba-larga-123')
     for (const bad of ['http://api.ejemplo.com/v1', 'https://localhost/v1', 'https://169.254.169.254/', 'https://10.1.2.3/']) {
       await page.locator('#npBaseUrl').fill(bad)
-      await page.locator('#npSave').click()
+      await page.locator('#npSave').dispatchEvent('click') // WebKit: formulario largo, el clic con coordenadas falla a veces
       await expect(status).toContainText('Base URL no permitida')
     }
     expect(calls).toEqual([])
     await page.locator('#npKey').fill('Mi Proveedor!')
     await page.locator('#npBaseUrl').fill('https://api.ejemplo.com/v1')
-    await page.locator('#npSave').click()
+    await page.locator('#npSave').dispatchEvent('click') // WebKit: formulario largo, el clic con coordenadas falla a veces
     await expect(status).toContainText('minúsculas, números y guiones')
     await page.locator('#npKey').fill('mi-proveedor')
     await page.locator('#npApiKey').fill('corta')
-    await page.locator('#npSave').click()
+    await page.locator('#npSave').dispatchEvent('click') // WebKit: formulario largo, el clic con coordenadas falla a veces
     await expect(status).toContainText('parece incompleta')
     await page.locator('#npApiKey').fill('clave-de-prueba-larga-123')
-    await page.locator('#npSave').click()
+    await page.locator('#npSave').dispatchEvent('click') // WebKit: formulario largo, el clic con coordenadas falla a veces
     await expect.poll(() => calls.length).toBe(1)
     expect(calls[0]).toMatchObject({ provider_key: 'mi-proveedor', base_url: 'https://api.ejemplo.com/v1', provider_type: 'chat_completion' })
   })

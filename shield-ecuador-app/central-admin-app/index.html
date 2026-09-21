@@ -654,9 +654,9 @@
           <div class="section-toolbar">
             <div>
               <span class="label">CENTRO DE SEGURIDAD</span>
-              <h2>Eventos, alertas, diagnostico IA e inventario</h2>
+              <h2>Eventos, alertas, diagnóstico IA e inventario</h2>
             </div>
-            <button id="secCheckAlertsNow" class="btn secondary">Verificar alertas ahora</button>
+            <button id="secCheckAlertsNow" class="btn secondary" type="button">Verificar alertas ahora</button>
           </div>
 
           <div class="metric-grid">
@@ -682,9 +682,9 @@
             <div class="section-toolbar compact">
               <h2>Eventos de seguridad</h2>
               <div>
-                <button id="secExportCsv" class="btn secondary small">Exportar CSV</button>
-                <button id="secExportPdf" class="btn secondary small">Exportar PDF</button>
-                <button id="secRefreshFeed" class="btn secondary small">Actualizar</button>
+                <button id="secExportCsv" class="btn secondary small" type="button">Exportar CSV</button>
+                <button id="secExportPdf" class="btn secondary small" type="button">Exportar PDF</button>
+                <button id="secRefreshFeed" class="btn secondary small" type="button">Actualizar</button>
               </div>
             </div>
             <div class="form-grid compact">
@@ -714,9 +714,9 @@
             </div>
             <div id="secEventFeed" class="news-run-log"></div>
             <div class="modal-actions">
-              <button id="secFeedPrev" class="btn secondary small">Anterior</button>
+              <button id="secFeedPrev" class="btn secondary small" type="button">Anterior</button>
               <span id="secFeedPageInfo" class="muted"></span>
-              <button id="secFeedNext" class="btn secondary small">Siguiente</button>
+              <button id="secFeedNext" class="btn secondary small" type="button">Siguiente</button>
             </div>
           </article>
 
@@ -752,11 +752,11 @@
               </label>
               <label>
                 Cantidad de eventos
-                <input id="secAlertCount" type="number" min="1" value="5" />
+                <input id="secAlertCount" type="number" min="1" max="100000" value="5" />
               </label>
               <label>
                 Ventana (minutos)
-                <input id="secAlertWindow" type="number" min="1" value="60" />
+                <input id="secAlertWindow" type="number" min="1" max="10080" value="60" />
               </label>
               <label>
                 Correo de aviso
@@ -764,13 +764,14 @@
               </label>
               <label>
                 Webhook (opcional)
-                <input id="secAlertWebhook" type="text" placeholder="https://..." />
+                <input id="secAlertWebhook" type="url" placeholder="https://hooks.ejemplo.com/..." autocomplete="off" />
               </label>
             </div>
             <div class="modal-actions">
-              <button id="secAlertSave" class="btn primary">Guardar umbral</button>
-              <button id="secAlertNew" class="btn secondary">Nuevo</button>
-              <button id="secAlertDelete" class="btn danger">Eliminar</button>
+              <label class="check-row"><input id="secAlertActive" type="checkbox" checked /> Umbral activo</label>
+              <button id="secAlertSave" class="btn primary" type="button">Guardar umbral</button>
+              <button id="secAlertNew" class="btn secondary" type="button">Nuevo</button>
+              <button id="secAlertDelete" class="btn danger" type="button">Eliminar</button>
             </div>
             <p id="secAlertStatus" class="muted"></p>
             <div id="secAlertList" class="news-run-log"></div>
@@ -778,10 +779,10 @@
 
           <article class="card">
             <div class="section-toolbar compact">
-              <h2>Diagnostico con IA</h2>
-              <button id="secRunDiagnosis" class="btn primary">Generar diagnostico ahora</button>
+              <h2>Diagnóstico con IA</h2>
+              <button id="secRunDiagnosis" class="btn primary" type="button">Generar diagnóstico ahora</button>
             </div>
-            <p class="muted">Corre automaticamente cada lunes. El boton genera uno adicional bajo demanda, analizando los eventos de los ultimos 7 dias.</p>
+            <p class="muted">Corre automaticamente cada lunes. El boton genera uno adicional bajo demanda, analizando los eventos de los últimos 7 dias.</p>
             <p id="secDiagnosisStatus" class="muted"></p>
             <div id="secDiagnosisList" class="news-run-log"></div>
           </article>
@@ -789,7 +790,7 @@
           <article class="card">
             <div class="section-toolbar compact">
               <h2>Inventario de superficie de ataque (EASM)</h2>
-              <button id="secRunEasm" class="btn primary">Ejecutar inventario ahora</button>
+              <button id="secRunEasm" class="btn primary" type="button">Ejecutar inventario ahora</button>
             </div>
             <p class="muted">Corre automaticamente el dia 1 de cada mes: buckets publicos, variables de entorno esperadas y endpoints publicos conocidos.</p>
             <p id="secEasmStatus" class="muted"></p>
@@ -822,12 +823,12 @@
                 </label>
                 <label>
                   Contenido (markdown)
-                  <textarea id="secKataBody" rows="5" placeholder="Que paso, por que importa, que aprendimos..."></textarea>
+                  <textarea id="secKataBody" rows="5" placeholder="Qué pasó, por qué importa, qué aprendimos..."></textarea>
                 </label>
                 <div class="modal-actions">
-                  <button id="secKataSaveDraft" class="btn secondary">Guardar borrador</button>
-                  <button id="secKataSubmitReview" class="btn secondary">Enviar a revision</button>
-                  <button id="secKataReject" class="btn secondary">Regresar a borrador</button>
+                  <button id="secKataSaveDraft" class="btn secondary" type="button">Guardar borrador</button>
+                  <button id="secKataSubmitReview" class="btn secondary" type="button">Enviar a revisión</button>
+                  <button id="secKataReject" class="btn secondary" type="button">Regresar a borrador</button>
                 </div>
 
                 <div id="secKataPublishFields" class="hidden">
@@ -856,7 +857,7 @@
                     Explicacion
                     <textarea id="secKataExplanation" rows="3"></textarea>
                   </label>
-                  <button id="secKataPublish" class="btn primary">Publicar</button>
+                  <button id="secKataPublish" class="btn primary" type="button">Publicar</button>
                 </div>
                 <p id="secKataStatus" class="muted"></p>
               </article>

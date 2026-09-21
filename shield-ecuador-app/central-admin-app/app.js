@@ -3781,7 +3781,7 @@ function renderChampionshipMatches() {
 
 const SEC_FEED_PAGE_SIZE = 25;
 const SEC_SEVERITY_CLASS = { critica: "critical", alta: "high", media: "medium", baja: "low" };
-const SEC_SEVERITY_LABEL = { critica: "Critica", alta: "Alta", media: "Media", baja: "Baja" };
+const SEC_SEVERITY_LABEL = { critica: "Crítica", alta: "Alta", media: "Media", baja: "Baja" };
 
 function secSeverityBadge(severity) {
   const cls = SEC_SEVERITY_CLASS[severity] || "info";
@@ -3838,10 +3838,12 @@ async function loadSecurityEndpointOptions() {
 function buildSecFeedQuery(extra = "") {
   const filters = state.secFilters || {};
   const parts = ["select=*", "order=created_at.desc"];
-  if (filters.severity) parts.push(`severity=eq.${filters.severity}`);
+  if (["baja", "media", "alta", "critica"].includes(filters.severity)) parts.push(`severity=eq.${filters.severity}`);
   if (filters.endpoint) parts.push(`endpoint=ilike.*${encodeURIComponent(filters.endpoint)}*`);
-  if (filters.from) parts.push(`created_at=gte.${new Date(filters.from).toISOString()}`);
-  if (filters.to) parts.push(`created_at=lte.${new Date(filters.to).toISOString()}`);
+  // An unfinished datetime-local value gives an Invalid Date and toISOString() throws: ignore it instead of breaking the feed.
+  const isoOrNull = (v) => { const d = new Date(v); return v && !Number.isNaN(d.getTime()) ? d.toISOString() : null; };
+  if (isoOrNull(filters.from)) parts.push(`created_at=gte.${isoOrNull(filters.from)}`);
+  if (isoOrNull(filters.to)) parts.push(`created_at=lte.${isoOrNull(filters.to)}`);
   return `security_events?${parts.join("&")}${extra}`;
 }
 
@@ -3855,7 +3857,7 @@ async function loadSecurityFeed() {
     renderSecurityFeed();
   } catch (error) {
     console.warn("No se pudieron cargar los eventos de seguridad:", error);
-    $("#secEventFeed").innerHTML = `<p class="muted">No se pudieron cargar los eventos. Verifica la migracion 052.</p>`;
+    $("#secEventFeed").innerHTML = `<p class="muted" role="alert">No se pudieron cargar los eventos. Pulsa Actualizar para reintentar.</p>`;
   }
 }
 
@@ -3888,8 +3890,13 @@ async function loadSecurityMetrics() {
     const events14d = Array.isArray(rows) ? rows : [];
     const events7d = events14d.filter((e) => e.created_at >= since7d);
 
-    $("#secMetricEvents").textContent = String(events7d.length);
-    $("#secMetricBlocks").textContent = String(events7d.filter((e) => e.event_type === "rate_limit_exceeded").length);
+    // The two counts used to be taken from a sample capped at 1000 rows, so a busy week showed "1000" as the total.
+    const [total7d, blocks7d] = await Promise.all([
+      countRows("security_events", `&created_at=gte.${since7d}`),
+      countRows("security_events", `&created_at=gte.${since7d}&event_type=eq.rate_limit_exceeded`),
+    ]);
+    $("#secMetricEvents").textContent = total7d.toLocaleString("es-EC");
+    $("#secMetricBlocks").textContent = blocks7d.toLocaleString("es-EC");
     $("#secMetricEndpoints").textContent = String(new Set(events7d.map((e) => e.endpoint)).size);
 
     const topEndpoints = countBy(events7d, "endpoint").sort((a, b) => b.count - a.count).slice(0, 5);
@@ -3898,7 +3905,8 @@ async function loadSecurityMetrics() {
     const trend = trendByDay(events14d).sort((a, b) => String(a.value).localeCompare(String(b.value)));
     $("#secTrendChart").innerHTML = renderSecBarChart(trend, 14);
   } catch (error) {
-    console.warn("No se pudieron cargar las metricas de seguridad:", error);
+    console.warn("No se pudieron cargar las métricas de seguridad:", error);
+    ["#secMetricEvents", "#secMetricBlocks", "#secMetricEndpoints"].forEach((id) => { $(id).textContent = "—"; });
   }
 }
 
@@ -3926,6 +3934,12 @@ async function runSecurityAlertCheck() {
   }
 }
 
+// A cell that starts with = + - @ (or a tab/CR) is run as a formula by Excel/Sheets: prefix it so it stays text.
+function csvSafe(value) {
+  const text = String(value ?? "");
+  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+}
+
 function secEventsToCsvRows(events) {
   const header = ["fecha", "endpoint", "tipo", "severidad", "metadata"];
   const lines = [header.join(",")];
@@ -3935,8 +3949,8 @@ function secEventsToCsvRows(events) {
       event.endpoint,
       event.event_type,
       event.severity,
-      JSON.stringify(event.metadata || {}).replaceAll('"', '""'),
-    ].map((value) => `"${String(value).replaceAll('"', '""')}"`);
+      JSON.stringify(event.metadata || {}),
+    ].map((value) => `"${csvSafe(value).replaceAll('"', '""')}"`);
     lines.push(row.join(","));
   });
   return lines.join("\n");
@@ -3957,7 +3971,7 @@ async function exportSecurityEventsPdf() {
     const rows = await supabaseRest(`${buildSecFeedQuery()}&limit=1000`);
     const events = Array.isArray(rows) ? rows : [];
     const win = window.open("", "_blank");
-    if (!win) { notify("El navegador bloqueo la ventana de impresion."); return; }
+    if (!win) { notify("El navegador bloqueó la ventana de impresión."); return; }
     win.document.write(`
       <html><head><title>Centro de Seguridad - Eventos</title>
       <style>body{font-family:sans-serif;font-size:12px;} table{width:100%;border-collapse:collapse;} td,th{border:1px solid #ccc;padding:4px;text-align:left;}</style>
@@ -4009,7 +4023,7 @@ function renderSecurityAlertConfigs() {
       <span class="badge ${cfg.active ? "ai" : "manual"}">${cfg.active ? "activo" : "inactivo"}</span>
       <button class="btn secondary small" data-sec-alert-edit="${esc(cfg.id)}">Editar</button>
     </div>
-  `).join("") : `<p class="muted">Todavia no hay umbrales configurados.</p>`;
+  `).join("") : `<p class="muted">Todavía no hay umbrales configurados.</p>`;
 
   $$("[data-sec-alert-edit]").forEach((button) => {
     button.addEventListener("click", () => loadSecurityAlertIntoForm(button.dataset.secAlertEdit));
@@ -4026,6 +4040,7 @@ function loadSecurityAlertIntoForm(id) {
   $("#secAlertWindow").value = cfg.window_minutes;
   $("#secAlertEmail").value = cfg.notify_email || "";
   $("#secAlertWebhook").value = cfg.notify_webhook_url || "";
+  $("#secAlertActive").checked = cfg.active !== false;
   $("#secAlertStatus").textContent = "";
 }
 
@@ -4037,6 +4052,7 @@ function clearSecurityAlertForm() {
   $("#secAlertWindow").value = "60";
   $("#secAlertEmail").value = "";
   $("#secAlertWebhook").value = "";
+  $("#secAlertActive").checked = true;
   $("#secAlertStatus").textContent = "";
 }
 
@@ -4049,8 +4065,18 @@ async function saveSecurityAlertConfig() {
     window_minutes: Number($("#secAlertWindow").value),
     notify_email: $("#secAlertEmail").value.trim() || undefined,
     notify_webhook_url: $("#secAlertWebhook").value.trim() || undefined,
-    active: true,
+    active: $("#secAlertActive").checked,
   };
+  const statusEl = $("#secAlertStatus");
+  if (!payload.name || payload.name.length > 100) { statusEl.textContent = "Escribe un nombre de hasta 100 caracteres."; return; }
+  if (!Number.isInteger(payload.event_count_threshold) || payload.event_count_threshold < 1 || payload.event_count_threshold > 100000) { statusEl.textContent = "El número de eventos debe ser un entero entre 1 y 100.000."; return; }
+  if (!Number.isInteger(payload.window_minutes) || payload.window_minutes < 1 || payload.window_minutes > 10080) { statusEl.textContent = "La ventana debe ser un entero entre 1 y 10.080 minutos (una semana)."; return; }
+  if (!payload.notify_email && !payload.notify_webhook_url) { statusEl.textContent = "Indica al menos un correo o un webhook de aviso."; return; }
+  if (payload.notify_email && !/^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/.test(payload.notify_email)) { statusEl.textContent = "El correo de aviso no es válido."; return; }
+  if (payload.notify_webhook_url) {
+    const problem = publicUrlProblem(payload.notify_webhook_url, true);
+    if (problem) { statusEl.textContent = `Webhook no permitido: ${problem}`; return; }
+  }
   try {
     const result = await supabaseFunctionInvoke("save-security-alert-config", payload);
     $("#secAlertId").value = result.config.id;
@@ -4080,7 +4106,7 @@ async function loadSecurityDiagnoses() {
     state.secDiagnoses = Array.isArray(rows) ? rows : [];
     renderSecurityDiagnoses();
   } catch (error) {
-    console.warn("No se pudieron cargar los diagnosticos:", error);
+    console.warn("No se pudieron cargar los diagnósticos:", error);
   }
 }
 
@@ -4101,7 +4127,7 @@ function renderSecurityDiagnoses() {
         <button class="btn secondary small" data-sec-diag-kata="${esc(d.id)}">Convertir en kata</button>
       </div>
     </div>
-  `).join("") : `<p class="muted">Todavia no se ha generado ningun diagnostico.</p>`;
+  `).join("") : `<p class="muted">Todavía no se ha generado ningun diagnóstico.</p>`;
 
   $$("[data-sec-diag-feedback]").forEach((button) => {
     button.addEventListener("click", () => submitSecurityDiagnosisFeedback(button.dataset.secDiagFeedback, button.dataset.rating));
@@ -4131,14 +4157,14 @@ function startSecurityKataFromDiagnosis(diagnosisId) {
   $("#secKataBody").value = `${diagnosis.summary_es}\n\nRecomendaciones:\n${(diagnosis.recommendations || []).map((r) => `- ${r}`).join("\n")}`;
   state.secKataSourceDiagnosisId = diagnosisId;
   $("#secKataPublishFields").classList.add("hidden");
-  $("#secKataStatus").textContent = "Borrador prellenado desde el diagnostico. Guarda y envia a revision.";
+  $("#secKataStatus").textContent = "Borrador prellenado desde el diagnóstico. Guarda y envía a revisión.";
 }
 
 async function runSecurityDiagnosis() {
-  $("#secDiagnosisStatus").textContent = "Generando diagnostico...";
+  $("#secDiagnosisStatus").textContent = "Generando diagnóstico...";
   try {
     const result = await supabaseFunctionInvoke("security-diagnose", {});
-    $("#secDiagnosisStatus").textContent = result.skipped ? result.reason : "Diagnostico generado.";
+    $("#secDiagnosisStatus").textContent = result.skipped ? result.reason : "Diagnóstico generado.";
     await loadSecurityDiagnoses();
   } catch (error) {
     $("#secDiagnosisStatus").textContent = `Error: ${error.message}`;
@@ -4155,7 +4181,7 @@ async function loadSecurityEasmFindings() {
   }
 }
 
-const SEC_FINDING_TYPE_LABEL = { public_endpoint: "Endpoint publico", public_bucket: "Bucket publico", missing_env_var: "Variable de entorno faltante", other: "Otro" };
+const SEC_FINDING_TYPE_LABEL = { public_endpoint: "Endpoint público", public_bucket: "Bucket público", missing_env_var: "Variable de entorno faltante", other: "Otro" };
 
 function renderSecurityEasmFindings() {
   const rows = state.secEasmFindings || [];
@@ -4170,7 +4196,7 @@ function renderSecurityEasmFindings() {
         <td><button class="badge ${f.resolved ? "ai" : "audit"}" data-sec-finding-detail="${esc(f.id)}" style="cursor:pointer;border:0;">${f.resolved ? "resuelto" : "pendiente"}</button></td>
       </tr>
     `).join("")}</tbody></table>
-  ` : `<p class="muted">Todavia no se ha ejecutado el inventario EASM.</p>`;
+  ` : `<p class="muted">Todavía no se ha ejecutado el inventario EASM.</p>`;
 
   $$("[data-sec-finding-detail]").forEach((button) => {
     button.addEventListener("click", () => openSecFindingModal(button.dataset.secFindingDetail));
@@ -4180,17 +4206,17 @@ function renderSecurityEasmFindings() {
 function secFindingExplanation(finding) {
   const target = finding.target;
   if (finding.finding_type === "public_endpoint") {
-    return `Este endpoint (<code>${esc(target)}</code>) es publico a proposito: pg_cron lo llama sin sesion de usuario, por eso tiene <code>verify_jwt = false</code> en <code>supabase/config.toml</code>. No requiere ninguna accion.`;
+    return `Este endpoint (<code>${esc(target)}</code>) es público a propósito: pg_cron lo llama sin sesion de usuario, por eso tiene <code>verify_jwt = false</code> en <code>supabase/config.toml</code>. No requiere ninguna acción.`;
   }
   if (finding.finding_type === "public_bucket") {
     return finding.resolved
-      ? `El bucket <code>${esc(target)}</code> ya fue revisado y confirmado como publico a proposito.`
-      : `El bucket <code>${esc(target)}</code> esta marcado como publico en Supabase Storage y no esta en la lista de buckets que deberian serlo (solo <code>campaign-ads</code>). Revisalo en Supabase &rarr; Storage: si no necesita ser publico, cambialo a privado.`;
+      ? `El bucket <code>${esc(target)}</code> ya fue revisado y confirmado como público a propósito.`
+      : `El bucket <code>${esc(target)}</code> está marcado como público en Supabase Storage y no esta en la lista de buckets que deberían serlo (solo <code>campaign-ads</code>). Revísalo en Supabase &rarr; Storage: si no necesita ser público, cambialo a privado.`;
   }
   if (finding.finding_type === "missing_env_var") {
     return finding.resolved
       ? `La variable <code>${esc(target)}</code> ya fue configurada.`
-      : `La variable de entorno <code>${esc(target)}</code> no esta definida en los secretos de las Edge Functions. Configurala en Supabase &rarr; Edge Functions &rarr; Secrets. Mientras falte, las funciones que dependen de ella pueden fallar o quedar menos protegidas.`;
+      : `La variable de entorno <code>${esc(target)}</code> no está definida en los secretos de las Edge Functions. Configúrala en Supabase &rarr; Edge Functions &rarr; Secrets. Mientras falte, las funciones que dependen de ella pueden fallar o quedar menos protegidas.`;
   }
   return finding.resolved ? "Este hallazgo ya fue resuelto." : "Este hallazgo todavia no se ha resuelto.";
 }
@@ -4202,7 +4228,7 @@ function openSecFindingModal(id) {
   $("#secFindingModalBody").innerHTML = `
     <p>${secFindingExplanation(finding)}</p>
     <p class="muted">Mes del escaneo: ${esc(finding.scan_month)} &middot; Severidad: ${secSeverityBadge(finding.severity)} &middot; Estado: ${finding.resolved ? "resuelto" : "pendiente"}${finding.resolved_at ? ` (${esc(new Date(finding.resolved_at).toLocaleString("es-EC"))})` : ""}</p>
-    ${finding.details && Object.keys(finding.details).length ? `<p class="muted">Detalle tecnico: <code>${esc(JSON.stringify(finding.details))}</code></p>` : ""}
+    ${finding.details && Object.keys(finding.details).length ? `<p class="muted">Detalle técnico: <code>${esc(JSON.stringify(finding.details))}</code></p>` : ""}
   `;
   $("#secFindingModal").classList.add("active");
 }
@@ -4222,7 +4248,7 @@ async function runSecurityEasmScan() {
   }
 }
 
-const SEC_KATA_STATUS_LABEL = { borrador: "Borrador", en_revision: "En revision", publicado: "Publicado" };
+const SEC_KATA_STATUS_LABEL = { borrador: "Borrador", en_revision: "En revisión", publicado: "Publicado" };
 
 async function loadSecurityKataDrafts() {
   try {
@@ -4237,15 +4263,15 @@ async function loadSecurityKataDrafts() {
 function renderSecurityKataDrafts() {
   const rows = state.secKataDrafts || [];
   $("#secKataList").innerHTML = rows.length ? rows.map((k) => `
-    <div class="question-row compact-row" data-sec-kata-select="${esc(k.id)}">
-      <strong>${esc(k.title)}</strong>
+    <div class="question-row compact-row">
+      <button type="button" class="link-button" data-sec-kata-select="${esc(k.id)}">${esc(k.title)}</button>
       <span class="badge ${k.status === "publicado" ? "ai" : k.status === "en_revision" ? "manual" : "audit"}">${esc(SEC_KATA_STATUS_LABEL[k.status] || k.status)}</span>
       <span class="muted">${esc(new Date(k.created_at).toLocaleDateString("es-EC"))}</span>
     </div>
-  `).join("") : `<p class="muted">Todavia no hay borradores de kata.</p>`;
+  `).join("") : `<p class="muted">Todavía no hay borradores de kata.</p>`;
 
-  $$("[data-sec-kata-select]").forEach((row) => {
-    row.addEventListener("click", () => loadSecurityKataIntoEditor(row.dataset.secKataSelect));
+  $$("[data-sec-kata-select]").forEach((button) => {
+    button.addEventListener("click", () => loadSecurityKataIntoEditor(button.dataset.secKataSelect));
   });
 }
 

@@ -2019,3 +2019,14 @@ ol.decision-list { padding-left: 20px; display: grid; gap: 8px; }
 @media (max-width: 720px) { #championship .news-provider-key-row { flex-direction: column; } #championship .btn { width: 100%; } }
 #championship #champResendKey { min-height: 44px; }
 #championship .section-toolbar.compact { flex-wrap: wrap; gap: 8px; }
+
+/* ── Row A11: Centro de Seguridad ──────────────────────────────────────── */
+#securityCenter input, #securityCenter select, #securityCenter textarea { min-height: 44px; }
+#securityCenter textarea { min-height: 88px; }
+.link-button { background: none; border: 0; padding: 0; min-height: 44px; color: var(--blue); text-align: left; font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; }
+.link-button:focus-visible { outline: 3px solid #fde68a; outline-offset: 2px; }
+#securityCenter .data-table { min-width: 560px; }
+#securityCenter .news-run-log, #secEventFeed { overflow-x: auto; max-width: 100%; }
+#securityCenter .modal .modal-content, #secFindingModal > div { max-width: min(560px, 94vw); }
+#securityCenter code { overflow-wrap: anywhere; }
+@media (max-width: 720px) { #securityCenter .toolbar-actions, #securityCenter .toolbar-actions .btn { width: 100%; } }
