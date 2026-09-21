@@ -3175,6 +3175,7 @@ async function createTpotAiAnalysis() {
 
 async function checkTpotAiJob(jobId) {
   const job = await tpotApi(`ai-analysis/${jobId}`, {}, false);
+  if (state.threatView !== "ai") return; // the person moved on while the job was running: do not paint over another view
   const status = mapAiStatus(job.status);
   const visible = ["approved", "published"].includes(status);
   $("#tpotContent").innerHTML = `
@@ -3185,7 +3186,7 @@ async function checkTpotAiJob(jobId) {
       <pre class="safe-json">${esc(JSON.stringify({ ...job, raw_ai_output: visible ? job.raw_ai_output : "[bloqueado hasta auditoría]" }, null, 2))}</pre>
     </article>
   `;
-  $("#tpotStatus").textContent = `Análisis ${jobId}: ${status}. Auditoría obligatoria antes de publicar.`;
+  $("#tpotStatus").textContent = `Análisis ${jobId}: ${aiStatusLabel(status)}. Un análisis solo se aprueba después de la auditoría.`;
 }
 
 function tpotKpi(label, value) {
@@ -3295,6 +3296,10 @@ function mapAiStatus(status = "draft") {
     rejected: "audit_failed",
     failed: "audit_failed",
   }[status] || status;
+}
+
+function aiStatusLabel(status) {
+  return { draft: "borrador", queued: "en cola", analyzing: "analizando", pending_audit: "pendiente de auditoría", audit_failed: "rechazado por la auditoría", needs_human_review: "auditado, pendiente de aprobación", approved: "aprobado", published: "aprobado" }[status] || status;
 }
 
 function aiStatusBadge(status) {

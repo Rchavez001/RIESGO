@@ -12,6 +12,7 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const tpotService = createTpotService(getConfigFromEnv(process.env));
 const rateBuckets = new Map();
+const TPOT_RATE_LIMIT_PER_MIN = Number(process.env.TPOT_RATE_LIMIT_PER_MIN) || 80;
 
 // Only these files are public assets of the console. The static handler used to serve anything under this
 // directory (server.js, tpotService.js, package.json, *.log …) to any authenticated request.
@@ -330,7 +331,7 @@ function rateLimit(req) {
   }
   bucket.count += 1;
   rateBuckets.set(key, bucket);
-  return bucket.count <= 80;
+  return bucket.count <= TPOT_RATE_LIMIT_PER_MIN;
 }
 
 async function readJson(req) {

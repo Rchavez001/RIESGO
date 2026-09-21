@@ -64,12 +64,13 @@ test.describe('central-admin-app server', () => {
 
   test('el proxy añade la clave de servicio en el servidor y nunca la devuelve al navegador', async () => {
     const api = http()
-    const res = await api.get('/api/rest/v1/users?select=id', { headers: good })
+    const marker = `m${Date.now()}${Math.floor(Math.random() * 1e6)}`
+    const res = await api.get(`/api/rest/v1/users?select=id&marker=${marker}`, { headers: good })
     expect(res.status()).toBe(200)
     expect(JSON.stringify(res.headers())).not.toContain('test-service-role-key')
     expect(await res.text()).not.toContain('test-service-role-key')
-    const seen = await fetch(`${UPSTREAM}/__last`).then(r => r.json())
-    expect(seen.url).toBe('/rest/v1/users?select=id')
+    const seen = await fetch(`${UPSTREAM}/__find?contains=${marker}`).then(r => r.json())
+    expect(seen.url).toBe(`/rest/v1/users?select=id&marker=${marker}`)
     expect(seen.headers.apikey).toBe('test-service-role-key')
     // las credenciales Basic del administrador no se reenvían a Supabase
     expect(seen.headers.authorization).toBe('Bearer test-service-role-key')
