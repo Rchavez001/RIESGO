@@ -2010,3 +2010,12 @@ ol.decision-list { padding-left: 20px; display: grid; gap: 8px; }
 .topic-bar .bar-track i { display: block; height: 100%; background: var(--blue); }
 .topic-bar.out .bar-track i { background: #f59e0b; }
 .topic-bar strong, .topic-bar span { overflow-wrap: anywhere; }
+
+/* ── Row A10: Campeonato ───────────────────────────────────────────────── */
+#championship .form-grid.compact input, #championship .form-grid.compact select, #championship textarea { min-height: 44px; }
+#championship .news-provider-key-row { display: flex; gap: 8px; }
+#championship .news-provider-key-row input { flex: 1; min-width: 0; }
+#championship .progress-row { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 720px) { #championship .news-provider-key-row { flex-direction: column; } #championship .btn { width: 100%; } }
+#championship #champResendKey { min-height: 44px; }
+#championship .section-toolbar.compact { flex-wrap: wrap; gap: 8px; }

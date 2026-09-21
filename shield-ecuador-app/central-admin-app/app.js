@@ -3573,25 +3573,36 @@ async function saveChampionshipConfig() {
   const opensLocal = $("#champRegOpens").value;
   const closesLocal = $("#champRegCloses").value;
   if (!$("#champName").value.trim() || !opensLocal || !closesLocal) {
-    statusEl.textContent = "Completa nombre, apertura y cierre de inscripcion.";
+    statusEl.textContent = "Completa nombre, apertura y cierre de inscripción.";
     return;
   }
+
+  // Out-of-range or empty numbers used to be replaced silently by a default (typing 0 gave 60), and the closing date
+  // could be earlier than the opening one.
+  const intIn = (id, min, max) => { const n = Number($(`#${id}`).value); return Number.isInteger(n) && n >= min && n <= max ? n : null; };
+  const numbers = {
+    max_age: intIn("champMaxAge", 1, 100),
+    questions_per_match: intIn("champQuestionsPerMatch", 1, 20),
+    time_limit_easy_seconds: intIn("champTimeEasy", 5, 600),
+    time_limit_medium_seconds: intIn("champTimeMedium", 5, 600),
+    time_limit_hard_seconds: intIn("champTimeHard", 5, 600),
+  };
+  const bad = Object.entries(numbers).filter(([, v]) => v === null).map(([k]) => ({ max_age: "edad máxima (1–100)", questions_per_match: "preguntas por combate (1–20)", time_limit_easy_seconds: "tiempo fácil (5–600 s)", time_limit_medium_seconds: "tiempo medio (5–600 s)", time_limit_hard_seconds: "tiempo difícil (5–600 s)" }[k]));
+  if (bad.length) { statusEl.textContent = `Revisa: ${bad.join(", ")}.`; return; }
+  if (new Date(closesLocal) <= new Date(opensLocal)) { statusEl.textContent = "El cierre de inscripciones debe ser posterior a la apertura."; return; }
+  if ($("#champName").value.trim().length > 120) { statusEl.textContent = "El nombre puede tener como máximo 120 caracteres."; return; }
 
   const payload = {
     name: $("#champName").value.trim(),
     status: $("#champStatus").value,
     min_belt: $("#champMinBelt").value,
-    max_age: Number($("#champMaxAge").value) || 18,
+    ...numbers,
     registration_opens_at: new Date(opensLocal).toISOString(),
     registration_closes_at: new Date(closesLocal).toISOString(),
-    questions_per_match: Number($("#champQuestionsPerMatch").value) || 5,
-    time_limit_easy_seconds: Number($("#champTimeEasy").value) || 60,
-    time_limit_medium_seconds: Number($("#champTimeMedium").value) || 90,
-    time_limit_hard_seconds: Number($("#champTimeHard").value) || 120,
-    rules_text: $("#champRulesText").value.trim() || null,
+    rules_text: $("#champRulesText").value.trim().slice(0, 2000) || null,
   };
 
-  statusEl.textContent = "Guardando...";
+  statusEl.textContent = "Guardando…";
   try {
     if (state.championship?.id) {
       await supabaseRest(`championships?id=eq.${state.championship.id}`, {
@@ -3606,7 +3617,7 @@ async function saveChampionshipConfig() {
       });
     }
     statusEl.textContent = "";
-    notify("Configuracion del campeonato guardada.");
+    notify("Configuración del campeonato guardada.");
     await loadChampionshipConfig();
   } catch (error) {
     console.error("No se pudo guardar el campeonato:", error);
@@ -3622,21 +3633,25 @@ async function saveChampionshipResendKey() {
     statusEl.textContent = "Pega tu API key de Resend antes de guardar.";
     return;
   }
-  statusEl.textContent = "Guardando...";
+  if (value.length < 16) {
+    statusEl.textContent = "La clave parece incompleta. No se guardó nada.";
+    return;
+  }
+  statusEl.textContent = "Guardando…";
   try {
     await supabaseFunctionInvoke("save-app-secret", { name: "resend_api_key", value });
-    input.value = "";
-    statusEl.textContent = "Clave guardada de forma cifrada.";
+    statusEl.textContent = "Clave guardada de forma cifrada. No se puede volver a ver.";
     notify("Clave de Resend guardada.");
   } catch (error) {
-    console.error("No se pudo guardar la clave de Resend:", error);
     statusEl.textContent = `No se pudo guardar: ${error.message}`;
+  } finally {
+    input.value = "";
   }
 }
 
 async function runChampionshipDraw() {
   if (!state.championship?.id) {
-    notify("Guarda la configuracion del campeonato primero.");
+    notify("Guarda la configuración del campeonato primero.");
     return;
   }
   const scheduledLocal = $("#champDrawScheduledAt").value;
@@ -3644,15 +3659,31 @@ async function runChampionshipDraw() {
     notify("Elige la fecha y hora del combate.");
     return;
   }
-  if (!window.confirm("Esto sorteara la ronda 1 entre todos los inscritos y les enviara un correo. Esta accion no se puede deshacer. ¿Continuar?")) return;
+  const windowHours = Number($("#champDrawWindowHours").value);
+  if (!Number.isInteger(windowHours) || windowHours < 1 || windowHours > 168) {
+    notify("La ventana debe ser un número entero de horas entre 1 y 168.");
+    return;
+  }
+  if (new Date(scheduledLocal).getTime() < Date.now() + 5 * 60000) {
+    notify("La fecha y hora del combate debe estar en el futuro.");
+    return;
+  }
+  if (state.championship.status !== "registration_closed") {
+    notify("Para sortear, guarda primero el estado “Inscripciones cerradas”.");
+    return;
+  }
+  const registered = state.championshipRegistrations.length;
+  if (!window.confirm(`Se sorteará la ronda 1 entre ${registered} inscrito(s) y se enviará un correo a cada participante con el combate del ${new Date(scheduledLocal).toLocaleString("es-EC")}.\n\nEsto NO se puede deshacer. ¿Continuar?`)) return;
 
+  const drawButton = $("#champDrawRound1");
+  drawButton.disabled = true;
   const resultEl = $("#champDrawResult");
-  resultEl.textContent = "Sorteando y enviando correos...";
+  resultEl.textContent = "Sorteando y enviando correos…";
   try {
     const result = await supabaseFunctionInvoke("championship-draw-round1", {
       championship_id: state.championship.id,
       scheduled_at: new Date(scheduledLocal).toISOString(),
-      window_hours: Number($("#champDrawWindowHours").value) || 24,
+      window_hours: windowHours,
     });
     if (result.error) {
       resultEl.innerHTML = `<p class="news-run-error">${esc(result.error)}</p>`;
@@ -3667,6 +3698,9 @@ async function runChampionshipDraw() {
   } catch (error) {
     console.error("Error al sortear la ronda 1:", error);
     resultEl.innerHTML = `<p class="news-run-error">${esc(error.message)}</p>`;
+  } finally {
+    drawButton.disabled = false;
+    await loadChampionshipConfig();
   }
 }
 
@@ -3686,7 +3720,7 @@ async function loadChampionshipRegistrations() {
 function renderChampionshipRegistrations() {
   const container = $("#champRegistrationList");
   if (state.championshipRegistrations.length === 0) {
-    container.innerHTML = `<p class="muted">Todavia no hay inscritos.</p>`;
+    container.innerHTML = `<p class="muted">Todavía no hay inscritos.</p>`;
     return;
   }
   container.innerHTML = state.championshipRegistrations.map((r) => `
@@ -3694,13 +3728,24 @@ function renderChampionshipRegistrations() {
       <div class="news-run-head">
         <span class="badge ai">Inscrito</span>
         <strong>${esc(new Date(r.registered_at).toLocaleString("es-EC"))}</strong>
-        <span class="muted">usuario ${esc(r.user_id)} · cinturon ${esc(r.belt_at_registration)} · nacimiento ${esc(r.birthdate)}</span>
+        <span class="muted">participante ${esc(shortId(r.user_id))} · cinturón ${esc(r.belt_at_registration)} · edad ${esc(ageFromBirthdate(r.birthdate))}</span>
       </div>
     </div>
   `).join("");
 }
 
-const CHAMP_MATCH_STATUS_LABEL = { scheduled: "Programado", in_progress: "En curso", completed: "Completado", bye: "Bye (avanza directo)" };
+// Data minimisation: the console is shared, so it shows an age and a short id instead of a birthdate and a full user id.
+function shortId(id) { return String(id || "").slice(0, 8) || "—"; }
+function ageFromBirthdate(birthdate) {
+  const d = new Date(birthdate);
+  if (Number.isNaN(d.getTime())) return "—";
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age -= 1;
+  return `${age} años`;
+}
+
+const CHAMP_MATCH_STATUS_LABEL = { scheduled: "Programado", in_progress: "En curso", completed: "Completado", bye: "Pase directo (bye)" };
 
 async function loadChampionshipMatches() {
   if (!state.championship?.id) return;
@@ -3718,7 +3763,7 @@ async function loadChampionshipMatches() {
 function renderChampionshipMatches() {
   const container = $("#champMatchList");
   if (state.championshipMatches.length === 0) {
-    container.innerHTML = `<p class="muted">Todavia no se ha sorteado ninguna ronda.</p>`;
+    container.innerHTML = `<p class="muted">Todavía no se ha sorteado ninguna ronda.</p>`;
     return;
   }
   container.innerHTML = state.championshipMatches.map((m) => `
@@ -3728,8 +3773,8 @@ function renderChampionshipMatches() {
         <strong>Ronda ${esc(String(m.round))}</strong>
         <span class="muted">${esc(new Date(m.scheduled_at).toLocaleString("es-EC"))}</span>
       </div>
-      <p class="muted">Jugador 1: ${esc(m.player1_id)}${m.player2_id ? ` · Jugador 2: ${esc(m.player2_id)}` : " · (bye, sin oponente)"}</p>
-      ${m.winner_id ? `<p>Ganador: ${esc(m.winner_id)}</p>` : ""}
+      <p class="muted">Jugador 1: ${esc(shortId(m.player1_id))}${m.player2_id ? ` · Jugador 2: ${esc(shortId(m.player2_id))}` : " · (bye, sin oponente)"}</p>
+      ${m.winner_id ? `<p>Ganador: ${esc(shortId(m.winner_id))}</p>` : ""}
     </div>
   `).join("");
 }

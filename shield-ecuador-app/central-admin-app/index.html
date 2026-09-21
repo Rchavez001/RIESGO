@@ -536,7 +536,7 @@
 
           <div class="split">
             <article class="card">
-              <h2>Configuracion del campeonato activo</h2>
+              <h2>Configuración del campeonato activo</h2>
               <div class="form-grid compact">
                 <label>
                   Nombre
@@ -545,7 +545,7 @@
                 <label>
                   Estado
                   <select id="champStatus">
-                    <option value="draft">Borrador (nadie lo ve todavia)</option>
+                    <option value="draft">Borrador (nadie lo ve todavía)</option>
                     <option value="registration_open">Inscripciones abiertas</option>
                     <option value="registration_closed">Inscripciones cerradas</option>
                     <option value="in_progress">En curso</option>
@@ -553,52 +553,52 @@
                   </select>
                 </label>
                 <label>
-                  Cinturon requerido
+                  Cinturón requerido
                   <select id="champMinBelt">
                     <option value="white">Blanco</option>
                     <option value="yellow">Amarillo</option>
                     <option value="orange">Naranja</option>
                     <option value="green">Verde</option>
                     <option value="blue">Azul</option>
-                    <option value="brown">Marron</option>
+                    <option value="brown">Marrón</option>
                     <option value="black" selected>Negro</option>
                   </select>
                 </label>
                 <label>
-                  Edad maxima
-                  <input id="champMaxAge" type="number" min="1" value="18" />
+                  Edad máxima
+                  <input id="champMaxAge" type="number" min="1" max="100" value="18" />
                 </label>
                 <label>
-                  Inscripcion abre
+                  Inscripción abre
                   <input id="champRegOpens" type="datetime-local" />
                 </label>
                 <label>
-                  Inscripcion cierra
+                  Inscripción cierra
                   <input id="champRegCloses" type="datetime-local" />
                 </label>
                 <label>
                   Preguntas por combate
-                  <input id="champQuestionsPerMatch" type="number" min="1" value="5" />
+                  <input id="champQuestionsPerMatch" type="number" min="1" max="20" value="5" />
                 </label>
                 <label>
-                  Tiempo pregunta facil (seg)
-                  <input id="champTimeEasy" type="number" min="1" value="60" />
+                  Tiempo pregunta fácil (seg)
+                  <input id="champTimeEasy" type="number" min="5" max="600" value="60" />
                 </label>
                 <label>
                   Tiempo pregunta media (seg)
-                  <input id="champTimeMedium" type="number" min="1" value="90" />
+                  <input id="champTimeMedium" type="number" min="5" max="600" value="90" />
                 </label>
                 <label>
-                  Tiempo pregunta dificil (seg)
-                  <input id="champTimeHard" type="number" min="1" value="120" />
+                  Tiempo pregunta difícil (seg)
+                  <input id="champTimeHard" type="number" min="5" max="600" value="120" />
                 </label>
               </div>
               <label>
-                Reglas (texto que veran los estudiantes)
-                <textarea id="champRulesText" rows="5" placeholder="Ej. Participan cinturones negros hasta 18 anos. Cada combate consiste en 5 preguntas..."></textarea>
+                Reglas (texto que verán los estudiantes)
+                <textarea id="champRulesText" rows="5" maxlength="2000" placeholder="Ej. Participan cinturones negros hasta 18 años. Cada combate consiste en 5 preguntas..."></textarea>
               </label>
               <p id="champConfigStatus" class="muted"></p>
-              <button id="champSaveConfig" class="btn primary">Guardar configuracion</button>
+              <button id="champSaveConfig" class="btn primary" type="button">Guardar configuración</button>
             </article>
 
             <article class="card">
@@ -607,8 +607,8 @@
               <label>
                 API Key de Resend
                 <span class="news-provider-key-row">
-                  <input id="champResendKey" type="password" placeholder="re_..." autocomplete="off" />
-                  <button id="champResendKeySave" class="btn secondary small">Guardar clave</button>
+                  <input id="champResendKey" type="password" placeholder="re_..." autocomplete="new-password" spellcheck="false" aria-label="API Key de Resend" />
+                  <button id="champResendKeySave" class="btn secondary small" type="button">Guardar clave</button>
                 </span>
               </label>
               <p id="champResendStatus" class="muted"></p>
@@ -616,15 +616,15 @@
               <div class="section-toolbar compact" style="margin-top:20px;">
                 <h2>Sortear ronda 1</h2>
               </div>
-              <p class="muted">Empareja aleatoriamente a todos los inscritos y les envia un correo con la fecha/hora de su combate.</p>
+              <p class="muted">Empareja al azar a todos los inscritos y les envía un correo con la fecha y hora de su combate. Requiere que el estado sea “Inscripciones cerradas”. <strong>No se puede deshacer.</strong></p>
               <div class="form-grid compact">
                 <label>
                   Fecha y hora del combate
                   <input id="champDrawScheduledAt" type="datetime-local" />
                 </label>
                 <label>
-                  Ventana para completarlo (horas)
-                  <input id="champDrawWindowHours" type="number" min="1" value="24" />
+                  Ventana para completarlo (horas, 1 a 168)
+                  <input id="champDrawWindowHours" type="number" min="1" max="168" value="24" />
                 </label>
               </div>
               <button id="champDrawRound1" class="btn primary">Sortear ronda 1 y enviar correos</button>
@@ -635,15 +635,16 @@
           <article class="card">
             <div class="section-toolbar compact">
               <h2>Inscritos</h2>
-              <button id="champRefreshRegistrations" class="btn secondary small">Actualizar</button>
+              <button id="champRefreshRegistrations" class="btn secondary small" type="button">Actualizar</button>
             </div>
+            <p class="muted">Por privacidad se muestra la edad, no la fecha de nacimiento, y un identificador corto.</p>
             <div id="champRegistrationList" class="news-run-log"></div>
           </article>
 
           <article class="card">
             <div class="section-toolbar compact">
               <h2>Combates</h2>
-              <button id="champRefreshMatches" class="btn secondary small">Actualizar</button>
+              <button id="champRefreshMatches" class="btn secondary small" type="button">Actualizar</button>
             </div>
             <div id="champMatchList" class="news-run-log"></div>
           </article>
