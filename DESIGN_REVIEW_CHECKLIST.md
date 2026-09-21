@@ -62,7 +62,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | A9 | Admin › Preguntas abiertas | ✅ | ✅ | ✅ | ✅ | **done** |
 | A10 | Admin › Campeonato | ✅ | ✅ | ✅ | ✅ | **done** |
 | A11 | Admin › Centro de Seguridad | ✅ | ✅ | ✅ | ✅ | **done** |
-| A12 | Admin › Usuarios | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| A12 | Admin › Usuarios | ✅ | ✅ | ✅ | ✅ | **done** |
 | A13 | Admin › Ocupaciones | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A14 | Admin › Propaganda | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A15 | Admin › Reportes | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -343,3 +343,12 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Testing:** `tests/admin/security-center.spec.ts` × 7 perfiles (9 pruebas): métricas exactas, texto hostil como texto, **CSV** (celdas peligrosas, comillas, metadatos), PDF, validación del umbral (webhook http/interno, correo, rangos) sin llamar a la función, interruptor activo, kata por teclado, fallo de eventos, targets/desbordes.
 - **No probado en vivo:** las funciones desplegadas responden 401 a la clave pública; el envío real de un webhook no se pudo ejecutar sin la clave de servicio.
 - **Decisión del dueño:** (1) el diagnóstico con IA y la conversión a kata se apoyan en eventos con texto externo: hay revisión humana antes de publicar (bien), pero conviene que el prompt trate esos textos como datos; (2) `security_config_audit` guarda quién cambió cada umbral pero el "quién" es siempre `central-admin` (credencial compartida); (3) los correos de alerta salen de `onboarding@resend.dev` salvo que se defina `CHAMPIONSHIP_EMAIL_FROM` (misma nota que A10).
+
+### A12 — Admin › Usuarios (2026-09-21) · done
+- **Hallazgo (maqueta con personas inventadas):** la pantalla listaba **tres usuarios escritos en el código** ("Ana Paredes", "Luis Mora", "Rosa Vera") con avance y "inquietud principal" inventados, marcada como "Modo local / Maqueta". El botón **"Dar de baja seleccionados"** solo cambiaba una marca en el navegador y avisaba "N usuario(s) dados de baja": **no daba de baja a nadie**. Con 86 personas registradas en producción, el administrador miraba una lista falsa.
+- **Cambios:** el panel muestra ahora los **usuarios reales**: resumen (total 86, nuevos en 30 días 80, con autorización de tratamiento de datos 82, administradores 1; migración **067** `admin_user_summary()`, solo `service_role`, verificado: con la clave pública responde 401), reparto por cinturón con barras y una lista paginada (25 por página) con filtros por cinturón y rol. Eliminado el botón simulado.
+- **Privacidad por diseño (A02, LOPDP):** nombres, correos y teléfonos se guardan **cifrados** y la consola compartida **no los muestra**. La lista solo pide campos no identificativos (identificador corto de 8 caracteres, cinturón, puntos, rol, sector, **dominio** de la organización, fechas, si autorizó el tratamiento de datos); una prueba comprueba que la consulta no incluye `full_name`, `email`, `phone`, `location` ni `birthdate`, y que el identificador completo no aparece en la página. El dominio de organización sí se muestra (identifica una empresa, no a una persona).
+- **Dato útil que salió:** en producción `onboarding_completed` es **0 de 86**: el flujo de incorporación nunca se marca como completado (o ya no se usa). Conviene revisar si es un fallo.
+- **Responsive / A11y:** tabla con `<caption>`, `scope` y celda de identificador como `<th scope="row">`, dentro de una caja con scroll horizontal; paginador con estado `role=status`; filtros y botones ≥44 px; sin desbordes.
+- **Testing:** `tests/admin/users.spec.ts` × 7 perfiles (7 pruebas): cifras y lista reales (y ausencia de los tres inventados), sin "dar de baja" simulado + explicación de privacidad, campos pedidos sin PII, id corto y datos como texto, paginación y filtros (parámetros exactos), fallo, tabla/targets. Suite admin completa sin fallos.
+- **Decisión del dueño:** hoy **no hay forma de suspender a un usuario desde la consola** (nunca la hubo: era simulada). Hacerlo bien exige una acción real —p. ej. bloquear la cuenta en Supabase Auth— con confirmación, motivo, registro de quién la hizo (hoy la credencial es compartida) y una vía de reversión. También faltan las funciones de derechos ARCO (acceso, rectificación, eliminación) sobre estos datos.

@@ -868,27 +868,69 @@
         <section id="users" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">USUARIOS <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Maqueta]</span></span>
-              <h2>Estadistica y bajas</h2>
+              <span class="label">EN VIVO · PERSONAS REGISTRADAS</span>
+              <h2>Usuarios</h2>
+              <p class="muted">Solo datos que no identifican a nadie a simple vista: nombres y correos están cifrados y esta consola no los muestra. Cada persona aparece con un identificador corto.</p>
+              <p id="usersNote" class="muted" role="status">Cargando…</p>
             </div>
-            <button id="bulkSuspend" class="btn danger">Dar de baja seleccionados</button>
+            <button id="refreshUsers" class="btn secondary" type="button">Actualizar</button>
           </div>
-          <div class="card">
-            <table class="user-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Usuario</th>
-                  <th>Dojo</th>
-                  <th>Avance</th>
-                  <th>Preguntas</th>
-                  <th>Inquietud principal</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody id="userRows"></tbody>
-            </table>
+
+          <div class="metric-grid" id="userMetricGrid" aria-busy="true">
+            <article class="metric"><span>Usuarios registrados</span><strong id="userMetricTotal">…</strong></article>
+            <article class="metric"><span>Nuevos en 30 días</span><strong id="userMetricNew">…</strong></article>
+            <article class="metric"><span>Autorizaron el tratamiento de datos</span><strong id="userMetricAuthorized">…</strong></article>
+            <article class="metric"><span>Administradores</span><strong id="userMetricAdmins">…</strong></article>
           </div>
+
+          <div class="split">
+            <article class="card">
+              <h2>Por cinturón</h2>
+              <div id="userBelts" class="topic-list"></div>
+            </article>
+            <article class="card">
+              <h2>Lista</h2>
+              <div class="form-grid compact">
+                <label>Cinturón
+                  <select id="userFilterBelt">
+                    <option value="">Todos</option>
+                    <option value="white">Blanco</option><option value="yellow">Amarillo</option><option value="orange">Naranja</option>
+                    <option value="green">Verde</option><option value="blue">Azul</option><option value="brown">Marrón</option><option value="black">Negro</option>
+                  </select>
+                </label>
+                <label>Rol
+                  <select id="userFilterRole"><option value="">Todos</option><option value="user">Usuario</option><option value="admin">Administrador</option></select>
+                </label>
+              </div>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="table-scroll">
+              <table class="user-table data-table">
+                <caption class="sr-only">Personas registradas (sin nombre ni correo)</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Identificador</th>
+                    <th scope="col">Cinturón</th>
+                    <th scope="col">Puntos</th>
+                    <th scope="col">Rol</th>
+                    <th scope="col">Sector</th>
+                    <th scope="col">Organización</th>
+                    <th scope="col">Registro</th>
+                    <th scope="col">Última evaluación</th>
+                    <th scope="col">Autorizó datos</th>
+                  </tr>
+                </thead>
+                <tbody id="userRows"></tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <button id="userPrev" class="btn secondary small" type="button">Anterior</button>
+              <span id="userPageInfo" class="muted" role="status"></span>
+              <button id="userNext" class="btn secondary small" type="button">Siguiente</button>
+            </div>
+          </article>
         </section>
 
         <section id="occupations" class="panel">

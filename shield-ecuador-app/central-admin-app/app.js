@@ -99,6 +99,8 @@ function init() {
   void loadOverviewMetrics();
   void loadDojoStats();
   void loadOpenQuestionTopics();
+  void loadUsersSummary();
+  void loadUsersPage();
   void loadQuestionsFromSupabase();
   void loadNewsAlertsFromSupabase();
   void loadActor();
@@ -241,7 +243,11 @@ function bindActions() {
   $("#saveQuestions").addEventListener("click", saveQuestionsFromForm);
   $("#refreshAiProviders").addEventListener("click", loadNewsProvidersFromSupabase);
   $("#refreshOpenQuestions").addEventListener("click", loadOpenQuestionTopics);
-  $("#bulkSuspend").addEventListener("click", suspendSelectedUsers);
+  $("#refreshUsers").addEventListener("click", () => { void loadUsersSummary(); void loadUsersPage(); });
+  $("#userPrev").addEventListener("click", () => { userView.offset = Math.max(0, userView.offset - USER_PAGE_SIZE); void loadUsersPage(); });
+  $("#userNext").addEventListener("click", () => { userView.offset += USER_PAGE_SIZE; void loadUsersPage(); });
+  $("#userFilterBelt").addEventListener("change", (e) => { userView.belt = e.target.value; userView.offset = 0; void loadUsersPage(); });
+  $("#userFilterRole").addEventListener("change", (e) => { userView.role = e.target.value; userView.offset = 0; void loadUsersPage(); });
   $("#addOccupation").addEventListener("click", addOccupation);
   $("#saveOccupation").addEventListener("click", saveOccupation);
   $("#deleteOccupation").addEventListener("click", deleteOccupation);
@@ -313,7 +319,6 @@ function renderAll() {
   renderDojos();
   renderQuestions();
   renderAiProviders();
-  renderUsers();
   renderCampaigns();
   renderNewsAgent();
   renderNewsAlerts();
@@ -1806,18 +1811,74 @@ async function loadOpenQuestionTopics() {
   }
 }
 
+// Usuarios: the real `users` table. The panel used to list three invented people ("Ana Paredes"…) with fake progress and a
+// "Dar de baja seleccionados" button that only flipped a flag in the browser. Names and emails are stored encrypted, so
+// this view shows non-identifying fields only (short id, belt, points, role, sector, organisation domain, dates, consent).
+const USER_PAGE_SIZE = 25;
+const userView = { offset: 0, belt: "", role: "", total: 0, rows: [] };
+const BELT_ES = { white: "blanco", yellow: "amarillo", orange: "naranja", green: "verde", blue: "azul", brown: "marrón", black: "negro" };
+
+async function loadUsersSummary() {
+  const grid = $("#userMetricGrid");
+  grid.setAttribute("aria-busy", "true");
+  const put = (id, v) => { $(id).textContent = v === null || v === undefined ? "—" : Number(v).toLocaleString("es-EC"); };
+  try {
+    const sum = await supabaseRest("rpc/admin_user_summary", { method: "POST", body: "{}" });
+    put("#userMetricTotal", sum.total); put("#userMetricNew", sum.new_30d); put("#userMetricAuthorized", sum.authorized); put("#userMetricAdmins", sum.admins);
+    const belts = Object.entries(sum.by_belt || {}).sort((x, y) => y[1] - x[1]);
+    const max = Math.max(1, ...belts.map(([, n]) => n));
+    $("#userBelts").innerHTML = belts.map(([belt, n]) => `<div class="topic-row topic-bar"><strong>${esc(BELT_ES[belt] || belt)}</strong><span>${esc(Number(n).toLocaleString("es-EC"))} ${n === 1 ? "persona" : "personas"}</span><div class="bar-track" aria-hidden="true"><i style="width:${Math.max(6, Math.round((n / max) * 100))}%"></i></div></div>`).join("") || `<p class="muted">Sin datos.</p>`;
+    $("#usersNote").textContent = `${Number(sum.total).toLocaleString("es-EC")} personas registradas (datos de la base de datos en vivo).`;
+  } catch (error) {
+    console.warn("No se pudo cargar el resumen de usuarios:", error);
+    ["#userMetricTotal", "#userMetricNew", "#userMetricAuthorized", "#userMetricAdmins"].forEach((id) => put(id, null));
+    $("#userBelts").innerHTML = "";
+    $("#usersNote").textContent = "No se pudo leer el resumen de usuarios. Pulsa Actualizar.";
+  } finally {
+    grid.setAttribute("aria-busy", "false");
+  }
+}
+
+async function loadUsersPage() {
+  const filters = [];
+  if (Object.keys(BELT_ES).includes(userView.belt)) filters.push(`belt=eq.${userView.belt}`);
+  if (["user", "admin"].includes(userView.role)) filters.push(`role=eq.${userView.role}`);
+  const query = `users?select=id,belt,role,total_points,sector,email_domain,created_at,last_evaluation_at,data_processing_authorized&order=created_at.desc&limit=${USER_PAGE_SIZE}&offset=${userView.offset}${filters.length ? `&${filters.join("&")}` : ""}`;
+  try {
+    const res = await fetch(`/api/rest/v1/${query}`, { headers: { Prefer: "count=exact" } });
+    if (!res.ok) throw new Error(String(res.status));
+    userView.total = Number((res.headers.get("content-range") || "").split("/")[1]) || 0;
+    userView.rows = await res.json();
+  } catch (error) {
+    console.warn("No se pudo cargar la lista de usuarios:", error);
+    userView.rows = [];
+    userView.total = 0;
+    $("#userRows").innerHTML = `<tr><td colspan="9" role="alert">No se pudo cargar la lista. Pulsa Actualizar para reintentar.</td></tr>`;
+    $("#userPageInfo").textContent = "";
+    return;
+  }
+  renderUsers();
+}
+
 function renderUsers() {
-  $("#userRows").innerHTML = state.users.map((user) => `
+  const rows = userView.rows;
+  const fmt = (v) => (v ? new Date(v).toLocaleDateString("es-EC") : "—");
+  $("#userRows").innerHTML = rows.length ? rows.map((u) => `
     <tr>
-      <td><input type="checkbox" data-user-id="${esc(user.id)}" /></td>
-      <td>${esc(user.name)}</td>
-      <td>${esc(user.dojo)}</td>
-      <td>${user.progress}%</td>
-      <td>${user.questions}</td>
-      <td>${esc(user.topic)}</td>
-      <td><span class="status ${esc(user.status)}">${esc(user.status)}</span></td>
-    </tr>
-  `).join("");
+      <th scope="row"><code>${esc(shortId(u.id))}</code></th>
+      <td>${esc(BELT_ES[u.belt] || u.belt || "—")}</td>
+      <td>${esc(String(Number(u.total_points) || 0))}</td>
+      <td>${esc(u.role === "admin" ? "administrador" : u.role || "—")}</td>
+      <td>${esc(u.sector || "—")}</td>
+      <td>${esc(u.email_domain || "—")}</td>
+      <td>${esc(fmt(u.created_at))}</td>
+      <td>${esc(fmt(u.last_evaluation_at))}</td>
+      <td>${u.data_processing_authorized ? "Sí" : "No"}</td>
+    </tr>`).join("") : `<tr><td colspan="9">No hay usuarios con estos filtros.</td></tr>`;
+  const from = rows.length ? userView.offset + 1 : 0;
+  $("#userPageInfo").textContent = `Mostrando ${from}–${userView.offset + rows.length} de ${userView.total.toLocaleString("es-EC")}`;
+  $("#userPrev").disabled = userView.offset === 0;
+  $("#userNext").disabled = userView.offset + USER_PAGE_SIZE >= userView.total;
 }
 
 const SUPABASE_PROJECT_URL = "https://wbbcjiqzbzswxsmwjqlw.supabase.co";
@@ -2307,16 +2368,6 @@ function logout() {
   } catch (e) {
     window.location.href = "/logged-out";
   }
-}
-
-function suspendSelectedUsers() {
-  const selectedIds = $$("[data-user-id]:checked").map((input) => input.dataset.userId);
-  state.users.forEach((user) => {
-    if (selectedIds.includes(user.id)) user.status = "suspendido";
-  });
-  persist(`${selectedIds.length} usuario(s) dados de baja.`);
-  renderUsers();
-  renderMetrics();
 }
 
 function getSelectedDojo() {
