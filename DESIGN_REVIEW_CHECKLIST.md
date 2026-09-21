@@ -53,7 +53,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | A0 | Admin: shell, navegación lateral, auth (`central-admin-app`) | ✅ | ✅ | ✅ | ✅ | **done** |
 | A1 | Admin › Resumen | ✅ | ✅ | ✅ | ✅ | **done** |
 | A2 | Admin › Dojos y progreso | ✅ | ✅ | ✅ | ✅ | **done** |
-| A3 | Admin › Preguntas | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| A3 | Admin › Preguntas | ✅ | ✅ | ✅ | ✅ | **done** |
 | A4 | Admin › IA y auditoría | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A5 | Admin › Agente noticias | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A6 | Admin › Alertas IA | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -247,3 +247,14 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Testing:** `tests/admin/dojos.spec.ts` × 7 perfiles (6 pruebas): 7 dojos con cifras y título como texto (no HTML), regla real vs regla del borrador, borrador plegado + sin "Publicar", guardar avisa que es local, fallo de lectura, sin desbordes/targets. Suite admin: **133 pasan, 0 fallan** (49 omitidas por diseño).
 - **OWASP:** A01 — la agregación nunca se expone al público (solo `service_role`); A05 — se evita que un administrador crea que aplicó una configuración que no se aplicó (integridad de la operación). Datos de la respuesta siempre escapados.
 - **Decisión del dueño:** ¿quiere poder editar de verdad los dojos (nombre, tema, estado) desde la consola? Hoy solo el equipo técnico puede, por migración; construirlo requiere una tabla editable y RPC con auditoría.
+
+### A3 — Admin › Preguntas (2026-09-20) · done
+- **Qué es realmente este banco:** la tabla legada `questions`, que alimenta las respuestas del **Sensei IA** (`ask-sensei` busca allí preguntas aprobadas) y los casos que genera el agente de noticias. Las 30 preguntas de práctica y los katas del producto son `learning_items`, contenido versionado que no se edita desde aquí. El panel decía "20 manuales + 30 IA" y "Plan de 50 preguntas" (el modelo antiguo); ahora explica esto con claridad.
+- **Hallazgo de integridad (alto):** el botón **"Generar plan 50 preguntas"** reemplazaba el banco del dojo por 50 filas de relleno ("Pregunta manual 1 sobre…", "Respuesta correcta pendiente de ajustar.") y las **enviaba a la base**; las 20 "manuales" salían ya **aprobadas**. Además "Guardar preguntas" subía **todo el banco** cada vez, así que un solo clic sembraba respuestas de relleno aprobadas en la fuente que usa el Sensei. → Botón eliminado; las filas de ejemplo nacen "pendiente", se identifican y **nunca se envían** hasta que alguien escribe la respuesta y la explicación reales (aviso visible en cada una); "Guardar preguntas editadas" envía solo lo editado.
+- **Hallazgo de integridad (medio):** el estado local **"auditada"** (revisada por la IA, no por una persona) se guardaba como `approved`. → Solo la aprobación humana ("aprobada") queda `approved`; "auditada" → `pending`; se añadió "rechazada" → `rejected`.
+- **Validación:** una pregunta aprobada/auditada con texto, respuesta o explicación de menos de 10 caracteres bloquea el guardado y dice cuáles ("Revisa: #3"); la dificultad se limita a 1–5.
+- **Bug transversal corregido:** `supabaseRest` llamaba a `response.json()` aunque PostgREST responde `201/204` **sin cuerpo** a las escrituras con `return=minimal`: un guardado correcto se mostraba como "Supabase no aceptó el banco". Ahora solo se interpreta el cuerpo si existe (afecta a todos los paneles que guardan).
+- **UX/responsive/A11y:** selector "Dojo del borrador" en el propio panel (antes dependía del borrador que A2 dejó plegado); campos ≥44 px; botones a ancho completo en móvil; "Explicación" con tilde; mensajes con el número de preguntas guardadas.
+- **Testing:** `tests/admin/questions.spec.ts` × 7 perfiles (7 pruebas): texto y estructura (20+30, sin "plan"), selector de dojo, guardar sin editar = 0 escrituras, solo lo editado viaja (48 filas de ejemplo no) con `approved`/`pending` correctos y opción correcta, bloqueo por validación, HTML hostil como texto, sin desbordes/targets. Suite admin completa: sin fallos.
+- **OWASP:** A08/A04 (integridad de datos): impide contaminar la fuente que usa el Sensei con respuestas de relleno o sin revisión humana; A03: texto escapado en `<textarea>` (probado con `</textarea><img onerror>` y `<script>`).
+- **Decisión del dueño:** las opciones erróneas que se guardan con cada pregunta son **fijas** ("Ignorar la alerta…", "Compartir credenciales para resolver más rápido…", "Desactivar controles…") y la correcta siempre es la "A". Sirven al Sensei (que solo usa la respuesta), pero no como examen: si algún día se usan como opción múltiple hay que redactar distractores por pregunta y barajarlos.

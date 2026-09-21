@@ -1954,3 +1954,12 @@ body.menu-open { overflow: hidden; }
 .draft-box > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 800; }
 .draft-box > summary:focus-visible { outline: 3px solid #fde68a; outline-offset: 2px; }
 .draft-flag { font-size: 12px; color: #f59e0b; font-weight: 700; }
+
+/* ── Row A3: Preguntas ─────────────────────────────────────────────────── */
+.question-dojo-pick { display: grid; gap: 6px; max-width: 360px; margin: 10px 0; }
+.question-dojo-pick select { min-height: 44px; }
+.question-editor textarea, .question-editor input, .question-editor select { min-height: 44px; }
+.question-editor textarea { min-height: 72px; }
+.placeholder-note { color: #f59e0b; }
+.question-editor-head, .question-editor label { min-width: 0; }
+@media (max-width: 720px) { .toolbar-actions, .toolbar-actions .btn { width: 100%; } }

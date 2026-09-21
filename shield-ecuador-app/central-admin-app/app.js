@@ -245,7 +245,7 @@ function bindNavigation() {
 
 function bindActions() {
   $("#addDojo").addEventListener("click", addDojo);
-  $("#generateQuestionPlan").addEventListener("click", generateQuestionPlan);
+  $("#questionDojoSelect").addEventListener("change", (e) => { state.selectedDojoId = e.target.value; ensureQuestionBanks(); renderDojos(); renderQuestions(); });
   $("#saveQuestions").addEventListener("click", saveQuestionsFromForm);
   $("#addAiProvider").addEventListener("click", addAiProvider);
   $("#testAiFlow").addEventListener("click", testAiFlow);
@@ -471,16 +471,15 @@ function createDefaultQuestions(dojo) {
     id: `${dojo.id}-manual-${index + 1}`,
     number: index + 1,
     source: "manual",
-    status: "aprobada",
+    // Placeholder rows must never look approved: an approved row is used as a source by the Sensei.
+    status: "pendiente",
     difficulty: Math.ceil((index + 1) / 4),
     kata: `Kata ${Math.min(7, Math.ceil((index + 1) / 3))}`,
     text: `Pregunta manual ${index + 1} sobre ${dojo.theme}`,
     answer: "Respuesta correcta pendiente de ajustar.",
     explanation: "Explicacion pendiente de ajustar.",
     createdAt: now,
-    // Manual questions start out already "aprobada" — stamp the approval
-    // date at creation instead of leaving it blank until someone re-saves.
-    approvedAt: now,
+    approvedAt: null,
   }));
 
   const ai = Array.from({ length: 30 }, (_, index) => ({
@@ -500,7 +499,15 @@ function createDefaultQuestions(dojo) {
   return [...manual, ...ai];
 }
 
+// Example rows created locally (createDefaultQuestions) carry these texts until someone writes the real ones.
+const PLACEHOLDER_ANSWERS = ["Respuesta correcta pendiente de ajustar.", "Respuesta generada pendiente de auditoria."];
+function isPlaceholderQuestion(question) {
+  return PLACEHOLDER_ANSWERS.includes(String(question.answer || "").trim());
+}
+
 function renderQuestions() {
+  const pick = $("#questionDojoSelect");
+  pick.innerHTML = state.dojos.map((dojo) => `<option value="${esc(dojo.id)}" ${dojo.id === state.selectedDojoId ? "selected" : ""}>${esc(dojo.name)}</option>`).join("");
   const bank = state.questionsByDojo[state.selectedDojoId] || [];
   const dojo = getSelectedDojo();
   $("#questionDojoName").textContent = dojo.name;
@@ -519,6 +526,7 @@ function questionEditor(question) {
         Pregunta
         <textarea data-field="text" rows="3">${esc(question.text)}</textarea>
       </label>
+      ${isPlaceholderQuestion(question) ? '<div class="muted small placeholder-note">Fila de ejemplo sin editar: no se guarda hasta que escribas la respuesta y la explicación reales.</div>' : ""}
       <div class="muted small">Explicación simple: ${esc(explainText(question.text))}</div>
       <label>
         Respuesta correcta
@@ -526,7 +534,7 @@ function questionEditor(question) {
       </label>
       <div class="muted small">Explicación simple: ${esc(explainText(question.answer))}</div>
       <label>
-        Explicacion
+        Explicación
         <textarea data-field="explanation" rows="2">${esc(question.explanation)}</textarea>
       </label>
       <div class="question-mini-grid">
@@ -544,6 +552,7 @@ function questionEditor(question) {
             <option value="aprobada" ${question.status === "aprobada" ? "selected" : ""}>aprobada</option>
             <option value="auditada" ${question.status === "auditada" ? "selected" : ""}>auditada</option>
             <option value="pendiente" ${question.status === "pendiente" ? "selected" : ""}>pendiente</option>
+            <option value="rechazada" ${question.status === "rechazada" ? "selected" : ""}>rechazada</option>
           </select>
         </label>
       </div>
@@ -563,25 +572,30 @@ async function saveQuestionsFromForm() {
     const wasApproved = question.status === "aprobada";
     editor.querySelectorAll("[data-field]").forEach((field) => {
       const key = field.dataset.field;
-      question[key] = key === "difficulty" ? Number(field.value) : field.value;
+      question[key] = key === "difficulty" ? Math.min(5, Math.max(1, Math.round(Number(field.value)) || 1)) : field.value;
     });
     if (!question.createdAt) question.createdAt = new Date().toISOString();
     if (question.status === "aprobada" && !wasApproved) {
       question.approvedAt = new Date().toISOString();
     }
   });
-  persist("Preguntas modificadas y guardadas.");
-  await saveQuestionsToSupabase(bank, getSelectedDojo());
+  const real = bank.filter((question) => !isPlaceholderQuestion(question));
+  const problems = real
+    .filter((question) => ["aprobada", "auditada"].includes(question.status))
+    .filter((question) => [question.text, question.answer, question.explanation].some((value) => String(value || "").trim().length < 10))
+    .map((question) => `#${question.number}`);
+  if (problems.length) {
+    window.alert(`No se guardó nada. Una pregunta aprobada o auditada necesita texto, respuesta y explicación de al menos 10 caracteres.\n\nRevisa: ${problems.join(", ")}`);
+    return;
+  }
+  if (!real.length) {
+    notify("No hay preguntas editadas para guardar: las filas de ejemplo no se envían.");
+    return;
+  }
+  persist("Preguntas editadas guardadas en este navegador.");
+  await saveQuestionsToSupabase(real, getSelectedDojo());
   renderMetrics();
   renderQuestions();
-}
-
-async function generateQuestionPlan() {
-  const dojo = getSelectedDojo();
-  state.questionsByDojo[dojo.id] = createDefaultQuestions(dojo);
-  renderQuestions();
-  persist("Plan de 50 preguntas regenerado para el dojo seleccionado.");
-  await saveQuestionsToSupabase(state.questionsByDojo[dojo.id], dojo);
 }
 
 function renderAiProviders() {
@@ -1659,14 +1673,14 @@ async function saveQuestionsToSupabase(bank, dojo) {
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify(payload),
     });
-    notify("Preguntas guardadas en Supabase para Cyber Dojo.");
+    notify(`${payload.length} pregunta(s) guardadas en la base de datos.`);
   } catch (error) {
     console.error("No se pudieron guardar preguntas en Supabase:", error);
     // A toast auto-dismisses in 3.2s — too fast to read a variable-length
     // Postgres/PostgREST error. This path is rare (only on save failure),
     // so the extra interruption of a blocking alert is worth it here to
     // make the real cause visible instead of a generic dead-end message.
-    window.alert(`Guardado local listo. Supabase no acepto el banco:\n\n${error.message}`);
+    window.alert(`Guardado en este navegador, pero la base de datos no aceptó el banco:\n\n${error.message}`);
   }
 }
 
@@ -1683,8 +1697,11 @@ async function supabaseRest(path, options = {}) {
     throw new Error(`${response.status} ${await response.text()}`);
   }
 
+  // PostgREST answers writes made with Prefer: return=minimal with 201/204 and an EMPTY body: parse only when there is one
+  // (response.json() on an empty body threw and made a successful save look like a failure).
   if (response.status === 204) return null;
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }
 
 function questionFromSupabase(row) {
@@ -1713,7 +1730,8 @@ function questionToSupabase(question, dojo) {
     options: buildOptions(question),
     active: true,
     source_type: question.source === "manual" ? "manual" : "incident_investigation",
-    audit_status: question.status === "pendiente" ? "pending" : "approved",
+    // Only a human "aprobada" is approved. "auditada" (checked by the AI, not yet by a person) stays pending; it used to be approved.
+    audit_status: question.status === "aprobada" ? "approved" : question.status === "rechazada" ? "rejected" : "pending",
     difficulty: Number(question.difficulty) || 1,
     kata_label: question.kata,
     answer_text: question.answer,

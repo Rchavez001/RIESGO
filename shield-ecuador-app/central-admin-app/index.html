@@ -185,22 +185,27 @@
         <section id="questions" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">BANCO DE PREGUNTAS</span>
-              <h2>20 manuales + 30 generadas por IA</h2>
+              <span class="label">BANCO DE PREGUNTAS DE APOYO</span>
+              <h2>Preguntas del Sensei y del agente de noticias</h2>
+              <p class="muted">Este banco alimenta las respuestas del Sensei IA y los casos generados a partir de noticias. Las 30 preguntas de práctica y los katas de cada dojo son contenido revisado y versionado en la base de datos: no se editan aquí.</p>
+              <label class="question-dojo-pick">
+                Dojo del borrador
+                <select id="questionDojoSelect"></select>
+              </label>
               <p class="muted">Dojo seleccionado: <strong id="questionDojoName">-</strong></p>
             </div>
             <div class="toolbar-actions">
-              <button id="saveQuestions" class="btn secondary">Guardar preguntas</button>
-              <button id="generateQuestionPlan" class="btn primary">Generar plan 50 preguntas</button>
+              <button id="saveQuestions" class="btn primary" type="button">Guardar preguntas editadas</button>
             </div>
           </div>
+          <p class="muted">Solo se guardan las preguntas que hayas <strong>editado</strong> (con su respuesta y explicación reales). Las filas de ejemplo sin editar nunca se envían a la base de datos.</p>
 
           <div class="question-grid">
             <article class="card">
               <div class="card-head">
                 <div>
                   <span class="label">MANUALES</span>
-                  <h2>20 ingresadas por equipo</h2>
+                  <h2>Ingresadas por el equipo</h2>
                 </div>
               </div>
               <div id="manualQuestions" class="question-list"></div>
@@ -210,7 +215,7 @@
               <div class="card-head">
                 <div>
                   <span class="label">IA</span>
-                  <h2>30 generadas y auditadas</h2>
+                  <h2>Generadas por IA</h2>
                 </div>
               </div>
               <div id="aiQuestions" class="question-list"></div>
