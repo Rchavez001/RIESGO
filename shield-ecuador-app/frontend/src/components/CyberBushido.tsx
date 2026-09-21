@@ -1,3 +1,4 @@
+import { campaignImageUrl, safeHttpUrl } from '../lib/safeUrl'
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -726,9 +727,11 @@ function CampaignAdOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ad, visible])
 
-  if (!ad || !ad.image_url || isFocusedFlow) return null
+  const imageSrc = campaignImageUrl(ad?.image_url, process.env.REACT_APP_SUPABASE_URL)
+  const linkHref = safeHttpUrl(ad?.link_url)
+  if (!ad || !imageSrc || isFocusedFlow) return null
 
-  const image = <img src={ad.image_url} alt={ad.message} />
+  const image = <img src={imageSrc} alt={ad.message} />
 
   function dismiss() {
     playSound('ad-out')
@@ -764,8 +767,8 @@ function CampaignAdOverlay() {
             >
               <X size={18} />
             </button>
-            {ad.link_url ? (
-              <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="campaign-ad-card">
+            {linkHref ? (
+              <a href={linkHref} target="_blank" rel="noopener noreferrer" className="campaign-ad-card">
                 {image}
               </a>
             ) : (

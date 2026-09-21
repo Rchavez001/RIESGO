@@ -1903,7 +1903,7 @@ async function loadCampaignsFromSupabase() {
     renderCampaigns();
   } catch (error) {
     console.warn("No se pudieron cargar las campanas:", error);
-    notify("No se pudieron cargar las campanas de propaganda.");
+    notify("No se pudieron cargar las campañas de propaganda.");
   }
 }
 
@@ -1942,8 +1942,11 @@ async function saveCampaignSettings() {
   const maxHeight = Number($("#adsMaxHeight").value);
   const statusEl = $("#adsSettingsStatus");
 
-  if (!maxKb || !maxWidth || !maxHeight || maxKb <= 0 || maxWidth <= 0 || maxHeight <= 0) {
-    statusEl.textContent = "Ingresa valores mayores a 0.";
+  const inRange = (n, max) => Number.isInteger(n) && n >= 1 && n <= max;
+  if (!inRange(maxKb, 1024) || !inRange(maxWidth, 4096) || !inRange(maxHeight, 4096)) {
+    // The storage bucket itself refuses files over 1 MB or that are not png/jpeg/webp, so a larger limit here would only
+    // let the admin choose an image the server then rejects.
+    statusEl.textContent = "Peso: entero de 1 a 1024 KB. Ancho y alto: enteros de 1 a 4096 px.";
     return;
   }
 
@@ -1959,8 +1962,8 @@ async function saveCampaignSettings() {
       }),
     });
     if (Array.isArray(rows) && rows[0]) state.campaignSettings = rows[0];
-    statusEl.textContent = "Limites guardados.";
-    notify("Limites de imagen actualizados.");
+    statusEl.textContent = "Límites guardados.";
+    notify("Límites de imagen actualizados.");
   } catch (error) {
     console.warn("No se pudieron guardar los limites:", error);
     statusEl.textContent = "No se pudo guardar. Intenta de nuevo.";
@@ -1993,15 +1996,15 @@ function renderTierWeightsForm() {
         <span>Valor</span>
       </div>
       <label>
-        Minimo (USD)
+        Mínimo (USD)
         <input type="number" min="0" class="tier-min" value="${tier.min_usd}" />
       </label>
       <label>
-        Maximo (USD)
+        Máximo (USD)
         <input type="number" min="0" class="tier-max" value="${tier.max_usd ?? ""}" placeholder="Sin tope" />
       </label>
       <label>
-        Prioridad (veces mas frecuente)
+        Prioridad (veces más frecuente)
         <input type="number" min="0.1" step="0.1" class="tier-weight" value="${tier.weight}" />
       </label>
     </div>
@@ -2044,9 +2047,18 @@ async function saveTierWeights() {
     weight: Number(row.querySelector(".tier-weight").value),
   }));
 
-  if (rows.some((r) => !(r.weight > 0) || r.min_usd < 0 || (r.max_usd !== null && r.max_usd < r.min_usd))) {
-    statusEl.textContent = "Revisa los valores: minimo/maximo/prioridad deben ser validos.";
+  if (rows.some((r) => !(r.weight > 0) || !(r.min_usd >= 0) || (r.max_usd !== null && !(r.max_usd >= r.min_usd)))) {
+    statusEl.textContent = "Revisa los valores: mínimo, máximo y prioridad deben ser números válidos (el máximo no puede ser menor que el mínimo).";
     return;
+  }
+  // Overlapping ranges would make the tier of a donation ambiguous.
+  const ordered = [...rows].sort((a, b) => a.min_usd - b.min_usd);
+  for (let k = 1; k < ordered.length; k += 1) {
+    const prev = ordered[k - 1];
+    if (prev.max_usd === null || ordered[k].min_usd <= prev.max_usd) {
+      statusEl.textContent = `Los rangos de los niveles ${prev.value_tier} y ${ordered[k].value_tier} se superponen. Cada nivel debe empezar después de donde termina el anterior.`;
+      return;
+    }
   }
 
   try {
@@ -2069,6 +2081,8 @@ async function saveTierWeights() {
   }
 }
 
+const CAMPAIGN_IMAGE_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+
 function handleCampaignImageSelected(event) {
   const file = event.target.files && event.target.files[0];
   const statusEl = $("#adImageStatus");
@@ -2084,8 +2098,15 @@ function handleCampaignImageSelected(event) {
   const settings = state.campaignSettings;
   const maxBytes = settings.max_image_kb * 1024;
 
+  if (!CAMPAIGN_IMAGE_TYPES[file.type]) {
+    statusEl.textContent = "Solo se permiten imágenes PNG, JPEG o WebP.";
+    event.target.value = "";
+    pendingCampaignImage = null;
+    return;
+  }
+
   if (file.size > maxBytes) {
-    statusEl.textContent = `La imagen pesa ${(file.size / 1024).toFixed(0)}KB. El maximo permitido es ${settings.max_image_kb}KB.`;
+    statusEl.textContent = `La imagen pesa ${(file.size / 1024).toFixed(0)} KB. El máximo permitido es ${settings.max_image_kb} KB.`;
     event.target.value = "";
     pendingCampaignImage = null;
     return;
@@ -2095,7 +2116,7 @@ function handleCampaignImageSelected(event) {
   const probe = new Image();
   probe.onload = () => {
     if (probe.naturalWidth > settings.max_image_width || probe.naturalHeight > settings.max_image_height) {
-      statusEl.textContent = `La imagen mide ${probe.naturalWidth}x${probe.naturalHeight}px. El maximo permitido es ${settings.max_image_width}x${settings.max_image_height}px.`;
+      statusEl.textContent = `La imagen mide ${probe.naturalWidth}×${probe.naturalHeight} px. El máximo permitido es ${settings.max_image_width}×${settings.max_image_height} px.`;
       event.target.value = "";
       pendingCampaignImage = null;
       URL.revokeObjectURL(objectUrl);
@@ -2105,7 +2126,7 @@ function handleCampaignImageSelected(event) {
     pendingCampaignImage = { file, previewUrl: objectUrl };
     previewImg.src = objectUrl;
     previewWrap.classList.remove("hidden");
-    statusEl.textContent = `Lista para subir: ${(file.size / 1024).toFixed(0)}KB, ${probe.naturalWidth}x${probe.naturalHeight}px.`;
+    statusEl.textContent = `Lista para subir: ${(file.size / 1024).toFixed(0)} KB, ${probe.naturalWidth}×${probe.naturalHeight} px.`;
   };
   probe.onerror = () => {
     statusEl.textContent = "No se pudo leer la imagen. Intenta con otro archivo.";
@@ -2115,12 +2136,15 @@ function handleCampaignImageSelected(event) {
 }
 
 async function uploadCampaignImage(file) {
-  const safeExt = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+  // The extension comes from the (allow-listed) MIME type, never from the file name: a "logo.html" with an image type
+  // used to be stored as .html in a public bucket.
+  const ext = CAMPAIGN_IMAGE_TYPES[file.type];
+  if (!ext) throw new Error("Tipo de imagen no permitido.");
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
   const response = await fetch(`/api/storage/v1/object/campaign-ads/${filename}`, {
     method: "POST",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": file.type },
     body: file,
   });
 
@@ -2134,20 +2158,20 @@ async function uploadCampaignImage(file) {
 function renderCampaigns() {
   const list = $("#campaignList");
   if (state.campaigns.length === 0) {
-    list.innerHTML = `<p class="muted">Todavia no hay campanas. Usa "Agregar campana" para crear la primera.</p>`;
+    list.innerHTML = `<p class="muted">Todavía no hay campañas. Usa “Agregar campaña” para crear la primera.</p>`;
   } else {
     list.innerHTML = state.campaigns.map((campaign) => {
       const donationLabel = campaign.donation_type === "continua"
-        ? `Continua (${campaign.donation_period_months || "?"}m)`
-        : "Unica";
+        ? `Continua (${esc(String(campaign.donation_period_months || "?"))} meses)`
+        : "Única";
       return `
-      <button class="campaign-row ${campaign.id === state.selectedCampaignId ? "active" : ""}" data-id="${esc(campaign.id)}">
+      <button type="button" class="campaign-row ${campaign.id === state.selectedCampaignId ? "active" : ""}" data-id="${esc(campaign.id)}" aria-pressed="${campaign.id === state.selectedCampaignId}">
         <div>
           <strong>${esc(campaign.name)}</strong>
-          <div class="muted">${esc(campaign.moment)} - ${campaign.duration_seconds}s - ${esc(campaign.validity_type)}</div>
-          <div class="muted">Valor ${campaign.value_tier ?? 1} - ${donationLabel}</div>
+          <div class="muted">${esc(campaign.moment)} · ${esc(String(Number(campaign.duration_seconds) || 0))} s · ${esc(campaign.validity_type)}</div>
+          <div class="muted">Valor ${esc(String(campaign.value_tier ?? 1))} · ${donationLabel}</div>
         </div>
-        <span class="badge ${CAMPAIGN_STATUS_BADGE[campaign.status] || "audit"}">${CAMPAIGN_STATUS_LABEL[campaign.status] || campaign.status}</span>
+        <span class="badge ${CAMPAIGN_STATUS_BADGE[campaign.status] || "audit"}">${esc(CAMPAIGN_STATUS_LABEL[campaign.status] || campaign.status)}</span>
       </button>
     `;
     }).join("");
@@ -2181,8 +2205,8 @@ function renderCampaigns() {
     if (campaign.donation_period_months) $("#adDonationPeriod").value = campaign.donation_period_months;
     $("#adValueTier").value = campaign.value_tier || 1;
     updatePriorityHint();
-    if (campaign.image_url) {
-      previewImg.src = campaign.image_url;
+    if (campaign.image_url && safeHttpUrl(campaign.image_url)) {
+      previewImg.src = safeHttpUrl(campaign.image_url);
       previewWrap.classList.remove("hidden");
     } else {
       previewWrap.classList.add("hidden");
@@ -2207,14 +2231,14 @@ function renderCampaigns() {
 function renderCampaignAudit() {
   const container = $("#campaignAuditLog");
   if (state.campaignAudit.length === 0) {
-    container.innerHTML = `<p class="muted">Todavia no hay cambios registrados.</p>`;
+    container.innerHTML = `<p class="muted">Todavía no hay cambios registrados.</p>`;
     return;
   }
 
-  const actionLabel = { creada: "creo", actualizada: "actualizo", estado_cambiado: "cambio el estado de" };
+  const actionLabel = { creada: "creó", actualizada: "actualizó", estado_cambiado: "cambió el estado de" };
 
   container.innerHTML = state.campaignAudit.map((entry) => {
-    const campaignName = entry.campaign && entry.campaign.name ? entry.campaign.name : "(campana eliminada)";
+    const campaignName = entry.campaign && entry.campaign.name ? entry.campaign.name : "(campaña eliminada)";
     const when = new Date(entry.created_at).toLocaleString("es-EC");
     const detail = entry.action === "estado_cambiado" && entry.details
       ? ` de "${esc(entry.details.from || "")}" a "${esc(entry.details.to || "")}"`
@@ -2264,14 +2288,34 @@ async function saveCampaign() {
   const message = $("#adMessage").value.trim();
 
   if (!name || !message) {
-    notify("Completa al menos el nombre y el mensaje de la campana.");
+    notify("Completa al menos el nombre y el mensaje de la campaña.");
+    return;
+  }
+  if (name.length > 120 || message.length > 500) {
+    notify("El nombre admite hasta 120 caracteres y el mensaje hasta 500.");
+    return;
+  }
+  // `Number(x) || 10` used to turn 0 (or an empty box) into 10 seconds without telling anyone.
+  const duration = Number($("#adDuration").value);
+  if (!Number.isInteger(duration) || duration < 1 || duration > 120) {
+    notify("La duración debe ser un número entero de segundos entre 1 y 120.");
+    return;
+  }
+  const link = $("#adLink").value.trim();
+  if (link && !/^https:\/\/[^\s]+$/i.test(link)) {
+    // The link opens for every user: https only (the database also refuses anything that is not http(s)).
+    notify("El enlace debe empezar por https:// y no puede tener espacios.");
     return;
   }
 
   const donationType = $("#adDonationType").value;
   const donationPeriod = Number($("#adDonationPeriod").value) || null;
-  if (donationType === "continua" && !donationPeriod) {
-    notify("Indica el periodo en meses para una donacion continua.");
+  if (donationType === "continua" && (!Number.isInteger(donationPeriod) || donationPeriod < 1 || donationPeriod > 120)) {
+    notify("Indica el periodo de la donación continua: meses, entero entre 1 y 120.");
+    return;
+  }
+  if (!$("#adTargetAll").checked && getTargetSectorsFromForm().length === 0) {
+    notify("Elige al menos un sector o marca “Todos los sectores”. Sin sectores, la campaña no se mostraría a nadie.");
     return;
   }
 
@@ -2280,10 +2324,10 @@ async function saveCampaign() {
   const payload = {
     name,
     moment: $("#adMoment").value,
-    duration_seconds: Number($("#adDuration").value) || 10,
+    duration_seconds: duration,
     validity_type: $("#adValidity").value,
     status: $("#adStatus").value,
-    link_url: $("#adLink").value.trim() || null,
+    link_url: link || null,
     message,
     target_all: targetAll,
     target_sectors: targetAll ? [] : getTargetSectorsFromForm(),
@@ -2311,7 +2355,7 @@ async function saveCampaign() {
         await logCampaignAudit(updated.id, "estado_cambiado", { from: previousStatus, to: updated.status });
       }
       await logCampaignAudit(updated.id, "actualizada", payload);
-      notify("Campana actualizada.");
+      notify("Campaña actualizada.");
     } else {
       const rows = await supabaseRest("central_admin_campaigns", {
         method: "POST",
@@ -2324,7 +2368,7 @@ async function saveCampaign() {
         state.selectedCampaignId = created.id;
         await logCampaignAudit(created.id, "creada", payload);
       }
-      notify("Campana creada.");
+      notify("Campaña creada.");
     }
 
     pendingCampaignImage = null;
@@ -2333,7 +2377,7 @@ async function saveCampaign() {
     void loadCampaignAuditFromSupabase();
   } catch (error) {
     console.warn("No se pudo guardar la campana:", error);
-    notify("No se pudo guardar la campana. Intenta de nuevo.");
+    notify("No se pudo guardar la campaña. Comprueba los datos e inténtalo de nuevo.");
   }
 }
 

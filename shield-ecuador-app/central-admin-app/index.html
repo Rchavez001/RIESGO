@@ -982,40 +982,40 @@
           <div class="section-toolbar">
             <div>
               <span class="label">PROPAGANDA Y VENTANAS EMERGENTES</span>
-              <h2>Campanas configurables</h2>
+              <h2>Campañas configurables</h2>
             </div>
-            <button id="addCampaign" class="btn primary">Agregar campana</button>
+            <button id="addCampaign" class="btn primary" type="button">Agregar campaña</button>
           </div>
 
           <article class="card">
-            <h2>Limites de imagen para toda subida</h2>
+            <h2>Límites de imagen para toda subida</h2>
             <p class="muted">Estos limites aplican a cualquier imagen que se suba en una campana. En la pantalla del usuario, la imagen se muestra al 10% del tamano de su pantalla.</p>
             <div class="form-grid compact">
               <label>
                 Peso maximo (KB)
-                <input id="adsMaxKb" type="number" min="1" />
+                <input id="adsMaxKb" type="number" min="1" max="1024" />
               </label>
               <label>
                 Ancho maximo (px)
-                <input id="adsMaxWidth" type="number" min="1" />
+                <input id="adsMaxWidth" type="number" min="1" max="4096" />
               </label>
               <label>
                 Alto maximo (px)
-                <input id="adsMaxHeight" type="number" min="1" />
+                <input id="adsMaxHeight" type="number" min="1" max="4096" />
               </label>
             </div>
             <div class="modal-actions">
-              <button id="saveAdsSettings" class="btn secondary">Guardar limites</button>
+              <button id="saveAdsSettings" class="btn secondary" type="button">Guardar límites</button>
               <span id="adsSettingsStatus" class="muted"></span>
             </div>
           </article>
 
           <article class="card">
-            <h2>Prioridad de propaganda por valor de donacion</h2>
+            <h2>Prioridad de propaganda por valor de donación</h2>
             <p class="muted">Un valor mas alto se exhibe con mas frecuencia, en proporcion directa a su prioridad (peso). Ajusta los rangos en USD o el peso de cada nivel sin necesidad de un despliegue de codigo.</p>
             <div id="tierWeightsGrid" class="tier-weights-grid"></div>
             <div class="modal-actions">
-              <button id="saveTierWeights" class="btn secondary">Guardar prioridades</button>
+              <button id="saveTierWeights" class="btn secondary" type="button">Guardar prioridades</button>
               <span id="tierWeightsStatus" class="muted"></span>
             </div>
           </article>
@@ -1027,7 +1027,7 @@
               <div class="form-grid">
                 <label>
                   Nombre
-                  <input id="adName" type="text" />
+                  <input id="adName" type="text" maxlength="120" />
                 </label>
                 <label>
                   Momento
@@ -1039,7 +1039,7 @@
                 </label>
                 <label>
                   Duracion en segundos
-                  <input id="adDuration" type="number" min="1" />
+                  <input id="adDuration" type="number" min="1" max="120" />
                 </label>
                 <label>
                   Vigencia
@@ -1059,12 +1059,12 @@
                 </label>
                 <label>
                   Enlace al hacer clic
-                  <input id="adLink" type="url" placeholder="https://..." />
+                  <input id="adLink" type="url" placeholder="https://..." autocomplete="off" />
                 </label>
               </div>
               <label>
                 Mensaje
-                <textarea id="adMessage" rows="3"></textarea>
+                <textarea id="adMessage" rows="3" maxlength="500"></textarea>
               </label>
               <div class="sector-target-box">
                 <span class="label">Sectores a los que se dirige</span>
@@ -1075,7 +1075,7 @@
                 <div id="adSectorList" class="sector-check-list"></div>
               </div>
               <div class="donation-priority-box">
-                <span class="label">Donacion y prioridad de exhibicion</span>
+                <span class="label">Donación y prioridad de exhibición</span>
                 <div class="form-grid compact">
                   <label>
                     Tipo de donacion
@@ -1086,7 +1086,7 @@
                   </label>
                   <label id="adDonationPeriodField">
                     Periodo (meses)
-                    <input id="adDonationPeriod" type="number" min="1" placeholder="Ej. 12" />
+                    <input id="adDonationPeriod" type="number" min="1" max="120" placeholder="Ej. 12" />
                   </label>
                 </div>
                 <label>
@@ -1104,13 +1104,13 @@
               </div>
               <p id="adImageStatus" class="muted"></p>
               <div class="modal-actions">
-                <button id="saveCampaign" class="btn primary">Guardar campana</button>
+                <button id="saveCampaign" class="btn primary" type="button">Guardar campaña</button>
               </div>
             </article>
           </div>
 
           <article class="card">
-            <h2>Historial de cambios (auditoria)</h2>
+            <h2>Historial de cambios (auditoría)</h2>
             <div id="campaignAuditLog" class="progression-preview"></div>
           </article>
         </section>
