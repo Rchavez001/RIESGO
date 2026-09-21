@@ -1119,8 +1119,8 @@
           <div class="section-toolbar report-hero">
             <div>
               <span class="label">REPORTES</span>
-              <h2>Centro BI de ingresos y propaganda</h2>
-              <p class="muted">Haz clic sobre cada figura para bajar de nivel: resumen, sector, campana y detalle temporal.</p>
+              <h2>Centro BI de accesos y propaganda</h2>
+              <p class="muted">Haz clic sobre cada figura para bajar de nivel: resumen, sector, campaña y detalle temporal.</p>
             </div>
           </div>
           <article class="card report-control-card">
@@ -1128,15 +1128,16 @@
               <label>
                 Periodo
                 <select id="reportPeriod">
-                  <option value="quincenal">Quincenal (15 dias)</option>
+                  <option value="quincenal">Quincenal (15 días)</option>
                   <option value="mensual">Mensual</option>
                   <option value="trimestral" selected>Trimestral</option>
                 </select>
               </label>
             </div>
             <div class="modal-actions">
-              <button id="runReport" class="btn primary">Generar reporte</button>
+              <button id="runReport" class="btn primary" type="button">Generar reporte</button>
               <span id="reportRange" class="muted"></span>
+              <span id="reportTruncation" class="muted" role="status"></span>
             </div>
           </article>
 
@@ -1145,18 +1146,21 @@
 
           <article class="card bi-card">
             <div class="card-heading">
-              <button id="biBackBtn" class="btn secondary bi-back hidden" aria-label="Volver al grafico anterior">&#8592; Volver</button>
+              <button type="button" id="biBackBtn" class="btn secondary bi-back hidden" aria-label="Volver al gráfico anterior">&#8592; Volver</button>
               <div>
                 <span id="biChartLevel" class="label">NIVEL 1</span>
                 <h2 id="biChartTitle">Vista general del reporte</h2>
-                <span id="biChartSubtitle" class="muted">Click en una figura para profundizar dentro del mismo grafico.</span>
+                <span id="biChartSubtitle" class="muted">Haz clic en una figura o en una fila de la tabla para profundizar.</span>
               </div>
             </div>
-            <div id="topChart" class="report-chart-3d"></div>
-            <table class="user-table">
+            <p id="biChartFallback" class="muted" role="status" hidden>El gráfico 3D no se pudo cargar en este navegador. Toda la información está en la tabla de abajo.</p>
+            <button id="biRotateToggle" class="btn secondary small bi-rotate" type="button" aria-pressed="false">Pausar rotación</button>
+            <div id="topChart" class="report-chart-3d" role="img" aria-label="Gráfico 3D de barras del nivel actual. La misma información está en la tabla que sigue."></div>
+            <div class="table-scroll"><table class="user-table data-table">
+              <caption class="sr-only">Detalle del nivel actual del reporte</caption>
               <thead id="reportDetailHead"><tr><th>Indicador</th><th>Total</th></tr></thead>
               <tbody id="reportDetailRows"></tbody>
-            </table>
+            </table></div>
           </article>
         </section>
       </main>

@@ -94,6 +94,7 @@ function init() {
   bindNavigation();
   bindMobileMenu();
   bindDelegatedActions();
+  bindReportChartControls();
   bindActions();
   renderAll();
   void loadOverviewMetrics();
@@ -2498,7 +2499,13 @@ function reportPeriodRange() {
 }
 
 function ensureChart(elId) {
-  if (typeof echarts === "undefined") return null;
+  const fallback = $("#biChartFallback");
+  if (typeof echarts === "undefined") {
+    // The CDN script failed (offline, blocked, or its integrity hash no longer matches): say so instead of an empty box.
+    if (fallback) fallback.hidden = false;
+    return null;
+  }
+  if (fallback) fallback.hidden = true;
   const dom = document.getElementById(elId);
   if (!dom) return null;
   return echarts.getInstanceByDom(dom) || echarts.init(dom);
@@ -2510,11 +2517,11 @@ function renderReportKpis(entries = [], impressions = [], campaigns = []) {
   const campaignCounts = campaignImpressionRows(campaigns, impressions);
   const topCampaign = campaignCounts[0];
   const kpis = [
-    { label: "Ingresos totales", value: entries.length, accent: "cyan" },
-    { label: "Ingresos con sector", value: withSector, accent: "green" },
+    { label: "Accesos totales", value: (state.reportTotals || {}).entries ?? entries.length, accent: "cyan" },
+    { label: "Accesos con sector", value: withSector, accent: "green" },
     { label: "Sectores activos", value: activeSectors, accent: "violet" },
-    { label: "Impresiones", value: impressions.length, accent: "pink" },
-    { label: "Campana lider", value: topCampaign ? topCampaign.name : "-", detail: topCampaign ? `${topCampaign.count} vistas` : "Sin datos", accent: "amber" },
+    { label: "Impresiones", value: (state.reportTotals || {}).impressions ?? impressions.length, accent: "pink" },
+    { label: "Campaña líder", value: topCampaign ? topCampaign.name : "-", detail: topCampaign ? `${topCampaign.count} vistas` : "Sin datos", accent: "amber" },
   ];
   const container = $("#reportKpis");
   if (!container) return;
@@ -2536,6 +2543,10 @@ async function runReport() {
   setReportPath([{ level: "summary", label: REPORT_LEVELS.summary }]);
 
   try {
+    const [entryTotal, impressionTotal] = await Promise.all([
+      countRows("app_entry_log", `&entered_at=gte.${encodeURIComponent(startIso)}&entered_at=lte.${encodeURIComponent(endIso)}`),
+      countRows("campaign_impressions", `&shown_at=gte.${encodeURIComponent(startIso)}&shown_at=lte.${encodeURIComponent(endIso)}`),
+    ]);
     const [entries, impressions, campaigns] = await Promise.all([
       supabaseRest(`app_entry_log?select=sector,entered_at&entered_at=gte.${encodeURIComponent(startIso)}&entered_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
       supabaseRest(`campaign_impressions?select=campaign_id,sector,shown_at&shown_at=gte.${encodeURIComponent(startIso)}&shown_at=lte.${encodeURIComponent(endIso)}&limit=5000`),
@@ -2548,11 +2559,21 @@ async function runReport() {
     state.lastEntryRows = entryRows;
     state.lastImpressionRows = impressionRows;
     state.lastCampaignRows = campaignRows;
+    state.reportTotals = { entries: entryTotal, impressions: impressionTotal };
+
+    // The lists are capped at 5000 rows each. Totals used to be "rows fetched", so a busy quarter silently showed 5000.
+    const truncated = entryTotal > entryRows.length || impressionTotal > impressionRows.length;
+    const truncEl = $("#reportTruncation");
+    if (truncEl) truncEl.textContent = truncated
+      ? `Los totales son exactos; los gráficos y el detalle usan una muestra de ${entryRows.length.toLocaleString("es-EC")} accesos y ${impressionRows.length.toLocaleString("es-EC")} impresiones de ${entryTotal.toLocaleString("es-EC")} y ${impressionTotal.toLocaleString("es-EC")}. Elige un periodo más corto para verlo completo.`
+      : "";
 
     renderReportKpis(entryRows, impressionRows, campaignRows);
     renderTopChart();
   } catch (error) {
     console.warn("No se pudo generar el reporte:", error);
+    state.reportTotals = null;
+    $("#reportKpis").innerHTML = `<p class="muted" role="alert">No se pudo generar el reporte. Pulsa “Generar reporte” para reintentar.</p>`;
     notify("No se pudo generar el reporte.");
   }
 }
@@ -2630,17 +2651,45 @@ function reportRowsToTable(headers, rows) {
   const head = $("#reportDetailHead");
   const body = $("#reportDetailRows");
   if (!head || !body) return;
-  head.innerHTML = `<tr>${headers.map((header) => `<th>${esc(header)}</th>`).join("")}</tr>`;
+  head.innerHTML = `<tr>${headers.map((header) => `<th scope="col">${esc(header)}</th>`).join("")}</tr>`;
   body.innerHTML = rows.length === 0
     ? `<tr><td colspan="${headers.length}" class="muted">Sin datos para este nivel del reporte.</td></tr>`
-    : rows.map((row) => `
+    : rows.map((row, index) => `
       <tr class="clickable-row">
-        ${row.cells.map((cell) => `<td>${esc(cell)}</td>`).join("")}
+        ${row.cells.map((cell, cellIndex) => cellIndex === 0 && typeof row.action === "function"
+          ? `<td><button type="button" class="link-button" data-report-row="${index}">${esc(cell)}</button></td>`
+          : `<td>${esc(cell)}</td>`).join("")}
       </tr>
     `).join("");
-  $$("#reportDetailRows .clickable-row").forEach((tr, index) => {
-    const row = rows[index];
-    if (row && typeof row.action === "function") tr.addEventListener("click", row.action);
+  $$("#reportDetailRows [data-report-row]").forEach((button) => {
+    const row = rows[Number(button.dataset.reportRow)];
+    if (row) button.addEventListener("click", row.action);
+  });
+}
+
+// The chart spins by itself: it must be possible to stop it, and it must not spin at all for people who asked for reduced motion.
+const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+function reportAutoRotate() {
+  return state.biRotate !== false && !reducedMotionQuery.matches;
+}
+
+function bindReportChartControls() {
+  const toggle = $("#biRotateToggle");
+  const sync = () => {
+    const paused = !reportAutoRotate();
+    toggle.setAttribute("aria-pressed", String(paused));
+    toggle.textContent = paused ? "Reanudar rotación" : "Pausar rotación";
+    const chart = typeof echarts !== "undefined" ? echarts.getInstanceByDom($("#topChart")) : null;
+    if (chart) chart.setOption({ grid3D: { viewControl: { autoRotate: reportAutoRotate() } } });
+  };
+  toggle.addEventListener("click", () => { state.biRotate = state.biRotate === false; sync(); });
+  reducedMotionQuery.addEventListener("change", sync);
+  if (reducedMotionQuery.matches) sync();
+  // Rotating the phone or resizing the window used to leave the chart at its old size (it was resized only on tab change).
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => { const chart = typeof echarts !== "undefined" ? echarts.getInstanceByDom($("#topChart")) : null; if (chart) chart.resize(); }, 150);
   });
 }
 
@@ -2677,7 +2726,7 @@ function biBar3DOption(rows, valueLabel, options = {}) {
         alpha: 23,
         beta: 32,
         distance: options.distance || 205,
-        autoRotate: true,
+        autoRotate: reportAutoRotate(),
         autoRotateSpeed: 2.5,
       },
       light: {
@@ -2746,7 +2795,15 @@ function renderBiChart({ level, title, subtitle, rows, valueLabel, headers, tabl
     chart.clear();
     return;
   }
-  chart.setOption(biBar3DOption(rows, valueLabel, { barSize: level === 1 ? 34 : undefined }), true);
+  try {
+    chart.setOption(biBar3DOption(rows, valueLabel, { barSize: level === 1 ? 34 : undefined }), true);
+  } catch (error) {
+    // No WebGL (old device, blocked GPU, remote desktop): the table below has the same data, so the report must not fail with it.
+    console.warn("El gráfico 3D no se pudo dibujar:", error);
+    const fallback = $("#biChartFallback");
+    if (fallback) fallback.hidden = false;
+    return;
+  }
   chart.off("click");
   chart.on("click", (params) => {
     const row = rows.find((item) => item.name === params.name);
@@ -2763,12 +2820,12 @@ function renderReportSummary() {
   const impressions = state.lastImpressionRows || [];
   const rows = [
     {
-      name: "Ingresos por sector",
+      name: "Accesos por sector",
       value: entries.filter((row) => row.sector).length,
       action: renderSectorLevel,
     },
     {
-      name: "Ingresos sin sector",
+      name: "Accesos sin sector",
       value: entries.filter((row) => !row.sector).length,
       action: () => renderCampaignLevel(ALL_SECTORS_LABEL),
     },
@@ -2781,12 +2838,12 @@ function renderReportSummary() {
   renderBiChart({
     level: 1,
     title: "Vista general del reporte",
-    subtitle: "Click en una figura para profundizar dentro del mismo grafico.",
+    subtitle: "Haz clic en una figura para profundizar dentro del mismo gráfico.",
     rows,
     valueLabel: "Total",
     headers: ["Indicador", "Total", "Siguiente nivel"],
     tableRows: rows.map((row) => ({
-      cells: [row.name, row.value, row.name === "Propaganda" ? "Campanas" : "Sectores / campanas"],
+      cells: [row.name, row.value, row.name === "Propaganda" ? "Campañas" : "Sectores / campañas"],
       action: row.action,
     })),
     path: [{ label: REPORT_LEVELS.summary, action: renderReportSummary }],
@@ -2803,12 +2860,12 @@ function renderSectorLevel() {
     }));
   renderBiChart({
     level: 2,
-    title: "Ingresos por sector",
-    subtitle: "Click en un sector para ver las campanas mostradas a ese grupo.",
+    title: "Accesos por sector",
+    subtitle: "Haz clic en un sector para ver las campañas mostradas a ese grupo.",
     rows,
-    valueLabel: "Ingresos",
-    headers: ["Sector", "Ingresos", "Siguiente nivel"],
-    tableRows: rows.map((row) => ({ cells: [row.name, row.value, "Campanas mostradas"], action: row.action })),
+    valueLabel: "Accesos",
+    headers: ["Sector", "Accesos", "Siguiente nivel"],
+    tableRows: rows.map((row) => ({ cells: [row.name, row.value, "Campañas mostradas"], action: row.action })),
     path: [
       { label: REPORT_LEVELS.summary, action: renderReportSummary },
       { label: REPORT_LEVELS.sectors, action: renderSectorLevel },
@@ -2832,11 +2889,11 @@ function renderCampaignLevel(sectorLabel) {
     .sort((a, b) => b.value - a.value);
   renderBiChart({
     level: 3,
-    title: `Campanas mostradas: ${sectorLabel}`,
-    subtitle: "Click en una campana para ver el detalle diario dentro del mismo grafico.",
+    title: `Campañas mostradas: ${sectorLabel}`,
+    subtitle: "Haz clic en una campaña para ver el detalle diario dentro del mismo gráfico.",
     rows,
     valueLabel: "Impresiones",
-    headers: ["Campana", "Creada", "Impresiones"],
+    headers: ["Campaña", "Creada", "Impresiones"],
     tableRows: rows.map((row) => ({
       cells: [row.name, row.campaign.created_at ? new Date(row.campaign.created_at).toLocaleDateString("es-EC") : "-", row.value],
       action: row.action,
@@ -2860,11 +2917,11 @@ function renderGlobalCampaignLevel() {
     }));
   renderBiChart({
     level: 2,
-    title: "Propaganda por campana",
-    subtitle: "Click en una campana para ver los sectores impactados.",
+    title: "Propaganda por campaña",
+    subtitle: "Haz clic en una campaña para ver los sectores impactados.",
     rows,
     valueLabel: "Impresiones",
-    headers: ["Campana", "Creada", "Impresiones"],
+    headers: ["Campaña", "Creada", "Impresiones"],
     tableRows: rows.map((row) => ({
       cells: [row.name, row.campaign.created_at ? new Date(row.campaign.created_at).toLocaleDateString("es-EC") : "-", row.value],
       action: row.action,
@@ -2893,10 +2950,10 @@ function renderCampaignSectorLevel(campaignId, campaignName) {
   renderBiChart({
     level: 3,
     title: `Sectores impactados: ${campaignName}`,
-    subtitle: "Click en un sector para ver el comportamiento diario de esta campana.",
+    subtitle: "Haz clic en un sector para ver el comportamiento diario de esta campaña.",
     rows,
     valueLabel: "Impresiones",
-    headers: ["Sector", "Campana", "Impresiones"],
+    headers: ["Sector", "Campaña", "Impresiones"],
     tableRows: rows.map((row) => ({ cells: [row.name, campaignName, row.value], action: row.action })),
     path: [
       { label: REPORT_LEVELS.summary, action: renderReportSummary },

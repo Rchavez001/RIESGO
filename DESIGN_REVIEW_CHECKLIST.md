@@ -65,7 +65,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | A12 | Admin › Usuarios | ✅ | ✅ | ✅ | ✅ | **done** |
 | A13 | Admin › Ocupaciones | ✅ | ✅ | ✅ | ✅ | **done** |
 | A14 | Admin › Propaganda | ✅ | ✅ | ✅ | ✅ | **done** |
-| A15 | Admin › Reportes | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| A15 | Admin › Reportes | ✅ sin scroll horizontal, controles ≥44 px, tabla con desplazamiento propio | ✅ tildes, «accesos» en vez de «ingresos» (sonaba a dinero), rotación 3D pausable y apagada con movimiento reducido, gráfico se redimensiona con la ventana | ✅ `tests/admin/reports.spec.ts` (9 casos × 7 perfiles) | ✅ totales exactos por recuento (antes 5000 filas descargadas), aviso de muestra, fallo de WebGL/CDN ya no tumba el reporte, filas con botón real (teclado) | ✅ done |
 
 ## Notas por fila (una línea por columna al cerrar cada fila)
 
@@ -373,3 +373,9 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Testing:** `tests/admin/campaigns.spec.ts` × 7 perfiles (6 pruebas) + `tests/frontend/campaign-ad.spec.ts` (3 pruebas de la app de usuario) + `safeUrl.test.ts` (Jest, 2 pruebas): enlace peligroso, validaciones sin escribir, tipos de imagen y nombre derivado, límites, superposición de niveles, targets/desborde; en la app de usuario: enlace válido, `javascript:` inerte, imagen externa no cargada. Suites: admin 751 pasan; Jest 85/85; la app de usuario (subconjunto shell/dashboard/overlays) verificada tras el cambio.
 - **Nota de proceso:** al lanzar a la vez la suite admin y la de la app de usuario aparecieron 5 fallos de temporización en WebKit; los cinco pasan en aislamiento (12/12 y 13/13). Conviene no ejecutarlas en paralelo.
 - **Decisión del dueño:** (1) el anuncio de la app **registra una impresión por usuario** (`campaign_impressions` con su sector): confirme que el aviso de privacidad lo menciona; (2) el anuncio emergente no es un diálogo accesible (sin foco ni Escape; el fondo es un botón): recomiendo rediseñarlo con el patrón modal de la fila 20; (3) las campañas dirigidas coinciden por el **texto** del sector (ver A13).
+
+### A15 — Admin › Reportes · done
+- **Datos**: los totales de accesos e impresiones venían de `filas.length` con `limit=5000`; un trimestre concurrido mostraba «5000». Ahora usan recuento exacto (`countRows`) y, si la muestra es menor, se avisa que gráficos y detalle usan una muestra.
+- **Robustez**: si WebGL no está disponible, `echarts-gl` lanzaba «Invalid expression» y todo el reporte mostraba error; ahora solo el gráfico cae al aviso y la tabla conserva los datos. Un fallo real de carga muestra mensaje con instrucción de reintentar.
+- **Accesibilidad**: rotación automática con botón Pausar/Reanudar (WCAG 2.2.2) y apagada con `prefers-reduced-motion`; `role="img"` + etiqueta en el gráfico; tabla con `caption`, `th scope="col"`; primera celda de cada fila es un botón (antes solo `click` en `<tr>`).
+- **Pendiente para el dueño**: el detalle sigue limitado a 5000 filas por tabla; un agregado en SQL (RPC) lo quitaría.
