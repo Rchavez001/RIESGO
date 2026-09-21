@@ -59,3 +59,11 @@
   .learning-progress { margin-top: 10px; }
   .learning-page p { line-height: 1.5; }
 }
+
+/* /campeonato (checklist row 16) */
+.champ-field { display: grid; gap: 8px; max-width: 320px; margin-bottom: 8px; }
+.champ-field input { min-height: 44px; padding: 0 12px; font-size: 16px; color: var(--text-primary); background: var(--bg-elevated, #0b1424); border: 1px solid var(--border-subtle, rgba(255,255,255,.16)); }
+.learning-page .muted { color: #b6c2d3; font-size: .9rem; }
+.champ-page section.glass-panel { margin-bottom: 16px; padding: 20px; }
+.champ-page section.glass-panel:focus { outline: none; }
+.learning-page .cinema-button:focus-visible { outline: 3px solid #fde68a; outline-offset: 3px; }
