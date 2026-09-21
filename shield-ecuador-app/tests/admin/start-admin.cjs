@@ -19,8 +19,21 @@ http.createServer((req, res) => {
   req.on('data', (c) => chunks.push(c))
   req.on('end', () => {
     last = { method: req.method, url: req.url, headers: req.headers, bytes: Buffer.concat(chunks).length }
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(req.url.startsWith('/rest/v1/') ? '[]' : '{}')
+    const url = req.url
+    const headers = { 'Content-Type': 'application/json' }
+    let body = url.startsWith('/rest/v1/') ? '[]' : '{}'
+    // PostgREST-style exact counts for the Resumen panel
+    if (req.headers.prefer === 'count=exact') {
+      const total = url.startsWith('/rest/v1/users') ? 42 : url.includes('kind=eq.question') ? 210 : url.includes('kind=eq.case') ? 35 : 0
+      headers['Content-Range'] = `0-0/${total}`
+      body = '[{"id":"x"}]'
+    }
+    if (url.startsWith('/rest/v1/learning_dojos')) {
+      const belts = ['blanco', 'amarillo', 'naranja', 'verde', 'azul', 'marron', 'negro']
+      body = JSON.stringify(belts.map((belt, rank) => ({ id: `dojo-${rank}`, rank, title: `Dojo ${rank + 1} <b>x</b>`, belt, exam_code: `EXAM_${rank}` })))
+    }
+    res.writeHead(200, headers)
+    res.end(body)
   })
 }).listen(UPSTREAM_PORT, '127.0.0.1')
 

@@ -237,10 +237,13 @@ async function proxySupabase(req, res) {
     });
 
     const responseBody = Buffer.from(await response.arrayBuffer());
-    res.writeHead(response.status, {
+    const headers = {
       'Content-Type': response.headers.get('content-type') || 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
-    });
+    };
+    const contentRange = response.headers.get('content-range'); // PostgREST exact counts (Prefer: count=exact)
+    if (contentRange) headers['Content-Range'] = contentRange;
+    res.writeHead(response.status, headers);
     res.end(responseBody);
   } catch {
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });

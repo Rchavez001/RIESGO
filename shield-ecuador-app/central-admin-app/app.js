@@ -104,6 +104,7 @@ function init() {
   bindDelegatedActions();
   bindActions();
   renderAll();
+  void loadOverviewMetrics();
   void loadQuestionsFromSupabase();
   void loadNewsAlertsFromSupabase();
   void loadActor();
@@ -327,24 +328,72 @@ function renderAll() {
   void loadSenseiStats();
 }
 
+// The Resumen used to count the *local draft* (three invented users, sample dojos, sample banks) as if they were
+// live figures. It now reads exact counts from the database and says so when it cannot.
+const overview = { dojos: null, items: null, users: null, error: false, loading: true, dojoRows: [] };
+
+async function countRows(table, filter = "") {
+  const res = await fetch(`/api/rest/v1/${table}?select=id${filter}&limit=1`, { headers: { Prefer: "count=exact" } });
+  if (!res.ok) throw new Error(`${res.status}`);
+  const range = res.headers.get("content-range") || "";
+  const total = Number(range.split("/")[1]);
+  if (!Number.isFinite(total)) throw new Error("sin recuento");
+  return total;
+}
+
+async function loadOverviewMetrics() {
+  overview.loading = true;
+  overview.error = false;
+  renderMetrics();
+  try {
+    const [dojoRows, questions, cases, users] = await Promise.all([
+      supabaseRest("learning_dojos?select=id,rank,title,belt,exam_code&order=rank.asc"),
+      countRows("learning_items", "&kind=eq.question"),
+      countRows("learning_items", "&kind=eq.case"),
+      countRows("users"),
+    ]);
+    overview.dojoRows = Array.isArray(dojoRows) ? dojoRows : [];
+    overview.dojos = overview.dojoRows.length;
+    overview.items = { questions, cases };
+    overview.users = users;
+  } catch {
+    overview.error = true;
+  } finally {
+    overview.loading = false;
+    renderMetrics();
+    renderProgression();
+  }
+}
+
 function renderMetrics() {
-  $("#metricDojos").textContent = state.dojos.filter((dojo) => dojo.status === "activo").length;
-  $("#metricQuestions").textContent = String(Object.values(state.questionsByDojo).reduce((total, bank) => total + bank.length, 0));
-  $("#metricUsers").textContent = String(state.users.filter((user) => user.status === "activo").length);
+  const show = (value) => (overview.loading ? "…" : value === null || overview.error ? "—" : Number(value).toLocaleString("es-EC"));
+  $("#metricDojos").textContent = show(overview.dojos);
+  $("#metricQuestions").textContent = show(overview.items ? overview.items.questions + overview.items.cases : null);
+  $("#metricUsers").textContent = show(overview.users);
   $("#metricAds").textContent = String(state.campaigns.filter((campaign) => campaign.active).length);
+  $("#metricGrid").setAttribute("aria-busy", String(overview.loading));
+  $("#metricNote").textContent = overview.loading
+    ? "Cargando datos reales…"
+    : overview.error
+      ? "No se pudieron leer los datos reales. Las cifras con “—” no están disponibles; recarga la página o revisa la conexión."
+      : `Datos de la base de datos en vivo: ${overview.items.questions.toLocaleString("es-EC")} preguntas de práctica y ${overview.items.cases.toLocaleString("es-EC")} casos de kata.`;
 }
 
 function renderProgression() {
-  $("#progressionPreview").innerHTML = state.progression.map((step) => `
+  // Resumen: the real ladder (one row per published dojo). The old rows showed invented "percent" weights that
+  // nothing in the product uses; the real rule is: answer the 30 practice questions, then pass the 5-case kata with 4/5.
+  const beltColors = { blanco: "#eeeeee", amarillo: "#f5c518", naranja: "#f97316", verde: "#22c55e", azul: "#3b82f6", marron: "#8b5a2b", negro: "#111827" };
+  const rows = overview.dojoRows;
+  $("#progressionPreview").innerHTML = rows.length
+    ? `<p class="muted">Cada cinturón se gana respondiendo las 30 preguntas de práctica del dojo y aprobando su kata de 5 casos con al menos 4 aciertos (80 %).</p>` + rows.map((dojo) => `
     <div class="progress-row">
-      <span class="belt-chip" style="background:${step.color}; color:${step.belt === "Negro" ? "#fff" : "#111827"}">${esc(step.belt)}</span>
+      <span class="belt-chip" style="background:${beltColors[dojo.belt] || "#94a3b8"}; color:${dojo.belt === "negro" ? "#fff" : "#111827"}">${esc(dojo.belt)}</span>
       <div>
-        <strong>${esc(step.kata)}</strong>
-        <div class="muted">${esc(step.exam)}</div>
+        <strong>${esc(dojo.title)}</strong>
+        <div class="muted">Kata: ${esc(dojo.exam_code)}</div>
       </div>
-      <strong>${step.percent}%</strong>
-    </div>
-  `).join("");
+    </div>`).join("")
+    : `<p class="muted">${overview.loading ? "Cargando dojos…" : "No se pudo leer la lista de dojos."}</p>`;
 
   $("#kataRules").innerHTML = state.progression.map((step) => `
     <div class="kata-rule">

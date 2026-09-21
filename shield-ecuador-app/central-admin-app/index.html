@@ -71,24 +71,25 @@
         </header>
 
         <section id="overview" class="panel active">
-          <div class="metric-grid">
+          <div class="metric-grid" id="metricGrid" aria-busy="true">
             <article class="metric">
-              <span>Dojos activos</span>
-              <strong id="metricDojos">0</strong>
+              <span>Dojos publicados</span>
+              <strong id="metricDojos">…</strong>
             </article>
             <article class="metric">
-              <span>Preguntas objetivo</span>
-              <strong id="metricQuestions">0</strong>
+              <span>Preguntas y casos de kata</span>
+              <strong id="metricQuestions">…</strong>
             </article>
             <article class="metric">
-              <span>Usuarios activos</span>
-              <strong id="metricUsers">0</strong>
+              <span>Usuarios registrados</span>
+              <strong id="metricUsers">…</strong>
             </article>
             <article class="metric">
-              <span>Campanas activas</span>
-              <strong id="metricAds">0</strong>
+              <span>Campañas activas</span>
+              <strong id="metricAds">…</strong>
             </article>
           </div>
+          <p id="metricNote" class="muted metric-note" role="status">Cargando datos reales…</p>
 
           <div class="split">
             <article class="card">
@@ -105,19 +106,19 @@
               <div class="card-head">
                 <div>
                   <span class="label">FLUJO DE INTELIGENCIA ARTIFICIAL</span>
-                  <h2>Orden de consulta y revision</h2>
+                  <h2>Orden de consulta y revisión</h2>
                 </div>
               </div>
-              <div class="flow">
-                <div>IA 1</div>
-                <span></span>
-                <div>IA 2</div>
-                <span></span>
-                <div>IA 3</div>
-                <span></span>
-                <div>Revisor</div>
+              <div class="flow" role="list" aria-label="Orden de consulta">
+                <div role="listitem">IA 1</div>
+                <span aria-hidden="true"></span>
+                <div role="listitem">IA 2</div>
+                <span aria-hidden="true"></span>
+                <div role="listitem">IA 3</div>
+                <span aria-hidden="true"></span>
+                <div role="listitem">Revisor</div>
               </div>
-              <p class="muted">Si una inteligencia artificial demora demasiado, se consulta la siguiente. La revision puede mejorar la pregunta y la respuesta.</p>
+              <p class="muted">Si una inteligencia artificial demora demasiado, se consulta la siguiente. La revisión puede mejorar la pregunta y la respuesta.</p>
             </article>
           </div>
         </section>
