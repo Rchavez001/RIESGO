@@ -67,3 +67,15 @@
 .champ-page section.glass-panel { margin-bottom: 16px; padding: 20px; }
 .champ-page section.glass-panel:focus { outline: none; }
 .learning-page .cinema-button:focus-visible { outline: 3px solid #fde68a; outline-offset: 3px; }
+
+/* /campeonato/combate (checklist row 17) */
+.champ-timer { display: grid; gap: 6px; margin: 10px 0 16px; color: #e2e8f0; }
+.champ-timer strong { font-variant-numeric: tabular-nums; font-size: 1.15rem; }
+.champ-timer-bar { display: block; height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+.champ-timer-bar i { display: block; height: 100%; background: #67e8f9; transition: width .25s linear; }
+.champ-timer.urgent strong { color: #fca5a5; }
+.champ-timer.urgent .champ-timer-bar i { background: #f87171; }
+.champ-feedback { margin-top: 16px; }
+.champ-feedback:focus { outline: none; }
+.champ-page .answer-option { display: block; width: 100%; min-height: 56px; text-align: left; }
+@media (prefers-reduced-motion: reduce) { .champ-timer-bar i { transition: none; } }
