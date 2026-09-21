@@ -499,26 +499,29 @@
         <section id="openQuestions" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">PREGUNTAS ABIERTAS <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
-              <h2>Validacion de tema y respuesta con IA</h2>
+              <span class="label">EN VIVO · LO QUE PREGUNTAN LAS PERSONAS</span>
+              <h2>Preguntas abiertas al Sensei</h2>
+              <p id="openQuestionsNote" class="muted" role="status">Cargando…</p>
             </div>
-            <button id="simulateOpenQuestion" class="btn primary">Simular pregunta</button>
+            <button id="refreshOpenQuestions" class="btn secondary" type="button">Actualizar</button>
           </div>
 
           <div class="split">
             <article class="card">
-              <h2>Regla de decision</h2>
-              <div class="decision-list">
-                <div>1. Estudiante envia pregunta abierta.</div>
-                <div>2. IA clasifica si es tema de ciberseguridad.</div>
-                <div>3. Si aplica, responde usando la inteligencia artificial disponible.</div>
-                <div>4. Otra revision valida y puede mejorar la respuesta.</div>
-                <div>5. Se registra tema, tipo e inquietud para estadistica.</div>
-              </div>
+              <h2>Cómo se procesa una pregunta</h2>
+              <ol class="decision-list">
+                <li>Una persona registrada escribe su duda en “Pregunta al sensei”.</li>
+                <li>El servidor comprueba si el tema es de ciberseguridad (por palabras clave). Si no lo es, responde que está fuera de alcance.</li>
+                <li>Si es un término (“¿qué es phishing?”), responde con el glosario; si no, busca en el banco de preguntas aprobadas y, si hace falta, en fuentes web configuradas.</li>
+                <li>Un modelo auditor puede reescribir la respuesta antes de mostrarla.</li>
+                <li>Se guarda la consulta con su tema para estas estadísticas. Cada persona puede marcar si le sirvió.</li>
+              </ol>
+              <p class="muted">Límites: 1.000 caracteres por pregunta y 20 consultas cada 10 minutos por persona.</p>
             </article>
             <article class="card">
               <h2>Temas detectados</h2>
-              <div id="topicStats" class="topic-list"></div>
+              <p class="muted">“fuera de alcance” son preguntas que el Sensei no pudo atender: sirven para decidir qué contenido falta.</p>
+              <div id="topicStats" class="topic-list" aria-live="polite"></div>
             </article>
           </div>
         </section>

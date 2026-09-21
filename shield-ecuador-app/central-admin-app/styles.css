@@ -2002,3 +2002,11 @@ body.menu-open { overflow: hidden; }
 .threat-card, .config-block, .drilldown-panel { min-width: 0; overflow-wrap: anywhere; }
 .safe-json { max-width: 100%; overflow-x: auto; }
 @media (max-width: 720px) { .threat-filter-bar { grid-template-columns: 1fr; } .threat-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ── Row A9: Preguntas abiertas ────────────────────────────────────────── */
+ol.decision-list { padding-left: 20px; display: grid; gap: 8px; }
+.topic-bar { display: grid; gap: 4px; }
+.topic-bar .bar-track { height: 8px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden; }
+.topic-bar .bar-track i { display: block; height: 100%; background: var(--blue); }
+.topic-bar.out .bar-track i { background: #f59e0b; }
+.topic-bar strong, .topic-bar span { overflow-wrap: anywhere; }

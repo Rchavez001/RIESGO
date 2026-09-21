@@ -98,6 +98,7 @@ function init() {
   renderAll();
   void loadOverviewMetrics();
   void loadDojoStats();
+  void loadOpenQuestionTopics();
   void loadQuestionsFromSupabase();
   void loadNewsAlertsFromSupabase();
   void loadActor();
@@ -239,7 +240,7 @@ function bindActions() {
   $("#questionDojoSelect").addEventListener("change", (e) => { state.selectedDojoId = e.target.value; ensureQuestionBanks(); renderDojos(); renderQuestions(); });
   $("#saveQuestions").addEventListener("click", saveQuestionsFromForm);
   $("#refreshAiProviders").addEventListener("click", loadNewsProvidersFromSupabase);
-  $("#simulateOpenQuestion").addEventListener("click", simulateOpenQuestion);
+  $("#refreshOpenQuestions").addEventListener("click", loadOpenQuestionTopics);
   $("#bulkSuspend").addEventListener("click", suspendSelectedUsers);
   $("#addOccupation").addEventListener("click", addOccupation);
   $("#saveOccupation").addEventListener("click", saveOccupation);
@@ -312,7 +313,6 @@ function renderAll() {
   renderDojos();
   renderQuestions();
   renderAiProviders();
-  renderTopics();
   renderUsers();
   renderCampaigns();
   renderNewsAgent();
@@ -1775,13 +1775,35 @@ async function loadSenseiStats() {
   }
 }
 
-function renderTopics() {
-  $("#topicStats").innerHTML = state.topics.map((topic) => `
-    <div class="topic-row">
-      <strong>${esc(topic.name)}</strong>
-      <span>${topic.count} inquietudes</span>
-    </div>
-  `).join("");
+// Preguntas abiertas: real topics from sensei_consultations (RPC admin_sensei_topics). The panel used to show four
+// invented topics with invented counts ("Fraude bancario por mensaje: 42") and a "Simular pregunta" button that added a
+// fake topic and claimed "La IA validó que el tema es ciberseguridad".
+async function loadOpenQuestionTopics() {
+  const note = $("#openQuestionsNote");
+  const box = $("#topicStats");
+  note.textContent = "Cargando…";
+  try {
+    const [rows, total] = await Promise.all([
+      supabaseRest("rpc/admin_sensei_topics", { method: "POST", body: JSON.stringify({ p_limit: 15 }) }),
+      countRows("sensei_consultations"),
+    ]);
+    const list = Array.isArray(rows) ? rows : [];
+    const max = Math.max(1, ...list.map((t) => Number(t.total) || 0));
+    box.innerHTML = list.length ? list.map((t) => {
+      const n = Number(t.total) || 0;
+      const out = t.topic === "fuera de alcance";
+      return `<div class="topic-row topic-bar ${out ? "out" : ""}">
+        <strong>${esc(t.topic)}</strong>
+        <span>${esc(n.toLocaleString("es-EC"))} ${n === 1 ? "pregunta" : "preguntas"}${Number(t.helpful) ? ` · ${esc(String(Number(t.helpful)))} útil(es)` : ""}${Number(t.not_helpful) ? ` · ${esc(String(Number(t.not_helpful)))} no útil(es)` : ""}</span>
+        <div class="bar-track" aria-hidden="true"><i style="width:${Math.max(6, Math.round((n / max) * 100))}%"></i></div>
+      </div>`;
+    }).join("") : `<p class="muted">Todavía nadie ha hecho preguntas al Sensei.</p>`;
+    note.textContent = `${total.toLocaleString("es-EC")} preguntas registradas en total. Se muestran los ${list.length} temas más frecuentes (datos de la base de datos en vivo).`;
+  } catch (error) {
+    console.warn("No se pudieron cargar los temas:", error);
+    box.innerHTML = "";
+    note.textContent = "No se pudieron leer los temas. Pulsa Actualizar.";
+  }
 }
 
 function renderUsers() {
@@ -2285,12 +2307,6 @@ function logout() {
   } catch (e) {
     window.location.href = "/logged-out";
   }
-}
-
-function simulateOpenQuestion() {
-  state.topics.unshift({ name: "Consulta abierta validada: seguridad en WhatsApp", count: 1 });
-  persist("La IA valido que el tema es ciberseguridad y lo envio al flujo de respuesta + auditoria.");
-  renderTopics();
 }
 
 function suspendSelectedUsers() {
