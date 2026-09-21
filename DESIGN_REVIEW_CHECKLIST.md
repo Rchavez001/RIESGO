@@ -52,7 +52,7 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 | 20 | Overlays globales: `PWAInstallPrompt`, `CyberToast`/`ToastContext`, `PageTransition` | ✅ | ✅ | ✅ | ✅ | **done** |
 | A0 | Admin: shell, navegación lateral, auth (`central-admin-app`) | ✅ | ✅ | ✅ | ✅ | **done** |
 | A1 | Admin › Resumen | ✅ | ✅ | ✅ | ✅ | **done** |
-| A2 | Admin › Dojos y progreso | ⬜ | ⬜ | ⬜ | ⬜ | pending |
+| A2 | Admin › Dojos y progreso | ✅ | ✅ | ✅ | ✅ | **done** |
 | A3 | Admin › Preguntas | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A4 | Admin › IA y auditoría | ⬜ | ⬜ | ⬜ | ⬜ | pending |
 | A5 | Admin › Agente noticias | ⬜ | ⬜ | ⬜ | ⬜ | pending |
@@ -238,3 +238,12 @@ Leyenda: ⬜ pendiente · ✅ verificado/corregido · ➖ no aplica
 - **Testing:** `tests/admin/overview.spec.ts` × 7 perfiles (5 pruebas): cifras de la base (42/7/245/0), etiquetas, escalera con HTML hostil como texto, fallo de la base → "—", sin desbordes/cadena vertical. La suite admin completa: **91 pasan, 0 fallan** (49 omitidas por diseño: las de servidor corren una vez).
 - **OWASP:** A08/A04 — la decisión se toma con datos verdaderos; el proxy solo añade la cabecera `Content-Range` a la respuesta (sin exponer nada más). Sin hallazgos nuevos.
 - **Pendiente relacionado:** el panel **Usuarios** (A12) y el borrador de **Dojos/Preguntas** (A2/A3) siguen alimentándose de datos de ejemplo locales; se tratan en sus filas.
+
+### A2 — Admin › Dojos y progreso (2026-09-20) · done
+- **Hallazgo principal — el botón "Publicar configuración" mentía.** Estaba en la barra superior de **todas** las pantallas y solo hacía `localStorage.setItem` + un aviso "Configuración publicada para Ciber Dojo". No publicaba nada: un administrador creería haber cambiado el producto. → Eliminado. "Guardar borrador" queda, con el aviso y el `title` "solo en este navegador (no se publica)".
+- **El panel entero era un prototipo local**, no los dojos reales: dojos de ejemplo editables ("Agregar dojo", nombre/tema/ISO/estado), una regla "20 manuales + 30 IA = 50 preguntas por dojo" y una "regla de avance por katas" con porcentajes inventados; el producto real tiene 7 dojos fijos, 30 preguntas de práctica por persona y un kata de 5 casos (aprobar 4/5). → El panel ahora muestra **los 7 dojos reales en vivo** con: preguntas de práctica y casos de kata del banco, personas que empezaron, que terminaron la práctica, que presentaron y que aprobaron el kata. La regla que se explica es la verdadera. El editor local se conserva **plegado** (`<details>`) bajo el rótulo "solo en este navegador · no se publica", porque el panel de Preguntas (A3) aún usa ese borrador.
+- **Backend:** migración **065** `admin_dojo_stats()` (agrega todo en una sola llamada; `SECURITY DEFINER`, solo `service_role`; verificado: con la clave pública responde 401). Datos reales hoy: p. ej. "Primeras defensas" 140 preguntas + 60 casos, 20 personas empezaron, 0 aprobaron.
+- **Responsive / HD / A11y:** tarjetas por dojo en cuadrícula adaptable (1 columna en móvil), títulos con `overflow-wrap`, `dl` semántico; el resumen del borrador ≥44 px con foco visible; carga/errores en `role=status`/`aria-live`. Texto correcto: "Dojos y progreso", "Versión", tildes.
+- **Testing:** `tests/admin/dojos.spec.ts` × 7 perfiles (6 pruebas): 7 dojos con cifras y título como texto (no HTML), regla real vs regla del borrador, borrador plegado + sin "Publicar", guardar avisa que es local, fallo de lectura, sin desbordes/targets. Suite admin: **133 pasan, 0 fallan** (49 omitidas por diseño).
+- **OWASP:** A01 — la agregación nunca se expone al público (solo `service_role`); A05 — se evita que un administrador crea que aplicó una configuración que no se aplicó (integridad de la operación). Datos de la respuesta siempre escapados.
+- **Decisión del dueño:** ¿quiere poder editar de verdad los dojos (nombre, tema, estado) desde la consola? Hoy solo el equipo técnico puede, por migración; construirlo requiere una tabla editable y RPC con auditoría.

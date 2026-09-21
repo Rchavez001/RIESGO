@@ -32,6 +32,10 @@ http.createServer((req, res) => {
       const belts = ['blanco', 'amarillo', 'naranja', 'verde', 'azul', 'marron', 'negro']
       body = JSON.stringify(belts.map((belt, rank) => ({ id: `dojo-${rank}`, rank, title: `Dojo ${rank + 1} <b>x</b>`, belt, exam_code: `EXAM_${rank}` })))
     }
+    if (url.startsWith('/rest/v1/rpc/admin_dojo_stats')) {
+      const belts = ['blanco', 'amarillo', 'naranja', 'verde', 'azul', 'marron', 'negro']
+      body = JSON.stringify(belts.map((belt, rank) => ({ id: `dojo-${rank}`, rank, title: `Dojo ${rank + 1} <i>x</i>`, belt, exam_code: `EXAM_${rank}`, version: '3.0.0', questions: 140, cases: 60, started: 1234 - rank, finished_practice: 500, exam_takers: 200, passed: 150 })))
+    }
     res.writeHead(200, headers)
     res.end(body)
   })

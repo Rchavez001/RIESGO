@@ -1939,3 +1939,18 @@ body.menu-open { overflow: hidden; }
   .flow div { min-height: 48px; }
   .flow span { width: 2px; height: 16px; justify-self: center; }
 }
+
+/* ── Row A2: Dojos y progreso ──────────────────────────────────────────── */
+.dojo-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin: 12px 0 18px; }
+.dojo-stat { border: 1px solid var(--line-subtle); background: var(--panel); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.dojo-stat header { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.dojo-stat header > div { min-width: 0; overflow-wrap: anywhere; }
+.dojo-stat header strong, .dojo-stat header span.muted { display: block; }
+.dojo-stat dl { display: grid; gap: 6px; margin: 0; }
+.dojo-stat dl > div { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line-subtle); padding-top: 6px; }
+.dojo-stat dt { color: var(--muted); }
+.dojo-stat dd { margin: 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.draft-box { margin-top: 18px; }
+.draft-box > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 800; }
+.draft-box > summary:focus-visible { outline: 3px solid #fde68a; outline-offset: 2px; }
+.draft-flag { font-size: 12px; color: #f59e0b; font-weight: 700; }

@@ -105,6 +105,7 @@ function init() {
   bindActions();
   renderAll();
   void loadOverviewMetrics();
+  void loadDojoStats();
   void loadQuestionsFromSupabase();
   void loadNewsAlertsFromSupabase();
   void loadActor();
@@ -304,8 +305,8 @@ function bindActions() {
       void loadTpotView(state.threatView);
     });
   });
-  $("#saveAll").addEventListener("click", () => persist("Borrador guardado localmente."));
-  $("#publishAll").addEventListener("click", () => persist("Configuracion publicada para Ciber Dojo."));
+  $("#saveAll").addEventListener("click", () => persist("Borrador guardado solo en este navegador (no se publica)."));
+  $("#refreshDojoStats").addEventListener("click", loadDojoStats);
 
   ["dojoName", "dojoTheme", "dojoIso", "dojoStatus"].forEach((id) => {
     $(`#${id}`).addEventListener("input", updateSelectedDojoFromForm);
@@ -395,16 +396,38 @@ function renderProgression() {
     </div>`).join("")
     : `<p class="muted">${overview.loading ? "Cargando dojos…" : "No se pudo leer la lista de dojos."}</p>`;
 
-  $("#kataRules").innerHTML = state.progression.map((step) => `
-    <div class="kata-rule">
-      <span class="belt-chip" style="background:${step.color}; color:${step.belt === "Negro" ? "#fff" : "#111827"}">${esc(step.belt)}</span>
-      <div>
-        <strong>${esc(step.kata)}</strong>
-        <span class="muted">${esc(step.exam)}</span>
-      </div>
-      <strong>${step.percent}%</strong>
-    </div>
-  `).join("");
+}
+
+// Dojos y progreso: what is really published and how people are moving through it (RPC admin_dojo_stats).
+async function loadDojoStats() {
+  const note = $("#dojoStatsNote");
+  const box = $("#dojoStats");
+  note.textContent = "Cargando dojos…";
+  try {
+    const rows = await supabaseRest("rpc/admin_dojo_stats", { method: "POST", body: "{}" });
+    const list = Array.isArray(rows) ? rows : [];
+    const beltColors = { blanco: "#eeeeee", amarillo: "#f5c518", naranja: "#f97316", verde: "#22c55e", azul: "#3b82f6", marron: "#8b5a2b", negro: "#111827" };
+    const n = (value) => Number(value ?? 0).toLocaleString("es-EC");
+    box.innerHTML = list.map((d) => `
+      <article class="dojo-stat">
+        <header>
+          <span class="belt-chip" style="background:${beltColors[d.belt] || "#94a3b8"}; color:${d.belt === "negro" ? "#fff" : "#111827"}">${esc(d.belt)}</span>
+          <div><strong>${esc(d.title)}</strong><span class="muted">Versión ${esc(d.version)} · ${esc(d.exam_code)}</span></div>
+        </header>
+        <dl>
+          <div><dt>Preguntas de práctica</dt><dd>${n(d.questions)}</dd></div>
+          <div><dt>Casos de kata</dt><dd>${n(d.cases)}</dd></div>
+          <div><dt>Personas que empezaron</dt><dd>${n(d.started)}</dd></div>
+          <div><dt>Terminaron la práctica</dt><dd>${n(d.finished_practice)}</dd></div>
+          <div><dt>Presentaron el kata</dt><dd>${n(d.exam_takers)}</dd></div>
+          <div><dt>Aprobaron el kata</dt><dd>${n(d.passed)}</dd></div>
+        </dl>
+      </article>`).join("");
+    note.textContent = list.length ? `${list.length} dojos publicados. Cifras de la base de datos en vivo.` : "No hay dojos publicados.";
+  } catch {
+    box.innerHTML = "";
+    note.textContent = "No se pudieron leer los dojos. Revisa la conexión y pulsa Actualizar.";
+  }
 }
 
 function renderDojos() {

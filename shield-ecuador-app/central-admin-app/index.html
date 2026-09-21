@@ -64,8 +64,7 @@
             <p>Gestiona dojos, bancos de preguntas, reglas de avance, inteligencia artificial, revision de respuestas, usuarios y propaganda.</p>
           </div>
           <div class="top-actions">
-            <button id="saveAll" class="btn secondary" type="button">Guardar borrador</button>
-            <button id="publishAll" class="btn primary" type="button">Publicar configuración</button>
+            <button id="saveAll" class="btn secondary" type="button" title="Guarda el borrador solo en este navegador">Guardar borrador</button>
             <button id="logoutBtn" class="btn danger" type="button">Salir</button>
           </div>
         </header>
@@ -126,64 +125,61 @@
         <section id="dojos" class="panel">
           <div class="section-toolbar">
             <div>
-              <span class="label">N DOJOS CONFIGURABLES <span style="font-size:11px;color:#f59e0b;font-weight:600;margin-left:6px;">[Modo local / Borrador]</span></span>
-              <h2>Dojos tematicos</h2>
+              <span class="label">EN VIVO · BASE DE DATOS</span>
+              <h2>Dojos y progreso</h2>
             </div>
-            <button id="addDojo" class="btn primary">Agregar dojo</button>
+            <button id="refreshDojoStats" class="btn secondary" type="button">Actualizar</button>
           </div>
+          <p id="dojoStatsNote" class="muted" role="status">Cargando dojos…</p>
+          <div id="dojoStats" class="dojo-stats" aria-live="polite"></div>
 
-          <div class="dojo-layout">
-            <div id="dojoList" class="dojo-list"></div>
-            <article class="card editor">
-              <div class="card-head">
-                <div>
-                  <span class="label">EDITOR</span>
-                  <h2 id="dojoEditorTitle">Selecciona un dojo</h2>
-                </div>
-              </div>
+          <article class="card">
+            <span class="label">REGLA DE AVANCE (LA QUE APLICA EL PRODUCTO)</span>
+            <h3>Práctica → kata → siguiente cinturón</h3>
+            <p class="muted">Cada dojo tiene 30 preguntas de práctica por persona y un kata de 5 casos. Se aprueba con al menos 4 aciertos (80 %); al aprobar se abre el dojo siguiente y se suman 250 puntos la primera vez. Estas reglas viven en la base de datos y no se editan desde esta pantalla.</p>
+          </article>
 
-              <div class="form-grid">
-                <label>
-                  Nombre del dojo
-                  <input id="dojoName" type="text" />
-                </label>
-                <label>
-                  Tema
-                  <input id="dojoTheme" type="text" />
-                </label>
-                <label>
-                  Control ISO principal
-                  <input id="dojoIso" type="text" />
-                </label>
-                <label>
-                  Estado
-                  <select id="dojoStatus">
-                    <option value="activo">Activo</option>
-                    <option value="borrador">Borrador</option>
-                    <option value="pausado">Pausado</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="rule-grid">
-                <div>
-                  <strong>20</strong>
-                  <span>preguntas manuales</span>
+          <details class="card draft-box">
+            <summary>Borrador local de dojos <span class="draft-flag">solo en este navegador · no se publica</span></summary>
+            <p class="muted">Lo que edites aquí se guarda únicamente en este navegador y <strong>no cambia</strong> los dojos que ve el público. Sirve de apoyo para el banco de preguntas de borrador.</p>
+            <div class="section-toolbar">
+              <span class="label">DOJOS DEL BORRADOR</span>
+              <button id="addDojo" class="btn secondary" type="button">Agregar dojo al borrador</button>
+            </div>
+            <div class="dojo-layout">
+              <div id="dojoList" class="dojo-list"></div>
+              <article class="card editor">
+                <div class="card-head">
+                  <div>
+                    <span class="label">EDITOR DEL BORRADOR</span>
+                    <h2 id="dojoEditorTitle">Selecciona un dojo</h2>
+                  </div>
                 </div>
-                <div>
-                  <strong>30</strong>
-                  <span>preguntas IA intercaladas</span>
+                <div class="form-grid">
+                  <label>
+                    Nombre del dojo
+                    <input id="dojoName" type="text" />
+                  </label>
+                  <label>
+                    Tema
+                    <input id="dojoTheme" type="text" />
+                  </label>
+                  <label>
+                    Control ISO principal
+                    <input id="dojoIso" type="text" />
+                  </label>
+                  <label>
+                    Estado
+                    <select id="dojoStatus">
+                      <option value="activo">Activo</option>
+                      <option value="borrador">Borrador</option>
+                      <option value="pausado">Pausado</option>
+                    </select>
+                  </label>
                 </div>
-                <div>
-                  <strong>50</strong>
-                  <span>total por dojo</span>
-                </div>
-              </div>
-
-              <h3>Regla de avance por katas</h3>
-              <div id="kataRules" class="kata-rules"></div>
-            </article>
-          </div>
+              </article>
+            </div>
+          </details>
         </section>
 
         <section id="questions" class="panel">
