@@ -54,17 +54,30 @@ body{background:var(--bg-void);color:var(--text-primary)}button,a,input,select,t
 .cinema-reassurance{font-size:12px!important}
 .cinema-footer{font-size:12px}
 @media(max-width:700px){
-  .cinema-hero{--hero-media-h:clamp(190px,30dvh,300px);min-height:0}
+  /* The stacked headline + paragraph + actions + Sensei-video button + reassurance line easily
+     out-grows a phone's viewport height, pushing the video button near or past the bottom edge
+     (checklist row 1 follow-up: it reserved space for the video peeking through, but never
+     verified everything below it still fit above the fold on shorter phones like iPhone SE). */
+  .cinema-hero{--hero-media-h:clamp(110px,16dvh,170px);min-height:0;align-items:end}
   .cinema-hero-video{height:var(--hero-media-h)}
-  .cinema-hero-copy{padding:calc(var(--hero-media-h) - 56px) 5% 26px}
+  .cinema-hero-copy{padding:calc(var(--hero-media-h) - 80px) 5% 14px}
   .cinema-eyebrow{font-size:10px}
-  .cinema-hero h1{margin:12px 0}
-  .cinema-hero h1 .cinema-hero-intro{margin-bottom:4px}
-  .cinema-hero h1 .cinema-hero-connector{margin:6px 0}
-  .cinema-hero-copy>p{margin:8px 0}
-  .cinema-actions{margin-top:12px;gap:8px 17px}
-  .cinema-sensei-video-btn{margin-top:8px}
-  .cinema-reassurance{margin-top:8px!important}
+  .cinema-hero h1{margin:8px 0;line-height:1.05}
+  .cinema-hero h1 .cinema-hero-intro{margin-bottom:2px}
+  .cinema-hero h1 .cinema-hero-connector{margin:4px 0}
+  .cinema-hero-copy>p{margin:6px 0}
+  .cinema-actions{margin-top:8px;gap:6px 14px}
+  .cinema-sensei-video-btn{margin-top:6px;min-height:50px;padding:8px 16px 8px 8px}
+  .cinema-sensei-video-play{width:34px;height:34px}
+  .cinema-reassurance{margin-top:6px!important}
+}
+@media(max-width:700px) and (max-height:700px){
+  /* Shorter phones (iPhone SE-class) need a second pass: the button was still below the fold
+     with only the trims above. */
+  .cinema-hero{--hero-media-h:clamp(100px,14dvh,140px)}
+  .cinema-hero h1{margin:6px 0}
+  .cinema-hero-copy>p{margin:4px 0;font-size:13px}
+  .cinema-actions{margin-top:6px}
 }
 @media(max-height:520px) and (orientation:landscape){
   .cinema-header{height:64px;min-height:0;flex-wrap:nowrap;padding:0 5%;gap:16px}
