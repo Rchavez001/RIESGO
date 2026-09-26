@@ -392,11 +392,9 @@ code { font-family: var(--font-mono); }
   gap: 14px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  transition: transform .28s ease, box-shadow .28s ease;
+  transition: transform .32s cubic-bezier(.16,1,.3,1), box-shadow .32s ease;
   z-index: 30;
 }
-.sidebar-mobile-top { display: none; }
-.mobile-menu-toggle { display: none; }
 .floating-menu-toggle { display: none; }
 .mobile-menu-backdrop { display: none; }
 .mobile-bottom-nav { display: none; }
@@ -430,12 +428,9 @@ code { font-family: var(--font-mono); }
 .sidebar-rank strong { display: block; margin: 6px 0 12px; }
 .train-now { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; color: white; text-decoration: none; background: linear-gradient(135deg, var(--katana-red), var(--katana-dark)); font-weight: 900; letter-spacing: .08em; animation: trainPulse 2.5s infinite; }
 .sidebar-footer-actions {
-  position: sticky;
-  bottom: -18px;
-  margin-top: auto;
+  flex-shrink: 0;
   padding: 12px 0 0;
   border-top: 1px solid rgba(255,255,255,.08);
-  background: linear-gradient(180deg, rgba(5,5,15,.72), rgba(5,5,15,.98) 34%);
 }
 .logout-link {
   width: 100%;
@@ -1225,26 +1220,12 @@ code { font-family: var(--font-mono); }
     z-index: 55;
   }
   .app-shell.sidebar-open .dojo-sidebar { transform: translateX(0); }
-  .sidebar-mobile-top { display: flex; justify-content: flex-end; }
-  .mobile-menu-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid rgba(0, 240, 255, .18);
-    background: rgba(0, 0, 0, .18);
-    color: var(--neon-cyan);
-    padding: 10px 14px;
-    border-radius: 999px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    text-transform: uppercase;
-    box-shadow: 0 0 18px rgba(0, 240, 255, .14);
-  }
   .mobile-menu-backdrop {
     display: block;
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, .48);
+    backdrop-filter: blur(3px);
     opacity: 0;
     pointer-events: none;
     transition: opacity .28s ease;
@@ -3280,7 +3261,7 @@ code { font-family: var(--font-mono); }
 :root { --bottom-nav-h: 64px; }
 .side-link, .train-now, .audio-toggle, .logout-link { min-height: 44px; }
 .wisdom-pill { min-height: 44px; }
-.dojo-sidebar { padding-top: max(18px, calc(18px + var(--safe-top))); }
+.dojo-sidebar { padding-top: max(18px, calc(18px + var(--safe-top))); padding-bottom: max(18px, calc(18px + var(--safe-bottom))); }
 @media (max-width: 960px) {
   /* 9 icons with two-line labels made a 101px bar (30% of a landscape phone) that also hid the
      "Frase dojo" button behind it. Four core destinations + "Más" (opens the drawer) fit one line. */
@@ -3299,8 +3280,6 @@ code { font-family: var(--font-mono); }
 /* The drawer is one scrollable column: its children used to shrink, clipping the menu after "Personajes del dojo" (Perfil unreachable on short phones). */
 .dojo-sidebar > * { flex-shrink: 0; }
 @media (max-height: 700px) { .sidebar-sensei-card { display: none; } }
-/* Pinned to the bottom of the drawer it hid 35% of a 568px screen and covered the menu; on short screens it scrolls with the rest. */
-@media (max-height: 700px) { .sidebar-footer-actions { position: static; } }
 
 /* Primary cyan / gold buttons had no style at all (only primary+red existed): 11 call sites rendered as bare text. */
 .neon-button.primary.cyan {

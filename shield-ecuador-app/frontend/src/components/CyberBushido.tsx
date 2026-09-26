@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bot, CheckCircle2, Home, ListChecks, LogOut, Menu, Play, ShieldCheck, Swords, Trophy, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
+import { Bot, CheckCircle2, Home, ListChecks, LogOut, Menu, Play, Swords, Trophy, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
@@ -492,7 +492,6 @@ export function DojoShell({
     { to: '/dojos', label: 'Dojos', icon: ListChecks },
     { to: '/sensei', label: 'Pregunta al sensei', short: 'Sensei', icon: Bot },
     ...(onOpenChallenge ? [{ to: '#', label: 'Desafiando al Sensei', icon: Swords, action: onOpenChallenge }] : []),
-    { to: '/escaner', label: 'Revisa tu seguridad', icon: ShieldCheck },
     { to: '/campeonato', label: 'Campeonato', short: 'Torneo', icon: Trophy },
     { to: '/personajes', label: 'Personajes del dojo', icon: Swords },
     { to: '/perfil', label: 'Perfil', icon: User },
@@ -516,7 +515,18 @@ export function DojoShell({
             setSidebarOpen((open) => !open)
           }}
         >
-          {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={sidebarOpen ? 'close' : 'open'}
+              initial={{ opacity: 0, rotate: -45 }}
+              animate={{ opacity: 1, rotate: 0 }}
+              exit={{ opacity: 0, rotate: 45 }}
+              transition={{ duration: 0.16 }}
+              style={{ display: 'inline-flex' }}
+            >
+              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </motion.span>
+          </AnimatePresence>
           <span>{sidebarOpen ? 'Cerrar' : 'Menú'}</span>
         </button>
         {/* Closed drawer: `inert` keeps its 14 off-screen links out of the tab order and the accessibility tree. */}
@@ -530,15 +540,6 @@ export function DojoShell({
           aria-modal={isDrawer && sidebarOpen ? true : undefined}
           aria-label={isDrawer && sidebarOpen ? 'Menú principal' : undefined}
         >
-          <div className="sidebar-mobile-top">
-            <button className="mobile-menu-toggle" onClick={() => {
-              playSound('tap')
-              setSidebarOpen((open) => !open)
-            }}>
-              {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-              {sidebarOpen ? 'Cerrar' : 'Menú'}
-            </button>
-          </div>
           <NavLink to="/" className="brand-lockup" onClick={() => setSidebarOpen(false)}>
             <span className="torii">⛩</span>
             <span>
@@ -613,7 +614,7 @@ export function DojoShell({
                 </NavLink>
               )
             })}
-            {/* Everything else (Perfil, Personajes, Revisa tu seguridad…) lives in the drawer, one tap away. */}
+            {/* Everything else (Perfil, Personajes…) lives in the drawer, one tap away. */}
             <button type="button" className="bottom-link" aria-haspopup="dialog" aria-expanded={sidebarOpen} aria-controls="dojo-sidebar" onClick={() => { playSound('tap'); setSidebarOpen(true) }}>
               <Menu size={18} aria-hidden="true" />
               <span>Más</span>
