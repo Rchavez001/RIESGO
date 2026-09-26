@@ -41,7 +41,7 @@ body{background:var(--bg-void);color:var(--text-primary)}button,a,input,select,t
 .sensei-video-end-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin:14px 0 8px}
 .sensei-video-replay{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;background:transparent;border:0;color:var(--text-secondary);font:inherit;font-size:13px;cursor:pointer}
 .sensei-video-replay:hover{color:var(--neon-cyan)}
-@media (max-width:700px){.cinema-sensei-video-btn{width:100%}.sensei-video-backdrop{padding:0;align-items:end}.sensei-video-dialog{border-inline:0;border-bottom:0}.sensei-video-head{padding:12px 14px}}
+@media (max-width:700px){.cinema-sensei-video-btn{width:100%}.sensei-video-backdrop{padding:0}.sensei-video-dialog{border-inline:0}.sensei-video-head{padding:12px 14px}}
 
 /* Landing audit (checklist row 1): touch targets, legibility, first-screen fold, short landscape, safe areas */
 .cinema-header nav a{display:inline-flex;align-items:center;min-height:44px;padding-block:0}
