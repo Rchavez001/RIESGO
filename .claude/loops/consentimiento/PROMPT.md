@@ -77,6 +77,12 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
   añádela a `.env.example` con valor ficticio y documenta cómo generarla.
 - Nunca uses datos personales reales en pruebas o seeds. Usa `@example.test` e IP de documentación
   (`192.0.2.0/24`, `198.51.100.0/24`, `2001:db8::/32`).
+- **Antes de cualquier operación que reescriba historial o cambie el árbol** (`filter-repo`, `rebase`,
+  `reset`, cambiar de rama, `merge`): ejecutar `git stash push --include-untracked` o confirmar que
+  `git status` está vacío. `filter-repo`, `rebase` y `reset --hard` requieren OK explícito del humano
+  antes de ejecutarse, cada vez (2026-09-28: un `filter-repo` con un stash parcial reseteó ~29 archivos
+  sin commitear; el trabajo se recuperó porque ya estaba copiado a otras ramas, pero fue suerte, no
+  el proceso — de ahí esta regla).
 
 **Migraciones**
 - Nunca modifiques una migración existente. Crea la siguiente disponible: detecta el número mayor
