@@ -53,6 +53,8 @@ serve(async (req) => {
         purposes: doc.purposes,
         requires_reconsent: doc.requires_reconsent,
         privacy_policy_url: settings.privacy_policy_url,
+        // The registration screen tells a blocked minor (under 15) where their legal representative writes.
+        privacy_email: settings.privacy_email,
       },
       200,
       { "Cache-Control": "public, max-age=60" },

@@ -57,12 +57,12 @@ Deno.env.set('PII_ENCRYPTION_KEY_B64', randomKeyB64())
 
 await import('./index.ts')
 
-async function post(body: Record<string, unknown>) {
+async function post(body: Record<string, unknown>, xff = '203.0.113.9') {
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
       return await fetch('http://127.0.0.1:8000/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '203.0.113.9', 'user-agent': 'PruebaUA/1.0' },
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': xff, 'user-agent': 'PruebaUA/1.0' },
         body: JSON.stringify(body),
       })
     } catch {
@@ -151,6 +151,17 @@ Deno.test({
     }
     assertEquals(sent((c) => c.path === '/rest/v1/security_events' && JSON.stringify(c.body).includes('consent_ip_spoof_attempt')).length, 1)
     assertEquals(sent((c) => c.method === 'DELETE'), [])
+  },
+})
+
+Deno.test({
+  name: 'X-Forwarded-For falsificado por el cliente: la IP de la evidencia es la que añadió el proxy (REQ-05/T03)', ...opts,
+  async fn() {
+    reset()
+    const res = await post(await validBody(), '9.9.9.9, 8.8.8.8, 203.0.113.9')
+    assertEquals(res.status, 200)
+    const rows = sent((c) => c.method === 'POST' && c.path === '/rest/v1/consent_records')[0].body as Array<Record<string, any>>
+    assertEquals(await decryptConsentColumn(rows[0] as never, 'ip_ciphertext'), '203.0.113.9')
   },
 })
 

@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { checkRateLimit } from "../_shared/rate-limit.ts"
-import { extractClientIp, logSecurityEvent } from "../_shared/security-events.ts"
+import { logSecurityEvent } from "../_shared/security-events.ts"
+import { getClientIp } from "../_shared/client-ip.ts"
 import { encryptPii, getActiveKeyVersion, hmacLookup } from "../_shared/crypto.ts"
 import { encryptConsentColumn } from "../_shared/consent-evidence.ts"
 import { renderConsentMarkers, sha256Hex } from "../_shared/consent-render.ts"
@@ -63,7 +64,8 @@ serve(async (req) => {
       // Ignored, not fatal — the real IP below is what gets used regardless.
     }
 
-    const clientIp = extractClientIp(req)
+    // REQ-05: the address the trusted proxy appended, not the first X-Forwarded-For entry (client-controlled).
+    const clientIp = getClientIp(req)
     if (!clientIp) throw new Error("missing_client_ip")
     const userAgent = req.headers.get("user-agent") ?? ""
 
