@@ -274,3 +274,37 @@ En el resultado habrá IP reales. No me pegues las IP completas: basta con decir
 - **Secretos:** búsqueda por patrones sobre las líneas añadidas de las 3 ramas (no había gitleaks y no se descargó ningún binario): 0 hallazgos; el escáner se validó antes con un repo sintético con 7 secretos falsos (los detectó todos). Las menciones de `service_role` son comentarios/`GRANT` y el nombre de una variable de entorno, sin valores.
 - Riesgos / pendientes: `SenseiChallengeModal.tsx` (rama UX) referencia `/videos/cara.webm` y `/videos/sello.webm`, que quedaron fuera de git (ignorados): la rama UX no funciona sin esos 2 archivos; la rama UX borra `public/demo/` (incluye un `bank.json` de 33 079 líneas); `tests/proposal.visual.cjs` (versionado) menciona `/demo/`.
 - Gates: no aplican (sin cambios de código).
+
+## Iteración 7 — 2026-09-28 — (higiene del repo, sin tarea del módulo) estado desplegado, modo invitado y Fase 2
+
+### Estado desplegado en producción (medido el 2026-09-28, solo lectura: `supabase functions download --use-api` y `migration list`)
+**Cobertura:** solo las 11 funciones que se descargaron (las 3 modificadas de la línea base, las 8 nuevas y `championship-draw-round1`). **No se compararon** las demás funciones desplegadas (`secure-register-user`, `get-ranking`, `get-private-profile`, `save-provider-key`, etc.); su estado desplegado es desconocido hasta que se pida.
+
+| Función en producción | Archivos `_shared` que lleva | Versión desplegada frente al repo |
+|---|---|---|
+| `audit-generated-questions`, `run-daily-agent-workflows` | ninguno | `index.ts` = línea base (commit `333f2ca` de `chore/baseline-produccion`) |
+| `fix-learning-item-balance`, `import-question-bank`, `quiz-generator`, `run-news-agent` | `news-agent-core.ts`, `url-guard.ts` | `news-agent-core.ts` de **540 líneas** = línea base (`333f2ca`; con SSRF, tope 512 KB, `.csv/.json` y `shuffleOptions`); **distinto del de `main` actual** (528 líneas, commit `e99e109`, sin `.csv/.json` ni `shuffleOptions`). `url-guard.ts` = `main`. |
+| `security-diagnose`, `security-easm-scan`, `security-kata-convert` | solo `news-agent-core.ts` (**sin** `url-guard.ts`) | `news-agent-core.ts` de **476 líneas**: **anterior al arreglo de SSRF `e99e109`**; no coincide con ningún commit. Sin `fetchPublicPage`, sin tope de 512 KB, sin `.csv/.json`, sin `shuffleOptions`. `index.ts` = línea base. |
+| `log-login-event` | `rate-limit.ts`, `security-events.ts` | `rate-limit.ts` = **original `1309559`** (≠ `main`, que trae `failClosed` + HMAC del módulo); `security-events.ts` = `main`; `index.ts` = línea base. |
+| `championship-draw-round1` | `pii.ts` | `pii.ts` e `index.ts` = línea base. |
+
+**Migraciones:** 001–073 aplicadas (faltan 023 y 033 en ambos lados); 074 y 075 solo en local.
+
+### `main` NO es desplegable tal cual
+`main` ya contiene código del módulo que **no** está desplegado ni tiene su esquema: la Fase 1 (`secure-register-user` con aviso primero, evidencia y `failClosed`; `get-consent-notice`; `_shared/consent-*.ts`, `crypto.ts`, `rate-limit.ts` nuevo) depende de las migraciones 074 y 075 (sin aplicar) y de un aviso **publicado** que hoy no existe en producción (registrar usuarios con ese código fallaría o quedaría sin evidencia). Además, `supabase functions deploy` publica lo que hay en la carpeta local, no un commit. Por eso: ningún despliegue desde `main` fuera del release único de `PLAN_PRODUCCION_074_075.md`; los despliegues sueltos (p. ej. SEC-SSRF) se hacen función por función, con OK explícito, y solo de funciones cuyas dependencias `_shared` no incluyan archivos del módulo (comprobado para SEC-SSRF: ver la tarea).
+
+### Modo invitado (`vault/Arquitectura/Autenticación y modo invitado.md`, rama `docs/iso-y-privacidad`) — lo que afecta a T19b / D-12
+1. **Es una sesión real de Supabase Auth**: `supabase.auth.signInAnonymously()` desde "Probar sin cuenta" (landing y cabecera). Sin fila en `public.users`. Ya está en el código versionado (`CinematicPublicShell`, `CinematicLandingPage`, `DojoListPage`, `DojoDetailPage`, `LoginScreen`, `RegisterScreen`), no solo en la rama UX; lo nuevo de la rama UX es `GuestRegisterPrompt` y el bloqueo de rutas en `App.tsx`.
+2. **Sí toca la base de datos** (opción B de D-12, salvo que el inventario demuestre otra cosa): el invitado responde preguntas del primer dojo mediante el RPC `learning_state` (la migración `058_learning_state_guest_fix` existe para que funcione), es decir, se crean filas de progreso ligadas a un `auth.uid()` anónimo, además de la fila en `auth.users`. El inventario del paso 1 debe confirmarlo con consultas de solo lectura y listar además la IP que Supabase Auth registra al crear la sesión anónima.
+3. **El candado es solo del frontend** ("el candado real está en el frontend, no en la base de datos"): `GuestGate` bloquea rutas; un invitado que llame directamente a RPC/REST con su JWT anónimo no encuentra ese candado. Hay que revisarlo en T04/T19b (RLS y RPC que aceptan `is_anonymous`).
+4. **Registrarse no convierte la cuenta anónima**: `secure-register-user` crea un usuario **nuevo** con la service role; el progreso del invitado queda huérfano. Con el flujo actual no hay "conversión" que herede consentimiento; el registro pasa siempre por el aviso completo (REQ-06), que es lo que D-12 pide.
+5. **No hay caducidad ni limpieza** de sesiones anónimas descrita: D-12 exige que "su sesión anónima caduque" → hace falta un job de limpieza (borrar usuarios anónimos y su progreso tras N días) y decidir N; sin él las filas se acumulan indefinidamente.
+6. **La demo estática anterior** (`/practica` y `public/demo/` con `bank.json`, progreso en `localStorage`, sin datos en la base) era el equivalente a la opción A de D-12. El vault dice que se sustituyó por la sesión anónima; la rama UX borra `PracticePage` y `public/demo/` y redirige `/practica` a `/dojos`. Al borrarla desaparece la alternativa sin datos en la base: para cumplir D-12 solo quedan B (aviso breve) o C (apagar la sesión anónima en producción).
+7. Sin nada de esto en la SPEC: el paso 1 de T19b debe empezar por aquí. Recordatorio: `enable_anonymous_sign_ins = true` está en `config.toml` de la línea base (no se despliega solo, pero T99 lo verifica).
+
+### Cambios de esta iteración
+- `TASKS.md`: SEC-SSRF con la lista de importaciones de `_shared`, aclaración de qué parte de las 78 líneas ya está en `main`, y condición de parada; tarea **UX-integración** (confirmar la eliminación de `public/demo/` y su relación con D-12); T19b con lo del vault.
+- **Importaciones de las 3 funciones de SEC-SSRF** (`deno info`, transitivo): `news-agent-core.ts` → `url-guard.ts`; ninguna importa `rate-limit.ts`, `crypto.ts`, `consent-evidence.ts` ni otro archivo del módulo (**no se activa la condición de parada**).
+- Rama `wip/ux-redesign`: se versionaron `cara.webm` y `sello.webm` (los usa `SenseiChallengeModal`); `imagen/` y `videos/` siguen ignorados. Rama `chore/baseline-produccion`: se quitaron del `.gitignore` esas dos rutas.
+- Fase 2 (fusión de la línea base en `main`, en un worktree): ver el resultado abajo.
+- **Fase 2 ejecutada:** `main` = `430527f` (merge `--no-ff` de `chore/baseline-produccion`, 4 commits desde `22aaed5`), hecho en el worktree `~/Riesgo-wt/main`. 54 archivos, +4 437 −346. Sin `push`. La carpeta de trabajo y la rama del módulo no se tocaron (siguen en `8cdb21c`+ y sin haber recibido `main`: eso es la Fase 3). Nota: `main` ahora contiene el `.gitignore` con las entradas de herramientas locales y `supabase/.temp` sin versionar.
