@@ -211,9 +211,8 @@ async function loadPublishedNoticeAndSettings() {
   if (docError || !document) throw new Error("notice_not_published")
 
   const { data: settings, error: settingsError } = await supabase
-    .from("privacy_settings")
+    .from("privacy_settings_current")
     .select("settings_version, controller_name, controller_address, controller_phone, privacy_email, dpo_name, dpo_contact, privacy_policy_url, response_days, response_day_type")
-    .eq("is_current", true)
     .maybeSingle()
   if (settingsError || !settings) throw new Error("settings_unavailable")
 

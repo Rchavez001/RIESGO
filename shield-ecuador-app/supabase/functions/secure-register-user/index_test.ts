@@ -41,7 +41,7 @@ const fake = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
 
   if (pathname === '/rest/v1/rpc/check_rate_limit') return quotaRpc()
   if (pathname === '/rest/v1/consent_documents') return row(NOTICE)
-  if (pathname === '/rest/v1/privacy_settings') return row(SETTINGS)
+  if (pathname === '/rest/v1/privacy_settings_current') return row(SETTINGS)
   if (pathname === '/rest/v1/business_sectors') return row({ code: 'comerciante', industry: 'Comercio y Ventas' })
   if (pathname === '/rest/v1/users' && req.method === 'GET') return row(null) // no existing account
   if (pathname === '/auth/v1/admin/users' && req.method === 'POST') return json({ id: NEW_USER_ID, email: 'ana@empresa.com', aud: 'authenticated' })

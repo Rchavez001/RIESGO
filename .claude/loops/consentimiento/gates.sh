@@ -22,7 +22,7 @@ $DENO check supabase/functions/secure-register-user/index.ts supabase/functions/
 step "2/3 Deno ${DENO_VERSION}: cripto+AAD, cuota fail-closed, evidencia y registro de punta a punta (contra un Supabase falso)"
 $DENO test --allow-env --allow-net supabase/functions/
 
-step "3/3 SQL: migraciones 073+074 y ciclo de vida de la evidencia, en un Postgres 16 desechable"
+step "3/3 SQL: migraciones 073+074+075, ciclo de vida de la evidencia y versionado de privacy_settings, en un Postgres 16 desechable"
 CONTAINER="consent-gates-$$"
 docker run -d --rm --name "$CONTAINER" -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null
 trap 'docker rm -f "$CONTAINER" >/dev/null 2>&1 || true' EXIT
@@ -38,6 +38,8 @@ psql_in -d postgres -c "CREATE DATABASE gates"
 psql_in -d gates < "$TESTS/prereqs.sql"
 psql_in -d gates < "$MIGRATIONS/073_consent_module_foundation.sql"
 psql_in -d gates < "$MIGRATIONS/074_consent_evidence_unlink_and_stable_hash.sql"
+psql_in -d gates < "$MIGRATIONS/075_privacy_settings_versioning.sql"
 psql_in -d gates < "$TESTS/lifecycle.sql"
+psql_in -d gates < "$TESTS/settings_versioning.sql"
 
 printf '\nTodas las puertas pasaron.\n'
