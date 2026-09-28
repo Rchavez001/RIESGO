@@ -8,7 +8,7 @@
 // call sites; it only gives new code (this module's own) a single place to
 // call instead of a third inline copy of the same 60 lines.
 //
-// Two deliberate hardenings over the existing inline copies:
+// Deliberate hardenings over the existing inline copies:
 //   - a dedicated HMAC key per caller (`envVar` param), never the AES key —
 //     one leaked secret should not compromise both encryption and lookup;
 //   - decrypt reads the key version from the payload itself (`payload.v`)
@@ -16,7 +16,17 @@
 //     future key rotation does not break rows encrypted under the old key.
 //     Today only one key exists, so version 1 (or whatever PII_KEY_VERSION
 //     already points to) also falls back to the bare `keyEnvPrefix` secret —
-//     no new secret has to be provisioned before this code can run.
+//     no new secret has to be provisioned before this code can run;
+//   - optional AAD (SEC-04): a ciphertext can be bound to the place it lives
+//     in (`table:column:owner`, see buildAad), so copying it into another
+//     row or column makes GCM authentication fail instead of decrypting to
+//     someone else's data.
+//
+// AAD compatibility: payloads written WITHOUT AAD (everything already in
+// users.*_encrypted) have no `aad` marker and keep decrypting exactly as
+// before. A payload written WITH AAD carries `aad: true`; decrypting it
+// without supplying the AAD is an error, and stripping the marker does not
+// help an attacker — the tag was computed over the AAD, so GCM rejects it.
 
 export interface EncryptedPayload {
   v: number
@@ -24,39 +34,69 @@ export interface EncryptedPayload {
   iv: string
   tag: string
   ct: string
+  aad?: true
+}
+
+export interface CryptoOptions {
+  keyEnvPrefix?: string
+  aad?: string
+}
+
+const DEFAULT_KEY_PREFIX = 'PII_ENCRYPTION_KEY_B64'
+
+// `owner` is the user id when the row has one; for rows without a user (a
+// data_subject_requests case received by e-mail) use the row's own id.
+export function buildAad(table: string, column: string, owner: string): string {
+  if (!table || !column || !owner) throw new Error('invalid_aad_parts')
+  return `${table}:${column}:${owner}`
 }
 
 export async function encryptPii(
   value: string,
   keyVersion: number,
-  keyEnvPrefix = 'PII_ENCRYPTION_KEY_B64',
+  options: CryptoOptions = {},
 ): Promise<EncryptedPayload> {
-  const key = await getAesKey(keyVersion, keyEnvPrefix, ['encrypt'])
+  const key = await getAesKey(keyVersion, options.keyEnvPrefix ?? DEFAULT_KEY_PREFIX, ['encrypt'])
   const iv = crypto.getRandomValues(new Uint8Array(12))
+  const params: AesGcmParams = { name: 'AES-GCM', iv, tagLength: 128 }
+  if (options.aad !== undefined) params.additionalData = new TextEncoder().encode(options.aad)
   const encoded = new TextEncoder().encode(value)
-  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, encoded))
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt(params, key, encoded))
   const tag = encrypted.slice(encrypted.length - 16)
   const ct = encrypted.slice(0, encrypted.length - 16)
-  return { v: keyVersion, alg: 'AES-256-GCM', iv: toBase64(iv), tag: toBase64(tag), ct: toBase64(ct) }
+  const payload: EncryptedPayload = { v: keyVersion, alg: 'AES-256-GCM', iv: toBase64(iv), tag: toBase64(tag), ct: toBase64(ct) }
+  if (options.aad !== undefined) payload.aad = true
+  return payload
 }
 
+// `allowLegacy: false` is for columns that have only ever been written with
+// AAD: a payload without the marker there is a copy of some older ciphertext
+// pasted in, not something this module wrote, so it is refused.
 export async function decryptPii(
   payload: EncryptedPayload | null | undefined,
-  keyEnvPrefix = 'PII_ENCRYPTION_KEY_B64',
+  options: CryptoOptions & { allowLegacy?: boolean } = {},
 ): Promise<string> {
   if (!payload?.iv || !payload?.ct || !payload?.tag) return ''
-  const key = await getAesKey(payload.v ?? 1, keyEnvPrefix, ['decrypt'])
-  const iv = fromBase64(payload.iv)
+  const key = await getAesKey(payload.v ?? 1, options.keyEnvPrefix ?? DEFAULT_KEY_PREFIX, ['decrypt'])
+  const params: AesGcmParams = { name: 'AES-GCM', iv: fromBase64(payload.iv), tagLength: 128 }
+
+  if (payload.aad === true) {
+    if (options.aad === undefined) throw new Error('aad_required')
+    params.additionalData = new TextEncoder().encode(options.aad)
+  } else if (options.aad !== undefined && options.allowLegacy === false) {
+    throw new Error('legacy_payload_not_allowed')
+  }
+
   const ct = fromBase64(payload.ct)
   const tag = fromBase64(payload.tag)
   const joined = new Uint8Array(ct.length + tag.length)
   joined.set(ct)
   joined.set(tag, ct.length)
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, joined)
+  const decrypted = await crypto.subtle.decrypt(params, key, joined)
   return new TextDecoder().decode(decrypted)
 }
 
-export function getActiveKeyVersion(keyEnvPrefix = 'PII_ENCRYPTION_KEY_B64'): number {
+export function getActiveKeyVersion(keyEnvPrefix = DEFAULT_KEY_PREFIX): number {
   return getCurrentKeyVersion(keyEnvPrefix)
 }
 
@@ -65,7 +105,7 @@ async function getAesKey(version: number, keyEnvPrefix: string, usages: KeyUsage
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, usages)
 }
 
-function getKeyBytesForVersion(version: number, keyEnvPrefix: string): Uint8Array {
+function getKeyBytesForVersion(version: number, keyEnvPrefix: string) {
   const versioned = Deno.env.get(`${keyEnvPrefix}_V${version}`)
   const isCurrent = version === getCurrentKeyVersion(keyEnvPrefix)
   const value = versioned ?? (isCurrent ? Deno.env.get(keyEnvPrefix) : undefined) ?? ''

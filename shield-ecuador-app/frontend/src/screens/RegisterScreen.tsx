@@ -1,13 +1,12 @@
 import React, { useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Loader, Shield } from 'lucide-react'
 import { KanjiBackground, NeonButton, ScanlineOverlay } from '../components/CyberBushido'
 import { useAuth } from '../contexts/AuthContext'
+import type { ConsentSubmission } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { safeLocalPath } from '../lib/safeRedirect'
 import { friendlyAuthError } from '../lib/authErrors'
-import { useModalA11y } from '../hooks/useModalA11y'
 
 const FALLBACK_BUSINESS_SECTORS = [
   { code: 'comerciante', label: 'Comerciante', industry: 'Comercio y Ventas' },
@@ -16,10 +15,41 @@ const FALLBACK_BUSINESS_SECTORS = [
   { code: 'otro', label: 'Otro', industry: null },
 ]
 
+interface ConsentPurpose {
+  code: string
+  label: string
+  description?: string
+  required: boolean
+  order?: number
+}
+
+interface ConsentNotice {
+  document_id: string
+  version: string
+  title: string
+  rendered_md: string
+  rendered_sha256: string
+  settings_version: number
+  purposes: ConsentPurpose[]
+  privacy_policy_url: string | null
+  privacy_email: string
+}
+
+// REQ-06: el aviso es lo primero que ve quien se registra — no algo que aparece
+// después de llenar el formulario. Aceptar (con la finalidad obligatoria marcada
+// y la edad confirmada) lleva al formulario; rechazar devuelve a la portada.
+type Step = 'loading' | 'notice_unavailable' | 'consent' | 'minor_blocked' | 'form'
+
 export function RegisterScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, loading: authLoading, signUp } = useAuth()
+  const [step, setStep] = useState<Step>('loading')
+  const [notice, setNotice] = useState<ConsentNotice | null>(null)
+  const [decisions, setDecisions] = useState<Record<string, boolean>>({})
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
+  const [consentError, setConsentError] = useState('')
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -27,7 +57,6 @@ export function RegisterScreen() {
   const [businessType, setBusinessType] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showDataConsent, setShowDataConsent] = useState(false)
   const [businessSectors, setBusinessSectors] = useState(FALLBACK_BUSINESS_SECTORS)
   const redirectPath = safeLocalPath((location.state as { from?: { pathname?: string } } | null)?.from?.pathname)
 
@@ -56,7 +85,47 @@ export function RegisterScreen() {
     void loadBusinessSectors()
   }, [])
 
-  function handleSubmit(e: React.FormEvent) {
+  React.useEffect(() => {
+    void loadNotice()
+  }, [])
+
+  async function loadNotice() {
+    setStep('loading')
+    const { data, error } = await supabase.functions.invoke('get-consent-notice', { method: 'GET' })
+    if (error || !data || data.error) {
+      setStep('notice_unavailable')
+      return
+    }
+    setNotice(data as ConsentNotice)
+    setDecisions({})
+    setAgeConfirmed(false)
+    setStep('consent')
+  }
+
+  function toggleDecision(code: string) {
+    setDecisions((current) => ({ ...current, [code]: !current[code] }))
+  }
+
+  function handleConsentContinue() {
+    if (!notice) return
+    setConsentError('')
+    const missingRequired = notice.purposes.find((purpose) => purpose.required && !decisions[purpose.code])
+    if (missingRequired) {
+      setConsentError(`Debes aceptar "${missingRequired.label}" para continuar.`)
+      return
+    }
+    if (!ageConfirmed) {
+      setStep('minor_blocked')
+      return
+    }
+    setStep('form')
+  }
+
+  function handleConsentReject() {
+    navigate('/')
+  }
+
+  async function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
 
@@ -64,23 +133,35 @@ export function RegisterScreen() {
       setError('Seleccione el tipo de negocio')
       return
     }
-    setShowDataConsent(true)
-  }
+    if (!notice) return
 
-  async function acceptDataConsent() {
-    setError('')
-    setShowDataConsent(false)
     setLoading(true)
-
     try {
-      await signUp(email, password, {
-        full_name: fullName.trim(),
-        business_type: businessType,
-        data_processing_authorized: true,
-        data_processing_authorized_at: new Date().toISOString(),
-      } as any)
+      const consentNotice: ConsentSubmission = {
+        document_id: notice.document_id,
+        rendered_sha256: notice.rendered_sha256,
+        settings_version: notice.settings_version,
+        decisions: notice.purposes.map((purpose) => ({
+          purpose_code: purpose.code,
+          decision: decisions[purpose.code] ? 'granted' : 'denied',
+        })),
+      }
+
+      await signUp(email, password, { full_name: fullName.trim(), business_type: businessType }, consentNotice, ageConfirmed)
       navigate(redirectPath, { replace: true })
     } catch (err: unknown) {
+      const code = (err as { code?: string } | null)?.code
+      if (code === 'notice_changed') {
+        // The published notice changed mid-form: go back to a fresh consent
+        // screen instead of showing a dead end.
+        setError('')
+        await loadNotice()
+        return
+      }
+      if (code === 'RATE_LIMIT_UNAVAILABLE') {
+        setError('El registro no está disponible en este momento, intenta en unos minutos')
+        return
+      }
       // secure-register-user answers in Spanish and is meant to be shown as is ("Ya existe una cuenta…");
       // raw Supabase/edge-function text (English, technical) is replaced by a generic message.
       const raw = err instanceof Error ? err.message : ''
@@ -89,15 +170,6 @@ export function RegisterScreen() {
     } finally {
       setLoading(false)
     }
-  }
-
-  function rejectDataConsent() {
-    setShowDataConsent(false)
-    navigate('/')
-  }
-
-  function dismissDataConsent() {
-    setShowDataConsent(false)
   }
 
   return (
@@ -111,7 +183,46 @@ export function RegisterScreen() {
             <h1>CIBER DOJO</h1>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          {step === 'loading' && (
+            <div className="consent-loading" role="status">
+              <Loader className="animate-spin" size={20} /> Cargando aviso de privacidad…
+            </div>
+          )}
+
+          {step === 'notice_unavailable' && (
+            <div className="form-error" role="alert">
+              No podemos mostrar el aviso de privacidad en este momento. Inténtalo de nuevo en unos minutos.
+            </div>
+          )}
+
+          {step === 'consent' && notice && (
+            <ConsentStep
+              notice={notice}
+              decisions={decisions}
+              ageConfirmed={ageConfirmed}
+              error={consentError}
+              onToggleDecision={toggleDecision}
+              onToggleAge={() => setAgeConfirmed((value) => !value)}
+              onAccept={handleConsentContinue}
+              onReject={handleConsentReject}
+            />
+          )}
+
+          {step === 'minor_blocked' && notice && (
+            <div className="consent-minor-blocked">
+              <h2>No podemos crear tu cuenta todavía</h2>
+              <p>
+                Para menores de 15 años, el registro lo debe completar un representante legal.
+                Pídele que escriba a <strong>{notice.privacy_email}</strong> para continuar.
+              </p>
+              <NeonButton color="cyan" variant="outline" onClick={() => setStep('consent')}>
+                Volver
+              </NeonButton>
+            </div>
+          )}
+
+          {step === 'form' && (
+            <form onSubmit={(e) => void handleFormSubmit(e)}>
               <div className="field">
                 <label htmlFor="reg-name">NOMBRE DEL GUERRERO</label>
                 <input id="reg-name" name="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} maxLength={120} placeholder="Nombre completo" autoComplete="name" autoCapitalize="words" enterKeyHint="next" />
@@ -179,54 +290,84 @@ export function RegisterScreen() {
                 {loading ? <Loader className="animate-spin" size={18} /> : <Shield size={16} />}
                 FORJAR CUENTA
               </NeonButton>
-          </form>
+            </form>
+          )}
         </div>
-
-        {showDataConsent && (
-          <DataConsentDialog
-            onAccept={() => void acceptDataConsent()}
-            onReject={rejectDataConsent}
-            onDismiss={dismissDataConsent}
-          />
-        )}
       </div>
     </ScanlineOverlay>
   )
 }
 
-function DataConsentDialog({ onAccept, onReject, onDismiss }: { onAccept: () => void; onReject: () => void; onDismiss: () => void }) {
-  const card = React.useRef<HTMLDivElement>(null)
-  useModalA11y(card, onDismiss, () => document.getElementById('reg-business'))
-  return createPortal(
-    <div className="consent-modal">
-      <div className="consent-backdrop" onClick={onDismiss} />
-      <div ref={card} className="consent-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="consent-title" aria-describedby="consent-body" tabIndex={-1}>
-        <div className="mono-label">AUTORIZACIÓN DE DATOS PERSONALES</div>
-        <h2 id="consent-title">Tratamiento de datos personales</h2>
-        <div id="consent-body">
-          <p>
-            Autorizo el tratamiento de mis datos personales para fines internos de la aplicación,
-            incluyendo registro, gestión de usuario, operación del servicio y clasificación estadística
-            durante la vigencia de mi uso de la aplicación.
-          </p>
-          <p>
-            Declaro conocer que puedo ejercer mis derechos de acceso, rectificación, actualización,
-            eliminación y oposición —derechos ARCO—, así como solicitar la modificación o eliminación
-            de mis datos personales, escribiendo al correo: <strong>raulchavezdrouet@gmail.com</strong>.
-          </p>
-        </div>
-        <div className="consent-actions">
-          <NeonButton color="cyan" variant="outline" onClick={onReject}>
-            No acepto
-          </NeonButton>
-          <NeonButton color="gold" variant="outline" onClick={onAccept}>
-            Acepto y continuar
-          </NeonButton>
-        </div>
+function ConsentStep({
+  notice, decisions, ageConfirmed, error, onToggleDecision, onToggleAge, onAccept, onReject,
+}: {
+  notice: ConsentNotice
+  decisions: Record<string, boolean>
+  ageConfirmed: boolean
+  error: string
+  onToggleDecision: (code: string) => void
+  onToggleAge: () => void
+  onAccept: () => void
+  onReject: () => void
+}) {
+  return (
+    <div className="consent-step">
+      <div className="mono-label">AVISO DE PRIVACIDAD · v{notice.version}</div>
+      <h2>{notice.title}</h2>
+      <div className="consent-body">
+        {renderPlainParagraphs(notice.rendered_md)}
       </div>
-    </div>,
-    document.body,
+      {notice.privacy_policy_url && (
+        <p><a href={notice.privacy_policy_url} target="_blank" rel="noreferrer">Leer la Política de Privacidad completa ↗</a></p>
+      )}
+
+      <fieldset className="consent-purposes">
+        <legend>¿Para qué autorizas el uso de tus datos?</legend>
+        {notice.purposes.map((purpose) => (
+          <label key={purpose.code} className="consent-purpose-option">
+            <input
+              type="checkbox"
+              checked={!!decisions[purpose.code]}
+              onChange={() => onToggleDecision(purpose.code)}
+            />
+            <span>
+              <strong>{purpose.label}</strong>{purpose.required ? ' (obligatoria)' : ' (opcional)'}
+              {purpose.description && <small>{purpose.description}</small>}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      <label className="consent-purpose-option">
+        <input type="checkbox" checked={ageConfirmed} onChange={onToggleAge} />
+        <span>Declaro que tengo 15 años o más.</span>
+      </label>
+
+      {error && <div className="form-error" role="alert">{error}</div>}
+
+      <div className="consent-actions">
+        <NeonButton color="cyan" variant="outline" onClick={onReject}>
+          No acepto
+        </NeonButton>
+        <NeonButton color="gold" variant="outline" onClick={onAccept}>
+          Acepto y continuar
+        </NeonButton>
+      </div>
+    </div>
   )
+}
+
+function renderPlainParagraphs(text: string) {
+  return text.split(/\n\s*\n/).map((paragraph, index) => (
+    <p key={index}>
+      {paragraph.split('\n').map((line, lineIndex, lines) => (
+        <React.Fragment key={lineIndex}>
+          {line}
+          {lineIndex < lines.length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </p>
+  ))
 }
 
 function groupBusinessSectorsByIndustry<T extends { industry?: string | null }>(items: T[]): [string | null, T[]][] {

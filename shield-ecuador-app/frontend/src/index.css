@@ -2621,54 +2621,91 @@ code { font-family: var(--font-mono); }
   }
 }
 
-.consent-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  display: grid;
-  overflow-y: auto; /* the card can be taller than a phone screen (SE, landscape): it must scroll */
-  overscroll-behavior: contain;
-  padding: max(22px, var(--safe-top)) max(22px, var(--safe-right)) max(22px, var(--safe-bottom)) max(22px, var(--safe-left));
-}
-
-.consent-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(2, 3, 11, .78);
-  backdrop-filter: blur(12px);
-}
-
-.consent-card {
-  position: relative;
-  margin: auto; /* safe centering: unlike place-items:center it never clips the top when taller than the viewport */
-  width: min(720px, 100%);
-  padding: 28px;
-  border-color: rgba(245, 197, 24, .34);
-  background:
-    linear-gradient(135deg, rgba(245, 197, 24, .10), transparent 34%),
-    linear-gradient(180deg, rgba(7, 14, 31, .98), rgba(3, 5, 15, .99));
-  box-shadow: 0 32px 110px rgba(0,0,0,.62), 0 0 70px rgba(245,197,24,.10);
-  clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px));
-}
-
-.consent-card h2 {
+/* Aviso de privacidad — REQ-06: es la primera pantalla del registro, no un
+   modal que aparece después de llenar el formulario, así que vive inline
+   dentro de la misma .auth-card en vez de flotar sobre un backdrop. */
+.consent-step h2 {
   margin: 10px 0 14px;
   font-family: var(--font-display);
-  font-size: clamp(1.7rem, 4vw, 2.7rem);
-  line-height: 1;
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  line-height: 1.1;
 }
 
-.consent-card:focus { outline: none; }
-.consent-card p {
-  margin: 0 0 14px;
+.consent-body {
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.consent-body p {
+  margin: 0 0 12px;
   color: var(--text-secondary);
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
-.consent-card strong {
-  color: var(--gold-belt);
+.consent-body p:last-child { margin-bottom: 0; }
+
+.consent-purposes {
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+  display: grid;
+  gap: 10px;
 }
+
+.consent-purposes legend {
+  padding: 0 0 8px;
+  font: 12px var(--font-mono, inherit);
+  letter-spacing: .04em;
+  color: var(--text-secondary);
+}
+
+.consent-purpose-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.consent-purpose-option input {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  margin-top: 2px;
+}
+
+.consent-purpose-option span {
+  display: block;
+}
+
+.consent-purpose-option small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.consent-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 0;
+  color: var(--text-secondary);
+}
+
+.consent-minor-blocked h2 { margin: 10px 0 14px; }
+.consent-minor-blocked p { margin: 0 0 18px; color: var(--text-secondary); line-height: 1.6; }
+.consent-minor-blocked strong { color: var(--gold-belt); }
 
 .consent-actions {
   display: flex;
@@ -2679,14 +2716,6 @@ code { font-family: var(--font-mono); }
 }
 
 @media (max-width: 560px) {
-  .consent-card {
-    padding: 22px;
-  }
-
-  .consent-card p {
-    font-size: 16px;
-  }
-
   .consent-actions {
     display: grid;
   }

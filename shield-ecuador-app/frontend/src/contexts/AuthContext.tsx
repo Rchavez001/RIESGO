@@ -2,6 +2,17 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { supabase, UserProfile } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
+// What the visitor decided on the consent screen (RegisterScreen), carried
+// through to secure-register-user exactly as the server needs to re-verify it —
+// see get-consent-notice for where document_id/rendered_sha256/settings_version
+// come from.
+export interface ConsentSubmission {
+  document_id: string
+  rendered_sha256: string
+  settings_version: number
+  decisions: Array<{ purpose_code: string; decision: 'granted' | 'denied' }>
+}
+
 interface AuthContextType {
   user: User | null
   userProfile: UserProfile | null
@@ -9,7 +20,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>
   sendLoginCode: (email: string) => Promise<void>
   verifyCode: (email: string, token: string) => Promise<void>
-  signUp: (email: string, password: string, metadata: Partial<UserProfile>) => Promise<void>
+  signUp: (email: string, password: string, metadata: { full_name: string; business_type: string }, consentNotice: ConsentSubmission, ageConfirmed: boolean) => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   continueAsGuest: () => Promise<void>
@@ -152,19 +163,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function signUp(email: string, password: string, metadata: Partial<UserProfile>) {
+  async function signUp(email: string, password: string, metadata: { full_name: string; business_type: string }, consentNotice: ConsentSubmission, ageConfirmed: boolean) {
     const { data, error } = await supabase.functions.invoke('secure-register-user', {
       body: {
         email,
         password,
         full_name: metadata.full_name,
         business_type: metadata.business_type,
-        data_processing_authorized: metadata.data_processing_authorized,
+        consent_notice: consentNotice,
+        age_gate: ageConfirmed,
       },
     })
 
-    if (error) throw new Error(await getSupabaseFunctionErrorMessage(error))
-    if (data?.error) throw new Error(String(data.error))
+    if (error) {
+      // 4xx answers (409 notice_changed, 403 age_gate_failed…) arrive here, not in `data`.
+      const { message, code } = await getSupabaseFunctionError(error)
+      throw Object.assign(new Error(message), { code })
+    }
+    if (data?.error) {
+      // .code lets RegisterScreen react to a specific outcome (e.g. re-show
+      // the consent step on "notice_changed") while .message stays the
+      // human-readable text everything else already just displays as-is.
+      const thrown = new Error(typeof data.message === 'string' ? data.message : String(data.error)) as Error & { code?: string }
+      if (typeof data.error === 'string') thrown.code = data.error
+      throw thrown
+    }
 
     await signIn(email, password)
   }
@@ -195,24 +218,28 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-async function getSupabaseFunctionErrorMessage(error: unknown) {
+// `code` is only set when the server's `error` is a machine identifier (notice_changed…),
+// never for the Spanish sentences older responses put there.
+async function getSupabaseFunctionError(error: unknown): Promise<{ message: string; code?: string }> {
   if (typeof error === 'object' && error !== null) {
     const candidate = error as { message?: unknown; context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }
     try {
       const json = await candidate.context?.json?.()
       if (typeof json === 'object' && json !== null && 'error' in json) {
-        return String((json as { error: unknown }).error)
+        const { error: serverError, message } = json as { error: unknown; message?: unknown }
+        const code = typeof serverError === 'string' && /^[A-Za-z_]+$/.test(serverError) ? serverError : undefined
+        return { message: typeof message === 'string' ? message : String(serverError), code }
       }
     } catch {
       try {
         const text = await candidate.context?.text?.()
-        if (text) return text
+        if (text) return { message: text }
       } catch {}
     }
-    if (typeof candidate.message === 'string' && candidate.message) return candidate.message
+    if (typeof candidate.message === 'string' && candidate.message) return { message: candidate.message }
   }
-  if (error instanceof Error && error.message) return error.message
-  return 'No se pudo completar el registro. Verifica los datos e intenta nuevamente.'
+  if (error instanceof Error && error.message) return { message: error.message }
+  return { message: 'No se pudo completar el registro. Verifica los datos e intenta nuevamente.' }
 }
 
 export function useAuth() {
