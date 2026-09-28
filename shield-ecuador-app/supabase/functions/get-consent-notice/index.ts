@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { renderConsentMarkers, sha256Hex } from "../_shared/consent-render.ts"
+import { loadPublishedNotice, NoticeError } from "../_shared/consent-notice.ts"
 
 // Public, unauthenticated: the registration screen (and the public privacy
 // policy page) call this before anyone has an account. It needs the service
@@ -21,45 +21,35 @@ serve(async (req) => {
   if (req.method !== "GET") return jsonResponse({ error: "Metodo no permitido." }, 405)
 
   try {
-    const { data: doc, error: docError } = await supabase
-      .from("consent_documents")
-      .select("id, version, title, content_md, purposes, requires_reconsent")
-      .eq("status", "published")
-      .maybeSingle()
-
-    if (docError) throw docError
-    if (!doc) return jsonResponse({ error: "No hay un aviso de privacidad publicado todavía." }, 404)
-
-    const { data: settings, error: settingsError } = await supabase
-      .from("privacy_settings_current")
-      .select("settings_version, controller_name, controller_address, controller_phone, privacy_email, dpo_name, dpo_contact, privacy_policy_url, response_days, response_day_type")
-      .maybeSingle()
-
-    if (settingsError) throw settingsError
-    if (!settings) return jsonResponse({ error: "La configuración de privacidad no está disponible." }, 500)
-
-    const renderedMd = renderConsentMarkers(doc.content_md, settings)
-    const renderedSha256 = await sha256Hex(renderedMd)
+    const notice = await loadPublishedNotice(supabase)
 
     return jsonResponse(
       {
-        document_id: doc.id,
-        version: doc.version,
-        title: doc.title,
-        rendered_md: renderedMd,
-        rendered_sha256: renderedSha256,
-        settings_version: settings.settings_version,
-        purposes: doc.purposes,
-        requires_reconsent: doc.requires_reconsent,
-        privacy_policy_url: settings.privacy_policy_url,
+        document_id: notice.document.id,
+        version: notice.document.version,
+        title: notice.document.title,
+        rendered_md: notice.renderedMd,
+        rendered_sha256: notice.renderedSha256,
+        settings_version: notice.settings.settings_version,
+        purposes: notice.document.purposes,
+        requires_reconsent: notice.document.requires_reconsent,
+        privacy_policy_url: notice.settings.privacy_policy_url,
         // The registration screen tells a blocked minor (under 15) where their legal representative writes.
-        privacy_email: settings.privacy_email,
+        privacy_email: notice.settings.privacy_email,
       },
       200,
       { "Cache-Control": "public, max-age=60" },
     )
   } catch (error) {
-    console.error("get-consent-notice failed:", error)
+    if (error instanceof NoticeError && error.code === "notice_not_published") {
+      return jsonResponse({ error: "No hay un aviso de privacidad publicado todavía." }, 404)
+    }
+    if (error instanceof NoticeError && error.code === "notice_invalid") {
+      // Marker NAMES only, never values. A published notice must not have any: publishing is meant to prevent it.
+      console.error("get-consent-notice: aviso publicado con marcadores inválidos:", error.markers.join(", "))
+      return jsonResponse({ error: "NOTICE_INVALID" }, 500)
+    }
+    console.error("get-consent-notice failed:", error instanceof Error ? error.message : "unknown")
     return jsonResponse({ error: "No se pudo obtener el aviso de privacidad." }, 500)
   }
 })

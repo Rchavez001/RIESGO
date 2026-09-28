@@ -5,7 +5,7 @@ import { logSecurityEvent } from "../_shared/security-events.ts"
 import { getClientIp } from "../_shared/client-ip.ts"
 import { encryptPii, getActiveKeyVersion, hmacLookup } from "../_shared/crypto.ts"
 import { encryptConsentColumn } from "../_shared/consent-evidence.ts"
-import { renderConsentMarkers, sha256Hex } from "../_shared/consent-render.ts"
+import { loadPublishedNotice } from "../_shared/consent-notice.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,9 +71,11 @@ serve(async (req) => {
 
     const sector = await validateRegistration({ email, password, fullName, businessType })
 
-    const { document: publishedDoc, settings } = await loadPublishedNoticeAndSettings()
+    const notice = await loadPublishedNotice(supabase)
+    const publishedDoc = notice.document
+    const settings = notice.settings
     const purposes = parsePurposes(publishedDoc.purposes)
-    const { decisions, renderedSha256 } = await validateConsentNotice(body.consent_notice, publishedDoc, settings, purposes)
+    const { decisions, renderedSha256 } = await validateConsentNotice(body.consent_notice, publishedDoc, settings, purposes, notice.renderedSha256)
 
     if (body.age_gate !== true) {
       throw new AgeGateError(settings.privacy_email)
@@ -187,7 +189,7 @@ serve(async (req) => {
     console.error("secure-register-user failed:", safeError(error))
     const knownValidationErrors = [
       "invalid_email", "invalid_password", "invalid_full_name", "invalid_business_type",
-      "missing_client_ip", "notice_not_published", "settings_unavailable", "missing_required_consent",
+      "missing_client_ip", "notice_not_published", "settings_unavailable", "notice_invalid", "missing_required_consent",
     ]
     if (!knownValidationErrors.includes((error as Error)?.message)) {
       await logSecurityEvent({ req, endpoint: "secure-register-user", event_type: "unhandled_exception", severity: "alta", metadata: { name: (error as Error)?.name } })
@@ -202,49 +204,29 @@ class AgeGateError extends Error {
   constructor(privacyEmail: string) { super("age_gate_failed"); this.privacyEmail = privacyEmail }
 }
 
-async function loadPublishedNoticeAndSettings() {
-  const { data: document, error: docError } = await supabase
-    .from("consent_documents")
-    .select("id, version, content_md, purposes")
-    .eq("status", "published")
-    .maybeSingle()
-  if (docError || !document) throw new Error("notice_not_published")
-
-  const { data: settings, error: settingsError } = await supabase
-    .from("privacy_settings_current")
-    .select("settings_version, controller_name, controller_address, controller_phone, privacy_email, dpo_name, dpo_contact, privacy_policy_url, response_days, response_day_type")
-    .maybeSingle()
-  if (settingsError || !settings) throw new Error("settings_unavailable")
-
-  return { document, settings }
-}
-
 function parsePurposes(raw: unknown): Purpose[] {
   if (!Array.isArray(raw)) return []
   return raw.filter((item): item is Purpose => !!item && typeof item.code === "string")
 }
 
-// Recomputes today's rendered text server-side rather than trusting the
-// client's claimed hash — a mismatch means the notice changed underneath the
-// visitor between page-load and submit (SEC: "verificar que la huella
+// `expectedHash` is today's notice rendered server-side (never the client's claimed hash): a mismatch means
+// the notice changed underneath the visitor between page-load and submit (SEC: "verificar que la huella
 // coincide con la versión vigente").
 async function validateConsentNotice(
   raw: unknown,
-  document: { id: string; version: string; content_md: string },
-  settings: { settings_version: number; [key: string]: unknown },
+  document: { id: string },
+  settings: { settings_version: number },
   purposes: Purpose[],
+  expectedHash: string,
 ): Promise<{ decisions: Array<{ purpose_code: string; decision: "granted" | "denied" }>; renderedSha256: string }> {
-  const notice = raw as { document_id?: unknown; rendered_sha256?: unknown; settings_version?: unknown; decisions?: unknown } | null
-  if (!notice || typeof notice !== "object") throw new Error("missing_required_consent")
+  const submittedNotice = raw as { document_id?: unknown; rendered_sha256?: unknown; settings_version?: unknown; decisions?: unknown } | null
+  if (!submittedNotice || typeof submittedNotice !== "object") throw new Error("missing_required_consent")
 
-  const renderedMd = renderConsentMarkers(document.content_md, settings as never)
-  const expectedHash = await sha256Hex(renderedMd)
-
-  if (notice.document_id !== document.id || notice.settings_version !== settings.settings_version || notice.rendered_sha256 !== expectedHash) {
+  if (submittedNotice.document_id !== document.id || submittedNotice.settings_version !== settings.settings_version || submittedNotice.rendered_sha256 !== expectedHash) {
     throw new NoticeChangedError()
   }
 
-  const submitted = Array.isArray(notice.decisions) ? (notice.decisions as ConsentDecisionInput[]) : []
+  const submitted = Array.isArray(submittedNotice.decisions) ? (submittedNotice.decisions as ConsentDecisionInput[]) : []
   const decisions: Array<{ purpose_code: string; decision: "granted" | "denied" }> = []
 
   for (const purpose of purposes) {

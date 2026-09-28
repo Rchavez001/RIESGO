@@ -4,7 +4,7 @@
 // actual traffic. It is a fake: it does not enforce Postgres constraints (those are covered by the
 // migration tests) — it proves the function's own logic, ordering and compensation.
 import { assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts'
-import { renderConsentMarkers, sha256Hex } from '../_shared/consent-render.ts'
+import { renderConsent, sha256Hex } from '../_shared/consent-render.ts'
 import { decryptConsentColumn } from '../_shared/consent-evidence.ts'
 
 function randomKeyB64() {
@@ -16,16 +16,16 @@ const calls: Call[] = []
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 
 const NOTICE = {
-  id: 'doc-1', version: '1.0', purposes: [
+  id: 'doc-1', version: '1.0', title: 'Aviso de prueba', requires_reconsent: false, published_at: '2026-09-28T15:00:00Z', purposes: [
     { code: 'registro_aprendizaje', label: 'Registro y aprendizaje', required: true },
     { code: 'novedades', label: 'Novedades', required: false },
   ],
-  content_md: 'Responsable: {{controller_name}}. Escribe a {{privacy_email}}.',
+  content_md: 'Responsable: {{responsable_nombre}}. Escribe a {{correo_privacidad}}. Vigente desde {{fecha_vigencia}}.',
 }
 const SETTINGS = {
   settings_version: 3, controller_name: 'Club de Prueba', controller_address: null, controller_phone: null,
   privacy_email: 'privacidad@prueba.example', dpo_name: null, dpo_contact: null, privacy_policy_url: null,
-  response_days: 15, response_day_type: 'calendario',
+  unsubscribe_subject: 'Baja - Prueba', response_days: 15, ip_retention_days: 730,
 }
 const NEW_USER_ID = '99999999-9999-9999-9999-999999999999'
 
@@ -73,7 +73,7 @@ async function post(body: Record<string, unknown>, xff = '203.0.113.9') {
 }
 
 async function validBody(overrides: Record<string, unknown> = {}) {
-  const renderedSha256 = await sha256Hex(renderConsentMarkers(NOTICE.content_md, SETTINGS))
+  const renderedSha256 = await sha256Hex(renderConsent(NOTICE.content_md, SETTINGS, NOTICE).text)
   return {
     email: 'ana@empresa.com', password: 'MiClaveSegura1', full_name: 'Ana Pérez', business_type: 'comerciante',
     consent_notice: {
@@ -135,7 +135,7 @@ Deno.test({
     const rows = insert[0].body as Array<Record<string, any>>
     assertEquals(rows.map((r) => [r.purpose_code, r.decision]), [['registro_aprendizaje', 'granted'], ['novedades', 'denied']])
 
-    const expectedSha = await sha256Hex(renderConsentMarkers(NOTICE.content_md, SETTINGS))
+    const expectedSha = await sha256Hex(renderConsent(NOTICE.content_md, SETTINGS, NOTICE).text)
     for (const r of rows) {
       assertEquals(r.user_id, NEW_USER_ID)
       assertEquals(r.document_version, '1.0')
@@ -212,5 +212,25 @@ Deno.test({
     await res.body?.cancel()
     assertEquals(res.status, 400)
     assertEquals(sent((c) => CREATES_SOMETHING.test(`${c.method} ${c.path}`)), [])
+  },
+})
+
+Deno.test({
+  name: 'aviso publicado con un marcador desconocido o vacío → el registro se detiene y no crea nada (T09)', ...opts,
+  async fn() {
+    reset()
+    const original = NOTICE.content_md
+    try {
+      for (const broken of ['Hola {{marcador_que_no_existe}}', 'Hola {{responsable_telefono}}']) { // desconocido | conocido pero sin valor
+        NOTICE.content_md = broken
+        const res = await post(await validBody())
+        await res.body?.cancel()
+        assertEquals(res.status, 400)
+        assertEquals(sent((c) => CREATES_SOMETHING.test(`${c.method} ${c.path}`)), [])
+        calls.length = 0
+      }
+    } finally {
+      NOTICE.content_md = original
+    }
   },
 })

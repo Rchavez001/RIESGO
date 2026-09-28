@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, waitFor } from '@testing-library/react'
+import { AuthProvider, useAuth } from './AuthContext'
 
 const mockSignInWithPassword = jest.fn()
 const mockSignInWithOtp = jest.fn()
@@ -21,7 +22,6 @@ jest.mock('../lib/supabase', () => ({
   },
 }))
 
-import { AuthProvider, useAuth } from './AuthContext'
 
 // Minimal consumer so we can drive AuthContext's methods through real
 // component rendering, matching this project's existing test style
@@ -32,7 +32,7 @@ function TestConsumer({ onReady }: { onReady: (ctx: ReturnType<typeof useAuth>) 
   return null
 }
 
-function renderAuth() {
+function mountAuth() {
   let ctx: ReturnType<typeof useAuth> | null = null
   render(
     <AuthProvider>
@@ -51,7 +51,7 @@ beforeEach(() => {
 test('signIn calls signInWithPassword with the given credentials', async () => {
   mockSignInWithPassword.mockResolvedValue({ error: null })
 
-  const getCtx = renderAuth()
+  const getCtx = mountAuth()
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   await getCtx().signIn('usuario@empresa.com', 'MiClaveSegura1')
@@ -62,7 +62,7 @@ test('signIn calls signInWithPassword with the given credentials', async () => {
 test('signIn surfaces invalid credentials as a thrown error', async () => {
   mockSignInWithPassword.mockResolvedValue({ error: new Error('Invalid login credentials') })
 
-  const getCtx = renderAuth()
+  const getCtx = mountAuth()
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   await expect(getCtx().signIn('usuario@empresa.com', 'incorrecta')).rejects.toThrow(/invalid login/i)
@@ -72,7 +72,7 @@ test('signUp sends the real password to secure-register-user, then signs in with
   mockInvoke.mockResolvedValue({ data: { user_id: 'user-1', status: 'created' }, error: null })
   mockSignInWithPassword.mockResolvedValue({ error: null })
 
-  const getCtx = renderAuth()
+  const getCtx = mountAuth()
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   const consentNotice = {
@@ -108,7 +108,7 @@ test('signUp: un 409 notice_changed llega como error con .code y el mensaje legi
     error: { message: 'Edge Function returned a non-2xx status code', context: { json: async () => ({ error: 'notice_changed', message: 'El aviso cambió.' }) } },
   })
 
-  const getCtx = renderAuth()
+  const getCtx = mountAuth()
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   const consent = { document_id: 'doc-1', rendered_sha256: 'abc', settings_version: 1, decisions: [] }
@@ -120,7 +120,7 @@ test('signUp: un 409 notice_changed llega como error con .code y el mensaje legi
 test('sendLoginCode never creates a new user (existing-account login only)', async () => {
   mockSignInWithOtp.mockResolvedValue({ error: null })
 
-  const getCtx = renderAuth()
+  const getCtx = mountAuth()
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   await getCtx().sendLoginCode('Existente@Empresa.com')
@@ -134,7 +134,7 @@ test('sendLoginCode never creates a new user (existing-account login only)', asy
 test('verifyCode calls verifyOtp with the typed 6-digit code', async () => {
   mockVerifyOtp.mockResolvedValue({ error: null })
 
-  const getCtx = renderAuth()
+  const getCtx = mountAuth()
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   await getCtx().verifyCode('usuario@empresa.com', '123456')
@@ -149,7 +149,7 @@ test('verifyCode calls verifyOtp with the typed 6-digit code', async () => {
 test('verifyCode surfaces a rejected/expired code as a thrown error', async () => {
   mockVerifyOtp.mockResolvedValue({ error: new Error('Token has expired or is invalid') })
 
-  const getCtx = renderAuth()
+  const getCtx = mountAuth()
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   await expect(getCtx().verifyCode('usuario@empresa.com', '000000')).rejects.toThrow(/expired|invalid/i)
