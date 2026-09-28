@@ -3,3 +3,19 @@
 
 # Local Claude Code permissions (personal to this machine; may accumulate secrets in Bash allow entries)
 .claude/settings.local.json
+
+# Herramientas y basura local
+.vscode/
+__pycache__/
+*.pyc
+~$*
+
+# Skills de diseño instaladas por una herramienta (reproducibles con skills-lock.json)
+shield-ecuador-app/frontend/.claude/skills/
+shield-ecuador-app/frontend/.agents/
+
+# Material fuente pesado en bruto (arte y vídeo): no va a git; respaldar fuera
+shield-ecuador-app/imagen/
+shield-ecuador-app/videos/
+*.mp4
+*.mov

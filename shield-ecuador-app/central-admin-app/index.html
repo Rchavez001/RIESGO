@@ -188,38 +188,47 @@
               <span class="label">BANCO DE PREGUNTAS DE APOYO</span>
               <h2>Preguntas del Sensei y del agente de noticias</h2>
               <p class="muted">Este banco alimenta las respuestas del Sensei IA y los casos generados a partir de noticias. Las 30 preguntas de práctica y los katas de cada dojo son contenido revisado y versionado en la base de datos: no se editan aquí.</p>
-              <label class="question-dojo-pick">
-                Dojo del borrador
-                <select id="questionDojoSelect"></select>
-              </label>
-              <p class="muted">Dojo seleccionado: <strong id="questionDojoName">-</strong></p>
+              <p class="muted">Antes de publicarse, cada pregunta pasa por una validación de IA: que sea de ciberseguridad, que el lenguaje sea apto para personas sin conocimientos de informática y cuál opción es la correcta. Nada se activa para los usuarios sin pasar esa validación.</p>
             </div>
             <div class="toolbar-actions">
-              <button id="saveQuestions" class="btn primary" type="button">Guardar preguntas editadas</button>
+              <button id="addQuestionBtn" class="btn secondary" type="button">+ Agregar pregunta</button>
+              <button id="uploadQuestionBankBtn" class="btn primary" type="button">Subir archivo de preguntas</button>
+              <input id="uploadQuestionBankFile" type="file" accept=".txt,.md,.csv,.json,.pdf,.docx" hidden />
             </div>
           </div>
-          <p class="muted">Solo se guardan las preguntas que hayas <strong>editado</strong> (con su respuesta y explicación reales). Las filas de ejemplo sin editar nunca se envían a la base de datos.</p>
 
-          <div class="question-grid">
-            <article class="card">
-              <div class="card-head">
-                <div>
-                  <span class="label">MANUALES</span>
-                  <h2>Ingresadas por el equipo</h2>
-                </div>
+          <div class="form-grid compact question-bank-filters">
+            <label>
+              Dojo
+              <div class="select-clip">
+                <select id="questionDojoSelect"><option value="all">Todos los dojos</option></select>
               </div>
-              <div id="manualQuestions" class="question-list"></div>
-            </article>
+            </label>
+            <label>
+              Estado
+              <select id="questionStatusSelect">
+                <option value="pending">Pendientes de revisión</option>
+                <option value="approved">Aprobadas (publicadas)</option>
+                <option value="rejected">Rechazadas</option>
+                <option value="all">Todas</option>
+              </select>
+            </label>
+          </div>
+          <p id="questionBankSummary" class="muted" role="status"></p>
+          <p id="questionUploadStatus" class="muted" role="status"></p>
 
-            <article class="card">
-              <div class="card-head">
-                <div>
-                  <span class="label">IA</span>
-                  <h2>Generadas por IA</h2>
-                </div>
+          <div id="questionList" class="question-list"></div>
+
+          <div id="questionImportModal" class="modal">
+            <div class="modal-backdrop" data-act="closeQuestionImportModal"></div>
+            <div class="modal-card question-import-card">
+              <h2 id="questionImportModalTitle" tabindex="-1">Revisar preguntas importadas</h2>
+              <p class="muted">Corrige en línea lo que haga falta y publica solo las que queden en regla. Lo que dejes sin publicar se guarda en pausa: puedes retomarlo después desde "Pendientes de revisión".</p>
+              <div id="questionImportBody"></div>
+              <div class="modal-actions">
+                <button class="btn secondary" data-act="closeQuestionImportModal">Cerrar (deja el resto en pausa)</button>
               </div>
-              <div id="aiQuestions" class="question-list"></div>
-            </article>
+            </div>
           </div>
         </section>
 
