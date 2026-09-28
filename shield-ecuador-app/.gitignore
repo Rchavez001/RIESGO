@@ -30,3 +30,6 @@ backup*
 .tmp-learning-pg/
 __pycache__/
 .deploy/
+
+# Obsidian's own workspace/settings state — personal, not project content
+vault/.obsidian/
