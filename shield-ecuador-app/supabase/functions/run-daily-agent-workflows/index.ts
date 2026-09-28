@@ -33,6 +33,7 @@ serve(async (req) => {
     const AGENT_FUNCTION_MAP: Record<string, string> = {
       'incident-investigator': 'run-incident-investigator',
       'question-auditor': 'audit-generated-questions',
+      'ciber-dojo-news-agent': 'run-news-agent',
     }
 
     const results: Array<Record<string, unknown>> = []

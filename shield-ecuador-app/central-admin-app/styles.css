@@ -378,7 +378,6 @@ p {
 }
 
 .split,
-.question-grid,
 .ai-layout,
 .ads-layout {
   display: grid;
@@ -768,15 +767,6 @@ textarea:focus {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.question-editor {
-  display: grid;
-  gap: 12px;
-  border: 1px solid var(--line-subtle);
-  background: var(--soft);
-  border-radius: 8px;
-  padding: 12px;
-}
-
 .compact-row {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr) 86px 120px;
@@ -790,23 +780,6 @@ textarea:focus {
 
 .compact-row span {
   min-width: 0;
-}
-
-.question-editor-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-}
-
-.question-editor-head strong {
-  color: var(--blue);
-}
-
-.question-mini-grid {
-  display: grid;
-  grid-template-columns: 110px 1fr 130px;
-  gap: 10px;
 }
 
 .badge {
@@ -1367,7 +1340,6 @@ textarea:focus {
   .central-app,
   .dojo-layout,
   .split,
-  .question-grid,
   .ai-layout,
   .ads-layout {
     grid-template-columns: 1fr;
@@ -1376,8 +1348,7 @@ textarea:focus {
   .metric-grid,
   .form-grid,
   .rule-grid,
-  .form-grid.compact,
-  .question-mini-grid {
+  .form-grid.compact {
     grid-template-columns: 1fr;
   }
 
@@ -1956,13 +1927,101 @@ body.menu-open { overflow: hidden; }
 .draft-flag { font-size: 12px; color: #f59e0b; font-weight: 700; }
 
 /* ── Row A3: Preguntas ─────────────────────────────────────────────────── */
-.question-dojo-pick { display: grid; gap: 6px; max-width: 360px; margin: 10px 0; }
-.question-dojo-pick select { min-height: 44px; }
-.question-editor textarea, .question-editor input, .question-editor select { min-height: 44px; }
-.question-editor textarea { min-height: 72px; }
-.placeholder-note { color: #f59e0b; }
-.question-editor-head, .question-editor label { min-width: 0; }
 @media (max-width: 720px) { .toolbar-actions, .toolbar-actions .btn { width: 100%; } }
+
+/* ── Banco de preguntas: edición real + importación con IA ──────────────── */
+.question-bank-filters { max-width: 640px; margin: 10px 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.question-bank-filters label { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.question-bank-filters select { min-height: 44px; min-width: 0; }
+
+/* A native <select>'s "overflow" is one of the properties WebKit's UA stylesheet keeps forcing to
+   "visible" for its own popup chrome, no matter what author CSS says — so a long option (a dojo
+   name) still blows out the layout even with overflow:hidden set directly on the <select>. A plain
+   wrapper div isn't a form control, so its own overflow:hidden actually clips the select's box. */
+.select-clip { overflow: hidden; min-width: 0; border-radius: 8px; }
+
+.question-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid var(--line-subtle);
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.question-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.question-card textarea,
+.question-card input,
+.question-card select {
+  min-height: 44px;
+  min-width: 0;
+}
+
+/* WebKit sizes a <select> by its longest <option> text (a long dojo name here) and lets that
+   drive an "auto"-sized grid track wider than the viewport, even with min-width:0 on the select
+   itself — the fix has to cap the TRACK, not the item: minmax(0, 1fr) on every grid ancestor the
+   select sits in, including the <label> (itself a nested grid via the global `label` rule). */
+.question-card label {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.question-card textarea {
+  min-height: 64px;
+}
+
+.question-options-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.question-option-row {
+  display: grid;
+  grid-template-columns: 24px 28px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--line-subtle);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 0;
+}
+
+.question-option-row input[type="radio"] {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  min-width: 0;
+  margin: 10px 0 0;
+}
+
+.question-option-row textarea {
+  min-width: 0;
+}
+
+.question-option-letter {
+  font-weight: 900;
+  color: var(--blue);
+  padding-top: 12px;
+}
+
+.question-audit-notes { color: #f0d896; }
+
+.question-import-card { width: min(880px, 100%); max-height: 85vh; overflow-y: auto; }
+.question-import-row { margin-top: 14px; }
+
+@media (max-width: 720px) {
+  .question-options-grid { grid-template-columns: 1fr; }
+  .question-card .modal-actions { display: grid; gap: 8px; }
+  .question-card .modal-actions .btn { width: 100%; }
+}
 
 /* ── Row A4: proveedores de IA ─────────────────────────────────────────── */
 .ai-provider-list { display: grid; gap: 12px; margin-top: 12px; }

@@ -363,7 +363,7 @@ export function isImageFile(fileName: string): string | null {
 export async function extractTextFromFile(bytes: Uint8Array, fileName: string): Promise<string> {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
 
-  if (ext === 'txt' || ext === 'md') {
+  if (ext === 'txt' || ext === 'md' || ext === 'csv' || ext === 'json') {
     return new TextDecoder('utf-8').decode(bytes)
   }
 
@@ -378,7 +378,7 @@ export async function extractTextFromFile(bytes: Uint8Array, fileName: string): 
     return value
   }
 
-  throw new Error(`Tipo de archivo no soportado: .${ext}. Usa .txt, .md, .pdf, .docx, o una imagen (.png/.jpg/.webp).`)
+  throw new Error(`Tipo de archivo no soportado: .${ext}. Usa .txt, .md, .csv, .json, .pdf, .docx, o una imagen (.png/.jpg/.webp).`)
 }
 
 export function parseJsonResponse(content: string) {
@@ -389,6 +389,18 @@ export function parseJsonResponse(content: string) {
   return JSON.parse(normalized)
 }
 
+// Moodle's rule #7 for multiple-choice questions: don't let the correct answer fall in the same
+// position every time (an easy pattern a test-taker learns to exploit) — Fisher-Yates before
+// assigning A/B/C/D letters, so the answer built at index 0 above doesn't always end up as "A".
+export function shuffleOptions<T>(options: T[]): T[] {
+  const shuffled = [...options]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 export function buildOptions(correctAnswer: string, wrongAnswers?: string[]) {
   const fallbackWrong = [
     'Ignorar la alerta y continuar operando igual',
@@ -397,7 +409,7 @@ export function buildOptions(correctAnswer: string, wrongAnswers?: string[]) {
   ]
   const wrong = (wrongAnswers && wrongAnswers.length > 0 ? wrongAnswers : fallbackWrong).slice(0, 3)
   const letters = ['A', 'B', 'C', 'D']
-  const all = [{ texto: correctAnswer, correcta: true }, ...wrong.map((texto) => ({ texto, correcta: false }))]
+  const all = shuffleOptions([{ texto: correctAnswer, correcta: true }, ...wrong.map((texto) => ({ texto, correcta: false }))])
   return all.map((option, index) => ({ valor: letters[index] ?? String(index), ...option }))
 }
 
