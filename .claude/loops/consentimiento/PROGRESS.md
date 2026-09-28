@@ -1,12 +1,15 @@
 # PROGRESS — Módulo de Consentimiento Informado y Derechos del Titular
 
 Última actualización: 2026-09-28 (tarde). Fuente de requisitos: SPEC v1.0 (REQ-01…20, SEC-01…09).
-**`TASKS.md`, `DECISIONS.md` y el seed real del aviso NO están en la máquina** (se buscó en el repo, Descargas, Documentos y Escritorio;
-solo existen `gates.sh`, este archivo, `PLAN_PRODUCCION_074_075.md` y `diag/`, creados por Claude). Sin ellos no se puede dar el porcentaje
-contra TASKS.md ni cargar el aviso real: en local sigue el aviso de PRUEBA. Las tareas nuevas de abajo están listas para trasladar.
+El paquete del loop (PROMPT, SPEC, TASKS, DECISIONS, seed, run-loop.sh) está instalado en `.claude/loops/consentimiento/` y el trabajo sigue en la rama
+`feature/consentimiento-lopdp`. Este archivo tiene dos partes: las secciones de loop (mapa del repo, línea base, iteraciones — al final) y el
+historial previo al loop (estado, decisiones, hallazgos abiertos). Los pasos 2 y 3 de instalación del README (fusionar `settings.loop.json` y añadir
+`CLAUDE.md.fragmento`) NO se han hecho: cambian permisos e instrucciones del proyecto y los decide la persona responsable.
 
 ## Estado (estimación contra la SPEC, no contra TASKS.md)
-- ~42 % escrito contra la SPEC · ~19 % en producción (solo Fase 0; 074, 075 y Fase 1 NO están desplegadas).
+- **Contra TASKS.md: 1 de 28 tareas cerrada (3,6 %)** — solo T00; el resto tiene su "Estado real" anotado en TASKS.md. Ponderando lo parcial,
+  ≈ 27–28 % (estimación mía a partir de esas anotaciones). Contra la SPEC: ~42 % escrito.
+- ~19 % en producción (solo Fase 0; 074, 075 y Fase 1 NO están desplegadas, a la espera del release único).
 - Verificado con pruebas automáticas: cripto+AAD, cuota fail-closed, evidencia, registro de punta a punta, ciclo de vida SQL (073+074),
   versionado de `privacy_settings` (075), la función de diagnóstico T03, y una prueba de punta a punta contra Supabase local (21/21).
 
@@ -112,3 +115,58 @@ Punta a punta con Supabase local (necesita ~3 GB libres en C:; vigilar el disco)
 3. Sembrar un admin, `privacy_settings` vigente y un aviso publicado (en local no hay admin durante la migración).
 4. `supabase functions serve --env-file <fn.env>` con `PII_ENCRYPTION_KEY_B64`, `PII_KEY_VERSION`, `LOOKUP_HMAC_KEY_B64`, `SECURITY_EVENTS_HMAC_KEY`.
 5. `node supabase/tests/consent/e2e_local.cjs` y luego `e2e_decrypt.ts`.
+
+---
+
+# Secciones del loop
+
+## Mapa del repo (T00 — rutas reales, 2026-09-28)
+Gestor de paquetes: **npm** (`package-lock.json` en la raíz de `shield-ecuador-app/` y en `frontend/`; sin pnpm/yarn). Rutas bajo `shield-ecuador-app/`.
+
+| Qué | Ruta real |
+|---|---|
+| Pantalla de registro | `frontend/src/screens/RegisterScreen.tsx` (reescrita en Fase 1; el aviso ya no está hardcodeado) |
+| Contexto de autenticación | `frontend/src/contexts/AuthContext.tsx` (+ `.test.tsx`) |
+| Registro (Edge Function) | `supabase/functions/secure-register-user/index.ts` |
+| Aviso público | `supabase/functions/get-consent-notice/index.ts` |
+| Helpers compartidos | `supabase/functions/_shared/`: `crypto.ts`, `consent-evidence.ts`, `consent-render.ts`, `consent-notice.ts`, `client-ip.ts`, `rate-limit.ts`, `security-events.ts`, `pii.ts` (este último aún sin versionar en git) |
+| Panel de administración | `central-admin-app/server.js` (Node `http` puro, Basic Auth compartida + proxy con service role), `app.js` (SPA en JS plano), `index.html`, `styles.css`; sin dependencias npm |
+| Migraciones | `supabase/migrations/`: mayor **075**, con saltos en 023 y 033. Módulo: 073, 074, 075 |
+| Pruebas SQL / punta a punta del módulo | `supabase/tests/consent/` |
+| Pruebas Playwright | raíz: `playwright.frontend.config.ts` (`tests/frontend/`, 7 perfiles, necesita la app compilada en :8793), `playwright.admin.config.ts` (`tests/admin/`, levanta `server.js` con un upstream simulado) |
+| Texto de aviso hardcodeado | **Ninguno** tras Fase 1 (se buscó `privacy_notice`, "aviso de privacidad", "Tratamiento de datos personales", el correo personal que antes estaba escrito en `RegisterScreen`). Quedan solo referencias a `privacy_notice_version` (`lib/supabase.ts`, `get-private-profile`) |
+| Tabla de consentimiento previa | **No había**: solo columnas en `users` (migración 012): `data_processing_authorized`, `data_processing_authorized_at`, `privacy_notice_version` (antes una constante hardcodeada `2026-06-22`), `privacy_updated_at`. El panel lee `data_processing_authorized` (`central-admin-app/app.js`) |
+| Proveedor de correo | **Resend** (clave `resend_api_key` en Vault vía `app_secrets`): `championship-draw-round1`, `check-security-alerts` |
+| pgTAP / `supabase test db` | No existe. Las pruebas SQL del módulo son scripts `psql` autoverificables (`RAISE EXCEPTION` + `ON_ERROR_STOP`) sobre un Postgres 16 efímero |
+
+Comandos: typecheck `cd frontend && npx tsc --noEmit` · lint `npx eslint src --ext .ts,.tsx` (config `react-app`) · unit frontend `CI=true npx react-scripts test --watchAll=false` ·
+panel `cd central-admin-app && npm test` (+ `node tests/*.test.cjs`) y Playwright admin · Deno `npx -y deno@2.9.6 check|test`.
+
+## Línea base de gates (T00)
+`bash .claude/loops/consentimiento/gates.sh` — medido antes de tocar nada más en esta iteración:
+
+| Puerta | Estado base | Detalle |
+|---|---|---|
+| typecheck-frontend | OK | |
+| lint-frontend | **22 problemas al medir; 14 preexistentes** | 8 eran de `AuthContext.test.tsx` (imports tras `jest.mock`, `const getCtx = renderAuth()`); se corrigieron en esta iteración. Quedan **14 en 9 archivos ajenos al módulo**: `App.test.tsx` (2), `SenseiVideoModal.test.tsx` (2), `ToastContext.test.tsx` (2), `safeRedirect.test.ts` (1), `safeUrl.test.ts` (3), `AuthCallbackPage.test.tsx` (1), `LandingPage.tsx` (1), `LoginScreen.test.tsx` (1), `ResetPasswordPage.test.tsx` (1). La puerta tiene un **tope de 14**: no se admite ninguno nuevo y los viejos se siguen mostrando |
+| unit-frontend | OK | |
+| panel-unit | OK | |
+| panel-e2e | OK | Playwright admin, perfil desktop-chrome (~2,5 min). **Flake de entorno hallado y corregido en esta iteración:** el servidor de pruebas del panel (`:3198`, `reuseExistingServer: true`) sobrevivía entre corridas y su limitador de autenticaciones fallidas (10 cada 10 min, en memoria) hacía que la segunda corrida seguida recibiera 429 en vez de 401 (`server.spec.ts:23`). La puerta ahora cierra cualquier `start-admin.cjs` antes y después. Verificado con dos corridas seguidas |
+| deno-check | OK | |
+| deno-test | OK | 51 pruebas + 5 de la función de diagnóstico |
+| sql-ciclo-de-vida | OK | Postgres 16 efímero, 073+074+075 |
+| db-reset | **SKIP explícito** | Opt-in (`GATES_DB_RESET=1`, stack local en marcha). Además, **las migraciones anteriores a 073 no se aplican desde cero en Postgres 17**: la 004 define `is_admin()` (SQL) antes de crear la columna `role` que usa (`column "role" does not exist`). Es previo al módulo y rompe la regla "cada migración aplica limpia con `supabase db reset`" tal como está escrita; en local se sortea con una copia desechable que antepone `SET check_function_bodies = off;` (ver "Cómo reproducir en local") |
+
+No incluido en las puertas: Playwright del frontend (necesita la app compilada y un servidor en :8793; ver `npm run test:frontend`).
+
+## Iteración 1 — 2026-09-28 — T00 Mapa del repo y gates
+- Cambios: `.claude/loops/consentimiento/gates.sh` reescrito (una línea `GATE <nombre>: OK|FAIL|SKIP` por puerta, tope de lint, logs en `logs/`, `GATES_ONLY`, `GATES_DB_RESET`);
+  `logs/.gitignore` (`*.log`); `AuthContext.test.tsx` sin problemas de lint; `TASKS.md` con el estado real y la sección de tareas añadidas; `DECISIONS.md` con notas y D-08, D-09;
+  este archivo. Además, antes de la iteración (sin cerrar tarea): renderizador `consent-render.ts` con los 11 marcadores reales del seed, `consent-notice.ts` compartido y
+  `supabase/tests/consent/load_seed_aviso.cjs` (aviso real cargado y publicado SOLO en Supabase local).
+- Pruebas añadidas: 9 de `consent-render_test.ts` (incluye el seed real completo e incompleto), 1 de aviso publicado inválido en `secure-register-user/index_test.ts`.
+- Gates: OK salvo la línea base documentada arriba (lint: 14 preexistentes bajo tope; db-reset: omitido explícitamente).
+- Desviaciones de SPEC: ver "Decisiones tomadas" (AAD anclada en `user_ref_hmac`, aprobada; formato de cifrado JSON, pendiente D-09). Trabajo hecho fuera del orden del loop: la rama y parte de T02–T10 se
+  adelantaron antes de instalar el paquete; se anotó su estado real en TASKS.md en vez de marcarlas como cerradas.
+- Riesgos / pendientes detectados: `playwright.admin.config.ts` con `reuseExistingServer: true` es frágil fuera de `gates.sh` (misma causa que el flake de arriba); el frontend muestra el aviso como texto plano (Markdown sin renderizar: T18); T03-prod/T03-sec (P0); `pii.ts` sin versionar; el aviso local usa datos de desarrollo
+  (D-07 sin completar); el loop dice "nunca `supabase db push`" y en la Fase 0 (antes de instalarlo) sí se aplicó 073 a producción: no se repetirá.

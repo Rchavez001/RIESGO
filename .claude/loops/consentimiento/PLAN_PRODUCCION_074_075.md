@@ -1,7 +1,10 @@
-# Plan de ventana única — aplicar 074 + 075 a producción
+# Plan de release único — 074 + 075 (y el resto del módulo) a producción
 
-**Estado: NO EJECUTADO. Espera tu OK.** Proyecto `wbbcjiqzbzswxsmwjqlw`. Tiempo estimado: 10–15 min. Solo cambia la base de datos
-(no se despliega ninguna función ni el frontend en esta ventana).
+**Estado: GUARDADO, NO SE EJECUTA POR SEPARADO.** Decisión del responsable: esto se aplicará en **un único release** junto con las
+funciones, el frontend y el aviso ya publicado. No se aplican 074/075 antes por su cuenta. Proyecto `wbbcjiqzbzswxsmwjqlw`.
+
+Este documento describe los pasos de BASE DE DATOS de ese release (secciones 0–6). El orden completo del release está al final.
+Nada de lo que hay aquí se ejecuta hasta que la persona responsable lo pida expresamente.
 
 ## Qué cambia y qué NO
 - 074: `consent_records.user_id` y `admin_audit_log.actor_id` dejan de ser `ON DELETE SET NULL` (pasan a `NO ACTION`); el `row_hash`
@@ -40,10 +43,23 @@ cd shield-ecuador-app
 supabase migration list        # esperado: 073 en local y remoto; 074 y 075 solo en local
 ```
 
-## 2. Confirmación de respaldo (tú, antes de seguir)
-- [ ] Panel → Database → Backups: anotar la fecha/hora del último respaldo (o confirmar PITR activo). Debe ser de hoy.
-- [ ] Opcional, recomendado: respaldo lógico previo (necesita Docker y espacio; escribe un archivo local):
-      `supabase db dump -f ../backup_pre_074_075.sql` (esquema) y `supabase db dump --data-only -f ../backup_pre_074_075_data.sql`.
+## 2. Respaldo (obligatorio antes del `db push`)
+- [ ] Panel → Database → Backups: comprobar si el proyecto tiene **PITR** activo y anotar la fecha/hora de la última copia diaria.
+- **Si NO hay PITR, el respaldo lógico es obligatorio** (no opcional): esquema Y datos, antes del push, guardados **fuera de esta máquina**.
+  ```bash
+  cd shield-ecuador-app
+  supabase db dump -f ../backup_pre_release_esquema.sql
+  supabase db dump --data-only -f ../backup_pre_release_datos.sql
+  sha256sum ../backup_pre_release_*.sql > ../backup_pre_release.sha256     # constancia de integridad
+  ```
+  Reglas del respaldo:
+  1. **Contiene datos personales** (perfiles con PII cifrada, huellas HMAC, correos enmascarados): cifrarlo antes de moverlo
+     (p. ej. `7z a -p -mhe=on` o `age`) con una clave que NO viaje con el archivo, y **no commitearlo jamás** (ni en el repo ni en `.claude/`).
+  2. Copiarlo a un destino **fuera de esta máquina** (almacenamiento de la institución o un disco externo) y comprobar allí el `sha256`.
+  3. Comprobar que no está vacío ni truncado: tamaño coherente y última tabla presente (`grep -c "^COPY public\." backup_pre_release_datos.sql`).
+  4. Vigilar el disco antes de empezar: el 100 % de `C:` ya causó un incidente (Docker colgado, imagen dañada). Mínimo 2 GB libres.
+  5. No se continúa sin la confirmación de que la copia externa existe y se verificó.
+- `supabase db dump` no incluye el esquema `auth`; las cuentas de Auth dependen de la copia diaria/PITR del panel. Anotarlo en la constancia.
 - Qué se pierde de verdad al aplicar: 4 columnas de `privacy_settings` (las 3 de verificación están vacías —lo comprueba la guarda— y
   `is_current` solo dice cuál es la vigente, que pasa a ser la de mayor versión). Ningún dato de usuarios.
 
@@ -82,7 +98,18 @@ no se revierte: se corrige hacia delante. Con la tabla vacía, una migración 07
 `unlink_user_consent_evidence`; y para 075: borrar la tabla, la vista y el trigger nuevos, re-añadir `is_current` (y las 3 columnas
 de verificación) y poner `is_current = true` en la fila de mayor versión. No la preparo hasta que la pidas: no se espera usarla.
 
-## Ventana siguiente (NO ahora): funciones y frontend
-Solo cuando estén cumplidos los tres: (1) aviso real publicado en producción (revisado por legal), (2) T03 medido y `TRUSTED_PROXY_HOPS`
-fijado (o `cf-connecting-ip`), (3) 074+075 aplicadas. Entonces: `supabase secrets set TRUSTED_PROXY_HOPS=…`, desplegar
-`get-consent-notice` y `secure-register-user`, desplegar el frontend, y probar un registro real de punta a punta.
+## Orden del release único (todo o nada)
+Precondiciones, todas antes de empezar: (1) el aviso real está listo y revisado por legal; los datos del responsable y del delegado
+están completos (D-07); (2) T03 medido y la cabecera de IP de confianza decidida (D-08) — ver `diag/README.md`; (3) respaldo externo
+verificado (sección 2); (4) `gates.sh` en verde sobre la rama del release; (5) PR revisado.
+
+1. Secretos (los crea la persona responsable, nunca el loop): `LOOKUP_HMAC_KEY_B64` (ya existe), `TRUSTED_PROXY_HOPS` si aplica.
+2. `supabase db push` → 074 + 075 (secciones 1–4 de este plan).
+3. `supabase functions deploy` de `get-consent-notice` y `secure-register-user` (y el resto de funciones del módulo que lleguen en el release).
+4. Publicar el aviso v1.0 con los datos reales (sin marcadores sin resolver).
+5. Desplegar el frontend (`gcloud run deploy cyberdojo --source frontend …`).
+6. Prueba de punta a punta en producción: un registro real de prueba, y la verificación de cadenas (`verify_consent_chain`, `verify_audit_chain`).
+7. Criterio de reversa del release: mientras `consent_records` siga vacío se puede volver atrás (sección 6); con evidencia escrita se corrige hacia delante.
+
+**Por qué no por partes:** el frontend y `secure-register-user` nuevos exigen un aviso publicado (sin él nadie se registra) y 074/075
+cambian tablas que solo esas funciones nuevas usan. Aplicar una pieza sola no aporta nada y añade ventanas de riesgo.
