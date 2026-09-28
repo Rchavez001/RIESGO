@@ -93,7 +93,7 @@ test.describe('/escaner', () => {
   test('invitado: /escaner queda cerrado y se le invita a registrarse', async ({ page }) => {
     await setup(page, { anonymous: true })
     await page.goto('/escaner')
-    await expect(page.getByRole('heading', { name: /regístrate para continuar/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /regístrate para tener la experiencia completa/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /iniciar diagnóstico/i })).toHaveCount(0)
   })
 })

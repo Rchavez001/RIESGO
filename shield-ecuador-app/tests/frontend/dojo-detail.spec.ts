@@ -79,9 +79,37 @@ test.describe('/dojo/:id', () => {
     await setup(page, { anonymous: true })
     await openDojo(page)
     await expect(page.getByRole('note')).toContainText(/modo invitado/i)
+    await expect(page.getByRole('note')).toContainText(/10 preguntas/i)
     await expect(page.getByRole('link', { name: /regístrate gratis/i })).toBeVisible()
-    await expect(page.getByText(/respuestas en esta sesión/i)).toBeVisible()
+    await expect(page.getByText(/de 10 respuestas de prueba, sin guardar/i)).toBeVisible()
     await expect(page.getByText(/guardadas en tu cuenta/i)).toHaveCount(0)
+  })
+
+  test('invitado: al llegar a la pregunta 10 se le pide registrarse en vez de continuar', async ({ page }) => {
+    await signedIn(page, { anonymous: true })
+    let answered = 0
+    const questionAt = (n: number) => ({ ...Q1, id: `P3-${String(n).padStart(4, '0')}` })
+    await page.route('**/rest/v1/rpc/learning_state', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state({ cursor: answered, answered, question: questionAt(answered + 1) })) }))
+    await page.route('**/rest/v1/rpc/learning_answer', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state({ cursor: answered, answered: answered + 1, selected: 0, question: { ...questionAt(answered + 1), ...REVEAL } })) }))
+    await page.route('**/rest/v1/rpc/learning_next', r => { answered += 1; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state({ cursor: answered, answered, question: questionAt(answered + 1) })) }) })
+    await openDojo(page)
+
+    for (let i = 1; i <= 9; i++) {
+      const option = page.locator('.answer-option').first()
+      await expect(option).toBeEnabled()
+      await option.click({ force: true })
+      const next = page.getByRole('button', { name: /ya leí la explicación/i })
+      await expect(next).toBeVisible()
+      await next.click({ force: true })
+      await expect(page.locator('.hero-badge')).toContainText(`Pregunta ${i + 1} de 10`)
+    }
+    // Décima pregunta: se responde, pero ya no hay botón para continuar a la 11.
+    const lastOption = page.locator('.answer-option').first()
+    await expect(lastOption).toBeEnabled()
+    await lastOption.click({ force: true })
+    await expect(page.getByRole('button', { name: /ya leí la explicación/i })).toHaveCount(0)
+    await expect(page.getByText(/regístrate para tener la experiencia completa/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /regístrate gratis/i })).toBeVisible()
   })
 
   test('si falla la carga: mensaje y reintento, sin detalles del servidor', async ({ page }) => {

@@ -6,6 +6,8 @@ import { LearningFeedback, LearningTerms } from '../components/LearningHelpers'
 import { learningCall, learningDojos, LearningState } from '../services/learning'
 import { useAuth } from '../contexts/AuthContext'
 
+const GUEST_QUESTION_LIMIT = 10
+
 export function DojoDetailPage() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -77,7 +79,7 @@ export function DojoDetailPage() {
     <SectionHeader eyebrow="ENTRENAMIENTO · A TU RITMO" title={dojo.title} kanji="道" />
     <div className={`learning-intro glass-panel${state && state.answered > 0 ? ' is-secondary' : ''}`}><BeltBadge level={dojo.belt} />
       <p>Practica 30 preguntas para preparar tu examen. Equivocarte también ayuda a aprender. Puedes salir y continuar desde donde te quedaste.</p></div>
-    {isGuest && <p className="learning-guest-note" role="note">Estás en modo invitado: tu avance no se guarda. <Link to="/registro">Regístrate gratis</Link> para conservarlo y desbloquear más dojos.</p>}
+    {isGuest && <p className="learning-guest-note" role="note">Estás en modo invitado: puedes practicar hasta {GUEST_QUESTION_LIMIT} preguntas de este dojo y tu avance no se guarda. <Link to="/registro">Regístrate gratis</Link> para conservarlo, desbloquear más dojos y seguir sin límite.</p>}
     {error && <div role="alert" className="combat-feedback"><p>{error}</p><NeonButton onClick={() => act('learning_state', { p_dojo: dojo.id })} disabled={busy}>Recuperar mi avance</NeonButton></div>}
     {!state && busy && <p role="status">Recuperando tu última pregunta…</p>}
     {state && q && <div className="combat-layout learning-layout">
@@ -85,9 +87,9 @@ export function DojoDetailPage() {
         <CompanionPicker />
         <p>No hay límite de tiempo. Lee con calma y elige lo que harías.</p></aside>
       <section className="combat-panel question-card glass-panel" aria-busy={busy}>
-        <div className="hero-badge">Pregunta {state.cursor + 1} de 30 · {q.topic}</div>
-        <progress className="learning-progress" value={state.answered} max={30} aria-label={`${state.answered} preguntas respondidas de 30`} />
-        <p className="learning-save">{busy ? 'Guardando…' : isGuest ? `${state.answered} de 30 respuestas en esta sesión` : `${state.answered} de 30 respuestas guardadas en tu cuenta`}</p>
+        <div className="hero-badge">Pregunta {state.cursor + 1} de {isGuest ? GUEST_QUESTION_LIMIT : 30} · {q.topic}</div>
+        <progress className="learning-progress" value={state.answered} max={isGuest ? GUEST_QUESTION_LIMIT : 30} aria-label={`${state.answered} preguntas respondidas de ${isGuest ? GUEST_QUESTION_LIMIT : 30}`} />
+        <p className="learning-save">{busy ? 'Guardando…' : isGuest ? `${state.answered} de ${GUEST_QUESTION_LIMIT} respuestas de prueba, sin guardar` : `${state.answered} de 30 respuestas guardadas en tu cuenta`}</p>
         <h2 className="learning-prompt" ref={promptRef} tabIndex={-1}>{q.prompt}</h2><LearningTerms item={q} />
         <div className="answer-grid">{q.options.map((option, index) => <button key={`${q.id}-${index}`}
           className={`answer-option btn-katana ${answered && index === q.correct ? 'correct' : answered && index === state.selected ? 'wrong' : ''}`}
@@ -97,7 +99,13 @@ export function DojoDetailPage() {
         </button>)}</div>
         {answered && <div ref={feedbackRef} tabIndex={-1} className="learning-feedback-anchor"><LearningFeedback item={q} selected={state.selected!} /></div>}
         <div className="learning-actions">
-          {answered && state.cursor < 29 && <NeonButton color="cyan" disabled={busy}
+          {answered && isGuest && state.answered >= GUEST_QUESTION_LIMIT ? (
+            <div className="glass-panel combat-feedback" role="status">
+              <h3>Regístrate para tener la experiencia completa</h3>
+              <p>Como invitado ya practicaste {GUEST_QUESTION_LIMIT} preguntas. Crea una cuenta gratis para seguir con las 30 de este dojo, desbloquear el resto, el kata y el Sensei — toma menos de un minuto.</p>
+              <NeonButton color="gold" onClick={() => navigate('/registro')}>Regístrate gratis</NeonButton>
+            </div>
+          ) : answered && state.cursor < 29 && <NeonButton color="cyan" disabled={busy}
             onClick={() => act('learning_next', { p_dojo: dojo.id, p_question: q.id })}>Ya leí la explicación · Continuar</NeonButton>}
           {state.complete && <div role="status"><h3>Completaste las 30 preguntas</h3>
             <p>Ya puedes presentar tu kata: cinco casos, con el último más desafiante. Necesitas cuatro aciertos para aprobar.</p>

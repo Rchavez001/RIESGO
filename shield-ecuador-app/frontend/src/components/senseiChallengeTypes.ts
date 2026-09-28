@@ -6,6 +6,10 @@ export type QuestionContent = {
   options: string[]
   terms?: Record<string, string>
   topic?: string
+  // Only present on questions synced from the news-agent pipeline
+  // (public.learning_items.source_question_id IS NOT NULL) — the seeded
+  // belt-exam question bank has no equivalent date, so this is optional.
+  generated_at?: string
 }
 
 export type Phase =
