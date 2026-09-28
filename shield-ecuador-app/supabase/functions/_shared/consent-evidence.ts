@@ -13,7 +13,7 @@ export function consentRecordAad(column: ConsentRecordColumn, userRefHmac: strin
 }
 
 export function encryptConsentColumn(value: string, keyVersion: number, column: ConsentRecordColumn, userRefHmac: string) {
-  return encryptPii(value, keyVersion, { aad: consentRecordAad(column, userRefHmac) })
+  return encryptPii(value, keyVersion, { aad: consentRecordAad(column, userRefHmac), requireAad: true })
 }
 
 export async function decryptConsentColumn(

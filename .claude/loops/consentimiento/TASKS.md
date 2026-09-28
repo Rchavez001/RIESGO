@@ -32,13 +32,9 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 1 · Fundamentos criptográficos y de identidad
 
-- [ ] **T02 — Módulo `_shared/crypto.ts` con versionado de claves** (SEC-04)
-  - **Estado real (2026-09-28):** PARCIAL. Hecho: AES-256-GCM, AAD opcional con marca `aad:true`, HMAC con clave propia, lectura de cifrados anteriores sin AAD, versión de clave en el payload y `_V{n}` (`_shared/crypto.ts`, 8 pruebas). El formato es el JSON existente `{v,alg,iv,tag,ct}`: **D-09 = A (decidida), SPEC 1.1 ya lo dice; no es una desviación**. Falta: AAD obligatoria para columnas nuevas, `pii.ts` delegando en `crypto.ts`, pruebas "leer v1 con activa v2" y "clave mal formada sin filtrar la clave".
-  - AES-256-GCM, formato JSON existente `{v,alg,iv,tag,ct}` con marca `aad` (D-09), AAD obligatoria en columnas nuevas, HMAC con clave distinta.
-  - Compatibilidad: si `_shared/pii.ts` tiene formato previo, `decrypt` lo lee (legacy = v0) y
-    `encrypt` siempre usa la versión activa. `pii.ts` pasa a delegar en `crypto.ts`.
-  - **Tests:** ida y vuelta; AAD distinta falla; texto manipulado falla; leer v1 con activa v2;
-    HMAC estable y distinto al usar otra clave; clave mal formada → error claro sin filtrar la clave.
+- [x] **T02 — Módulo `_shared/crypto.ts` con versionado de claves** (SEC-04) (hecha 2026-09-28, iteración 4)
+  - **Resultado:** AES-256-GCM con el JSON existente `{v,alg,iv,tag,ct}` y marca `aad` (D-09); AAD obligatoria en columnas nuevas (`requireAad`, usado por `encryptConsentColumn`); HMAC con clave propia; versión de clave en el payload y `_V{n}`; lectura de los cifrados anteriores (incluido el formato `{iv,tag,ct}` sin `v` de `pii.ts`). 14 pruebas en `crypto_test.ts`: ida y vuelta; AAD distinta; texto manipulado; marca quitada; legado sin AAD; `allowLegacy:false`; leer v1 con v2 activa; v1 sin su clave `_V1` falla; clave mal formada / de otro largo / HMAC ausente → `invalid_key_vN` / `invalid_hmac_key:NOMBRE` sin filtrar el valor; `requireAad`.
+  - **Desviación:** "`pii.ts` pasa a delegar en `crypto.ts`" **se movió a T02-extra**. `_shared/pii.ts` sigue sin versionar en git (trabajo previo ajeno al módulo, ver PROGRESS.md, iteración 3) y no se incluye en los commits del loop hasta que la persona responsable lo apruebe.
 
 - [ ] **T03 — `_shared/client-ip.ts` y verificación empírica de cabeceras** (REQ-05)
   - **Estado real (2026-09-28):** PARCIAL. Hecho: `_shared/client-ip.ts` (toma la entrada que añadió el proxy de confianza, `TRUSTED_PROXY_HOPS`; normaliza y valida IPv4/IPv6; 8 pruebas), medición LOCAL de cabeceras (el proxy añade al final; `X-Real-IP` lo fija el proxy), IP de body ignorada con evento (en `secure-register-user`). Falta: `maskIp`, IPv4-mapped→IPv4 y zona IPv6, medición en hospedado (D-08; método en `.claude/loops/consentimiento/diag/`, no `scripts/diag-headers/`).
@@ -214,8 +210,12 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 6 · Migración, documentación y cierre
 
-- [ ] **T25 — Backfill de consentimientos legacy** (según plan T01) ⛔ BLOQUEADA (D-10, D-11)
-  - **Ajuste tras T01 (D-11):** no es una migración SQL sino una función/script de un solo uso (necesita `LOOKUP_HMAC_KEY_B64`); idempotente, con `--dry-run`, en lotes. Evidencia legacy marcada con `document_version LIKE 'legacy%'` (esperado `legacy-2026-06-22`), sin inventar IP (`ip_hmac` nulo, requiere migración nueva). Diseño completo en PROGRESS.md, Iteración 2.
+- [ ] **T25 — Backfill de consentimientos legacy** (según plan T01; **D-10 y D-11 decididas**)
+  - **Decisiones que aplican:** D-10 = conservar el consentimiento anterior como historial (documento retirado `legacy-2026-06-22`, evidencia limitada: solo fecha) y publicar el aviso 1.0 con `requires_reconsent = true` (T19 lo muestra a todos en su próximo inicio de sesión; **pendiente de confirmación por asesoría legal antes del release**, no bloquea el código). D-11 = ver los dos puntos siguientes.
+  - **(a) Migración nueva** (siguiente número libre al momento de hacerla; NO se edita la 073): `ALTER TABLE consent_records ALTER COLUMN ip_hmac DROP NOT NULL` + `CHECK (ip_hmac IS NOT NULL OR document_version LIKE 'legacy-%')`. Las filas nuevas siguen obligadas a tener `ip_hmac`. Debe entrar en la misma ventana de release que 074 y 075 (actualizar `PLAN_PRODUCCION_074_075.md` cuando exista). Prueba SQL en `supabase/tests/consent/` y puerta en `gates.sh`: una fila con `document_version = 'registro-1.0'` y `ip_hmac` nulo **falla**; una `legacy-2026-06-22` sin IP **pasa**; `verify_consent_chain()` sigue sin filas rotas.
+  - **(b) Script de un solo uso** (no migración; necesita `LOOKUP_HMAC_KEY_B64`): idempotente, en lotes de 500, **`--dry-run` por defecto** (solo cuenta las poblaciones A/B/C del plan y muestra 3 ids abreviados, sin correos ni IP); solo escribe con `--apply`. La clave HMAC llega **por variable de entorno en esa sesión**: nunca se escribe en archivos ni en logs (el script no imprime variables de entorno ni hace `console.log` de la clave, y sus pruebas lo verifican). **Se ejecuta únicamente dentro del release y con el OK explícito de la persona responsable; jamás en una iteración del loop ni contra producción desde aquí.** Mismo diseño de filas que PROGRESS.md, Iteración 2, §3 (documento legacy `retired`, una fila `registro_aprendizaje` `granted` por persona con `authorized = true`, `server_ts` original, sin IP; nada para quien nunca autorizó ni para las finalidades opcionales).
+  - **Tests obligatorios:** dry-run no escribe nada (cliente falso sin llamadas de INSERT); `--apply` dos veces inserta lo mismo que una; el `user_ref_hmac` coincide con `hmacLookup(user_id)` del registro; sin IP ni agente; quien tiene `authorized = false` no recibe fila; el documento legacy nunca queda `published`; sin la variable de la clave el script aborta con mensaje claro sin imprimir nada secreto.
+  - **Orden:** después de T19 (necesita `requires_reconsent`) y de 074/075 aplicadas (la 074 aborta si ya hay filas de evidencia).
 
 - [ ] **T98 — Documentación** (H14)
   - **Estado real (2026-09-28):** PARCIAL. Hecho: `PROGRESS.md`, `PLAN_PRODUCCION_074_075.md` (release único, con respaldo), `diag/README.md`. Falta: `SECURITY_PRIVACY.md`, manual administrativo, `BASE_DE_DATOS.md`, `.env.example`, rotación de claves, runbook de bajas, lista para legal.
@@ -237,6 +237,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 Nombres fuera de la numeración original (`Tnn-extra`, según PROMPT.md). Ojo: **T14-fix no tiene relación con T14** (`admin-consent`): es el arreglo del versionado de `privacy_settings`.
 
 - [ ] **T02-extra — Migrar `users.email_encrypted` y `full_name_encrypted` a AAD** cuando se actualicen sus lectores
+  - **Añadido desde T02:** `_shared/pii.ts` (sin versionar en git hoy) descifra siempre con la clave base e ignora `payload.v`: tras una rotación de claves `championship-draw-round1` (que lo importa) no podría leer correos cifrados con la clave anterior. Hacer que delegue en `crypto.ts` (`decryptPii`) y commitearlo junto con el resto del trabajo previo, con aprobación.
   - Solo añade AAD a las columnas antiguas, **sin cambiar de formato** (D-09 = A). AAD `users:<columna>:<user_id>`. Lectores a actualizar: `_shared/pii.ts`, `get-ranking` y copias inline. Re-cifrado por lotes; leer con y sin AAD durante la transición.
   - Depende de T02.
 - [ ] **T03-prod — Medir la cabecera de IP en Supabase hospedado** (D-08) ⛔ BLOQUEADA (D-08: pendiente de que la persona responsable ejecute la consulta del Logs Explorer)

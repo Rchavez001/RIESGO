@@ -7,8 +7,8 @@ historial previo al loop (estado, decisiones, hallazgos abiertos). Los pasos 2 y
 `CLAUDE.md.fragmento`) NO se han hecho: cambian permisos e instrucciones del proyecto y los decide la persona responsable.
 
 ## Estado (estimación contra la SPEC, no contra TASKS.md)
-- **Contra TASKS.md: 2 de 28 tareas cerradas (7,1 %)** — T00 y T01; el resto tiene su "Estado real" anotado en TASKS.md. Ponderando lo parcial,
-  ≈ 31 % (estimación mía a partir de esas anotaciones: 27–28 % antes de T01, que aporta una tarea completa). Contra la SPEC: ~42 % escrito.
+- **Contra TASKS.md: 3 de 28 tareas cerradas (10,7 %)** — T00, T01 y T02; el resto tiene su "Estado real" anotado en TASKS.md. Ponderando lo parcial,
+  ≈ 33 % (estimación mía a partir de esas anotaciones: ≈31 % antes de T02, que aporta lo que le faltaba). Contra la SPEC: ~42 % escrito.
 - ~19 % en producción (solo Fase 0; 074, 075 y Fase 1 NO están desplegadas, a la espera del release único).
 - Verificado con pruebas automáticas: cripto+AAD, cuota fail-closed, evidencia, registro de punta a punta, ciclo de vida SQL (073+074),
   versionado de `privacy_settings` (075), la función de diagnóstico T03, y una prueba de punta a punta contra Supabase local (21/21).
@@ -233,3 +233,24 @@ Con eso se confirma que solo existe la versión `2026-06-22` y cuántas personas
 - T01 **cerrada**: plan de backfill escrito; sin cambios de código (verificado con `git status`: solo `PROGRESS.md`, `DECISIONS.md` y `TASKS.md`).
 - Gates: no se ejecutaron los `gates.sh` completos porque no cambió ningún código, script ni prueba; las puertas no pueden cambiar de estado con cambios solo de documentación. Última corrida completa: iteración 1 (todas OK, `db-reset` omitido).
 - Riesgos / pendientes: D-10 y D-11 abiertas; el conteo de la sección 2 lo ejecuta una persona; T25 queda con ⛔ hasta que se decidan.
+
+Revísalas antes de ejecutarlas. Deben ser solo SELECT. El SQL Editor de Supabase corre con permisos totales, así que un UPDATE o DELETE se ejecutaría sin preguntar.
+La del Logs Explorer (D-08) solo devuelve algo si secure-register-user recibió peticiones recientemente. Si sale vacía, entra a tu app en producción, abre el registro y envía el formulario incompleto a propósito para generar una petición. Luego repite la consulta.
+En el resultado habrá IP reales. No me pegues las IP completas: basta con decirme qué columnas vienen llenas y si alguna coincide con tu IP pública, que puedes ver en ifconfig.me. Con eso decidimos D-08.
+
+## Iteración 3 — 2026-09-28 — (sin tarea nueva) D-10/D-11 aplicadas e inventario del trabajo ajeno al módulo
+- Cambios: `TASKS.md` (T25 reescrita según D-10/D-11 y sin ⛔: migración nueva `ip_hmac` nulo + `CHECK (ip_hmac IS NOT NULL OR document_version LIKE 'legacy-%')`, script de un solo uso con `--dry-run` por defecto y `--apply` explícito, clave HMAC solo por variable de entorno, solo dentro del release y con OK); `SPEC.md` §5 (`ip_hmac` nulable + CHECK). `DECISIONS.md`: la persona responsable completó el campo "Decisión" de D-10 y D-11; los encabezados aún dicen `[ABIERTA]` (solo un humano los cambia) y no los toqué.
+- **Hallazgo — el árbol de trabajo tiene ~1 200 entradas sin commit ajenas al módulo** (31 archivos versionados modificados/borrados + el resto sin versionar; ~1 020 son archivos de "skills" de diseño en `frontend/.claude/skills/`). Ninguna se modificó, se commiteó ni se descartó. Agrupadas y con el plan de ramas propuesto en el informe de esta iteración. Puntos que importan al módulo:
+  - **`supabase/migrations/030…058` y `069…072` (32 archivos) están sin versionar**: 41 de 73 migraciones están en git. Es la causa de fondo del problema de `db-reset` (T00-extra): un clon limpio no tiene ni el esquema real.
+  - **`_shared/pii.ts` está sin versionar y lo importa `championship-draw-round1`** (que sí está versionada): en un clon limpio esa función no compila. Además `pii.ts` ignora `payload.v`, así que no sobrevive a una rotación de claves (movido a T02-extra).
+  - **`supabase/config.toml` (modificado) activa `enable_anonymous_sign_ins = true`** y `frontend/src/components/GuestRegisterPrompt.tsx` (sin versionar) sugiere "modo invitado": existen usuarios anónimos sin pasar por el aviso de consentimiento. **No está en la SPEC**; hay que decidir qué datos trata un invitado y si necesita aviso (pregunta nueva D-12).
+  - `config.toml` también añade `verify_jwt = false` a `run-news-agent`, `check-security-alerts` y otras: distinto de la regla H01 para funciones NUEVAS del módulo, pero conviene revisarlo en T04.
+  - Riesgo de las puertas: `gates.sh` se ha ejecutado siempre con este árbol sucio (tests del frontend modificados, etc.). Hasta que el trabajo ajeno esté en su rama, "todas las puertas OK" no está probado sobre el commit limpio de la rama.
+- Gates: no aplican (solo documentación).
+
+## Iteración 4 — 2026-09-28 — T02 `_shared/crypto.ts` con versionado de claves
+- Cambios: `supabase/functions/_shared/crypto.ts` (`requireAad`; claves mal formadas → `invalid_key_vN` / `invalid_hmac_key:NOMBRE` sin exponer el mensaje de `atob` ni el valor), `_shared/consent-evidence.ts` (`encryptConsentColumn` usa `requireAad: true`), `TASKS.md`.
+- Pruebas añadidas (`_shared/crypto_test.ts`, ahora 14): rotación (v1 cifrado, v2 activa: lo viejo se lee y lo nuevo sale v2); v1 sin su `_V1` falla en vez de usar la clave equivocada; payload `{iv,tag,ct}` sin `v` (formato de `pii.ts`) se lee como v1; clave mal formada (no base64 / 16 bytes) sin filtrar el valor; HMAC mal formado, corto o ausente; `requireAad` (falta, vacía, correcta). Las 3 últimas fallaron primero por la razón correcta (mensaje de `atob`, mensaje del HMAC, opción inexistente).
+- Gates: **OK** (`bash .claude/loops/consentimiento/gates.sh`, 4 min 25 s): typecheck-frontend, lint-frontend (14 = línea base), unit-frontend, panel-unit, panel-e2e, deno-check, deno-test (crypto 14, consent-evidence 8), sql-ciclo-de-vida; `db-reset` SKIP explícito (línea base, T00-extra). Salvedad: corrido con el árbol sucio descrito en la iteración 3.
+- Desviaciones de SPEC: ninguna en el formato (D-09). **Desviación de TASKS:** "`pii.ts` pasa a delegar en `crypto.ts`" se movió a T02-extra porque `pii.ts` está sin versionar y es parte del trabajo ajeno (instrucción: no commitearlo).
+- Riesgos / pendientes: `secure-register-user` sigue cifrando `users.email_encrypted`/`full_name_encrypted` sin AAD (T02-extra); `get-ranking`, `championship-draw-round1` y `pii.ts` siguen usando la clave base sin mirar `v`.

@@ -40,6 +40,8 @@ export interface EncryptedPayload {
 export interface CryptoOptions {
   keyEnvPrefix?: string
   aad?: string
+  // Set by every writer of a NEW column: encrypting without AAD is then an error, not a silent downgrade.
+  requireAad?: boolean
 }
 
 const DEFAULT_KEY_PREFIX = 'PII_ENCRYPTION_KEY_B64'
@@ -56,6 +58,7 @@ export async function encryptPii(
   keyVersion: number,
   options: CryptoOptions = {},
 ): Promise<EncryptedPayload> {
+  if (options.requireAad && !options.aad) throw new Error('aad_required')
   const key = await getAesKey(keyVersion, options.keyEnvPrefix ?? DEFAULT_KEY_PREFIX, ['encrypt'])
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const params: AesGcmParams = { name: 'AES-GCM', iv, tagLength: 128 }
@@ -109,8 +112,9 @@ function getKeyBytesForVersion(version: number, keyEnvPrefix: string) {
   const versioned = Deno.env.get(`${keyEnvPrefix}_V${version}`)
   const isCurrent = version === getCurrentKeyVersion(keyEnvPrefix)
   const value = versioned ?? (isCurrent ? Deno.env.get(keyEnvPrefix) : undefined) ?? ''
-  const bytes = fromBase64(value)
-  if (bytes.byteLength !== 32) throw new Error(`invalid_key_v${version}`)
+  // atob's own message must not surface: a malformed secret is reported by name/version only.
+  const bytes = decodeBase64OrNull(value)
+  if (bytes?.byteLength !== 32) throw new Error(`invalid_key_v${version}`)
   return bytes
 }
 
@@ -129,10 +133,17 @@ export async function hmacLookup(value: string, envVar: string): Promise<string>
 }
 
 async function getHmacKey(envVar: string) {
-  const value = Deno.env.get(envVar) ?? ''
-  const bytes = fromBase64(value)
-  if (bytes.byteLength < 16) throw new Error(`invalid_hmac_key:${envVar}`)
+  const bytes = decodeBase64OrNull(Deno.env.get(envVar) ?? '')
+  if (!bytes || bytes.byteLength < 16) throw new Error(`invalid_hmac_key:${envVar}`)
   return crypto.subtle.importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+}
+
+function decodeBase64OrNull(value: string): Uint8Array<ArrayBuffer> | null {
+  try {
+    return fromBase64(value)
+  } catch {
+    return null
+  }
 }
 
 function fromBase64(value: string) {

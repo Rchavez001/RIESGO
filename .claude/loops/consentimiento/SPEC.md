@@ -149,7 +149,7 @@ create table consent_records (
   decision text not null check (decision in ('granted','denied','revoked')),
   channel text not null check (channel in ('registro','reconsentimiento','mi_privacidad','correo','admin')),
   ip_ciphertext text,                         -- v{n}.iv.ct ; NULL tras retención
-  ip_hmac text not null,
+  ip_hmac text,                               -- obligatorio salvo evidencia legacy sin IP (D-11): ver CHECK abajo
   ua_ciphertext text,
   ua_hmac text,
   key_version int not null,
@@ -159,6 +159,9 @@ create table consent_records (
 );
 create index on consent_records (user_id, purpose_code, server_ts desc);
 create index on consent_records (ip_hmac);
+-- D-11: solo las filas del backfill legacy pueden no tener IP; las nuevas siguen obligadas.
+alter table consent_records add constraint consent_records_ip_hmac_required
+  check (ip_hmac is not null or document_version like 'legacy-%');
 
 create view my_consent_state as ...          -- último estado por finalidad, SIN ip/ua, filtrado por auth.uid()
 

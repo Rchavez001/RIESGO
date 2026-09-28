@@ -52,7 +52,9 @@ Recomendación técnica: A. Es lo único que no afirma más de lo que se sabe: e
 Finalidades opcionales (`novedades`, `publicidad_personalizada`): en cualquiera de las opciones NO se crea registro para las personas antiguas; se tratan como "no consintió" hasta que lo elijan ellas.
 Personas con `data_processing_authorized = false`: no tienen ninguna evidencia; no se les inventa. Qué hacer con sus cuentas hasta que acepten el aviso 1.0 (¿bloquear el uso, dejar solo lectura?) también es de la persona responsable.
 Tareas bloqueadas: T25 (backfill) hasta saber A/B/C; T19 (reconsentimiento) no depende de esto para el diseño, sí para a quién se le muestra.
-Decisión: 
+Decisión: Conservar el consentimiento anterior como historial (documento retirado legacy-2026-06-22, evidencia limitada: solo fecha). Publicar el aviso 1.0 con requires_reconsent = true: todos los usuarios deben aceptarlo en su próximo inicio de sesión. Pendiente de confirmación por asesoría legal antes del release.
+
+ 
 
 D-11 — Dos ajustes técnicos al plan de backfill que no encajan con lo escrito en la SPEC/TASKS [ABIERTA]
 
@@ -62,4 +64,12 @@ Contexto (T01): al diseñar el backfill aparecieron dos incompatibilidades con e
 Además (menor): el documento legacy se llama `legacy-<versión anterior>` (esperado: `legacy-2026-06-22`) en vez de `legacy` a secas, por si en producción hubiera más de una versión anotada; el marcador es `document_version LIKE 'legacy%'`. `settings_version = 0` = "no aplica" (los datos del responsable de entonces no eran configurables).
 Recomendación técnica: 1-A y 2 tal como se describe.
 Tareas bloqueadas: T25. Ninguna otra.
+Decisión:  Permitir ip_hmac NULL SOLO para filas legacy, con CHECK (ip_hmac IS NOT NULL OR document_version LIKE 'legacy-%'); las filas nuevas siguen obligadas a tenerlo. El backfill se ejecuta como script único, idempotente, con --dry-run por defecto, solo dentro de la ventana de release y con mi OK. La clave HMAC se pasa por variable de entorno en esa sesión; nunca se escribe en archivos ni en logs.
+
+D-12 — Usuarios invitados (inicio de sesión anónimo): ¿necesitan aviso de consentimiento? [ABIERTA]
+
+Contexto (iteración 3): `supabase/config.toml` (modificado, sin commit) activa `enable_anonymous_sign_ins = true` y hay un componente `GuestRegisterPrompt.tsx` (sin versionar): existe, o se está construyendo, un modo invitado que crea usuarios sin pasar por `secure-register-user` ni por el aviso. La SPEC solo cubre el registro con correo. Depende de qué datos se guardan de un invitado (progreso, puntajes, IP, `security_events`, respuestas en `learning_state`).
+Opciones: A) El invitado no guarda nada personal (solo estado local del navegador): no necesita aviso, y el aviso se muestra al convertirse en cuenta. B) El invitado guarda progreso en la base: necesita un aviso corto propio (y una finalidad) antes de crear la sesión anónima. C) Desactivar los inicios de sesión anónimos hasta que exista el aviso.
+Recomendación técnica: averiguar primero qué se guarda hoy (lo hace T04/T19 al revisar rutas); si es A, no hace falta nada; si es B, C hasta que el aviso esté listo.
+Tareas bloqueadas: ninguna por ahora; afecta al diseño de T19 (conversión invitado → cuenta) y al release.
 Decisión: 
