@@ -11,6 +11,18 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 )
 
+// Moodle rule #7 (don't let the correct answer fall in the same position every time). This file
+// doesn't import the shared news-agent-core helpers, so it keeps its own copy rather than adding
+// that dependency just for this.
+function shuffleOptionsArray<T>(options: T[]): T[] {
+  const shuffled = [...options]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -51,12 +63,21 @@ serve(async (req) => {
       .select()
       .single()
 
-    const { data: pendingQuestions } = await supabase
+    // question_ids: an admin's single "Validar" click on one just-added/edited
+    // question passes its own id here so this run targets exactly that row,
+    // instead of the oldest-N sweep the scheduled job uses.
+    const questionIds = Array.isArray(body.question_ids) ? body.question_ids.filter((id: unknown) => typeof id === 'string') : null
+
+    let pendingQuery = supabase
       .from('questions')
       .select('id, branch, question_text, options, generated_from_incident_id, audit_status')
       .eq('audit_status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(body.limit ?? 20)
+
+    pendingQuery = questionIds && questionIds.length > 0
+      ? pendingQuery.in('id', questionIds)
+      : pendingQuery.order('created_at', { ascending: false }).limit(body.limit ?? 20)
+
+    const { data: pendingQuestions } = await pendingQuery
 
     if (!pendingQuestions || pendingQuestions.length === 0) {
       await supabase
@@ -113,9 +134,13 @@ serve(async (req) => {
       const hasCorrectedExplanation = typeof audit.corrected_explanation === 'string' && audit.corrected_explanation.trim()
       const hasCorrection = Boolean(hasCorrectedQuestion || hasCorrectedOptions || hasCorrectedExplanation || audit.suggested_improvement)
       const now = new Date().toISOString()
+      // A rewritten set of options tends to come back with the correct one first (Moodle rule #7:
+      // don't let the answer fall in the same position every time) — shuffle once, reuse everywhere
+      // this correction is written so the audit trail matches what actually gets served.
+      const shuffledCorrectedOptions = hasCorrectedOptions ? shuffleOptionsArray(audit.corrected_options) : null
       const correctedPayload = hasCorrection ? {
         question_text: hasCorrectedQuestion ? audit.corrected_question_text.trim() : question?.question_text,
-        options: hasCorrectedOptions ? audit.corrected_options : question?.options,
+        options: hasCorrectedOptions ? shuffledCorrectedOptions : question?.options,
         explanation: hasCorrectedExplanation ? audit.corrected_explanation.trim() : null,
         suggested_improvement: audit.suggested_improvement ?? null,
       } : null
@@ -144,7 +169,7 @@ serve(async (req) => {
         updatePayload.question_text = audit.corrected_question_text.trim()
       }
       if (status === 'approved' && hasCorrectedOptions) {
-        updatePayload.options = audit.corrected_options
+        updatePayload.options = shuffledCorrectedOptions
       }
       if (status === 'approved' && hasCorrectedExplanation) {
         updatePayload.explanation = audit.corrected_explanation.trim()

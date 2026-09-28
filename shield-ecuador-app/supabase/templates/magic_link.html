@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+  <body style="margin:0;padding:0;background:#0B1220;font-family:Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0B1220;padding:32px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:32px;text-align:center;">
+                <p style="color:#64748B;font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 8px;">CIBER DOJO</p>
+                <h1 style="color:#0B1220;font-size:22px;margin:0 0 16px;">Tu código de acceso</h1>
+                <p style="color:#64748B;font-size:14px;margin:0 0 24px;">
+                  Usa este código de 6 dígitos para entrar a tu dojo. Es válido por 15 minutos.
+                </p>
+                <p style="font-size:36px;font-weight:700;letter-spacing:.2em;color:#0B1220;background:#F1F5F9;border-radius:12px;padding:16px 0;margin:0 0 24px;">
+                  {{ .Token }}
+                </p>
+                <p style="color:#64748B;font-size:13px;margin:0 0 8px;">
+                  También puedes entrar directamente con este enlace:
+                </p>
+                <p style="margin:0 0 24px;">
+                  <a href="{{ .ConfirmationURL }}" style="color:#14B8A6;font-size:14px;">Entrar a Ciber Dojo →</a>
+                </p>
+                <p style="color:#94A3B8;font-size:12px;margin:0;">
+                  Si no pediste este código, puedes ignorar este correo con confianza.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

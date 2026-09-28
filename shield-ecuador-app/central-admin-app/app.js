@@ -80,7 +80,7 @@ const baseState = {
   reportDrillPath: [],
   occupations: [],
   selectedOccupationCode: null,
-  questionsByDojo: {},
+  questionBank: { items: [], loaded: false, error: null, dojoFilter: "all", statusFilter: "pending", importBusy: false, importReview: null },
   newsAlerts: [],
 };
 
@@ -90,7 +90,6 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function init() {
-  ensureQuestionBanks();
   bindNavigation();
   bindMobileMenu();
   bindDelegatedActions();
@@ -134,7 +133,7 @@ function mergeState(base, saved) {
   const merged = structuredClone(base);
   Object.assign(merged, saved);
   merged.newsAgent = { ...base.newsAgent, ...(saved.newsAgent || {}) };
-  merged.questionsByDojo = saved.questionsByDojo || {};
+  merged.questionBank = structuredClone(base.questionBank);
   merged.newsAlerts = saved.newsAlerts || [];
   merged.campaigns = [];
   merged.campaignAudit = [];
@@ -164,6 +163,7 @@ const DELEGATED_ACTIONS = {
   rejectThreatJob: (id) => rejectThreatJob(id),
   closeThreatDrilldown: () => $("#threatDrilldown").classList.add("hidden"),
   closeSecFindingModal: () => closeSecFindingModal(),
+  closeQuestionImportModal: () => closeQuestionImportModal(),
 };
 
 function bindDelegatedActions() {
@@ -203,7 +203,11 @@ function closeMobileMenu(returnFocus = true) {
 function bindMobileMenu() {
   $("#menuToggle").addEventListener("click", () => ($("#rail").classList.contains("open") ? closeMobileMenu() : openMobileMenu()));
   $("#menuBackdrop").addEventListener("click", () => closeMobileMenu());
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMobileMenu(); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    closeMobileMenu();
+    if ($("#questionImportModal").classList.contains("active")) closeQuestionImportModal();
+  });
   mobileNavQuery.addEventListener("change", () => { $("#rail").classList.remove("open"); syncMobileMenu(); });
   syncMobileMenu();
 }
@@ -240,8 +244,11 @@ function bindNavigation() {
 
 function bindActions() {
   $("#addDojo").addEventListener("click", addDojo);
-  $("#questionDojoSelect").addEventListener("change", (e) => { state.selectedDojoId = e.target.value; ensureQuestionBanks(); renderDojos(); renderQuestions(); });
-  $("#saveQuestions").addEventListener("click", saveQuestionsFromForm);
+  $("#questionDojoSelect").addEventListener("change", (e) => { state.questionBank.dojoFilter = e.target.value; renderQuestions(); });
+  $("#questionStatusSelect").addEventListener("change", (e) => { state.questionBank.statusFilter = e.target.value; renderQuestions(); });
+  $("#addQuestionBtn").addEventListener("click", addBlankQuestion);
+  $("#uploadQuestionBankBtn").addEventListener("click", () => $("#uploadQuestionBankFile").click());
+  $("#uploadQuestionBankFile").addEventListener("change", handleQuestionBankFileSelected);
   $("#refreshAiProviders").addEventListener("click", loadNewsProvidersFromSupabase);
   $("#refreshOpenQuestions").addEventListener("click", loadOpenQuestionTopics);
   $("#refreshUsers").addEventListener("click", () => { void loadUsersSummary(); void loadUsersPage(); });
@@ -440,9 +447,7 @@ function renderDojos() {
   $$(".dojo-item").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedDojoId = button.dataset.id;
-      ensureQuestionBanks();
       renderDojos();
-      renderQuestions();
     });
   });
 
@@ -454,146 +459,392 @@ function renderDojos() {
   $("#dojoStatus").value = dojo.status;
 }
 
-function ensureQuestionBanks() {
-  state.dojos.forEach((dojo) => {
-    if (!Array.isArray(state.questionsByDojo[dojo.id])) {
-      state.questionsByDojo[dojo.id] = createDefaultQuestions(dojo);
-    }
-  });
-}
-
-function createDefaultQuestions(dojo) {
-  const now = new Date().toISOString();
-
-  const manual = Array.from({ length: 20 }, (_, index) => ({
-    id: `${dojo.id}-manual-${index + 1}`,
-    number: index + 1,
-    source: "manual",
-    // Placeholder rows must never look approved: an approved row is used as a source by the Sensei.
-    status: "pendiente",
-    difficulty: Math.ceil((index + 1) / 4),
-    kata: `Kata ${Math.min(7, Math.ceil((index + 1) / 3))}`,
-    text: `Pregunta manual ${index + 1} sobre ${dojo.theme}`,
-    answer: "Respuesta correcta pendiente de ajustar.",
-    explanation: "Explicacion pendiente de ajustar.",
-    createdAt: now,
-    approvedAt: null,
-  }));
-
-  const ai = Array.from({ length: 30 }, (_, index) => ({
-    id: `${dojo.id}-ai-${index + 21}`,
-    number: index + 21,
-    source: "ia",
-    status: index % 3 === 0 ? "pendiente" : "auditada",
-    difficulty: Math.min(5, Math.ceil((index + 1) / 6)),
-    kata: `Kata ${Math.min(7, Math.ceil((index + 1) / 5))}`,
-    text: `Pregunta IA ${index + 21} sobre ${dojo.theme}`,
-    answer: "Respuesta generada pendiente de auditoria.",
-    explanation: "Justificacion generada pendiente de auditoria.",
-    createdAt: now,
-    approvedAt: null,
-  }));
-
-  return [...manual, ...ai];
-}
-
-// Example rows created locally (createDefaultQuestions) carry these texts until someone writes the real ones.
-const PLACEHOLDER_ANSWERS = ["Respuesta correcta pendiente de ajustar.", "Respuesta generada pendiente de auditoria."];
-function isPlaceholderQuestion(question) {
-  return PLACEHOLDER_ANSWERS.includes(String(question.answer || "").trim());
-}
+const QUESTION_STATUS_LABEL = { pending: "Pendiente de revisión", approved: "Aprobada · publicada", rejected: "Rechazada" };
+const QUESTION_SOURCE_LABEL = { manual: "Manual", news_generated: "IA · noticias", incident_investigation: "IA · incidente", audited_generated: "IA · auditada", manual_upload: "Archivo subido" };
 
 function renderQuestions() {
   const pick = $("#questionDojoSelect");
-  pick.innerHTML = state.dojos.map((dojo) => `<option value="${esc(dojo.id)}" ${dojo.id === state.selectedDojoId ? "selected" : ""}>${esc(dojo.name)}</option>`).join("");
-  const bank = state.questionsByDojo[state.selectedDojoId] || [];
-  const dojo = getSelectedDojo();
-  $("#questionDojoName").textContent = dojo.name;
-  $("#manualQuestions").innerHTML = bank.filter((question) => question.source === "manual").map(questionEditor).join("");
-  $("#aiQuestions").innerHTML = bank.filter((question) => question.source === "ia").map(questionEditor).join("");
+  const currentFilter = state.questionBank.dojoFilter;
+  pick.innerHTML = `<option value="all">Todos los dojos</option>` +
+    state.dojos.map((dojo) => `<option value="${esc(dojo.id)}" ${dojo.id === currentFilter ? "selected" : ""}>${esc(dojo.name)}</option>`).join("");
+  pick.value = currentFilter;
+  $("#questionStatusSelect").value = state.questionBank.statusFilter;
+
+  const summary = $("#questionBankSummary");
+  const list = $("#questionList");
+  if (!state.questionBank.loaded) {
+    summary.textContent = state.questionBank.error ? "No se pudieron leer las preguntas. Pulsa Actualizar." : "Cargando preguntas…";
+    list.innerHTML = "";
+    return;
+  }
+
+  const items = state.questionBank.items
+    .filter((q) => currentFilter === "all" || q.dojo_id === currentFilter)
+    .filter((q) => state.questionBank.statusFilter === "all" || q.audit_status === state.questionBank.statusFilter);
+
+  const pendingTotal = state.questionBank.items.filter((q) => q.audit_status === "pending").length;
+  summary.textContent = `${items.length} pregunta(s) en este filtro · ${state.questionBank.items.length} en total · ${pendingTotal} pendiente(s) de revisión en todo el banco.`;
+
+  list.innerHTML = items.length
+    ? items.map(questionCardHtml).join("")
+    : `<p class="muted">No hay preguntas en este filtro.</p>`;
+
+  bindQuestionCardEvents();
 }
 
-function questionEditor(question) {
+function questionCardHtml(q) {
+  const isDraft = String(q.id).startsWith("draft-");
+  const options = Array.isArray(q.options) && q.options.length === 4
+    ? q.options
+    : [{ valor: "A", texto: "", correcta: true }, { valor: "B", texto: "", correcta: false }, { valor: "C", texto: "", correcta: false }, { valor: "D", texto: "", correcta: false }];
+  const statusBadgeClass = q.audit_status === "approved" ? "ai" : q.audit_status === "rejected" ? "danger" : "audit";
+
   return `
-    <div class="question-editor" data-question-id="${esc(question.id)}">
-      <div class="question-editor-head">
-        <strong>#${String(question.number).padStart(2, "0")}</strong>
-        <span class="badge ${question.source === "manual" ? "manual" : question.status === "pendiente" ? "audit" : "ai"}">${esc(question.source === "manual" ? "manual" : question.status)}</span>
+    <article class="question-card" data-question-id="${esc(q.id)}">
+      <div class="question-card-head">
+        <span class="badge ${statusBadgeClass}">${esc(QUESTION_STATUS_LABEL[q.audit_status] || q.audit_status || "Pendiente de revisión")}</span>
+        <span class="badge manual">${esc(QUESTION_SOURCE_LABEL[q.source_type] || q.source_type || "Manual")}</span>
+        ${q.active ? '<span class="badge ai">Activa para usuarios</span>' : '<span class="badge audit">En pausa · no visible</span>'}
       </div>
+      <label>
+        Dojo
+        <div class="select-clip">
+          <select data-field="dojo_id">
+            <option value="">Sin dojo asignado</option>
+            ${state.dojos.map((dojo) => `<option value="${esc(dojo.id)}" ${dojo.id === q.dojo_id ? "selected" : ""}>${esc(dojo.name)}</option>`).join("")}
+          </select>
+        </div>
+      </label>
       <label>
         Pregunta
-        <textarea data-field="text" rows="3">${esc(question.text)}</textarea>
+        <textarea data-field="question_text" rows="3">${esc(q.question_text || "")}</textarea>
       </label>
-      ${isPlaceholderQuestion(question) ? '<div class="muted small placeholder-note">Fila de ejemplo sin editar: no se guarda hasta que escribas la respuesta y la explicación reales.</div>' : ""}
-      <div class="muted small">Explicación simple: ${esc(explainText(question.text))}</div>
-      <label>
-        Respuesta correcta
-        <textarea data-field="answer" rows="2">${esc(question.answer)}</textarea>
-      </label>
-      <div class="muted small">Explicación simple: ${esc(explainText(question.answer))}</div>
-      <label>
-        Explicación
-        <textarea data-field="explanation" rows="2">${esc(question.explanation)}</textarea>
-      </label>
-      <div class="question-mini-grid">
-        <label>
-          Dificultad
-          <input data-field="difficulty" type="number" min="1" max="5" value="${question.difficulty}" />
-        </label>
-        <label>
-          Kata
-          <input data-field="kata" value="${esc(question.kata)}" />
-        </label>
-        <label>
-          Estado
-          <select data-field="status">
-            <option value="aprobada" ${question.status === "aprobada" ? "selected" : ""}>aprobada</option>
-            <option value="auditada" ${question.status === "auditada" ? "selected" : ""}>auditada</option>
-            <option value="pendiente" ${question.status === "pendiente" ? "selected" : ""}>pendiente</option>
-            <option value="rechazada" ${question.status === "rechazada" ? "selected" : ""}>rechazada</option>
-          </select>
-        </label>
+      <div class="question-options-grid">
+        ${options.map((opt, index) => `
+          <label class="question-option-row">
+            <input type="radio" name="correct-${esc(q.id)}" data-field="correct" value="${index}" ${opt.correcta ? "checked" : ""} aria-label="Marcar opción ${esc(opt.valor || String.fromCharCode(65 + index))} como correcta" />
+            <span class="question-option-letter">${esc(opt.valor || String.fromCharCode(65 + index))}</span>
+            <textarea data-field="option" data-index="${index}" rows="2">${esc(opt.texto || "")}</textarea>
+          </label>
+        `).join("")}
       </div>
-      <div class="question-dates muted small">
-        Generada: ${question.createdAt ? new Date(question.createdAt).toLocaleString("es-EC") : "Sin fecha"}
-        ${question.approvedAt ? ` · Aprobada: ${new Date(question.approvedAt).toLocaleString("es-EC")}` : ""}
+      <label>
+        Explicación (por qué es correcta)
+        <textarea data-field="explanation" rows="2">${esc(q.explanation || "")}</textarea>
+      </label>
+      ${q.audit_notes ? `<p class="muted small question-audit-notes">Notas de la IA: ${esc(q.audit_notes)}</p>` : ""}
+      <div class="modal-actions">
+        <button type="button" class="btn primary small question-save">Guardar</button>
+        ${!isDraft ? '<button type="button" class="btn secondary small question-validate">Validar con IA</button>' : ""}
+        ${!isDraft ? '<button type="button" class="btn danger small question-delete">Eliminar</button>' : ""}
       </div>
-    </div>
+    </article>
   `;
 }
 
-async function saveQuestionsFromForm() {
-  const bank = state.questionsByDojo[state.selectedDojoId] || [];
-  $$(".question-editor").forEach((editor) => {
-    const question = bank.find((item) => item.id === editor.dataset.questionId);
-    if (!question) return;
-    const wasApproved = question.status === "aprobada";
-    editor.querySelectorAll("[data-field]").forEach((field) => {
-      const key = field.dataset.field;
-      question[key] = key === "difficulty" ? Math.min(5, Math.max(1, Math.round(Number(field.value)) || 1)) : field.value;
-    });
-    if (!question.createdAt) question.createdAt = new Date().toISOString();
-    if (question.status === "aprobada" && !wasApproved) {
-      question.approvedAt = new Date().toISOString();
-    }
+function bindQuestionCardEvents() {
+  $$("#questionList .question-card").forEach((card) => {
+    const id = card.dataset.questionId;
+    card.querySelector(".question-save")?.addEventListener("click", () => void saveQuestionCard(id));
+    card.querySelector(".question-validate")?.addEventListener("click", () => void validateQuestionCard(id));
+    card.querySelector(".question-delete")?.addEventListener("click", () => void deleteQuestionCard(id));
   });
-  const real = bank.filter((question) => !isPlaceholderQuestion(question));
-  const problems = real
-    .filter((question) => ["aprobada", "auditada"].includes(question.status))
-    .filter((question) => [question.text, question.answer, question.explanation].some((value) => String(value || "").trim().length < 10))
-    .map((question) => `#${question.number}`);
-  if (problems.length) {
-    window.alert(`No se guardó nada. Una pregunta aprobada o auditada necesita texto, respuesta y explicación de al menos 10 caracteres.\n\nRevisa: ${problems.join(", ")}`);
-    return;
-  }
-  if (!real.length) {
-    notify("No hay preguntas editadas para guardar: las filas de ejemplo no se envían.");
-    return;
-  }
-  persist("Preguntas editadas guardadas en este navegador.");
-  await saveQuestionsToSupabase(real, getSelectedDojo());
-  renderMetrics();
+}
+
+function readQuestionCardForm(card) {
+  const letters = ["A", "B", "C", "D"];
+  const correctIndex = Number(card.querySelector('[data-field="correct"]:checked')?.value ?? 0);
+  const options = [...card.querySelectorAll('[data-field="option"]')].map((el, index) => ({
+    valor: letters[index],
+    texto: el.value.trim(),
+    correcta: index === correctIndex,
+  }));
+  return {
+    dojo_id: card.querySelector('[data-field="dojo_id"]').value || null,
+    question_text: card.querySelector('[data-field="question_text"]').value.trim(),
+    explanation: card.querySelector('[data-field="explanation"]').value.trim(),
+    options,
+  };
+}
+
+function questionFormProblem(form) {
+  if (form.question_text.length < 10) return "La pregunta necesita al menos 10 caracteres.";
+  if (form.options.some((o) => o.texto.length < 3)) return "Las 4 opciones necesitan texto (al menos 3 caracteres cada una).";
+  if (!form.options.some((o) => o.correcta)) return "Marca cuál opción es la correcta.";
+  return null;
+}
+
+function addBlankQuestion() {
+  const id = `draft-${Date.now()}`;
+  state.questionBank.items.unshift({
+    id,
+    dojo_id: state.questionBank.dojoFilter !== "all" ? state.questionBank.dojoFilter : null,
+    question_text: "",
+    options: [{ valor: "A", texto: "", correcta: true }, { valor: "B", texto: "", correcta: false }, { valor: "C", texto: "", correcta: false }, { valor: "D", texto: "", correcta: false }],
+    explanation: "",
+    active: false,
+    audit_status: "pending",
+    audit_notes: "",
+    source_type: "manual",
+  });
   renderQuestions();
+  $(`.question-card[data-question-id="${id}"] textarea[data-field="question_text"]`)?.focus();
+  notify("Completa la pregunta, sus 4 opciones y guarda: se validará con IA antes de poder publicarse.");
+}
+
+async function saveQuestionCard(id) {
+  const card = $(`.question-card[data-question-id="${id}"]`);
+  if (!card) return;
+  const form = readQuestionCardForm(card);
+  const problem = questionFormProblem(form);
+  if (problem) {
+    notify(problem);
+    return;
+  }
+  const isDraft = id.startsWith("draft-");
+  // Any manual save (new or edited) must go back through AI validation before it can be active again.
+  const payload = {
+    dojo_id: form.dojo_id,
+    branch: form.dojo_id,
+    question_text: form.question_text,
+    question_type: "escenario",
+    options: form.options,
+    explanation: form.explanation,
+    answer_text: form.options.find((o) => o.correcta)?.texto || "",
+    active: false,
+    audit_status: "pending",
+    audit_notes: null,
+    editable: true,
+  };
+
+  try {
+    // questions.dojo_id has a FK to cyber_dojos(id); a dojo added in this session may not exist in
+    // Supabase yet (the Dojos panel keeps its list in localStorage until something else syncs it).
+    const dojo = form.dojo_id ? state.dojos.find((d) => d.id === form.dojo_id) : null;
+    if (dojo) await ensureDojoSyncedToSupabase(dojo);
+
+    if (isDraft) {
+      const newId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      await supabaseRest("questions", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: newId, source_type: "manual", order_num: Date.now() % 100000, ...payload }) });
+      state.questionBank.items = state.questionBank.items.filter((q) => q.id !== id);
+      notify("Pregunta guardada como pendiente. Pulsa \"Validar con IA\" para revisarla antes de publicarla.");
+    } else {
+      await supabaseRest(`questions?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(payload) });
+      const item = state.questionBank.items.find((q) => q.id === id);
+      if (item) Object.assign(item, payload, { options: form.options });
+      notify("Cambios guardados como pendientes. Pulsa \"Validar con IA\" para volver a publicarla.");
+    }
+    await loadQuestionsFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo guardar la pregunta:", error);
+    notify(`No se pudo guardar: ${error.message || error}`);
+  }
+}
+
+async function validateQuestionCard(id) {
+  const card = $(`.question-card[data-question-id="${id}"]`);
+  const button = card?.querySelector(".question-validate");
+  if (button) { button.disabled = true; button.textContent = "Validando…"; }
+  try {
+    const result = await supabaseFunctionInvoke("audit-generated-questions", { question_ids: [id], triggered_by: "questions_panel" });
+    if (result.error) throw new Error(result.error);
+    notify(result.approved > 0 ? "La IA aprobó la pregunta: ya está publicada." : result.rejected > 0 ? "La IA rechazó la pregunta. Revisa las notas y corrígela." : "La IA no encontró la pregunta pendiente (¿ya fue revisada?).");
+    await loadQuestionsFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo validar la pregunta:", error);
+    notify(`No se pudo validar con IA: ${error.message || error}`);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = "Validar con IA"; }
+  }
+}
+
+async function deleteQuestionCard(id) {
+  if (id.startsWith("draft-")) {
+    state.questionBank.items = state.questionBank.items.filter((q) => q.id !== id);
+    renderQuestions();
+    return;
+  }
+  const item = state.questionBank.items.find((q) => q.id === id);
+  if (!window.confirm(`¿Eliminar esta pregunta para siempre?\n\n${item?.question_text || id}`)) return;
+  try {
+    await supabaseRest(`questions?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+    state.questionBank.items = state.questionBank.items.filter((q) => q.id !== id);
+    renderQuestions();
+    notify("Pregunta eliminada.");
+  } catch (error) {
+    console.warn("No se pudo eliminar la pregunta:", error);
+    notify(`No se pudo eliminar: ${error.message || error}`);
+  }
+}
+
+const MAX_QUESTION_UPLOAD_BYTES = 5 * 1024 * 1024;
+const QUESTION_UPLOAD_EXTENSIONS = ["txt", "md", "csv", "json", "pdf", "docx"];
+
+async function handleQuestionBankFileSelected(event) {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const status = $("#questionUploadStatus");
+  if (!QUESTION_UPLOAD_EXTENSIONS.includes(ext)) {
+    status.textContent = `Extensión no soportada (.${ext}). Usa: ${QUESTION_UPLOAD_EXTENSIONS.map((e) => `.${e}`).join(", ")}.`;
+    return;
+  }
+  if (file.size > MAX_QUESTION_UPLOAD_BYTES) {
+    status.textContent = `El archivo pesa ${(file.size / 1048576).toFixed(1)} MB; el máximo es ${MAX_QUESTION_UPLOAD_BYTES / 1048576} MB.`;
+    return;
+  }
+
+  const button = $("#uploadQuestionBankBtn");
+  button.disabled = true;
+  status.textContent = "Subiendo archivo…";
+  try {
+    const filePath = `question-bank/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const uploadResponse = await fetch(`/api/storage/v1/object/news-agent-uploads/${filePath}`, {
+      method: "POST",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!uploadResponse.ok) throw new Error(`${uploadResponse.status} ${await uploadResponse.text()}`);
+
+    status.textContent = "Leyendo y validando preguntas con IA (puede tardar unos segundos)…";
+    const result = await supabaseFunctionInvoke("import-question-bank", { file_path: filePath });
+    if (result.error) throw new Error(result.error);
+
+    status.textContent = result.summary || `${(result.imported || []).length} pregunta(s) importadas.`;
+    if (!result.imported || result.imported.length === 0) {
+      notify("La IA no encontró preguntas de opción múltiple reconocibles en ese archivo.");
+      return;
+    }
+    openQuestionImportReview(result.imported);
+    await loadQuestionsFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo importar el archivo:", error);
+    status.textContent = `No se pudo importar: ${error.message || error}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openQuestionImportReview(imported) {
+  state.questionBank.importReview = imported.map((q) => ({ ...q, resolved: false }));
+  renderQuestionImportModal();
+  $("#questionImportModal").classList.add("active");
+  $("#questionImportModalTitle").focus({ preventScroll: true });
+}
+
+function closeQuestionImportModal() {
+  $("#questionImportModal").classList.remove("active");
+  state.questionBank.importReview = null;
+}
+
+function importIssueBadges(item) {
+  const badges = [];
+  badges.push(`<span class="badge ${item.topic_ok ? "ai" : "danger"}">${item.topic_ok ? "Tema: ciberseguridad OK" : "Tema: revisar"}</span>`);
+  badges.push(`<span class="badge ${item.language_ok ? "ai" : "danger"}">${item.language_ok ? "Lenguaje accesible OK" : "Lenguaje: revisar"}</span>`);
+  badges.push(`<span class="badge ${item.answer_confident ? "ai" : "danger"}">${item.answer_confident ? "Respuesta correcta identificada" : "Respuesta correcta: incierta"}</span>`);
+  return badges.join(" ");
+}
+
+function renderQuestionImportModal() {
+  const body = $("#questionImportBody");
+  const items = state.questionBank.importReview || [];
+  const pending = items.filter((q) => !q.resolved);
+  if (pending.length === 0) {
+    body.innerHTML = `<p class="muted">Ya revisaste todas las preguntas de este archivo.</p>`;
+    return;
+  }
+
+  body.innerHTML = pending.map((item, index) => `
+    <article class="question-card question-import-row" data-import-index="${state.questionBank.importReview.indexOf(item)}">
+      <div class="question-card-head">
+        ${importIssueBadges(item)}
+      </div>
+      ${item.issues && item.issues.length ? `<p class="muted small">Problemas señalados por la IA: ${esc(item.issues.join(" · "))}</p>` : ""}
+      <label>
+        Dojo
+        <div class="select-clip">
+          <select data-field="dojo_id">
+            <option value="">Sin dojo asignado</option>
+            ${state.dojos.map((dojo) => `<option value="${esc(dojo.id)}" ${dojo.id === item.dojo_id ? "selected" : ""}>${esc(dojo.name)}</option>`).join("")}
+          </select>
+        </div>
+      </label>
+      <label>
+        Pregunta
+        <textarea data-field="question_text" rows="3">${esc(item.question_text || "")}</textarea>
+      </label>
+      <div class="question-options-grid">
+        ${(item.options || []).map((opt, optIndex) => `
+          <label class="question-option-row">
+            <input type="radio" name="import-correct-${index}" data-field="correct" value="${optIndex}" ${opt.correcta ? "checked" : ""} aria-label="Marcar opción ${esc(opt.valor || String.fromCharCode(65 + optIndex))} como correcta" />
+            <span class="question-option-letter">${esc(opt.valor || String.fromCharCode(65 + optIndex))}</span>
+            <textarea data-field="option" data-index="${optIndex}" rows="2">${esc(opt.texto || "")}</textarea>
+          </label>
+        `).join("")}
+      </div>
+      <label>
+        Explicación
+        <textarea data-field="explanation" rows="2">${esc(item.explanation || "")}</textarea>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn primary small import-approve">Aprobar y publicar</button>
+        <button type="button" class="btn secondary small import-pause">Dejar en pausa</button>
+      </div>
+    </article>
+  `).join("");
+
+  $$("#questionImportBody .question-import-row").forEach((row) => {
+    const index = Number(row.dataset.importIndex);
+    row.querySelector(".import-approve").addEventListener("click", () => void approveImportedQuestion(index, row));
+    row.querySelector(".import-pause").addEventListener("click", () => pauseImportedQuestion(index));
+  });
+}
+
+async function approveImportedQuestion(index, row) {
+  const item = state.questionBank.importReview[index];
+  if (!item) return;
+  const form = readQuestionCardForm(row);
+  const problem = questionFormProblem(form);
+  if (problem) {
+    notify(problem);
+    return;
+  }
+  try {
+    const dojo = form.dojo_id ? state.dojos.find((d) => d.id === form.dojo_id) : null;
+    if (dojo) await ensureDojoSyncedToSupabase(dojo);
+    await supabaseRest(`questions?id=eq.${encodeURIComponent(item.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        dojo_id: form.dojo_id,
+        branch: form.dojo_id,
+        question_text: form.question_text,
+        options: form.options,
+        explanation: form.explanation,
+        answer_text: form.options.find((o) => o.correcta)?.texto || "",
+        active: true,
+        audit_status: "approved",
+        reviewed_at: new Date().toISOString(),
+      }),
+    });
+    item.resolved = true;
+    notify("Pregunta publicada.");
+    renderQuestionImportModal();
+    await loadQuestionsFromSupabase();
+  } catch (error) {
+    console.warn("No se pudo publicar la pregunta importada:", error);
+    notify(`No se pudo publicar: ${error.message || error}`);
+  }
+}
+
+function pauseImportedQuestion(index) {
+  const item = state.questionBank.importReview[index];
+  if (!item) return;
+  item.resolved = true;
+  notify("Se dejó en pausa: sigue pendiente de revisión en la lista de abajo.");
+  renderQuestionImportModal();
 }
 
 // Real providers (table ai_providers). "Probar algoritmo" and the draft chain used to live here: the button only showed
@@ -1597,23 +1848,15 @@ async function deleteAlert(id) {
 
 async function loadQuestionsFromSupabase() {
   try {
-    const dojoIds = state.dojos.map((dojo) => dojo.id).join(",");
-    const rows = await supabaseRest(`questions?select=id,dojo_id,order_num,source_type,audit_status,difficulty,kata_label,question_text,answer_text,explanation,options,active&dojo_id=in.(${dojoIds})&active=eq.true&order=order_num.asc`);
-    if (!Array.isArray(rows) || rows.length === 0) return;
-
-    state.dojos.forEach((dojo) => {
-      const bank = rows
-        .filter((row) => row.dojo_id === dojo.id)
-        .map(questionFromSupabase);
-      if (bank.length > 0) state.questionsByDojo[dojo.id] = bank;
-    });
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    renderAll();
-    notify("Preguntas cargadas desde Supabase.");
+    const rows = await supabaseRest("questions?select=id,dojo_id,source_type,audit_status,question_text,explanation,options,active,audit_notes,created_at&order=created_at.desc&limit=500");
+    state.questionBank.items = Array.isArray(rows) ? rows : [];
+    state.questionBank.loaded = true;
+    state.questionBank.error = null;
   } catch (error) {
     console.warn("No se pudieron cargar preguntas desde Supabase:", error);
+    state.questionBank.error = error.message || String(error);
   }
+  if ($("#questions")?.classList.contains("active")) renderQuestions();
 }
 
 const DOJO_STATUS_TO_SUPABASE = { activo: "active", borrador: "draft", pausado: "paused" };
@@ -1637,26 +1880,6 @@ async function ensureDojoSyncedToSupabase(dojo) {
   });
 }
 
-async function saveQuestionsToSupabase(bank, dojo) {
-  try {
-    await ensureDojoSyncedToSupabase(dojo);
-    const payload = bank.map((question) => questionToSupabase(question, dojo));
-    await supabaseRest("questions?on_conflict=id", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify(payload),
-    });
-    notify(`${payload.length} pregunta(s) guardadas en la base de datos.`);
-  } catch (error) {
-    console.error("No se pudieron guardar preguntas en Supabase:", error);
-    // A toast auto-dismisses in 3.2s — too fast to read a variable-length
-    // Postgres/PostgREST error. This path is rare (only on save failure),
-    // so the extra interruption of a blocking alert is worth it here to
-    // make the real cause visible instead of a generic dead-end message.
-    window.alert(`Guardado en este navegador, pero la base de datos no aceptó el banco:\n\n${error.message}`);
-  }
-}
-
 async function supabaseRest(path, options = {}) {
   const response = await fetch(`/api/rest/v1/${path}`, {
     ...options,
@@ -1675,58 +1898,6 @@ async function supabaseRest(path, options = {}) {
   if (response.status === 204) return null;
   const text = await response.text();
   return text ? JSON.parse(text) : null;
-}
-
-function questionFromSupabase(row) {
-  return {
-    id: row.id,
-    number: row.order_num || 1,
-    source: row.source_type === "manual" ? "manual" : "ia",
-    status: row.audit_status === "approved" ? "aprobada" : row.audit_status === "pending" ? "pendiente" : row.audit_status || "pendiente",
-    difficulty: row.difficulty || 1,
-    kata: row.kata_label || "Kata 1",
-    text: row.question_text,
-    answer: row.answer_text || firstCorrectOptionText(row.options) || "Respuesta pendiente.",
-    explanation: row.explanation || "Explicacion pendiente.",
-  };
-}
-
-function questionToSupabase(question, dojo) {
-  return {
-    id: question.id,
-    branch: dojo.id,
-    dojo_id: dojo.id,
-    order_num: question.number,
-    iso_control: dojo.iso,
-    question_text: question.text,
-    question_type: "escenario",
-    options: buildOptions(question),
-    active: true,
-    source_type: question.source === "manual" ? "manual" : "incident_investigation",
-    // Only a human "aprobada" is approved. "auditada" (checked by the AI, not yet by a person) stays pending; it used to be approved.
-    audit_status: question.status === "aprobada" ? "approved" : question.status === "rechazada" ? "rejected" : "pending",
-    difficulty: Number(question.difficulty) || 1,
-    kata_label: question.kata,
-    answer_text: question.answer,
-    explanation: question.explanation,
-    editable: true,
-  };
-}
-
-function buildOptions(question) {
-  const answer = question.answer || "Control correcto pendiente de configurar";
-  return [
-    { valor: "A", texto: answer, correcta: true },
-    { valor: "B", texto: "Ignorar la alerta y continuar operando igual", correcta: false },
-    { valor: "C", texto: "Compartir credenciales para resolver mas rapido", correcta: false },
-    { valor: "D", texto: "Desactivar controles de seguridad temporalmente", correcta: false },
-  ];
-}
-
-function firstCorrectOptionText(options) {
-  if (!Array.isArray(options)) return "";
-  const option = options.find((item) => item.correcta === true || item.is_correct === true) || options[0];
-  return option?.texto || "";
 }
 
 
@@ -2263,7 +2434,6 @@ function addDojo() {
     status: "borrador",
   });
   state.selectedDojoId = id;
-  ensureQuestionBanks();
   persist("Dojo agregado. Configura tema, ISO y estado.");
   renderAll();
 }

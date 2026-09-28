@@ -1,0 +1,21 @@
+-- Regla pedagogica (Moodle, "10 reglas para escribir preguntas de opcion
+-- multiple", regla #5): la opcion correcta no debe ser mas larga ni mas
+-- detallada que los distractores, porque la longitud es una pista que un
+-- estudiante puede explotar sin saber el tema. Se agrega a los dos agentes
+-- que generan preguntas y al agente que las audita, para que la IA la
+-- respete al redactar y el auditor la haga cumplir antes de activar nada.
+
+UPDATE public.agent_configs
+SET
+  prompt_template = 'Analiza los incidentes de ciberseguridad reportados para el dia anterior. Resume impacto para MIPYMEs ecuatorianas, clasifica severidad y propone hasta 10 preguntas nuevas para Ciber Dojo. Usa lenguaje simple para PYMEs ecuatorianas: nunca menciones una sigla, un dominio o el nombre de una fuente sin explicar entre parentesis que es, en una frase corta (ejemplo: "cisa.gov, la agencia de ciberseguridad del gobierno de Estados Unidos"). La dificultad de las preguntas debe subir progresivamente segun el cinturon del dojo, de blanco (mas facil) a negro (mas dificil). La opcion correcta y las incorrectas deben tener una extension y un nivel de detalle similares: no agregues condiciones, matices o tecnicismos extra solo a la respuesta correcta para hacerla "indiscutiblemente cierta", porque una opcion notablemente mas larga o mas detallada es una pista que un estudiante puede usar para adivinar sin saber el tema; si una opcion necesita mas contexto para no ser ambigua, dale ese mismo nivel de detalle a las demas. Las preguntas deben estar alineadas a ISO 27001, incluir 4 opciones cuando aplique y devolver JSON estricto con incidents[] y generated_questions[].'
+WHERE agent_code = 'incident-investigator';
+
+UPDATE public.agent_configs
+SET
+  prompt_template = 'Busca noticias recientes de ciberataques en las fuentes configuradas. Extrae tactica, impacto, control preventivo ISO 27001 y genera preguntas y KATAS para Ciber Dojo. Usa lenguaje simple para PYMEs ecuatorianas: nunca menciones una sigla, un dominio o el nombre de una fuente sin explicar entre parentesis que es, en una frase corta (ejemplo: "bleepingcomputer.com, un sitio web que reporta noticias de ciberataques"). La dificultad de las preguntas debe subir progresivamente segun el cinturon del dojo, de blanco (mas facil) a negro (mas dificil). La opcion correcta y las incorrectas deben tener una extension y un nivel de detalle similares: no agregues condiciones, matices o tecnicismos extra solo a la respuesta correcta para hacerla "indiscutiblemente cierta", porque una opcion notablemente mas larga o mas detallada es una pista que un estudiante puede usar para adivinar sin saber el tema; si una opcion necesita mas contexto para no ser ambigua, dale ese mismo nivel de detalle a las demas. Cada KATA generada debe tener exactamente 5 casos: los primeros 3 de dificultad baja a media, y los ultimos 2 de complejidad media y media-alta, con respuestas que no sean obvias a simple vista y que asuman que quien responde ya completo las 20 preguntas manuales del dojo. Devuelve JSON estricto con generated_questions[] y generated_katas[].'
+WHERE agent_code = 'ciber-dojo-news-agent';
+
+UPDATE public.agent_configs
+SET
+  prompt_template = 'Audita las preguntas generadas automaticamente para Ciber Dojo antes de activarlas. Evalua claridad, relevancia para PYMEs ecuatorianas, alineacion con ISO 27001, accionabilidad, ausencia de ambiguedad y calidad pedagogica. Rechaza o corrige cualquier pregunta que use una sigla, un dominio o el nombre de una fuente sin explicarlo en lenguaje simple entre parentesis. Rechaza o corrige cualquier pregunta donde la respuesta correcta sea notablemente mas larga o mas detallada que las opciones incorrectas (o la unica con matices y condiciones tecnicas): eso le da al estudiante una pista para adivinarla sin saber el tema; si corriges, iguala la extension y el nivel de detalle de todas las opciones sin cambiar cual es la correcta. Verifica que la dificultad suba progresivamente segun el cinturon del dojo, de blanco a negro, y que las KATAS tengan exactamente 5 casos con los ultimos 2 de complejidad media y media-alta y respuestas no evidentes. Aprueba solo preguntas seguras y utiles. Devuelve JSON estricto con audits[] usando question_id, status approved|rejected, notes y suggested_improvement.'
+WHERE agent_code = 'question-auditor';
