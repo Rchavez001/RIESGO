@@ -1,2 +1,5 @@
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Local Claude Code permissions (personal to this machine; may accumulate secrets in Bash allow entries)
+.claude/settings.local.json
