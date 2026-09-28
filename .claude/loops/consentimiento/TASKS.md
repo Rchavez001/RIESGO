@@ -172,6 +172,14 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     solicitud de derechos con tipo; muestra número de caso y fecha límite.
   - **Tests E2E:** revocar publicidad en un clic; solicitar baja muestra número de caso.
 
+- [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07)
+  - **Decisión D-12 (2026-09-28):** primero inventariar; luego A o B según el resultado; mientras no esté implementado y probado, **`enable_anonymous_sign_ins` debe estar desactivado en producción** (opción C) y el modo invitado **no entra en el release**.
+  - **Paso 1 — inventario (sin cambiar código):** qué guarda hoy un usuario con `is_anonymous = true`: filas por tabla y columna (`users`, `learning_state`, puntajes, respuestas), `security_events`, `admin_audit_log`, logs con IP, funciones que aceptan sesión anónima, y si alguna manda datos a un proveedor de IA. Documentarlo en `PROGRESS.md` con archivos y consultas de solo lectura (las que toquen producción las ejecuta la persona responsable). Puntos de partida: `frontend/src/components/GuestRegisterPrompt.tsx` (sin versionar), `App.tsx` (`isGuest`), `CinematicPublicShell.tsx`, `DojoDetailPage.tsx`, `supabase/config.toml` (`enable_anonymous_sign_ins`), migración 058 (`learning_state_guest_fix`, sin versionar).
+  - **Paso 2A — si no guarda nada personal en la base:** se mantiene el modo invitado; el aviso completo se muestra al convertirse en cuenta (flujo de REQ-06). Prueba: un invitado no genera filas personales ni evidencia; al registrarse pasa por el aviso completo.
+  - **Paso 2B — si guarda datos:** antes de crear la sesión anónima, aviso breve con enlace al aviso completo y botón "Continuar como invitado", registrado como evidencia con la finalidad `invitado_basico` (finalidad nueva en el documento del aviso y en el seed; requiere texto validado por la persona responsable); los invitados **no envían datos personales a proveedores de IA** y su sesión anónima **caduca** (configurar y probar); al convertirse en cuenta pasan por el flujo completo (REQ-06). Prueba: sin el aviso breve no se crea la sesión anónima; el evidence queda con `invitado_basico`.
+  - **Paso 3 — comprobación de release:** una puerta o lista en T99 que verifique `enable_anonymous_sign_ins = false` en la configuración que se despliega mientras 2A/2B no estén cerradas.
+  - Depende de T04 (rutas y `auth-guard`) para el paso 1; los pasos 2A/2B dependen del esquema de T06 y del aviso publicado (`secure-register-user` ya escribe la evidencia del registro).
+
 - [ ] **T20 — Re-consentimiento al iniciar sesión** (REQ-09)
   - **Tests E2E:** publicar v1.1 con reconsent → siguiente login muestra aviso; aceptar continúa;
     rechazar la obligatoria solo permite baja o cerrar sesión.
@@ -228,7 +236,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - `gates.sh` completo en verde; `verify_consent_chain()` y `verify_audit_chain()` OK sobre seed;
     búsqueda de `decodeJwtRole` sin usos nuevos; búsqueda de `console.log` con PII en archivos
     tocados; checklist de REQ/SEC en `PROGRESS.md` con evidencia (test o archivo) por requisito;
-    lista de pendientes para producción (secretos a crear, config de proxy, decisiones abiertas).
+    lista de pendientes para producción (secretos a crear, config de proxy, decisiones abiertas);
+    **`enable_anonymous_sign_ins` desactivado en lo que se despliega salvo que T19b esté cerrada (D-12)**; **`frontend` tiene la ruta `/registro`** (ver T-ruta-registro).
 
 ---
 
@@ -249,5 +258,11 @@ Nombres fuera de la numeración original (`Tnn-extra`, según PROMPT.md). Ojo: *
 - [x] **T14-fix — Versionado de `privacy_settings`** (migración 075) — hecha
   - Sin `is_current` ni SECURITY DEFINER; `privacy_email_verifications` actualizable y acotada; `supabase/tests/consent/settings_versioning.sql`. Pendiente solo de aplicar en producción, dentro del release único.
 - [ ] **T00-extra — [P1] Migraciones no reproducibles desde cero**
+  - **Prerrequisito (iteración 5):** las migraciones 030–058 y 069–072 no están en git (41 de 73 versionadas). Primero debe integrarse la rama `chore/baseline-produccion` en `main` y `feature/consentimiento-lopdp` actualizarse desde `main`; sin eso un `db reset` no tiene ni los archivos.
   - La migración 004 usa una columna (`users.role`) antes de crearla: `supabase db reset` falla en Postgres 17. Proponer una **migración base** con `supabase db dump --schema-only` (revisada) y reactivar `db-reset` en `gates.sh` (hoy SKIP explícito, ver línea base en `PROGRESS.md`).
   - **No editar migraciones existentes sin aprobación explícita.** Es una propuesta: describir el enfoque (base + qué migraciones se archivan o se marcan como aplicadas), cómo se comprueba que el esquema resultante es idéntico al de producción, y esperar el visto bueno antes de tocar nada.
+- [ ] **T-ruta-registro — [P0] La ruta `/registro` no existe en el código versionado**
+  - **Hallazgo (iteración 5):** en `HEAD` (y en `main`) `App.tsx` no importa `RegisterScreen` ni declara `<Route path="/registro">`, pero `LoginScreen`, `CinematicLandingPage`, `CinematicPublicShell` y `SenseiVideoModal` (versionados) enlazan a `/registro` y `tests/frontend/register.spec.ts` lo visita. La pantalla de registro con el aviso primero es **inalcanzable** en el commit limpio: la ruta solo existe en el `App.tsx` modificado sin commit (mezclada con el rediseño). `gates.sh` no lo detecta (no corre el Playwright del frontend).
+  - **Hecho:** parche mínimo generado y comprobado con `git apply --check` contra `HEAD`: `.claude/loops/consentimiento/patches/registro-route.patch` (import + ruta en `App.tsx`, y el botón "INSCRÍBETE" de `LandingPage.tsx` hacia `/registro`). **No se aplicó**: `App.tsx` y `LandingPage.tsx` tienen cambios de UX sin commit del usuario.
+  - **Falta:** aplicarlo tras mover el trabajo de UX a su rama (ver plan de ramas en PROGRESS.md, iteración 5) y ejecutar `tests/frontend/register.spec.ts` contra la app compilada.
+  - **Aceptación:** en un árbol limpio, `/registro` muestra la pantalla; `register.spec.ts` pasa.
