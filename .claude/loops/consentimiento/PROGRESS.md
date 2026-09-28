@@ -7,8 +7,8 @@ historial previo al loop (estado, decisiones, hallazgos abiertos). Los pasos 2 y
 `CLAUDE.md.fragmento`) NO se han hecho: cambian permisos e instrucciones del proyecto y los decide la persona responsable.
 
 ## Estado (estimación contra la SPEC, no contra TASKS.md)
-- **Contra TASKS.md: 1 de 28 tareas cerrada (3,6 %)** — solo T00; el resto tiene su "Estado real" anotado en TASKS.md. Ponderando lo parcial,
-  ≈ 27–28 % (estimación mía a partir de esas anotaciones). Contra la SPEC: ~42 % escrito.
+- **Contra TASKS.md: 2 de 28 tareas cerradas (7,1 %)** — T00 y T01; el resto tiene su "Estado real" anotado en TASKS.md. Ponderando lo parcial,
+  ≈ 31 % (estimación mía a partir de esas anotaciones: 27–28 % antes de T01, que aporta una tarea completa). Contra la SPEC: ~42 % escrito.
 - ~19 % en producción (solo Fase 0; 074, 075 y Fase 1 NO están desplegadas, a la espera del release único).
 - Verificado con pruebas automáticas: cripto+AAD, cuota fail-closed, evidencia, registro de punta a punta, ciclo de vida SQL (073+074),
   versionado de `privacy_settings` (075), la función de diagnóstico T03, y una prueba de punta a punta contra Supabase local (21/21).
@@ -170,3 +170,66 @@ No incluido en las puertas: Playwright del frontend (necesita la app compilada y
   adelantaron antes de instalar el paquete; se anotó su estado real en TASKS.md en vez de marcarlas como cerradas.
 - Riesgos / pendientes detectados: `playwright.admin.config.ts` con `reuseExistingServer: true` es frágil fuera de `gates.sh` (misma causa que el flake de arriba); el frontend muestra el aviso como texto plano (Markdown sin renderizar: T18); T03-prod/T03-sec (P0); `pii.ts` sin versionar; el aviso local usa datos de desarrollo
   (D-07 sin completar); el loop dice "nunca `supabase db push`" y en la Fase 0 (antes de instalarlo) sí se aplicó 073 a producción: no se repetirá.
+
+## Iteración 2 — 2026-09-28 — T01 Inventario de consentimiento actual y plan de backfill
+Solo lectura y documentación: **ningún cambio de código, de migraciones ni de producción**. Nada se consultó en la base hospedada.
+
+### 1. Cómo se registra hoy el consentimiento
+| Dónde | Qué | Detalle |
+|---|---|---|
+| `public.users` (migración 012) | `data_processing_authorized BOOLEAN NOT NULL DEFAULT false`, `data_processing_authorized_at TIMESTAMPTZ` (nulo permitido), `privacy_notice_version TEXT NOT NULL DEFAULT '2026-06-22'`, `privacy_updated_at` | El **valor por defecto de la versión también se aplica a quien nunca autorizó**: `privacy_notice_version` sola no prueba nada; solo vale junto con `authorized = true`. |
+| `auth.users.raw_user_meta_data` | `{privacy_notice_version, data_processing_authorized: true}` | Lo escribe `secure-register-user` al crear la cuenta. Es copia, no fuente. |
+| Tabla de consentimiento | **No existía** hasta `consent_records` (073) | Vacía: nada de lo anterior está en ella. |
+| Cifrado | Solo email/nombre/etc. en `users.*_encrypted` (AAD pendiente, T02-extra). El consentimiento en sí **no** está cifrado ni tiene evidencia de IP/agente. | |
+
+Quién escribe: solo `secure-register-user` (upsert de `users`; hoy además escribe `consent_records`). Quién lee: `get-private-profile` (devuelve `data_processing_authorized` y `privacy_notice_version`),
+el tipo `UserProfile` del frontend (campos declarados, sin uso visible), el panel (`central-admin-app/app.js`: columna "Consentimiento" Sí/No de la lista de usuarios), la migración 067
+(`admin_user_summary`: cuenta `authorized`) y `tests/admin/users.spec.ts`. No hay más lectores. La copia `release/cyberdojo-clean-repo/` es un volcado antiguo: se ignora.
+
+Texto que aceptaron las personas antiguas (versión `2026-06-22`, reconstruido de `release/cyberdojo-clean-repo/.../LoginScreen.tsx` y de `RegisterScreen.tsx` antes del commit 3cd0989; no hay copia en la base):
+una sola autorización general "para fines internos de la aplicación, incluyendo registro, gestión de usuario, operación del servicio y clasificación estadística durante la vigencia de mi uso",
+más una nota de derechos ARCO con un correo personal como contacto (no se copia aquí). No nombra al responsable legal, no indica plazos de conservación, no separa finalidades, no habla de menores ni de IP.
+
+Calidad de la evidencia antigua: hay fecha (la del servidor al registrarse) y nada más. **No hay IP, no hay agente de usuario, no hay huella del texto mostrado, no hay decisión por finalidad.**
+
+### 2. Qué se migra y qué no
+| Población | Se migra a `consent_records` | Cómo |
+|---|---|---|
+| A. `authorized = true` y con fecha | Sí | 1 fila: finalidad `registro_aprendizaje`, `decision = granted`, `channel = registro`, `server_ts` = `data_processing_authorized_at`. |
+| B. `authorized = true` sin fecha | Sí, marcada | Igual, con `server_ts = users.created_at` y anotada en el informe del script como "fecha aproximada". |
+| C. `authorized = false` | **No** | No hay nada que registrar; no se inventa. Quedan "sin consentimiento" hasta que acepten el aviso 1.0 (D-10). |
+| Finalidades opcionales (`novedades`, `publicidad_personalizada`) | **Nunca** | Nadie las aceptó nunca; quedan como "no consintió". |
+| Datos personales | No se lee ni se copia ningún dato personal: solo `id`, `authorized`, `authorized_at`, `created_at`, `privacy_notice_version`. | |
+
+Conteo previo (solo lectura, sin datos personales; **lo ejecuta la persona responsable en el editor SQL, yo no lo ejecuté**):
+```sql
+select data_processing_authorized as autorizado,
+       data_processing_authorized_at is not null as con_fecha,
+       privacy_notice_version, count(*) as personas
+from public.users group by 1, 2, 3 order by personas desc;
+```
+Con eso se confirma que solo existe la versión `2026-06-22` y cuántas personas hay en A, B y C antes de correr nada.
+
+### 3. Diseño del backfill (T25) — sin implementar
+1. **Documento legacy** en `consent_documents`: `version = 'legacy-2026-06-22'` (uno por cada versión distinta que salga en el conteo), `status = 'retired'` (nunca `published`: el índice de "un solo publicado" no se toca y no se ofrece a nadie),
+   `content_md` = el texto reconstruido (con el correo personal sustituido por "[contacto de la época, omitido]") precedido de una nota "sin copia almacenada del texto original", `purposes` = una sola finalidad obligatoria `registro_aprendizaje`
+   (el mismo código que el aviso 1.0, para que "Mi privacidad" muestre continuidad), `content_sha256` = SHA-256 de ese contenido, `created_by` = el admin que la cree.
+2. **Filas de evidencia** (una por persona de A y B): `user_id`, `user_ref_hmac = hmacLookup(user_id, "LOOKUP_HMAC_KEY_B64")` (la **misma** función que el registro, para que una baja o un retiro posterior encuentren la fila),
+   `document_id/version` del legacy, `rendered_sha256` = `content_sha256` del legacy (no hubo renderizado), `settings_version = 0` ("no aplica"), `purpose_code = registro_aprendizaje`, `decision = granted`, `channel = registro`,
+   `ip_ciphertext/ua_ciphertext/ua_hmac = NULL`, **`ip_hmac = NULL`** (requiere D-11), `key_version` = versión activa. `server_ts` = la fecha original; la cadena de hash sigue el `id`, no el tiempo, y así un `revoked` posterior siempre queda "más nuevo" que el legacy.
+3. **No puede ser una migración SQL**: `user_ref_hmac` necesita `LOOKUP_HMAC_KEY_B64`, que solo existe en las funciones (D-11). Será una función/script de un solo uso con service role: `--dry-run` (solo cuenta A/B/C y muestra 3 ids abreviados, sin correos), lotes de 500 con un solo `INSERT`
+   (el trigger de cadena toma su bloqueo por fila), idempotente (antes de insertar salta a quien ya tenga una fila `legacy%` para esa finalidad).
+4. **Cuándo**: dentro de la ventana única del release, **después** de 074 y 075 (la 074 cambia el hash y aborta si ya hay filas) y antes de exponer el reconsentimiento (T19). Requiere el OK explícito de la persona responsable y el respaldo del plan `PLAN_PRODUCCION_074_075.md`.
+   Es **irreversible por diseño** (la evidencia es append-only): por eso primero `--dry-run`, luego un lote de prueba de 5, luego el resto.
+5. **Comprobación posterior**: `verify_consent_chain()` sin filas; `count(legacy) = |A| + |B|`; ninguna fila legacy con `ip_ciphertext` o `ip_hmac`; ninguna fila para personas de C; una segunda corrida no inserta nada.
+6. **Después del backfill**: las columnas de `users` se quedan (las leen `get-private-profile`, el panel y la 067) y `secure-register-user` sigue escribiéndolas; la fuente de verdad pasa a `consent_records` y el panel (T22/T23) debe leer de ahí. Retirar las columnas es una tarea futura, no de esta entrega.
+7. **Reconsentimiento**: el aviso 1.0 se publica con `requires_reconsent = true` (T19). Quien tenga como último estado un registro `legacy%`, o ninguno, verá el aviso nuevo. Si esto es lo que se quiere lo decide D-10.
+
+### 4. Incompatibilidades registradas (en `DECISIONS.md`, sin decidir)
+- **D-10** (legal): validez del consentimiento anterior y si se exige uno nuevo a todos; qué pasa con quienes nunca autorizaron. Bloquea T25.
+- **D-11** (técnica): `ip_hmac` es `NOT NULL` en la 073; el backfill no puede ser migración SQL por la clave HMAC. Bloquea T25.
+
+### Resultado
+- T01 **cerrada**: plan de backfill escrito; sin cambios de código (verificado con `git status`: solo `PROGRESS.md`, `DECISIONS.md` y `TASKS.md`).
+- Gates: no se ejecutaron los `gates.sh` completos porque no cambió ningún código, script ni prueba; las puertas no pueden cambiar de estado con cambios solo de documentación. Última corrida completa: iteración 1 (todas OK, `db-reset` omitido).
+- Riesgos / pendientes: D-10 y D-11 abiertas; el conteo de la sección 2 lo ejecuta una persona; T25 queda con ⛔ hasta que se decidan.

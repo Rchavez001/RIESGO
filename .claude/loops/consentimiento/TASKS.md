@@ -22,7 +22,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Aceptación:** `gates.sh` corre y reporta el estado base (puede haber FAIL preexistentes:
     documentarlos como línea base y excluirlos explícitamente con comentario, sin ocultarlos).
 
-- [ ] **T01 — Inventario de consentimiento actual**
+- [x] **T01 — Inventario de consentimiento actual** (hecha 2026-09-28: ver Iteración 2 en PROGRESS.md; incompatibilidades en D-10 y D-11)
   - **Estado real (2026-09-28):** Sin iniciar como tarea (no hay plan de backfill escrito). Hoy: `users.data_processing_authorized`/`_at`, `privacy_notice_version` (constante hardcodeada `2026-06-22` hasta la Fase 1) y PII cifrada con `PII_ENCRYPTION_KEY_B64`.
   - Documentar en `PROGRESS.md` cómo se registra hoy el consentimiento (tabla, columnas, versión,
     cifrado) y qué datos existentes deben migrarse a `consent_records` como `channel='registro'`
@@ -214,8 +214,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 6 · Migración, documentación y cierre
 
-- [ ] **T25 — Backfill de consentimientos legacy** (según plan T01)
-  - Migración idempotente; evidencia legacy marcada `document_version='legacy'`, sin inventar IP.
+- [ ] **T25 — Backfill de consentimientos legacy** (según plan T01) ⛔ BLOQUEADA (D-10, D-11)
+  - **Ajuste tras T01 (D-11):** no es una migración SQL sino una función/script de un solo uso (necesita `LOOKUP_HMAC_KEY_B64`); idempotente, con `--dry-run`, en lotes. Evidencia legacy marcada con `document_version LIKE 'legacy%'` (esperado `legacy-2026-06-22`), sin inventar IP (`ip_hmac` nulo, requiere migración nueva). Diseño completo en PROGRESS.md, Iteración 2.
 
 - [ ] **T98 — Documentación** (H14)
   - **Estado real (2026-09-28):** PARCIAL. Hecho: `PROGRESS.md`, `PLAN_PRODUCCION_074_075.md` (release único, con respaldo), `diag/README.md`. Falta: `SECURITY_PRIVACY.md`, manual administrativo, `BASE_DE_DATOS.md`, `.env.example`, rotación de claves, runbook de bajas, lista para legal.
