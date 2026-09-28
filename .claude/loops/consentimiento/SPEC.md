@@ -1,11 +1,11 @@
 # SPEC · Módulo de Consentimiento Informado y Derechos del Titular — CiberDojo
 
-Versión de SPEC: 1.0 · 26-09-2026
+Versión de SPEC: 1.1 · 28-09-2026 (cambios sobre 1.0: SEC-04 por D-09; REQ-11 por D-03; REQ-12 por D-04; nuevo REQ-21 por D-05; modelo de datos alineado con las migraciones 073–075)
 Insumos: `CiberDojo_Consentimiento_Informado.pdf` v1.0 (propuesta) y
 `EVALUACION_ISO_42001_TR_24368_CIBERDOJO.docx` v1.0 (diagnóstico).
 Stack observado: frontend React/TypeScript (`frontend/`), panel `central-admin-app/` (Node,
 `server.js` + `app.js`, Basic Auth y proxy con service role), Supabase (Edge Functions Deno en
-`supabase/functions/`, helpers en `_shared/`, migraciones SQL hasta 072).
+`supabase/functions/`, helpers en `_shared/`, migraciones SQL hasta 075).
 
 ---
 
@@ -19,6 +19,7 @@ Stack observado: frontend React/TypeScript (`frontend/`), panel `central-admin-a
 3. Permitir configurar desde el panel el **correo del delegado / canal de privacidad**, al que se
    enrutan las solicitudes de baja y derechos, con historial.
 4. Cerrar, en el perímetro de este módulo, los hallazgos H01, H04 (parcial), H08, H15 y reforzar E01/E10.
+5. Permitir configurar desde el panel el **correo saliente** (Resend por defecto | SMTP) sin exponer nunca sus secretos (REQ-21).
 
 Fuera de alcance: resto de hallazgos ISO (H02, H03, H05–H07, H09–H14, H16, H17), redacción jurídica
 definitiva de la Política de Privacidad completa.
@@ -58,8 +59,8 @@ Si un revisor legal decide que la IP no debe conservarse, basta cambiar `ip_rete
 | REQ-08 | Área "Mi privacidad" en la cuenta del usuario: ver estado vigente de cada finalidad, versión aceptada, fecha; otorgar/revocar opcionales con **un clic** (mismo esfuerzo que otorgar); revocación sin justificación. El usuario **no** ve IP ni UA (ni siquiera la suya cifrada). | Aviso §7 |
 | REQ-09 | Re-consentimiento: si se publica una versión con `requires_reconsent = true`, en el siguiente inicio de sesión el usuario ve el nuevo aviso antes de continuar. Si no acepta la finalidad obligatoria, solo puede solicitar baja o cerrar sesión. | Anexo "Coherencia operativa" |
 | REQ-10 | Solicitud de baja / derechos desde la cuenta (formulario) y por correo. La solicitud desde la app crea fila en `data_subject_requests`, envía correo al **correo de privacidad vigente** con asunto configurable (por defecto: *"Solicitud de baja y eliminación de datos - CiberDojo"*) y acuse al titular con número de caso y fecha límite. El correo al delegado contiene número de caso y tipo, **no** datos cifrados ni IP. | Aviso §6, §7 |
-| REQ-11 | Plazo de respuesta configurable (`response_days`, por defecto 15; tipo de día configurable, ver D-03). El panel muestra casos por vencer (≤3 días) y vencidos. | Aviso §7 (art. 15 LOPDP) |
-| REQ-12 | Menores: el registro pide declarar si la persona tiene 15 años o más. Si no, se bloquea el registro autónomo y se muestra el flujo de representante legal definido en D-04. No se almacena fecha de nacimiento salvo que D-04 lo decida. | Aviso §9 |
+| REQ-11 | Plazo de respuesta en **días calendario** (`response_days`, por defecto 15, configurable; D-03). No hay tabla de feriados ni tipo de día: 15 días calendario vencen siempre antes que 15 hábiles. El panel muestra casos por vencer (≤3 días) y vencidos. | Aviso §7 (art. 15 LOPDP) |
+| REQ-12 | Menores: el registro pide declarar si la persona tiene 15 años o más. Si no, se **bloquea** el registro autónomo y se muestra un mensaje para que el representante legal lo gestione por correo al canal de privacidad (D-04, opción A). **No se guarda fecha de nacimiento** ni ningún dato del menor. El flujo de consentimiento del representante (opción B) queda fuera de esta entrega. | Aviso §9 |
 | REQ-13 | **Panel admin → sección "Consentimiento informado"** con pestañas: (a) Versiones: lista, estado, fechas, autor, publicador, nº de aceptaciones; (b) Editor de borrador en Markdown con vista previa renderizada con los marcadores resueltos y editor de finalidades; (c) Comparar versiones (diff línea a línea); (d) Publicar/retirar con motivo obligatorio y confirmación escribiendo el número de versión; (e) Configuración del responsable y delegado; (f) Bitácora; (g) Solicitudes de derechos; (h) Evidencia. | Requisito del cliente |
 | REQ-14 | Configuración (`privacy_settings`): nombre/razón social del responsable, domicilio, teléfono, **correo de privacidad y baja**, nombre y contacto del delegado (DPO), asunto de baja, `response_days`, `ip_retention_days`, URL de Política de Privacidad. Cada guardado crea nueva `settings_version`. | Aviso §1; Anexo "Identificación" |
 | REQ-15 | Cambio del correo de privacidad: el nuevo correo queda `pending` hasta confirmarse con un código de 6 dígitos (válido 30 min, guardado como hash) enviado a esa dirección. Solo entonces se activa. Evita desviar solicitudes de baja a un buzón erróneo. | Robustez del canal |
@@ -68,6 +69,7 @@ Si un revisor legal decide que la IP no debe conservarse, basta cambiar `ip_rete
 | REQ-18 | Verificación de integridad: función `verify_consent_chain()` y `verify_audit_chain()` que recorren las cadenas y reportan el primer eslabón roto. Botón en el panel y test automatizado. | Integridad de evidencia |
 | REQ-19 | Retención: job programado (pg_cron o función invocada por scheduler con secreto propio) que, tras `ip_retention_days`, pone a NULL `ip_ciphertext` y `ua_ciphertext` preservando HMAC y el resto de la fila. Es la única mutación permitida sobre `consent_records` y se hace mediante función `SECURITY DEFINER` con registro en bitácora. | Aviso §5; Anexo "Conservación" |
 | REQ-20 | Tras una baja atendida, los datos de cuenta se eliminan/anonimizan según la política, pero la evidencia de consentimiento se conserva seudonimizada (user_id → HMAC) durante el plazo de evidencia que fije D-02, y luego se purga. | Aviso §5, §7 |
+| REQ-21 | **Configuración de correo saliente desde el panel** (D-05). Sección **"Correo saliente"** dentro de "Consentimiento informado", solo rol `privacy_admin`. (a) Campos: modo (`resend` por defecto, reutilizando la integración existente | `smtp`), host, puerto, seguridad SSL/TLS, usuario, contraseña, nombre y correo del remitente, reply-to, habilitado. La clave de Resend (`resend_api_key` en `app_secrets`) **no se muestra ni se edita** desde el panel. (b) Tabla `email_transport_settings` versionada **solo con INSERT** (mismo patrón que `privacy_settings`, migración 075). La contraseña SMTP se cifra con `_shared/crypto.ts` con AAD `email_transport_settings:password:<settings_version>` y se lee con `allowLegacy:false`. **Nunca se devuelve al cliente**: la API responde `password_set: true|false`; para cambiarla hay que escribir una nueva. (c) Botón **"Enviar correo de prueba"** al correo del admin conectado, con rate limit; guarda la fecha y el resultado sin datos sensibles (tabla `email_transport_tests`, porque la fila de configuración es inmutable). (d) **Anti-SSRF para SMTP**: resolver el DNS y rechazar IP privadas, loopback, link-local y de metadatos (también en formato IPv4-mapped de IPv6); conectar a la IP ya validada (sin volver a resolver); puertos permitidos **465 y 2525**. Aviso en pantalla: "Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS". (e) Bitácora con `before`/`after` **sin la contraseña** (solo "contraseña cambiada: sí/no"). (f) Si el modo activo falla o no está configurado: **la solicitud se registra igual**, el titular ve su número de caso y el panel muestra el banner **"Correo no configurado / con errores"** con el contador de avisos pendientes y un botón para reenviarlos (tabla `email_outbox`). Los códigos de verificación de correo (REQ-15) no se encolan: si el envío falla se informa al instante. (g) Interfaz `EmailSender` con `ResendSender` (reutiliza `resend_api_key` de `app_secrets`), `SmtpSender` (librería mantenida, puerto 465) y `FakeEmailSender`. (h) **Resend se declara como proveedor con transferencia internacional (EE. UU.)** en §4 del aviso semilla y en el anexo (texto propuesto, a validar con asesoría legal). | D-05; REQ-10; SEC-09 |
 
 ## 4. Requisitos de seguridad
 
@@ -76,7 +78,7 @@ Si un revisor legal decide que la IP no debe conservarse, basta cambiar `ip_rete
 | SEC-01 | Funciones nuevas verifican el JWT **criptográficamente** (`supabase.auth.getUser(jwt)` o verificación JWKS) y leen rol desde BD (`admin_roles`), no desde claims sin verificar. `verify_jwt = true` en `config.toml` salvo `get-consent-notice`. | H01 |
 | SEC-02 | Roles del módulo en tabla `admin_roles(user_id, role)`: `privacy_editor` (crea/edita borradores), `privacy_admin` (publica, retira, configura, revela IP, gestiona solicitudes), `privacy_auditor` (solo lectura de bitácora y evidencia enmascarada). Opción de "cuatro ojos": si `four_eyes_publish = true`, quien editó el borrador no puede publicarlo. | H08; ISO A.3 |
 | SEC-03 | El panel `central-admin-app` debe operar con la **sesión del administrador individual** (JWT de Supabase Auth del admin, con MFA si está disponible) para este módulo; el proxy con service role no se usa para estas rutas. Ver D-01. | H08 |
-| SEC-04 | Criptografía en `_shared/crypto.ts` (nuevo o refactor de `_shared/pii.ts` manteniendo compatibilidad): AES-256-GCM, IV aleatorio de 12 bytes, formato `v{n}.{iv_b64}.{ct_b64}` (el tag va incluido en `ct` en WebCrypto). Claves `PII_ENC_KEY_V{n}` (32 bytes base64), clave activa `PII_ENC_ACTIVE_VERSION`. HMAC-SHA256 con clave **distinta** `LOOKUP_HMAC_KEY`. AAD = `tabla:columna:user_id` para impedir mover cifrados entre filas. Lectura soporta todas las versiones registradas. | H15; E01 |
+| SEC-04 | Criptografía en `_shared/crypto.ts`, compatible con `_shared/pii.ts` (D-09): AES-256-GCM, IV aleatorio de 12 bytes, formato JSON existente **`{v, alg: "AES-256-GCM", iv, tag, ct}`** en base64, con la marca **`aad: true`** cuando se cifró con AAD (el formato `v{n}.{iv}.{ct}` de la versión 1.0 de esta SPEC queda descartado). Clave activa `PII_ENCRYPTION_KEY_B64` con su versión en `PII_KEY_VERSION`; versiones anteriores en `PII_ENCRYPTION_KEY_B64_V{n}`; el payload lleva su versión (`v`) y la lectura soporta todas las registradas. HMAC-SHA256 con clave **distinta** `LOOKUP_HMAC_KEY_B64`. AAD = `tabla:columna:dueño` para impedir mover cifrados entre filas o columnas; el dueño es el `user_id` de la fila, salvo en `consent_records` (`user_ref_hmac`, porque `user_id` pasa a NULL tras una baja) y en `data_subject_requests` (el UUID de la propia fila, generado por la función antes del insert). Las columnas nuevas se leen con `allowLegacy:false`; los cifrados anteriores sin AAD se siguen leyendo (migrarlos con AAD es T02-extra, sin cambiar de formato). | H15; E01 |
 | SEC-05 | Nada de cifrado con clave en SQL (`pgp_sym_encrypt` con clave literal) ni claves en el frontend. | Buenas prácticas |
 | SEC-06 | RLS: `consent_records`, `admin_audit_log`, `data_subject_requests` sin políticas de UPDATE/DELETE para ningún rol de cliente; `REVOKE UPDATE, DELETE` a `anon`, `authenticated`; trigger `BEFORE UPDATE OR DELETE` que lanza excepción salvo bandera de sesión puesta por la función de retención. El usuario solo lee sus propios `consent_records` a través de una vista sin columnas de IP/UA. | E02 |
 | SEC-07 | Rate limit en `submit-consent`, `update-my-consent`, `request-data-subject-right` y confirmación de correo, con clave HMAC (no correo/IP en claro) y **fail-closed** en endpoints de escritura si la RPC de cuota falla. | H15 |
@@ -86,7 +88,8 @@ Si un revisor legal decide que la IP no debe conservarse, basta cambiar `ip_rete
 ## 5. Modelo de datos (orientativo; adaptarlo a convenciones del repo)
 
 ```sql
--- Configuración versionada (una fila vigente, historial completo)
+-- Configuración versionada: cada cambio es un INSERT; la vigente es la de mayor settings_version
+-- (vista privacy_settings_current; un trigger exige que la versión nueva sea exactamente la siguiente). Migración 075.
 create table privacy_settings (
   id bigint generated always as identity primary key,
   settings_version int not null unique,
@@ -94,22 +97,26 @@ create table privacy_settings (
   controller_address text,
   controller_phone text,
   privacy_email text not null,    -- correo de privacidad y baja (activo)
-  privacy_email_pending text,     -- en verificación (REQ-15)
-  privacy_email_code_hash text,
-  privacy_email_code_expires_at timestamptz,
   dpo_name text,
   dpo_contact text,
   unsubscribe_subject text not null default 'Solicitud de baja y eliminación de datos - CiberDojo',
-  response_days int not null default 15 check (response_days between 1 and 90),
-  response_day_type text not null default 'calendario' check (response_day_type in ('calendario','habiles')),
-  ip_retention_days int not null default 730 check (ip_retention_days >= 0),
+  response_days int not null default 15 check (response_days between 1 and 90),   -- días CALENDARIO (D-03)
+  ip_retention_days int not null default 730 check (ip_retention_days >= 0),      -- valor por defecto de desarrollo (D-02 abierta)
+  evidence_retention_days int not null default 1825 check (evidence_retention_days >= 0),  -- ídem
   privacy_policy_url text,
   four_eyes_publish boolean not null default false,
-  is_current boolean not null default false,
   created_by uuid not null,
   created_at timestamptz not null default now()
 );
-create unique index on privacy_settings (is_current) where is_current;
+
+-- Verificación del nuevo correo de privacidad (REQ-15): actualizable pero acotada (solo suben los intentos y se confirma
+-- una vez y a tiempo). Al confirmar: marcar la verificación + INSERT de una versión nueva de privacy_settings, en una transacción.
+create table privacy_email_verifications (
+  id uuid primary key default gen_random_uuid(),
+  new_email text not null, code_hash text not null, expires_at timestamptz not null,
+  attempts int not null default 0, confirmed_at timestamptz,
+  requested_by uuid not null, created_at timestamptz not null default now()
+);
 
 create table consent_documents (
   id uuid primary key default gen_random_uuid(),
@@ -160,7 +167,8 @@ create table admin_audit_log (
   actor_id uuid not null, actor_email_hmac text not null, actor_role text not null,
   action text not null,        -- consent.draft.create|update, consent.publish, consent.retire,
                                -- settings.update, settings.email.verify, evidence.reveal_ip,
-                               -- evidence.export, dsr.status_change, audit.export
+                               -- evidence.export, dsr.status_change, audit.export,
+                               -- email_transport.update, email_transport.test, email_outbox.resend
   entity text not null, entity_id text,
   before jsonb, after jsonb, diff text,
   reason text,                 -- obligatorio para publish, retire, reveal_ip, export, settings.update
@@ -190,6 +198,35 @@ create table data_subject_requests (
 create table admin_roles (user_id uuid, role text check (role in
   ('privacy_editor','privacy_admin','privacy_auditor')), granted_by uuid, granted_at timestamptz default now(),
   primary key (user_id, role));
+
+-- REQ-21 · Correo saliente. Versionada solo con INSERT, mismo patrón que privacy_settings.
+create table email_transport_settings (
+  id bigint generated always as identity primary key,
+  settings_version int not null unique,          -- exactamente max + 1
+  mode text not null default 'resend' check (mode in ('resend','smtp')),
+  enabled boolean not null default true,
+  smtp_host text, smtp_port int check (smtp_port in (465, 2525)),
+  smtp_security text check (smtp_security = 'ssl_tls'),
+  smtp_username text,
+  smtp_password_ciphertext jsonb,                -- {v,alg,iv,tag,ct,aad:true}; AAD 'email_transport_settings:password:<settings_version>'; nunca se devuelve
+  from_name text, from_email text, reply_to text,
+  created_by uuid not null, created_at timestamptz not null default now()
+);
+-- Resultado de cada correo de prueba (la fila de arriba es inmutable): sin datos sensibles.
+create table email_transport_tests (
+  id bigint generated always as identity primary key,
+  settings_version int not null, tested_by uuid not null, tested_at timestamptz not null default now(),
+  ok boolean not null, error_code text            -- código corto, nunca el mensaje del servidor
+);
+-- Avisos que no se pudieron enviar (al delegado, acuses al titular): la solicitud ya está registrada; se reenvían desde el panel.
+create table email_outbox (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('dsr_delegate_notice','dsr_ack')),
+  request_id uuid not null,                       -- data_subject_requests.id; sin correo ni datos del titular en la fila
+  status text not null default 'pending' check (status in ('pending','sent','failed')),
+  attempts int not null default 0, last_error_code text,
+  created_at timestamptz not null default now(), sent_at timestamptz
+);
 ```
 
 Canonicalización para `row_hash`: JSON con claves ordenadas alfabéticamente, timestamps en ISO-8601
@@ -204,8 +241,8 @@ UTC con microsegundos, sin espacios. Calcular en la función PL/pgSQL de inserci
 | `secure-register-user` (modificar) | pública + rate limit | Recibe datos de registro + `{document_id, rendered_sha256, settings_version, decisions:[{purpose_code, decision}], age_gate}`. Valida que la huella coincide con la versión vigente (si no: 409 `NOTICE_CHANGED`). Crea usuario y evidencia de forma atómica (REQ-07). |
 | `submit-consent` | usuario | Re-consentimiento (REQ-09). |
 | `update-my-consent` | usuario | Otorgar/revocar opcionales (REQ-08). |
-| `request-data-subject-right` | usuario | Crea caso, envía correos (REQ-10). |
-| `admin-consent` | admin con rol | Acciones: `list_versions`, `get_version`, `create_draft`, `update_draft`, `diff`, `preview`, `publish`, `retire`, `get_settings`, `update_settings`, `start_email_verification`, `confirm_email_verification`, `list_audit`, `export_audit`, `search_evidence`, `reveal_ip`, `export_subject_file`, `list_requests`, `update_request_status`, `verify_chains`. Cada acción valida rol y escribe bitácora. |
+| `request-data-subject-right` | usuario | Crea caso, envía correos (REQ-10). Si el envío falla, el caso queda registrado y el aviso pendiente en `email_outbox` (REQ-21). |
+| `admin-consent` | admin con rol | Acciones: `list_versions`, `get_version`, `create_draft`, `update_draft`, `diff`, `preview`, `publish`, `retire`, `get_settings`, `update_settings`, `start_email_verification`, `confirm_email_verification`, `list_audit`, `export_audit`, `search_evidence`, `reveal_ip`, `export_subject_file`, `list_requests`, `update_request_status`, `verify_chains`, `get_email_transport`, `update_email_transport`, `send_test_email`, `list_pending_emails`, `resend_pending_emails` (estas cinco solo `privacy_admin`; `get_email_transport` responde `password_set`, nunca la contraseña). Cada acción valida rol y escribe bitácora. |
 | `consent-retention-job` | secreto de scheduler dedicado | REQ-19. |
 
 **Obtención de IP (REQ-05):** implementar `getClientIp(req)` en `_shared/client-ip.ts`. Antes de
@@ -225,3 +262,4 @@ exactos>)` según la topología real del servidor de la politécnica; nunca `tru
 | H08 | Identidad individual, roles, bitácora con actor. |
 | H14 | T98 actualiza `SECURITY_PRIVACY.md`, manual administrativo y `BASE_DE_DATOS.md` para este módulo. |
 | H15 | Versionado de claves, separación enc/HMAC, rotación probada, fail-closed. |
+| Correo saliente (D-05) | REQ-21: transporte configurable, secretos cifrados con AAD y nunca devueltos, anti-SSRF, degradación sin perder solicitudes. |

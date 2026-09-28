@@ -33,8 +33,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 ## Fase 1 · Fundamentos criptográficos y de identidad
 
 - [ ] **T02 — Módulo `_shared/crypto.ts` con versionado de claves** (SEC-04)
-  - **Estado real (2026-09-28):** PARCIAL. Hecho: AES-256-GCM, AAD opcional con marca `aad:true`, HMAC con clave propia, lectura de cifrados anteriores sin AAD, versión de clave en el payload y `_V{n}` (`_shared/crypto.ts`, 8 pruebas). Falta: formato `v{n}.{iv}.{ct}` (se mantuvo el JSON existente `{v,alg,iv,tag,ct}`: desviación pendiente de aprobar), AAD obligatoria, `pii.ts` delegando en `crypto.ts`, pruebas "leer v1 con activa v2" y "clave mal formada sin filtrar la clave".
-  - AES-256-GCM, formato `v{n}.{iv}.{ct}`, AAD obligatoria, HMAC con clave distinta.
+  - **Estado real (2026-09-28):** PARCIAL. Hecho: AES-256-GCM, AAD opcional con marca `aad:true`, HMAC con clave propia, lectura de cifrados anteriores sin AAD, versión de clave en el payload y `_V{n}` (`_shared/crypto.ts`, 8 pruebas). El formato es el JSON existente `{v,alg,iv,tag,ct}`: **D-09 = A (decidida), SPEC 1.1 ya lo dice; no es una desviación**. Falta: AAD obligatoria para columnas nuevas, `pii.ts` delegando en `crypto.ts`, pruebas "leer v1 con activa v2" y "clave mal formada sin filtrar la clave".
+  - AES-256-GCM, formato JSON existente `{v,alg,iv,tag,ct}` con marca `aad` (D-09), AAD obligatoria en columnas nuevas, HMAC con clave distinta.
   - Compatibilidad: si `_shared/pii.ts` tiene formato previo, `decrypt` lo lee (legacy = v0) y
     `encrypt` siempre usa la versión activa. `pii.ts` pasa a delegar en `crypto.ts`.
   - **Tests:** ida y vuelta; AAD distinta falla; texto manipulado falla; leer v1 con activa v2;
@@ -60,7 +60,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests negativos obligatorios:** sin token, token con firma alterada, token expirado,
     token con claim `role: service_role` forjado, usuario sin rol, rol insuficiente.
 
-- [ ] **T05 — Identidad individual en `central-admin-app` para este módulo** (SEC-03, H08) ⛔ BLOQUEADA (D-01)
+- [ ] **T05 — Identidad individual en `central-admin-app` para este módulo** (SEC-03, H08)
+  - **Estado:** desbloqueada por **D-01 = A** (Supabase Auth + TOTP, JWT del admin hacia `admin-consent`, roles en `admin_roles`). Depende de T04 (`auth-guard.ts`), aún sin hacer.
   - Según D-01: login del admin con Supabase Auth (y MFA si procede) y envío del JWT del admin
     a `admin-consent`; las rutas del módulo no usan el proxy con service role.
   - **Aceptación:** una acción del módulo queda atribuida al `actor_id` del admin real;
@@ -116,18 +117,23 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests:** revocar opcional crea fila `revoked`; no se puede revocar la obligatoria por esta vía
     (debe ir a baja); re-consentimiento solo si hay versión nueva con `requires_reconsent`.
 
-- [ ] **T12 — Abstracción de correo** (REQ-10, SEC-09) ⛔ BLOQUEADA (D-05) si no existe proveedor
-  - **Estado real (2026-09-28):** Sin iniciar. Hallazgo de T00: el repo ya usa Resend (clave `resend_api_key` en Vault vía `app_secrets`; ver `championship-draw-round1`, `check-security-alerts`). D-05 no debería bloquear.
-  - Interfaz `EmailSender` con implementación del proveedor elegido y `FakeEmailSender` para tests.
-  - Plantillas: aviso al delegado, acuse al titular, código de verificación de correo.
-  - **Tests:** asunto sin saltos de línea; plantilla del delegado no contiene correo/IP del titular
-    más allá del número de caso y tipo (ver D-06 si se desea incluir el correo).
+- [ ] **T12 — Correo saliente: transporte configurable y `EmailSender`** (REQ-21 backend, REQ-10, SEC-09)
+  - **Estado real (2026-09-28):** desbloqueada por **D-05** (transporte configurable desde el panel). Sin iniciar. Hallazgo de T00: el repo ya usa Resend (`resend_api_key` en Vault vía `app_secrets`; `championship-draw-round1`, `check-security-alerts`), que es el modo por defecto. Depende de T02 (AAD), T04 (`auth-guard`) y T08 (bitácora).
+  - **Migración** (siguiente número libre; patrón de la 075): `email_transport_settings` versionada solo con INSERT (trigger de versión siguiente; sin UPDATE/DELETE), `email_transport_tests` (resultado de cada correo de prueba, sin datos sensibles), `email_outbox` (avisos pendientes: sin correo ni datos del titular en la fila). RLS sin acceso para `anon`/`authenticated`. Prueba SQL autoverificable en `supabase/tests/consent/` y puerta en `gates.sh`.
+  - **`_shared/email/`**: interfaz `EmailSender`; `ResendSender` (reutiliza `resend_api_key` de `app_secrets`; la clave no se expone ni se edita desde el panel); `SmtpSender` con una librería **mantenida** (elegirla en la tarea y justificarla en `PROGRESS.md`), puerto 465 con SSL/TLS; `FakeEmailSender` para pruebas.
+  - **Contraseña SMTP:** cifrada con `crypto.ts`, AAD `email_transport_settings:password:<settings_version>`, lectura con `allowLegacy:false`. Nunca se devuelve al cliente: la API responde `password_set`; para cambiarla hay que escribir una nueva.
+  - **Anti-SSRF** (`_shared/email/ssrf-guard.ts`): resolver el DNS y rechazar IP privadas, loopback, link-local y de metadatos (incluido IPv4-mapped de IPv6); conectar a la IP validada, sin volver a resolver; solo puertos 465 y 2525; el 587 (y el 25) se rechazan con un mensaje claro: "Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS".
+  - **Acciones de `admin-consent`** (solo `privacy_admin`; comparten el archivo con T14–T16, pero aquí solo las de correo): `get_email_transport`, `update_email_transport`, `send_test_email` (al correo del admin conectado, con rate limit HMAC fail-closed; guarda fecha y resultado en `email_transport_tests`), `list_pending_emails`, `resend_pending_emails`. Bitácora con before/after **sin la contraseña** (solo "contraseña cambiada: sí/no").
+  - **Degradación:** si el modo activo falla o no está configurado, quien llama (T13) registra la solicitud igual y deja el aviso en `email_outbox` como pendiente; la API del panel expone el contador para el banner (T23b).
+  - **Plantillas:** aviso al delegado (solo número de caso, tipo, fecha límite y enlace al panel: **D-06, sin el correo del titular**), acuse al titular, código de verificación de correo (no se encola: si falla se informa al instante).
+  - **Aviso semilla:** proponer en §4 de `seed/aviso_consentimiento_v1.0.md` la declaración de Resend como proveedor con transferencia internacional (EE. UU.), marcada como texto a validar con asesoría legal (REQ-21 h); el anexo del PDF lo actualiza quien lo mantiene.
+  - **Tests obligatorios:** la contraseña no aparece en **ninguna** respuesta ni log (revisar respuestas de `get/update`, errores, `console.*` y bitácora); host privado rechazado (10.x, 127.x, 169.254.x, metadatos, ::1, IPv4-mapped, y un nombre que resuelve a IP privada); puerto 587 rechazado con el mensaje claro; si el envío falla, la solicitud igual se registra y queda como pendiente; el correo de prueba queda en bitácora; asunto sin saltos de línea; la plantilla del delegado no contiene el correo ni la IP del titular; con `FakeEmailSender` el reenvío marca los pendientes como enviados.
 
 - [ ] **T13 — `request-data-subject-right`** (REQ-10, REQ-11)
   - **Estado real (2026-09-28):** Sin iniciar. Existe el helper `prepareDsrRow()` (`_shared/consent-evidence.ts`): el UUID del caso se genera antes del insert para construir la AAD.
-  - Crea caso con `routed_to_email` = correo vigente y `due_at` según `response_days` y tipo de día.
-  - **Tests:** caso creado, 2 correos en `FakeEmailSender`, fecha límite correcta (incluye caso
-    con fin de semana si D-03 = hábiles), rate limit.
+  - Crea caso con `routed_to_email` = correo vigente y `due_at` = recepción + `response_days` **días calendario** (D-03; sin tabla de feriados). La columna `response_day_type` que trae la migración 073 queda sin uso: retirarla en una migración nueva cuando toque (no editar la 073).
+  - Si el envío del correo falla, el caso **se registra igual**, el titular ve su número de caso y el aviso queda pendiente en `email_outbox` (T12).
+  - **Tests:** caso creado, 2 correos en `FakeEmailSender`, fecha límite correcta en días calendario (incluye un plazo que cruza fin de semana: cuenta igual), rate limit, y **envío fallido → caso registrado + aviso pendiente**.
 
 - [ ] **T14 — `admin-consent`: versiones y publicación** (REQ-01, REQ-13 a–d, SEC-02)
   - Acciones de borrador, diff, preview, publish (transacción: retira vigente + publica nueva),
@@ -190,6 +196,14 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - Formulario con todos los campos; flujo de verificación del nuevo correo con estado
     "pendiente de verificación"; historial de versiones de configuración.
 
+- [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
+  - Sección "Correo saliente" dentro de "Consentimiento informado", **visible y operable solo para `privacy_admin`** (editor y auditor no la ven).
+  - Formulario: modo (`resend` por defecto | `smtp`), host, puerto, seguridad SSL/TLS, usuario, contraseña, nombre y correo del remitente, reply-to, habilitado. La clave de Resend no aparece ni se edita. La contraseña se muestra como "configurada / no configurada" y solo se puede reemplazar escribiendo una nueva; nunca viaja de vuelta al navegador.
+  - Aviso en pantalla: "Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS". Botón "Enviar correo de prueba" (al admin conectado) con el último resultado (fecha y ok/error corto).
+  - Banner **"Correo no configurado / con errores"** con el contador de avisos pendientes y el botón para reenviarlos; visible en la pestaña Solicitudes y en la cabecera de la sección.
+  - Historial de versiones de la configuración (sin contraseñas) con quién y cuándo.
+  - **Tests E2E del panel:** editor y auditor no ven la sección; la contraseña no aparece en el DOM, en las respuestas de red ni tras guardar; el banner aparece con el modo roto y desaparece tras reenviar; el correo de prueba queda en la bitácora. Depende de T12 y T05.
+
 - [ ] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11)
   - Bitácora con filtros y detalle before/after (diff); export CSV.
   - Evidencia: búsqueda, historial, IP enmascarada, "Revelar IP" con motivo; export de expediente.
@@ -205,6 +219,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 - [ ] **T98 — Documentación** (H14)
   - **Estado real (2026-09-28):** PARCIAL. Hecho: `PROGRESS.md`, `PLAN_PRODUCCION_074_075.md` (release único, con respaldo), `diag/README.md`. Falta: `SECURITY_PRIVACY.md`, manual administrativo, `BASE_DE_DATOS.md`, `.env.example`, rotación de claves, runbook de bajas, lista para legal.
+  - Incluir el correo saliente (REQ-21): configuración, rotación de la contraseña SMTP, qué hacer con el banner de avisos pendientes; y la mención de Resend (transferencia internacional) en el aviso.
   - Actualizar `SECURITY_PRIVACY.md`, manual administrativo (sección nueva con capturas o pasos),
     `BASE_DE_DATOS.md`, `.env.example`; procedimiento de rotación de claves; runbook de atención
     de solicitudes de baja; lista de lo que debe completar el área legal antes de publicar.
@@ -222,13 +237,16 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 Nombres fuera de la numeración original (`Tnn-extra`, según PROMPT.md). Ojo: **T14-fix no tiene relación con T14** (`admin-consent`): es el arreglo del versionado de `privacy_settings`.
 
 - [ ] **T02-extra — Migrar `users.email_encrypted` y `full_name_encrypted` a AAD** cuando se actualicen sus lectores
-  - AAD `users:<columna>:<user_id>`. Lectores a actualizar: `_shared/pii.ts`, `get-ranking` y copias inline. Re-cifrado por lotes; leer con y sin AAD durante la transición.
+  - Solo añade AAD a las columnas antiguas, **sin cambiar de formato** (D-09 = A). AAD `users:<columna>:<user_id>`. Lectores a actualizar: `_shared/pii.ts`, `get-ranking` y copias inline. Re-cifrado por lotes; leer con y sin AAD durante la transición.
   - Depende de T02.
-- [ ] **T03-prod — Medir la cabecera de IP en Supabase hospedado** (D-08)
+- [ ] **T03-prod — Medir la cabecera de IP en Supabase hospedado** (D-08) ⛔ BLOQUEADA (D-08: pendiente de que la persona responsable ejecute la consulta del Logs Explorer)
   - Método: consulta del Logs Explorer y, solo si no alcanza, función de diagnóstico con JWT de admin (ver `.claude/loops/consentimiento/diag/README.md`). Fijar `TRUSTED_PROXY_HOPS` o pasar a `cf-connecting-ip`.
   - Bloquea el paso a producción (T99). Requiere una acción humana en producción.
-- [ ] **T03-sec — [P0] Rate limit y `security_events` con la cabecera de confianza, no la primera entrada de X-Forwarded-For**
+- [ ] **T03-sec — [P0] Rate limit y `security_events` con la cabecera de confianza, no la primera entrada de X-Forwarded-For** ⛔ BLOQUEADA (D-08 / T03-prod)
   - Hoy `extractClientIp` toma la primera entrada, que controla el cliente: rotándola se evade el límite por IP (también el del registro). Unificar con `_shared/client-ip.ts`.
   - Depende de T03-prod (con la topología equivocada todos compartirían un solo bucket).
 - [x] **T14-fix — Versionado de `privacy_settings`** (migración 075) — hecha
   - Sin `is_current` ni SECURITY DEFINER; `privacy_email_verifications` actualizable y acotada; `supabase/tests/consent/settings_versioning.sql`. Pendiente solo de aplicar en producción, dentro del release único.
+- [ ] **T00-extra — [P1] Migraciones no reproducibles desde cero**
+  - La migración 004 usa una columna (`users.role`) antes de crearla: `supabase db reset` falla en Postgres 17. Proponer una **migración base** con `supabase db dump --schema-only` (revisada) y reactivar `db-reset` en `gates.sh` (hoy SKIP explícito, ver línea base en `PROGRESS.md`).
+  - **No editar migraciones existentes sin aprobación explícita.** Es una propuesta: describir el enfoque (base + qué migraciones se archivan o se marcan como aplicadas), cómo se comprueba que el esquema resultante es idéntico al de producción, y esperar el visto bueno antes de tocar nada.
