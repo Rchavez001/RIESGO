@@ -166,7 +166,7 @@ export function LandingPage() {
                   <button
                     type="button"
                     className="lp-signup-badge"
-                    onClick={() => navigate('/login?mode=register')}
+                    onClick={() => navigate('/registro')}
                     aria-label="Inscribete gratis"
                   >
                     <span>INSCRÍBETE</span>

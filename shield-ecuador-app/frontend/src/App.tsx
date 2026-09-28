@@ -7,6 +7,7 @@ import { LandingPage } from './screens/CinematicLandingPage'
 import { CharactersPage } from './screens/CharactersPage'
 import { PracticePage } from './screens/PracticePage'
 import { LoginScreen } from './screens/LoginScreen'
+import { RegisterScreen } from './screens/RegisterScreen'
 import { DashboardScreen } from './screens/CinematicDashboardScreen'
 import { DojoListPage } from './screens/DojoListPage'
 import { DojoDetailPage } from './screens/DojoDetailPage'
@@ -139,6 +140,7 @@ function AppRoutes() {
         <Route path="/personajes/:id" element={<PageTransition><CharactersPage /></PageTransition>} />
         <Route path="/practica" element={<PageTransition><PracticePage /></PageTransition>} />
         <Route path="/login" element={<PageTransition><LoginScreen /></PageTransition>} />
+        <Route path="/registro" element={<PageTransition><RegisterScreen /></PageTransition>} />
         <Route path="/auth/callback" element={<PageTransition><AuthCallbackPage /></PageTransition>} />
         <Route path="/reset-password" element={<PageTransition><ResetPasswordPage /></PageTransition>} />
         <Route path="/tenant-admin" element={<TenantAdminRoute />} />
