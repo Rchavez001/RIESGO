@@ -37,7 +37,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Desviación:** "`pii.ts` pasa a delegar en `crypto.ts`" **se movió a T02-extra**. `_shared/pii.ts` sigue sin versionar en git (trabajo previo ajeno al módulo, ver PROGRESS.md, iteración 3) y no se incluye en los commits del loop hasta que la persona responsable lo apruebe.
 
 - [ ] **T03 — `_shared/client-ip.ts` y verificación empírica de cabeceras** (REQ-05)
-  - **Estado real (2026-09-28):** PARCIAL. Hecho: `_shared/client-ip.ts` (toma la entrada que añadió el proxy de confianza, `TRUSTED_PROXY_HOPS`; normaliza y valida IPv4/IPv6; 8 pruebas), medición LOCAL de cabeceras (el proxy añade al final; `X-Real-IP` lo fija el proxy), IP de body ignorada con evento (en `secure-register-user`). Falta: `maskIp`, IPv4-mapped→IPv4 y zona IPv6, medición en hospedado (D-08; método en `.claude/loops/consentimiento/diag/`, no `scripts/diag-headers/`).
+  - **Estado real (2026-09-29, reconciliación):** PARCIAL. Hecho: `getClientIp()`/`normalizeIp()` en `_shared/client-ip.ts` (toma la entrada que añadió el proxy de confianza, `TRUSTED_PROXY_HOPS`; 7 pruebas en `client-ip_test.ts`), medición LOCAL de cabeceras (el proxy añade al final; `X-Real-IP` lo fija el proxy), IP de body ignorada con evento (en `secure-register-user`).
+  - **Falta:** `maskIp(ip)` (no existe la función, confirmado con `grep` — la SPEC la pide explícitamente); normalización IPv4-mapped→IPv4 y zona IPv6 (no hay pruebas de esos casos en `client-ip_test.ts`); medición en Supabase hospedado (D-08, bloqueada en `T03-prod`).
   - En modo headless no se pueden levantar servidores de larga duración: implementar según la
     documentación oficial de Supabase y dejar en `DECISIONS.md` una verificación **D-08** para que
     un humano confirme en staging qué cabecera trae la IP real (con un script de diagnóstico que
@@ -49,7 +50,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests:** XFF con varias IP, IPv6, IPv4-mapped, cabecera ausente, valor basura, body con `ip`.
 
 - [ ] **T04 — Verificación de identidad y roles** (SEC-01, SEC-02)
-  - **Estado real (2026-09-28):** PARCIAL. Hecho: tabla `admin_roles` con RLS y `has_privacy_role()` (073). Falta: `_shared/auth-guard.ts` (`requireUser`/`requireRole`) y sus pruebas negativas.
+  - **Estado real (2026-09-29, reconciliación):** PARCIAL. Hecho: tabla `admin_roles` con RLS (`admin_roles_self_read`, sin INSERT/UPDATE/DELETE para `authenticated`/`anon`) y `has_privacy_role(required_role)` (migración `073_consent_module_foundation.sql:6-24`).
+  - **Falta:** `_shared/auth-guard.ts` no existe (confirmado: el archivo no está en el árbol); por tanto tampoco existen `requireUser`/`requireRole` ni sus pruebas negativas (sin token, firma alterada, expirado, `role: service_role` forjado, sin rol, rol insuficiente). Bloquea T05 y, en cascada, la identidad individual del panel para el resto de tareas de Fase 3 en adelante.
   - `_shared/auth-guard.ts`: `requireUser(req)` verificando JWT criptográficamente;
     `requireRole(req, roles[])` consultando `admin_roles`.
   - Migración: tabla `admin_roles` con RLS.
@@ -66,7 +68,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 ## Fase 2 · Modelo de datos
 
 - [ ] **T06 — Migración: `privacy_settings`, `consent_documents`** (REQ-01, REQ-02, REQ-03, REQ-14)
-  - **Estado real (2026-09-28):** CASI. Hecho: `privacy_settings` versionable (075: sin `is_current`, vigente = mayor versión, trigger de versión siguiente) y `consent_documents` (inmutabilidad, única publicada); aviso real del seed cargable y publicable en local (`supabase/tests/consent/load_seed_aviso.cjs`); pruebas SQL de inmutabilidad, única publicada y versionado. Falta: seed integrado en `supabase db reset` (hoy es un script aparte), pruebas "borrador sí editable" y "retirar deja sin publicada solo si se publica otra en la misma transacción" (esa regla no está implementada).
+  - **Estado real (2026-09-29, reconciliación):** CASI. Hecho: `privacy_settings` versionable (migración `075_privacy_settings_versioning.sql`: sin `is_current`, vigente = mayor versión, trigger de versión siguiente, probado en `supabase/tests/consent/settings_versioning.sql`) y `consent_documents` con trigger de inmutabilidad de versión no-borrador e índice de única publicada (`073_consent_module_foundation.sql`, función `enforce_consent_document_immutability`); aviso real del seed cargable y publicable en local (`supabase/tests/consent/load_seed_aviso.cjs`).
+  - **Falta (verificado con `grep` sobre `lifecycle.sql`/`settings_versioning.sql`, 2026-09-29): no hay NINGUNA prueba SQL de las reglas propias de `consent_documents`** — ni "no se puede editar contenido publicado", ni "no puede haber 2 publicadas", ni "borrador sí editable", ni "retirar deja sin publicada solo si se publica otra en la misma transacción" (esta última regla, además, no está implementada en ninguna migración). El documento solo se usa hoy como fixture (un INSERT de una fila borrador) para las pruebas de `consent_records`. Seed integrado en `supabase db reset` sigue siendo un script aparte (`load_seed_aviso.cjs`), no parte de una migración.
   - Triggers de inmutabilidad de versión no-borrador; índice de única publicada.
   - Seed de desarrollo: settings v1 con valores ficticios (`privacidad@example.test`) y
     documento v1.0 `published` cargado desde `seed/aviso_consentimiento_v1.0.md`.
@@ -75,7 +78,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     borrador sí editable; retirar deja sin publicada solo si se publica otra en la misma transacción.
 
 - [ ] **T07 — Migración: `consent_records` + cadena de integridad** (REQ-04, REQ-18, SEC-06)
-  - **Estado real (2026-09-28):** CASI. Hecho: `consent_records`, cadena de hash con advisory lock, append-only (trigger + REVOKE), vista `my_consent_state`, `verify_consent_chain()`, y (074) baja/retención sin romper la cadena; `lifecycle.sql`. Falta: pruebas de UPDATE/DELETE como `authenticated` y como `service_role`, e inserciones concurrentes.
+  - **Estado real (2026-09-29, reconciliación):** CASI. Hecho: `consent_records`, cadena de hash con advisory lock (`consent_records_chain_trigger`), append-only (trigger `block_consent_records_mutation` + `REVOKE`), vista `my_consent_state` sin IP/UA, `verify_consent_chain()`, y (074) baja/retención acotada sin romper la cadena; probado en `supabase/tests/consent/lifecycle.sql` (líneas 43-84: `DELETE`/`UPDATE` fallan con `append-only` o `solo se puede poner en NULL`, incluida la función de baja limitada a `service_role`).
+  - **Falta (confirmado, sin `SET ROLE` en `lifecycle.sql`):** las pruebas se ejecutan como superusuario de la sesión de prueba, no cambian explícitamente a los roles `authenticated`/`service_role` con `SET ROLE` — el trigger es agnóstico al rol así que es muy probable que ya bloquee a ambos, pero el criterio de aceptación literal ("UPDATE y DELETE fallan **para `authenticated` y para `service_role`**") no está demostrado como tal; tampoco hay prueba de inserciones concurrentes manteniendo la cadena válida.
   - Trigger `BEFORE INSERT` que calcula `prev_hash`/`row_hash` con advisory lock.
   - Trigger anti UPDATE/DELETE; `REVOKE`; vista `my_consent_state` sin IP/UA.
   - Funciones `verify_consent_chain()`.
@@ -84,7 +88,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     reporte la fila exacta; inserciones concurrentes mantienen cadena válida.
 
 - [ ] **T08 — Migración: `admin_audit_log`, `data_subject_requests`** (REQ-10, REQ-16, SEC-06)
-  - **Estado real (2026-09-28):** PARCIAL. Hecho: `admin_audit_log` append-only con cadena y `verify_audit_chain()`; `data_subject_requests` con `next_case_number()`. Falta: UPDATE de `data_subject_requests` solo de `status`/`resolved_at`/`resolution_note_ciphertext` vía función con rol y bitácora; `case_number` secuencial POR AÑO (hoy una secuencia global con prefijo de año); pruebas equivalentes a T07.
+  - **Estado real (2026-09-29, reconciliación):** PARCIAL. Hecho: `admin_audit_log` append-only con cadena y `verify_audit_chain()`, probado (`lifecycle.sql:81-84`, "la bitácora sigue siendo append-only, sin bandera que valga"); `data_subject_requests` con `next_case_number()` (`073_consent_module_foundation.sql:326-329`: `'CD-' || año || '-' || nextval(secuencia)`).
+  - **Falta:** `next_case_number()` usa una secuencia **global** (no se reinicia cada año, solo cambia el prefijo del año) — no es "secuencial por año" como pide el criterio; no existe ninguna función que permita el UPDATE acotado de `data_subject_requests` (`status`/`resolved_at`/`resolution_note_ciphertext`) con bitácora — hoy la tabla no tiene ninguna vía de actualización controlada; sin pruebas SQL equivalentes a las de T07 para esta tabla.
   - Misma estrategia append-only para la bitácora; `data_subject_requests` permite UPDATE solo de
     `status`, `resolved_at`, `resolution_note_ciphertext` vía función con rol y bitácora.
   - Generador de `case_number` secuencial por año.
@@ -94,13 +99,15 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 ## Fase 3 · Backend
 
 - [ ] **T09 — `get-consent-notice`** (REQ-02, SEC-08)
-  - **Estado real (2026-09-28):** CASI. Hecho: `get-consent-notice` con render de los 11 marcadores del aviso (`_shared/consent-render.ts`), marcador desconocido o sin valor → error `NOTICE_INVALID` (nunca silencioso), huella sobre el texto renderizado, 11 pruebas del renderizador incluido el seed real. Falta: prueba propia de la función (hoy solo punta a punta local) y la sanitización del Markdown (se hace en cliente, T18).
+  - **Estado real (2026-09-29, reconciliación):** CASI. Hecho: `get-consent-notice` con render de los 11 marcadores del aviso (`_shared/consent-render.ts`), marcador desconocido o sin valor → error (nunca silencioso), huella sobre el texto renderizado; 10 pruebas en `_shared/consent-render_test.ts` (confirmado con `grep -c '^Deno.test'`, incluido el seed real completo e incompleto).
+  - **Falta:** no existe `supabase/functions/get-consent-notice/index_test.ts` (confirmado: no hay ningún `*_test.ts` en esa carpeta) — la única cobertura de la función en sí es punta a punta local (`e2e_local.cjs`), no una prueba propia y aislada; sanitización del Markdown pendiente (a propósito, se hace en cliente, T18).
   - Render de marcadores con settings vigentes; marcador desconocido → error en borrador,
     nunca en producción silenciosa; sanitización; `rendered_sha256` sobre el Markdown renderizado.
   - **Tests:** huella estable; cambia si cambia settings; marcador faltante detectado.
 
 - [ ] **T10 — Registro con evidencia atómica** (REQ-04, REQ-05, REQ-06 backend, REQ-07, SEC-07)
-  - **Estado real (2026-09-28):** CASI. Hecho: registro con evidencia atómica (una fila por finalidad, IP/UA cifrados con AAD, compensación), 409 por huella, obligatoria exigida, `ip` del body ignorada + evento, 503 fail-closed (`RATE_LIMIT_UNAVAILABLE`), puerta de 15 años. Falta: validación de esquema (SEC-08) y el código `NOTICE_CHANGED` en mayúsculas de la SPEC (hoy `notice_changed`).
+  - **Estado real (2026-09-29, reconciliación):** CASI. Hecho: registro con evidencia atómica (una fila por finalidad, IP/UA cifrados con AAD, compensación), 409 por huella, obligatoria exigida, `ip` del body ignorada + evento, 503 fail-closed (`RATE_LIMIT_UNAVAILABLE`), puerta de 15 años; 9 pruebas en `secure-register-user/index_test.ts` (confirmado con `grep -c`).
+  - **Falta:** validación de esquema (SEC-08) explícita; el código de error es literalmente `"notice_changed"` en minúscula (`secure-register-user/index.ts:181`), no `NOTICE_CHANGED` como escribe la SPEC — decidir si se normaliza el código o se actualiza la SPEC, y anotarlo como desviación en vez de dejarlo inconsistente.
   - Modificar `secure-register-user`: validación de esquema; 409 `NOTICE_CHANGED` si la huella no
     coincide; rechazo si `registro_aprendizaje` ≠ `granted`; insertar una fila por finalidad
     (incluidas las `denied`); IP/UA cifrados con AAD; compensación si falla evidencia.
@@ -110,6 +117,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     fallo simulado de inserción → usuario eliminado.
 
 - [ ] **T11 — `update-my-consent` y `submit-consent`** (REQ-08, REQ-09)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Ninguna de las dos funciones existe en `supabase/functions/` (confirmado). Depende de T04 (`auth-guard.ts`) y T07 (`consent_records`, ya hecho).
   - **Tests:** revocar opcional crea fila `revoked`; no se puede revocar la obligatoria por esta vía
     (debe ir a baja); re-consentimiento solo si hay versión nueva con `requires_reconsent`.
 
@@ -132,6 +140,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests:** caso creado, 2 correos en `FakeEmailSender`, fecha límite correcta en días calendario (incluye un plazo que cruza fin de semana: cuenta igual), rate limit, y **envío fallido → caso registrado + aviso pendiente**.
 
 - [ ] **T14 — `admin-consent`: versiones y publicación** (REQ-01, REQ-13 a–d, SEC-02)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. La función `admin-consent` no existe (confirmado con `ls supabase/functions/`); no confundir con `T14-fix`, que es el versionado de `privacy_settings` (migración 075, ya hecho) y no aporta nada a esta tarea. Depende de T04 (`auth-guard.ts`) y T06 (modelo de `consent_documents`, ya hecho).
   - Acciones de borrador, diff, preview, publish (transacción: retira vigente + publica nueva),
     retire; motivo obligatorio; cuatro ojos si está activo; bitácora con before/after.
   - **Tests:** editor no publica; admin publica; con cuatro ojos el autor no publica su borrador;
@@ -145,6 +154,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     bitácora con before/after sin exponer el código.
 
 - [ ] **T16 — `admin-consent`: bitácora, evidencia, revelación de IP, solicitudes, cadenas** (REQ-16, REQ-17, REQ-18)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T04, T14 y T15 (todas comparten el archivo `admin-consent`). El modelo de datos que necesita (`admin_audit_log`, `consent_records`, `data_subject_requests`) ya existe (T07/T08).
   - **Tests:** búsqueda por correo usa HMAC; IP enmascarada por defecto; `reveal_ip` exige
     `privacy_admin` + motivo y registra; auditor no puede revelar; export CSV registrado;
     cambio de estado de solicitud registrado; `verify_chains` devuelve OK.
@@ -168,11 +178,13 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     obligatoria; payload incluye huella; no incluye IP.
 
 - [ ] **T19 — "Mi privacidad" en la cuenta** (REQ-08, REQ-10)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T11 (`update-my-consent`) y T13 (`request-data-subject-right`), ninguna hecha todavía.
   - Estado por finalidad, versión aceptada, fecha; interruptores de opcionales; formulario de
     solicitud de derechos con tipo; muestra número de caso y fecha límite.
   - **Tests E2E:** revocar publicidad en un clic; solicitar baja muestra número de caso.
 
 - [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07)
+  - **Estado real (2026-09-29, reconciliación):** Solo diseño e investigación (iteración 7, INV-SEC de la iteración 9). El paso 1 (inventario formal en PROGRESS.md con archivos y consultas) no se ha escrito como tal — lo más cercano es el hallazgo de INV-SEC sobre el RPC `learning_state`. Pasos 2A/2B/3 sin empezar.
   - **Decisión D-12 (2026-09-28):** primero inventariar; luego A o B según el resultado; mientras no esté implementado y probado, **`enable_anonymous_sign_ins` debe estar desactivado en producción** (opción C) y el modo invitado **no entra en el release**.
   - **Paso 1 — inventario (sin cambiar código):** qué guarda hoy un usuario con `is_anonymous = true`: filas por tabla y columna (`users`, `learning_state`, puntajes, respuestas), `security_events`, `admin_audit_log`, logs con IP, funciones que aceptan sesión anónima, y si alguna manda datos a un proveedor de IA. Documentarlo en `PROGRESS.md` con archivos y consultas de solo lectura (las que toquen producción las ejecuta la persona responsable). Puntos de partida: `frontend/src/components/GuestRegisterPrompt.tsx` (sin versionar), `App.tsx` (`isGuest`), `CinematicPublicShell.tsx`, `DojoDetailPage.tsx`, `supabase/config.toml` (`enable_anonymous_sign_ins`), migración 058 (`learning_state_guest_fix`, sin versionar).
   - **Antecedentes (iteración 7, `vault/Arquitectura/Autenticación y modo invitado.md` en la rama `docs/iso-y-privacidad`):** el invitado es una sesión anónima real de Supabase Auth (`signInAnonymously`), sin fila en `users`, que responde preguntas del primer dojo vía el RPC `learning_state` (migración 058) → probablemente **sí guarda datos** (opción B). El candado de rutas es solo de frontend (`GuestGate`); registrarse crea un usuario nuevo (no convierte la sesión anónima); no hay caducidad ni limpieza de sesiones anónimas. El paso 1 debe confirmar todo esto y además revisar qué RPC/REST acepta un JWT anónimo (RLS), la IP que registra Supabase Auth al crear la sesión anónima, y proponer el **job de limpieza** (borrar usuarios anónimos y su progreso tras N días; N lo decide la persona responsable). Detalle en PROGRESS.md, iteración 7.
@@ -182,26 +194,31 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - Depende de T04 (rutas y `auth-guard`) para el paso 1; los pasos 2A/2B dependen del esquema de T06 y del aviso publicado (`secure-register-user` ya escribe la evidencia del registro).
 
 - [ ] **T20 — Re-consentimiento al iniciar sesión** (REQ-09)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende del modelo de `requires_reconsent` en `consent_documents` (ya existe la columna, T06) y de T19 (pantalla donde mostrarlo).
   - **Tests E2E:** publicar v1.1 con reconsent → siguiente login muestra aviso; aceptar continúa;
     rechazar la obligatoria solo permite baja o cerrar sesión.
 
 ## Fase 5 · Panel administrativo — sección "Consentimiento informado"
 
 - [ ] **T21 — Navegación y pestaña Versiones + Editor** (REQ-13 a, b)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Ninguna pantalla del panel para el módulo existe todavía en `central-admin-app`. Depende de T05 (identidad individual en el panel) y T14 (acciones de `admin-consent` que esta pantalla consume).
   - Menú "Consentimiento informado"; lista de versiones; crear borrador desde vigente; editor
     Markdown con vista previa en vivo (marcadores resueltos y resaltados si faltan);
     editor de finalidades (código inmutable para las existentes); guardado con autosave del
     borrador y aviso de cambios sin guardar.
 
 - [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.
   - Diff lado a lado; modal de publicación con motivo, casilla `requires_reconsent`,
     confirmación escribiendo la versión; resumen de impacto (nº de usuarios que verán re-consentimiento).
 
 - [ ] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05.
   - Formulario con todos los campos; flujo de verificación del nuevo correo con estado
     "pendiente de verificación"; historial de versiones de configuración.
 
 - [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T12 (`EmailSender`, sin iniciar) y T05.
   - Sección "Correo saliente" dentro de "Consentimiento informado", **visible y operable solo para `privacy_admin`** (editor y auditor no la ven).
   - Formulario: modo (`resend` por defecto | `smtp`), host, puerto, seguridad SSL/TLS, usuario, contraseña, nombre y correo del remitente, reply-to, habilitado. La clave de Resend no aparece ni se edita. La contraseña se muestra como "configurada / no configurada" y solo se puede reemplazar escribiendo una nueva; nunca viaja de vuelta al navegador.
   - Aviso en pantalla: "Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS". Botón "Enviar correo de prueba" (al admin conectado) con el último resultado (fecha y ok/error corto).
@@ -210,6 +227,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests E2E del panel:** editor y auditor no ven la sección; la contraseña no aparece en el DOM, en las respuestas de red ni tras guardar; el banner aparece con el modo roto y desaparece tras reenviar; el correo de prueba queda en la bitácora. Depende de T12 y T05.
 
 - [ ] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T16 (las acciones que esta pantalla invoca) y T05.
   - Bitácora con filtros y detalle before/after (diff); export CSV.
   - Evidencia: búsqueda, historial, IP enmascarada, "Revelar IP" con motivo; export de expediente.
   - Solicitudes: tabla con semáforo (vigente / ≤3 días / vencida), cambio de estado con nota.
@@ -220,6 +238,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 ## Fase 6 · Migración, documentación y cierre
 
 - [ ] **T25 — Backfill de consentimientos legacy** (según plan T01; **D-10 y D-11 decididas**)
+  - **Estado real (2026-09-29, reconciliación):** Solo diseño (D-10/D-11 decididas, plan completo en PROGRESS.md iteración 2 y esta tarea). Ni la migración (a) ni el script (b) están escritos — y **no deben** escribirse/ejecutarse como iteración normal del loop: el propio criterio de la tarea dice que el script solo corre dentro de la ventana de release, con OK explícito. Depende de T19 (requires_reconsent) y de que 074/075 estén aplicadas en producción.
   - **Decisiones que aplican:** D-10 = conservar el consentimiento anterior como historial (documento retirado `legacy-2026-06-22`, evidencia limitada: solo fecha) y publicar el aviso 1.0 con `requires_reconsent = true` (T19 lo muestra a todos en su próximo inicio de sesión; **pendiente de confirmación por asesoría legal antes del release**, no bloquea el código). D-11 = ver los dos puntos siguientes.
   - **(a) Migración nueva** (siguiente número libre al momento de hacerla; NO se edita la 073): `ALTER TABLE consent_records ALTER COLUMN ip_hmac DROP NOT NULL` + `CHECK (ip_hmac IS NOT NULL OR document_version LIKE 'legacy-%')`. Las filas nuevas siguen obligadas a tener `ip_hmac`. Debe entrar en la misma ventana de release que 074 y 075 (actualizar `PLAN_PRODUCCION_074_075.md` cuando exista). Prueba SQL en `supabase/tests/consent/` y puerta en `gates.sh`: una fila con `document_version = 'registro-1.0'` y `ip_hmac` nulo **falla**; una `legacy-2026-06-22` sin IP **pasa**; `verify_consent_chain()` sigue sin filas rotas.
   - **(b) Script de un solo uso** (no migración; necesita `LOOKUP_HMAC_KEY_B64`): idempotente, en lotes de 500, **`--dry-run` por defecto** (solo cuenta las poblaciones A/B/C del plan y muestra 3 ids abreviados, sin correos ni IP); solo escribe con `--apply`. La clave HMAC llega **por variable de entorno en esa sesión**: nunca se escribe en archivos ni en logs (el script no imprime variables de entorno ni hace `console.log` de la clave, y sus pruebas lo verifican). **Se ejecuta únicamente dentro del release y con el OK explícito de la persona responsable; jamás en una iteración del loop ni contra producción desde aquí.** Mismo diseño de filas que PROGRESS.md, Iteración 2, §3 (documento legacy `retired`, una fila `registro_aprendizaje` `granted` por persona con `authorized = true`, `server_ts` original, sin IP; nada para quien nunca autorizó ni para las finalidades opcionales).
