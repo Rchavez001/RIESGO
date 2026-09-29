@@ -6,6 +6,7 @@ export type QuestionContent = {
   options: string[]
   terms?: Record<string, string>
   topic?: string
+  generated_at?: string
 }
 
 export type Phase =
