@@ -78,7 +78,13 @@ export function DojoDetailPage() {
     <div className={`learning-intro glass-panel${state && state.answered > 0 ? ' is-secondary' : ''}`}><BeltBadge level={dojo.belt} />
       <p>Practica 30 preguntas para preparar tu examen. Equivocarte también ayuda a aprender. Puedes salir y continuar desde donde te quedaste.</p></div>
     {isGuest && <p className="learning-guest-note" role="note">Estás en modo invitado: tu avance no se guarda. <Link to="/registro">Regístrate gratis</Link> para conservarlo y desbloquear más dojos.</p>}
-    {error && <div role="alert" className="combat-feedback"><p>{error}</p><NeonButton onClick={() => act('learning_state', { p_dojo: dojo.id })} disabled={busy}>Recuperar mi avance</NeonButton></div>}
+    {error && (error.startsWith('GUEST_LIMIT_REACHED:')
+      ? <div className="glass-panel combat-feedback" role="status">
+          <h3>Regístrate para seguir</h3>
+          <p>{error.replace('GUEST_LIMIT_REACHED: ', '')}</p>
+          <NeonButton color="gold" onClick={() => navigate('/registro')}>Regístrate gratis</NeonButton>
+        </div>
+      : <div role="alert" className="combat-feedback"><p>{error}</p><NeonButton onClick={() => act('learning_state', { p_dojo: dojo.id })} disabled={busy}>Recuperar mi avance</NeonButton></div>)}
     {!state && busy && <p role="status">Recuperando tu última pregunta…</p>}
     {state && q && <div className="combat-layout learning-layout">
       <aside className="combat-panel learning-companion"><p className="mono-label">TU COMPAÑERO DE PRÁCTICA</p>

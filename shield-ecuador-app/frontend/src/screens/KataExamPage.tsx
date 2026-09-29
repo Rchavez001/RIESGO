@@ -69,8 +69,14 @@ export function KataExamPage() {
       awardedBelt={learningDojos[Math.min(6, dojo.rank + 1)].belt} score={exam.score ?? 0} total={5} onContinue={() => setCelebrate(false)} />}
     <div className="learning-intro glass-panel"><BeltBadge level={dojo.belt} />
       <p>Cinco casos, sin límite de tiempo. El último combina más decisiones. Se aprueba con al menos 75 %: cuatro de cinco aciertos (80 %). Al terminar podrás revisar todas las explicaciones.</p></div>
-    {error && <div role="alert" className="combat-feedback"><p>{error}</p><NeonButton disabled={busy}
-      onClick={() => act('learning_start_exam', { p_code: dojo.exam_code })}>Recuperar examen</NeonButton></div>}
+    {error && (error.startsWith('GUEST_LIMIT_REACHED:')
+      ? <div className="glass-panel combat-feedback" role="status">
+          <h3>Regístrate para seguir</h3>
+          <p>{error.replace('GUEST_LIMIT_REACHED: ', '')}</p>
+          <NeonButton color="gold" onClick={() => navigate('/registro')}>Regístrate gratis</NeonButton>
+        </div>
+      : <div role="alert" className="combat-feedback"><p>{error}</p><NeonButton disabled={busy}
+          onClick={() => act('learning_start_exam', { p_code: dojo.exam_code })}>Recuperar examen</NeonButton></div>)}
     {!user && <p>Inicia sesión para presentar tu examen.</p>}
     {busy && !exam && <p role="status">Comprobando tu entrenamiento y preparando los cinco casos…</p>}
     {exam && !exam.finished && item && <section className="exam-card glass-panel" aria-busy={busy}>

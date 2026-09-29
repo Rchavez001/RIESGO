@@ -86,6 +86,22 @@ test.describe('/kata/:code', () => {
     await expect(page.getByText('Caso 1 de 5')).toHaveCount(0)
   })
 
+  test('invitado en el límite (INV-SEC): invitación a registrarse, no el botón de recuperar examen', async ({ page }) => {
+    await setup(page, { anonymous: true })
+    await page.route('**/rest/v1/rpc/learning_start_exam', r => r.fulfill({
+      status: 400, contentType: 'application/json',
+      body: JSON.stringify({ code: 'P0001', message: 'GUEST_LIMIT_REACHED: Regístrate gratis para presentar el examen de este dojo.' }),
+    }))
+    await page.goto('/kata/EXAM_BLANCO_AMARILLO')
+    await expect(page.getByRole('heading', { name: /regístrate para seguir/i })).toBeVisible()
+    await expect(page.getByText(/GUEST_LIMIT_REACHED/)).toHaveCount(0)
+    const cta = page.getByRole('button', { name: /regístrate gratis/i })
+    await expect(cta).toBeVisible()
+    await cta.click()
+    await expect(page).toHaveURL(/\/registro$/)
+    await expect(page.getByRole('button', { name: /recuperar examen/i })).toHaveCount(0)
+  })
+
   test('si falla: mensaje sin detalles del servidor y reintento', async ({ page }) => {
     await setup(page)
     await page.route('**/rest/v1/rpc/learning_start_exam', r => r.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"deadlock detected"}' }))

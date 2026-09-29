@@ -110,6 +110,26 @@ sql_ciclo_de_vida() {
   psql_in -d gates < "$TESTS/settings_versioning.sql"
 }
 
+# ── 4b. INV-SEC (P2, independiente del módulo): tope de invitado en learning_answer/learning_start_exam ────────────
+sql_guest_limit() {
+  local container="learning-gates-$$"
+  docker run -d --rm --name "$container" -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null
+  trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+  for _ in $(seq 1 90); do
+    [ "$(docker logs "$container" 2>&1 | grep -c 'ready to accept connections')" -ge 2 ] && break
+    sleep 1
+  done
+  psql_in() { docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null "$@"; }
+  local LTESTS=supabase/tests/learning
+  psql_in -d postgres -c "CREATE DATABASE gt"
+  psql_in -d gt < "$LTESTS/prereqs.sql"
+  psql_in -d gt < "$MIGRATIONS/026_learning_progress.sql"
+  psql_in -d gt < "$MIGRATIONS/058_learning_state_guest_fix.sql"
+  psql_in -d gt < "$MIGRATIONS/059_learning_state_hide_answer_until_answered.sql"
+  psql_in -d gt < "$MIGRATIONS/076_learning_guest_limit.sql"
+  psql_in -d gt < "$LTESTS/guest_limit.sql"
+}
+
 # ── 5. `supabase db reset` (recrea la base LOCAL desde cero) ─────────────────────────────────────────────────────────
 db_reset() { supabase db reset --yes; }
 
@@ -121,6 +141,7 @@ gate panel-e2e           panel_e2e
 gate deno-check          deno_check
 gate deno-test           deno_test
 gate sql-ciclo-de-vida   sql_ciclo_de_vida
+gate sql-guest-limit     sql_guest_limit
 if [[ "${GATES_DB_RESET:-0}" == "1" ]]; then
   gate db-reset db_reset
 else

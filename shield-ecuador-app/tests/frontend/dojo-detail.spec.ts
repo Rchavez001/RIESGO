@@ -84,6 +84,23 @@ test.describe('/dojo/:id', () => {
     await expect(page.getByText(/guardadas en tu cuenta/i)).toHaveCount(0)
   })
 
+  test('invitado en el tope de 10 (INV-SEC): invitación a registrarse, no el botón de reintentar', async ({ page }) => {
+    await setup(page, { anonymous: true })
+    await openDojo(page)
+    await page.route('**/rest/v1/rpc/learning_answer', r => r.fulfill({
+      status: 400, contentType: 'application/json',
+      body: JSON.stringify({ code: 'P0001', message: 'GUEST_LIMIT_REACHED: Como invitado, regístrate para seguir con las 30 preguntas de este dojo.' }),
+    }))
+    await page.locator('.answer-option').first().click()
+    await expect(page.getByRole('heading', { name: /regístrate para seguir/i })).toBeVisible()
+    await expect(page.getByText(/GUEST_LIMIT_REACHED/)).toHaveCount(0)
+    const cta = page.getByRole('button', { name: /regístrate gratis/i })
+    await expect(cta).toBeVisible()
+    await cta.click()
+    await expect(page).toHaveURL(/\/registro$/)
+    await expect(page.getByRole('button', { name: /recuperar mi avance/i })).toHaveCount(0)
+  })
+
   test('si falla la carga: mensaje y reintento, sin detalles del servidor', async ({ page }) => {
     await setup(page)
     await page.route('**/rest/v1/rpc/learning_state', r => r.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"deadlock detected"}' }))
