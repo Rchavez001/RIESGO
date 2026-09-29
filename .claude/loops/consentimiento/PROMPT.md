@@ -83,6 +83,15 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
   antes de ejecutarse, cada vez (2026-09-28: un `filter-repo` con un stash parcial reseteó ~29 archivos
   sin commitear; el trabajo se recuperó porque ya estaba copiado a otras ramas, pero fue suerte, no
   el proceso — de ahí esta regla).
+- **Comandos destructivos PROHIBIDOS sin OK explícito del humano, cada vez, sin excepción**:
+  `git reflog expire` (con cualquier alcance), `git gc --prune=...` o `--aggressive`, `git stash drop`
+  / `git stash clear`, `git clean` (con o sin `-f`/`-d`/`-x`), y borrar cualquier bundle de respaldo
+  (`rm *.bundle`). Ninguno de estos es necesario para verificar que un secreto se eliminó del historial
+  — `git log --all -S "<patrón>"` y `git rev-list --objects <ramas>` ya lo confirman sin borrar nada.
+  (2026-09-28: un `git reflog expire --all` seguido de `git gc --prune=now --aggressive`, hecho como
+  "limpieza extra" no solicitada tras confirmar que la reescritura ya era segura, destruyó 3 de 4
+  entradas de `git stash` — con ellas, ~139 MB de video y la mayoría de ~77 MB de imágenes que nunca
+  se habían commiteado en ninguna rama. No existía necesidad técnica de ese paso; de ahí esta regla.)
 
 **Migraciones**
 - Nunca modifiques una migración existente. Crea la siguiente disponible: detecta el número mayor
