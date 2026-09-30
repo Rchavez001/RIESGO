@@ -92,15 +92,36 @@ deno_test() {
 }
 
 # ── 4. SQL en un Postgres 16 efímero: migraciones del módulo + pruebas autoverificables ─────────────────────────────
-sql_ciclo_de_vida() {
-  local container="consent-gates-$$"
-  docker run -d --rm --name "$container" -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null
-  trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+# Contenedores efímeros de Postgres. Antes, cada puerta ponía un `trap … EXIT` dentro de su función; esa función corre en
+# un subshell y en Git Bash el trap no llegaba a dispararse: los contenedores quedaban vivos tras cada corrida. Ahora:
+# (1) cada contenedor lleva la etiqueta de ESTA corrida, (2) `with_pg` lo elimina explícitamente al terminar la puerta,
+# pase lo que pase, y (3) un trap EXIT/INT/TERM del proceso PRINCIPAL elimina todo lo que tenga la etiqueta (Ctrl-C incluido).
+GATES_RUN_LABEL="consent-gates-run=$$-$(date +%s)"
+cleanup_pg_containers() {
+  local ids
+  ids="$(docker ps -aq --filter "label=$GATES_RUN_LABEL" 2>/dev/null || true)"
+  [[ -n "$ids" ]] && docker rm -f $ids >/dev/null 2>&1 || true
+}
+trap cleanup_pg_containers EXIT
+trap 'cleanup_pg_containers; exit 130' INT TERM
+
+# with_pg <prefijo> <función>: arranca Postgres 16, espera a que esté listo, llama a <función> <contenedor> y lo elimina.
+with_pg() {
+  local container="$1-$$-$RANDOM" rc=0
+  docker run -d --rm --label "$GATES_RUN_LABEL" --name "$container" -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null || return 1
   # La imagen arranca un servidor temporal para inicializar y luego lo reinicia: esperar el segundo "ready".
   for _ in $(seq 1 90); do
     [ "$(docker logs "$container" 2>&1 | grep -c 'ready to accept connections')" -ge 2 ] && break
     sleep 1
   done
+  "$2" "$container" || rc=$?
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  return $rc
+}
+
+sql_ciclo_de_vida() { with_pg consent-gates sql_ciclo_de_vida_in; }
+sql_ciclo_de_vida_in() {
+  local container="$1"
   psql_in() { docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null "$@"; }
   psql_in -d postgres -c "CREATE DATABASE gates"
   psql_in -d gates < "$TESTS/prereqs.sql"
@@ -113,14 +134,9 @@ sql_ciclo_de_vida() {
 }
 
 # ── 4b. INV-SEC (P2, independiente del módulo): tope de invitado en learning_answer/learning_start_exam ────────────
-sql_guest_limit() {
-  local container="learning-gates-$$"
-  docker run -d --rm --name "$container" -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null
-  trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
-  for _ in $(seq 1 90); do
-    [ "$(docker logs "$container" 2>&1 | grep -c 'ready to accept connections')" -ge 2 ] && break
-    sleep 1
-  done
+sql_guest_limit() { with_pg learning-gates sql_guest_limit_in; }
+sql_guest_limit_in() {
+  local container="$1"
   psql_in() { docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null "$@"; }
   local LTESTS=supabase/tests/learning
   psql_in -d postgres -c "CREATE DATABASE gt"
