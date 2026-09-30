@@ -64,7 +64,22 @@
       "Read(./.gcloud-config/**)",
       "Read(./**/.gcloud-config/**)",
       "Read(./.deploy/**)",
-      "Bash(curl -u:*)"
+      "Bash(curl -u:*)",
+      "Bash(git gc:*)",
+      "Bash(git reflog:*)",
+      "Bash(git prune:*)",
+      "Bash(git stash drop:*)",
+      "Bash(git stash clear:*)",
+      "Bash(git clean:*)",
+      "Bash(git filter-repo:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git push:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git worktree prune:*)",
+      "Bash(rm -rf:*)",
+      "Bash(rm -r:*)",
+      "Bash(Remove-Item -Recurse:*)",
+      "Bash(*.bundle*)"
     ]
   }
 }
