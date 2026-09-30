@@ -155,7 +155,7 @@ panel `cd central-admin-app && npm test` (+ `node tests/*.test.cjs`) y Playwrigh
 | deno-check | OK | |
 | deno-test | OK | 51 pruebas + 5 de la función de diagnóstico |
 | sql-ciclo-de-vida | OK | Postgres 16 efímero, 073+074+075 |
-| db-reset | **SKIP explícito** | Opt-in (`GATES_DB_RESET=1`, stack local en marcha). Además, **las migraciones anteriores a 073 no se aplican desde cero en Postgres 17**: la 004 define `is_admin()` (SQL) antes de crear la columna `role` que usa (`column "role" does not exist`). Es previo al módulo y rompe la regla "cada migración aplica limpia con `supabase db reset`" tal como está escrita; en local se sortea con una copia desechable que antepone `SET check_function_bodies = off;` (ver "Cómo reproducir en local") |
+| db-reset | **SKIP explícito** | Opt-in (`GATES_DB_RESET=1`, stack local en marcha). Además, **las migraciones anteriores a 073 no se aplican desde cero**: la 004 define `is_admin()` (SQL) antes de crear la columna `role` que usa (`column "role" does not exist`). Es previo al módulo y rompe la regla "cada migración aplica limpia con `supabase db reset`" tal como está escrita; en local se sortea con una copia desechable que antepone `SET check_function_bodies = off;` (ver "Cómo reproducir en local"). **Corrección (iteración 23, T00-extra):** no es específico de Postgres 17 como se afirmaba aquí — medido con `supabase db reset` real y también con Postgres 16 puro: falla igual en ambas versiones. `SET check_function_bodies = off` tampoco lo evita (esa opción solo afecta a `plpgsql`, y `is_admin()` es `LANGUAGE sql`); si esa copia desechable "funcionó" antes fue por otra razón, no por esa línea — no verificado, ver detalle en la Iteración 23 y D-13. |
 
 No incluido en las puertas: Playwright del frontend (necesita la app compilada y un servidor en :8793; ver `npm run test:frontend`).
 
@@ -690,3 +690,63 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
   módulo, pensada para leerse/escribirse solo a través de las funciones `SECURITY DEFINER`).
 - Porcentaje: estricto 9 de 28 = **32,1 %** (antes 28,6 %). Ponderado: T08 pasa de 55 % a 100 % →
   1230/2800 = **≈ 43,9 %** (antes ≈ 42,3 %).
+
+## Iteración 23 — 2026-09-30 — T00-extra: migraciones no reproducibles desde cero (propuesta, sin tocar migraciones)
+- **Prioridad pedida explícitamente por la persona responsable** sobre las demás tareas desbloqueadas de `TASKS.md`.
+- **Prerrequisito (iteración 5) confirmado cumplido:** las 76 migraciones (001–078, saltos ya conocidos 023 y 033) están
+  todas en `supabase/migrations/` desde que `chore/baseline-produccion` se integró en `main` y se fusionó en esta rama
+  (iteración 10). No es un problema de archivos faltantes.
+- **Medido con `supabase db reset` real** (stack local, `major_version = 17` en `config.toml`) y con Postgres 16 puro
+  (mínimo `auth` simulado, sin columna `role` preexistente): la reproducción desde cero falla **siempre** en la migración
+  004, primer statement de `RLS: Extended admin access` — `ERROR: column "role" does not exist (SQLSTATE 42703)`.
+  Causa exacta: `public.is_admin()` (`004_admin_center.sql:6-18`, `LANGUAGE sql`) se valida contra el catálogo EN EL
+  MOMENTO de `CREATE FUNCTION` (Postgres analiza y resuelve las referencias de una función `LANGUAGE sql` al crearla,
+  en cualquier versión) y referencia `users.role`; esa columna la agrega la misma migración 004 diecinueve líneas
+  después (línea 26). **Corrección a la línea base anterior (T00, iteración 1):** no es específico de Postgres 17 —
+  confirmado que falla igual en Postgres 16. La nota de `check_function_bodies = off` en "Cómo reproducir en local"
+  (línea ~112) sigue siendo correcta como dato aislado (`SET check_function_bodies = off;` antes de 004, en la MISMA
+  sesión y para ESE archivo suelto, sí evita el error — verificado con psql directo), pero **no sirve como fix para
+  `supabase db reset`**, ver el punto siguiente.
+- **Opción D probada y descartada (aditiva, sin tocar migraciones existentes):** se probó insertar una migración nueva
+  `000_...` (ordena antes de 001 por nombre de archivo) con `ALTER DATABASE postgres SET check_function_bodies = off;`
+  y, en un segundo intento, con `SET check_function_bodies = off;` a secas. Ninguna de las dos evitó el fallo en 004:
+  confirmado con `supabase_migrations.schema_migrations` que la migración `000` sí se aplicó (y con `SHOW
+  check_function_bodies` que quedó en `off` para la sesión psql posterior), pero el CLI de Supabase reinicia el estado
+  de sesión entre archivo y archivo durante un mismo `db reset` (no es una sesión continua con `SET` heredado; probable
+  `DISCARD ALL` o reconexión entre migraciones) — un ajuste de sesión hecho en un archivo anterior no le llega al
+  siguiente. Se descarta esta vía; no hay forma de arreglarlo sin tocar el contenido de la migración 004 en sí, lo cual
+  las REGLAS DURAS prohíben sin aprobación explícita. Detalle completo y opciones restantes (A, B, C) en **D-13**
+  (`DECISIONS.md`, ABIERTA).
+- **Propuesta entregada (D-13, opción recomendada A):** dump de esquema de PRODUCCIÓN (`supabase db dump
+  --schema-only`, lo ejecuta la persona responsable con sus credenciales — esta sesión no tiene ni debe tener acceso a
+  producción), revisado (quitar `auth`/`storage`/`realtime`/extensiones, que ya provee `supabase start`), como única
+  migración nueva (`000_baseline_schema.sql` o el nombre que se acuerde); archivar 001–072 a
+  `supabase/migrations_archive/` (se conservan en git, dejan de aplicarse). Verificación: `supabase db reset` local con
+  la base + 073–078, volver a exportar el esquema y compararlo (diff) contra el dump de producción original. Riesgo
+  documentado en D-13: desincroniza los nombres de archivo locales de `supabase_migrations.schema_migrations` en
+  producción — nunca intentar `supabase db push` desde ese estado sin repararlo antes.
+- **No se ha tocado ninguna migración real, ni `gates.sh`, ni se ha archivado nada.** Todos los archivos de prueba
+  (`000_zzz_local_test_only.sql` y los contenedores Postgres sueltos usados para medir) se crearon fuera de
+  `supabase/migrations/` real solo durante la medición y se borraron/eliminaron al terminar; `git status` queda limpio
+  salvo los cambios de esta iteración (`TASKS.md`, `DECISIONS.md`, este archivo).
+- Cambios: `.claude/loops/consentimiento/TASKS.md` (T00-extra marcada `[x]` con el hallazgo; nueva `T00-extra-exec` ⛔
+  D-13 al final); `.claude/loops/consentimiento/DECISIONS.md` (D-13, ABIERTA); este archivo (corrección de la línea base
+  de `db-reset` en la sección "Línea base de gates" — ya no dice "específico de Postgres 17").
+- Pruebas añadidas: ninguna (tarea de investigación/propuesta, sin cambio de código ejecutable). Verificación empírica
+  con `supabase db reset` real (dos veces) y con contenedores Postgres 16/17 sueltos (auth simulado), documentada arriba.
+- **Flake detectado y descartado (no relacionado con T00-extra):** una corrida de `gates.sh` completa, hecha MIENTRAS
+  varios contenedores Postgres de esta investigación seguían activos en paralelo, reportó `sql-ciclo-de-vida: FAIL` en
+  la comprobación de concurrencia de `consent_records` ("la cadena quedó rota tras 8 inserciones concurrentes"). Se
+  repitió la puerta aislada (`GATES_ONLY=sql-ciclo-de-vida`) y luego `gates.sh` completo, ambas veces sin ningún otro
+  contenedor Docker corriendo: **OK las dos veces**. Confirmado que fue contención de recursos de Docker por mis propios
+  contenedores de prueba corriendo en paralelo, no una regresión del código del módulo (no se tocó `consent_records`,
+  sus triggers ni la migración 074 en esta iteración).
+- Gates: OK completo al cerrar (typecheck-frontend, lint-frontend [14 = línea base, sin cambio], unit-frontend,
+  panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit; db-reset SKIP explícito — sigue
+  así, ver arriba por qué). `docker ps -a` sin contenedores de prueba (`t00*`) al terminar; stack de `supabase start`
+  detenido (`supabase stop`).
+- Desviaciones de SPEC: ninguna (tarea fuera de la numeración SPEC, ver PROMPT.md).
+- Riesgos / pendientes detectados: ninguno nuevo más allá de lo ya anotado en D-13. `T00-extra-exec` queda bloqueada
+  hasta que un humano decida D-13 y, si es la opción A, entregue el dump de producción.
+- Porcentaje: sin cambio (T00-extra es una tarea `-extra`, no cuenta en los 28 numerados; sigue en 32,1 % / ≈ 43,9 %,
+  igual que la iteración 22).
