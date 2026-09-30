@@ -497,3 +497,37 @@ En el resultado habrá IP reales. No me pegues las IP completas: basta con decir
   panel, no como un 500 genérico.
 - Porcentaje: estricto 7 de 28 = **25,0 %** (antes 21,4 %). Ponderado: T06 pasa de 55 % a 100 % →
   1170/2800 = **≈ 41,8 %** (antes ≈ 40,2 %).
+
+## Nota — 2026-09-30 — Hallazgo crítico: gates.sh ocultaba fallos intermedios en las puertas SQL
+- **Qué pasó:** al investigar T07, una prueba de mutación deliberada (repetir el mismo `version` que ya
+  usa `lifecycle.sql` en `consent_documents_lifecycle.sql`, para comprobar que el gate detecta el error)
+  reveló que `sql_ciclo_de_vida_in` y `sql_guest_limit_in` ejecutaban cada `psql_in ... < archivo` como
+  una sentencia bash suelta, sin `&&` ni control de código de salida. Con `set -uo pipefail` (sin `-e`),
+  el fallo de un paso intermedio no detiene la función ni cambia su código de salida — el de la función
+  es el del ÚLTIMO comando. Si ese último paso pasa (lo hacía), el gate completo reporta `OK` aunque un
+  paso de en medio haya fallado con un error real.
+- **Confirmado con la propia inyección:** con el choque de versión reintroducido a propósito, `GATES_ONLY="sql-ciclo-de-vida"`
+  seguía reportando `OK` con el código sin corregir; tras encadenar con `&&`, el mismo choque produce
+  `GATE sql-ciclo-de-vida: FAIL` con el error real en el log — confirma que el fallo SÍ estaba ahí antes,
+  oculto, y que la corrección lo detecta.
+- **Impacto en la iteración 19 (T06):** el `consent_documents_lifecycle.sql` de esa iteración reutilizaba
+  `version = '1.0'`, que `lifecycle.sql` (fixture de `consent_records`) ya usa. Al correr la suite completa
+  en secuencia, esa prueba nueva **fallaba de verdad** por la restricción `UNIQUE` de `version` —pero el
+  "GATE sql-ciclo-de-vida: OK" reportado en esa iteración era falso: el fallo intermedio quedó oculto
+  porque `admin_roles.sql` (el último paso) sí pasaba. La migración 077 y su lógica SÍ son correctas
+  (lo prueba esta misma iteración, con la versión renombrada a `cdl-1.0`/`cdl-1.1`/`cdl-1.2`), pero el
+  "verificado en gates.sh" de la iteración 19 no era cierto en el momento en que se escribió.
+- **Corrección:** `gates.sh` (`sql_ciclo_de_vida_in`, `sql_guest_limit_in`): las llamadas a `psql_in`
+  ahora se encadenan con `&&`, así el primer fallo detiene la función y propaga el código de salida real.
+  `consent_documents_lifecycle.sql`: fixture renombrado de `1.0`/`1.1`/`1.2` a `cdl-1.0`/`cdl-1.1`/`cdl-1.2`
+  para no chocar con el fixture de `lifecycle.sql`. Con la corrección, la suite completa (`gates.sh` sin
+  filtrar) pasa de verdad — incluida la prueba de mutación que reintroduce el choque, que ahora sí falla.
+- **Alcance de la duda:** este patrón (comandos sueltos sin `&&`/control de rc en una función multi-paso)
+  solo existía en estas dos funciones SQL; las demás puertas (`typecheck_frontend`, `panel_e2e`, `deno_test`,
+  etc.) ya usaban `&&`, un solo comando, o `rc=$?` explícito. No se auditó cada "Gates: OK" histórico de
+  PROGRESS.md uno por uno (sería desproporcionado); el riesgo práctico es acotado a estas dos puertas y
+  a pruebas que, como esta, reutilizan un valor `UNIQUE` ya sembrado por un archivo anterior en la misma
+  secuencia — no hay indicio de que haya ocurrido antes (los archivos de prueba anteriores usan valores
+  claramente distintos entre sí).
+- No se marca ninguna tarea del backlog por esto: es una corrección de la propia infraestructura de
+  verificación (creada en T00), no de un requisito REQ-xx/SEC-xx.

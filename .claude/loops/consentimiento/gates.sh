@@ -123,15 +123,15 @@ sql_ciclo_de_vida() { with_pg consent-gates sql_ciclo_de_vida_in; }
 sql_ciclo_de_vida_in() {
   local container="$1"
   psql_in() { docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null "$@"; }
-  psql_in -d postgres -c "CREATE DATABASE gates"
-  psql_in -d gates < "$TESTS/prereqs.sql"
-  psql_in -d gates < "$MIGRATIONS/073_consent_module_foundation.sql"
-  psql_in -d gates < "$MIGRATIONS/074_consent_evidence_unlink_and_stable_hash.sql"
-  psql_in -d gates < "$MIGRATIONS/075_privacy_settings_versioning.sql"
-  psql_in -d gates < "$MIGRATIONS/077_consent_documents_no_gap_on_retire.sql"
-  psql_in -d gates < "$TESTS/lifecycle.sql"
-  psql_in -d gates < "$TESTS/settings_versioning.sql"
-  psql_in -d gates < "$TESTS/consent_documents_lifecycle.sql"
+  psql_in -d postgres -c "CREATE DATABASE gates" && \
+  psql_in -d gates < "$TESTS/prereqs.sql" && \
+  psql_in -d gates < "$MIGRATIONS/073_consent_module_foundation.sql" && \
+  psql_in -d gates < "$MIGRATIONS/074_consent_evidence_unlink_and_stable_hash.sql" && \
+  psql_in -d gates < "$MIGRATIONS/075_privacy_settings_versioning.sql" && \
+  psql_in -d gates < "$MIGRATIONS/077_consent_documents_no_gap_on_retire.sql" && \
+  psql_in -d gates < "$TESTS/lifecycle.sql" && \
+  psql_in -d gates < "$TESTS/settings_versioning.sql" && \
+  psql_in -d gates < "$TESTS/consent_documents_lifecycle.sql" && \
   psql_in -d gates < "$TESTS/admin_roles.sql"
 }
 
@@ -141,12 +141,12 @@ sql_guest_limit_in() {
   local container="$1"
   psql_in() { docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null "$@"; }
   local LTESTS=supabase/tests/learning
-  psql_in -d postgres -c "CREATE DATABASE gt"
-  psql_in -d gt < "$LTESTS/prereqs.sql"
-  psql_in -d gt < "$MIGRATIONS/026_learning_progress.sql"
-  psql_in -d gt < "$MIGRATIONS/058_learning_state_guest_fix.sql"
-  psql_in -d gt < "$MIGRATIONS/059_learning_state_hide_answer_until_answered.sql"
-  psql_in -d gt < "$MIGRATIONS/076_learning_guest_limit.sql"
+  psql_in -d postgres -c "CREATE DATABASE gt" && \
+  psql_in -d gt < "$LTESTS/prereqs.sql" && \
+  psql_in -d gt < "$MIGRATIONS/026_learning_progress.sql" && \
+  psql_in -d gt < "$MIGRATIONS/058_learning_state_guest_fix.sql" && \
+  psql_in -d gt < "$MIGRATIONS/059_learning_state_hide_answer_until_answered.sql" && \
+  psql_in -d gt < "$MIGRATIONS/076_learning_guest_limit.sql" && \
   psql_in -d gt < "$LTESTS/guest_limit.sql"
 }
 
