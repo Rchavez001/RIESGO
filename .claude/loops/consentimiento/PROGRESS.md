@@ -531,3 +531,60 @@ En el resultado habrá IP reales. No me pegues las IP completas: basta con decir
   claramente distintos entre sí).
 - No se marca ninguna tarea del backlog por esto: es una corrección de la propia infraestructura de
   verificación (creada en T00), no de un requisito REQ-xx/SEC-xx.
+
+## Iteración 21 — 2026-09-30 — T07 cierre: pruebas por rol, detección de manipulación, concurrencia
+- **Pasos previos (con OK explícito de la persona responsable, commits aparte):**
+  1. `PLAN_PRODUCCION_074_075.md` renombrado a `PLAN_PRODUCCION_RELEASE.md` y ampliado para cubrir
+     **todas** las migraciones aún sin aplicar (074–077), con tabla resumen (depende de / qué cambia /
+     verificación posterior), orden real de `supabase db push` (074→075→076→077 — 076 no es del módulo
+     pero viaja igual por numeración de archivo), respaldo, y reversa para 076/077. `PROMPT.md`: regla
+     dura nueva — toda iteración que cree una migración debe actualizar ese plan en el mismo commit.
+  2. **Hallazgo crítico de la propia infraestructura de verificación:** `sql_ciclo_de_vida_in` y
+     `sql_guest_limit_in` en `gates.sh` encadenaban `psql_in ... < archivo` como sentencias sueltas, sin
+     `&&`. Con `set -uo pipefail` (sin `-e`), el código de salida de la función es el del ÚLTIMO comando:
+     un fallo intermedio quedaba oculto si el último paso pasaba. Se descubrió con una prueba de mutación
+     deliberada (repetir a propósito el `version` que ya usa `lifecycle.sql`), que primero **no** hizo
+     fallar el gate con el código sin corregir. **El "GATE sql-ciclo-de-vida: OK" de la iteración 19 (T06)
+     era falso**: `consent_documents_lifecycle.sql` reutilizaba `version = '1.0'` (choque `UNIQUE` con el
+     fixture de `lifecycle.sql`) y fallaba de verdad, oculto por este bug. La migración 077 y su lógica
+     SÍ son correctas — lo prueba esta misma iteración, con el fixture renombrado a `cdl-1.0`/`1.1`/`1.2`
+     y el gate corregido (`&&` en ambas funciones) — pero la afirmación "verificado" de la iteración 19
+     no lo era en el momento en que se hizo. Commit aparte con el detalle completo del hallazgo.
+- Cambios T07: `supabase/tests/consent/prereqs.sql` (`ALTER ROLE service_role BYPASSRLS`, como en
+  Supabase real: sin esto, un `UPDATE` de `service_role` sobre una tabla con RLS y sin política para él
+  afecta 0 filas en silencio y nunca llega al trigger — una prueba "service_role no puede mutar" habría
+  pasado por la razón equivocada); `supabase/tests/consent/lifecycle.sql` (+3 bloques: roles explícitos,
+  detección de manipulación, restauración); `.claude/loops/consentimiento/gates.sh`
+  (`consent_records_concurrency_check`, nueva: 8 `psql` en paralelo contra el mismo contenedor).
+- Pruebas añadidas: `SET ROLE authenticated` → `UPDATE`/`DELETE` fallan con `permission denied` (el
+  `REVOKE` de 073); `SET ROLE service_role` → fallan con `append-only` (el trigger, alcanzable gracias al
+  `BYPASSRLS` nuevo); la fila no cambió con ninguno de los dos roles. Manipulación directa (fila 3, sin
+  tocar hasta ese punto, con `ALTER TABLE ... DISABLE TRIGGER` — la bandera de retención no sirve para
+  esto a propósito, solo deja poner a NULL `user_id`/`ip_ciphertext`/`ua_ciphertext`, nunca `decision`):
+  `verify_consent_chain()` señala exactamente la fila 3, no solo "algo roto"; se restaura y la cadena
+  vuelve a estar íntegra. Concurrencia: 8 inserciones reales en paralelo (procesos `psql` distintos, no
+  expresable en un único script SQL secuencial) terminan con las 8 filas y la cadena válida.
+- **Rojo confirmado antes de cada pieza, con inyecciones deliberadas (todas revertidas después):**
+  (1) sin `BYPASSRLS`, `SET ROLE service_role; UPDATE ...` daba `UPDATE 0` sin excepción — se habría
+  "pasado" sin probar nada; con `BYPASSRLS`, la misma sentencia sí llega al trigger y da `append-only`.
+  (2) el primer intento de la prueba de manipulación usó la bandera `app.allow_evidence_mutation` para
+  cambiar `decision`, y falló con el error real de la propia función ("aun con la bandera solo se puede
+  poner en NULL...") — confirmó que la bandera NO es el camino correcto para simular esto; se cambió a
+  `DISABLE TRIGGER`. (3) la prueba de concurrencia se verificó aparte contra una copia mutada del trigger
+  de cadena **sin** `pg_advisory_xact_lock` (con un `pg_sleep` para ensanchar la ventana de carrera): las
+  mismas 8 inserciones paralelas rompieron la cadena de verdad (`verify_consent_chain` señaló la fila 2,
+  "prev_hash no coincide") — confirma que la prueba detecta una carrera real y no es vacía. Con el
+  trigger real (con el lock), la cadena queda íntegra.
+- Gates: OK (typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e,
+  deno-check, deno-test, sql-ciclo-de-vida [incluida la concurrencia], sql-guest-limit; db-reset SKIP
+  explícito); `docker ps` sin contenedores de gates después.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) el alcance de la duda por el bug de `gates.sh` se acota a estas
+  dos puertas SQL (las demás ya usaban `&&`, un solo comando, o `rc=$?` explícito); no se auditó cada
+  "Gates: OK" histórico uno por uno, sería desproporcionado — el riesgo práctico real está limitado a
+  pruebas que reutilicen un valor `UNIQUE` ya sembrado por un archivo anterior en la misma secuencia
+  (no hay indicio de que ocurriera antes de la iteración 19). (2) `service_role` con `BYPASSRLS` en el
+  arnés local es ahora más fiel a producción, pero conviene tenerlo presente si se añaden pruebas nuevas
+  que asuman lo contrario.
+- Porcentaje: estricto 8 de 28 = **28,6 %** (antes 25,0 %). Ponderado: T07 pasa de 85 % a 100 % →
+  1185/2800 = **≈ 42,3 %** (antes ≈ 41,8 %).

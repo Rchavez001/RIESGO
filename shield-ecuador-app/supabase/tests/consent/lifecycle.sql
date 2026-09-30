@@ -46,6 +46,20 @@ SELECT pg_temp.expect_error($$DELETE FROM public.users WHERE email = 'ana@test.l
 SELECT pg_temp.expect_error($$UPDATE public.consent_records SET user_id = NULL WHERE id = 2$$, 'append-only');
 SELECT pg_temp.expect_error($$UPDATE public.consent_records SET decision = 'revoked' WHERE id = 2$$, 'append-only');
 
+-- 2b. Lo mismo, explícitamente como authenticated y como service_role (T07): dos mecanismos distintos
+--     bloquean cada UPDATE/DELETE — el GRANT revocado (authenticated) y el trigger (service_role, que
+--     en prereqs.sql tiene BYPASSRLS como en Supabase real, así que sí llega a la fila) — nunca "pasa
+--     sin más" por ninguno de los dos caminos.
+SET ROLE authenticated;
+SELECT pg_temp.expect_error($$UPDATE public.consent_records SET decision = 'revoked' WHERE id = 2$$, 'permission denied');
+SELECT pg_temp.expect_error($$DELETE FROM public.consent_records WHERE id = 2$$, 'permission denied');
+RESET ROLE;
+SET ROLE service_role;
+SELECT pg_temp.expect_error($$UPDATE public.consent_records SET decision = 'revoked' WHERE id = 2$$, 'append-only');
+SELECT pg_temp.expect_error($$DELETE FROM public.consent_records WHERE id = 2$$, 'append-only');
+RESET ROLE;
+SELECT pg_temp.expect_int((SELECT count(*) FROM public.consent_records WHERE id = 2 AND decision = 'granted'), 1, 'la fila 2 no cambió con ninguno de los dos roles');
+
 -- 3. Retención (REQ-19): con la bandera, ip/ua a NULL, y la cadena SIGUE íntegra.
 SET app.allow_evidence_mutation = 'on';
 UPDATE public.consent_records SET ip_ciphertext = NULL, ua_ciphertext = NULL WHERE id = 1;
@@ -88,5 +102,29 @@ RESET app.allow_evidence_mutation;
 SELECT pg_temp.expect_int(has_column_privilege('authenticated', 'public.consent_records', 'ip_ciphertext', 'SELECT')::int, 0, 'authenticated no lee ip_ciphertext');
 SELECT pg_temp.expect_int(has_column_privilege('authenticated', 'public.consent_records', 'ip_hmac', 'SELECT')::int, 0, 'authenticated no lee ip_hmac');
 SELECT pg_temp.expect_int(has_column_privilege('authenticated', 'public.consent_records', 'purpose_code', 'SELECT')::int, 1, 'authenticated sí lee la finalidad');
+
+-- 9. Alterar una fila directamente (fila 3, sin tocar hasta ahora) rompe la cadena de forma detectable:
+--    T07 exige que verify_consent_chain() señale exactamente esa fila, no solo "algo está roto". La
+--    bandera de retención NO sirve para esto a propósito (solo deja poner a NULL 3 columnas concretas,
+--    nunca cambiar `decision`): se simula el único camino real de una alteración indebida — saltarse el
+--    trigger a nivel de tabla, como haría un acceso directo a la base fuera de la aplicación.
+ALTER TABLE public.consent_records DISABLE TRIGGER consent_records_append_only;
+UPDATE public.consent_records SET decision = 'denied' WHERE id = 3;
+ALTER TABLE public.consent_records ENABLE TRIGGER consent_records_append_only;
+DO $$
+DECLARE broken record;
+BEGIN
+  SELECT * INTO broken FROM public.verify_consent_chain();
+  IF NOT FOUND THEN RAISE EXCEPTION 'se esperaba una cadena rota tras alterar la fila 3 a mano'; END IF;
+  IF broken.first_broken_id IS DISTINCT FROM 3 THEN
+    RAISE EXCEPTION 'verify_consent_chain señaló la fila % en vez de la 3', broken.first_broken_id;
+  END IF;
+END $$;
+-- Se restaura para no dejar la cadena rota al final del archivo (nada más depende de esto hoy, pero
+-- otros archivos de prueba corren después en la misma base).
+ALTER TABLE public.consent_records DISABLE TRIGGER consent_records_append_only;
+UPDATE public.consent_records SET decision = 'granted' WHERE id = 3;
+ALTER TABLE public.consent_records ENABLE TRIGGER consent_records_append_only;
+SELECT pg_temp.expect_chains_ok('tras restaurar la fila 3');
 
 \echo OK: ciclo de vida de la evidencia (073 + 074)

@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS public.users (
 DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE service_role; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Como en Supabase real: service_role tiene BYPASSRLS (así lo usa PostgREST con la clave de servicio).
+-- Sin esto, un UPDATE/DELETE directo de service_role sobre una tabla con RLS y sin política para él
+-- afecta 0 filas en silencio (RLS lo filtra antes de llegar a la fila) y nunca dispara los triggers
+-- append-only: una prueba "service_role no puede mutar evidencia" pasaría por la razón equivocada.
+ALTER ROLE service_role BYPASSRLS;
 -- Como en Supabase: las tablas nuevas de `public` nacen con todos los privilegios para estos roles; así los REVOKE de las
 -- migraciones se prueban de verdad (sin esto, un "permission denied" pasaría aunque la migración no revocara nada).
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;

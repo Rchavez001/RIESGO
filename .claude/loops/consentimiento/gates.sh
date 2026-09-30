@@ -132,7 +132,49 @@ sql_ciclo_de_vida_in() {
   psql_in -d gates < "$TESTS/lifecycle.sql" && \
   psql_in -d gates < "$TESTS/settings_versioning.sql" && \
   psql_in -d gates < "$TESTS/consent_documents_lifecycle.sql" && \
-  psql_in -d gates < "$TESTS/admin_roles.sql"
+  psql_in -d gates < "$TESTS/admin_roles.sql" && \
+  consent_records_concurrency_check "$container"
+}
+
+# T07: inserciones concurrentes de consent_records deben mantener la cadena de hash válida. Necesita
+# conexiones REALES simultáneas (pg_advisory_xact_lock serializa entre transacciones distintas, no
+# dentro de una sola sesión secuencial), así que no se puede expresar en un único script SQL: se lanzan
+# N procesos `psql` en paralelo, cada uno en su propia conexión al mismo contenedor.
+consent_records_concurrency_check() {
+  local container="$1" n=8 i pid pids=() rc=0
+  docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null -d gates -c "
+    INSERT INTO public.users (email) VALUES ('concurrency@test.local');
+    INSERT INTO public.consent_documents (version, title, content_md, content_sha256, purposes, status, created_by)
+      SELECT 'conc-1.0', 't', 'md', 'sha', '[]'::jsonb, 'draft', id FROM public.users WHERE role = 'admin';
+  " || return 1
+  for i in $(seq 1 "$n"); do
+    docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null -d gates -c "
+      INSERT INTO public.consent_records (user_id, user_ref_hmac, document_id, document_version, rendered_sha256,
+          settings_version, purpose_code, decision, channel, ip_ciphertext, ip_hmac, ua_ciphertext, ua_hmac, key_version)
+        SELECT u.id, 'ref-conc-$i', d.id, 'conc-1.0', 'r', 1, 'registro_aprendizaje', 'granted', 'registro',
+               '{\"v\":1,\"iv\":\"x\",\"tag\":\"y\",\"ct\":\"z\",\"aad\":true}'::jsonb, 'iphmac-$i',
+               '{\"v\":1,\"ct\":\"ua\",\"aad\":true}'::jsonb, 'uahmac', 1
+        FROM public.users u, public.consent_documents d
+        WHERE u.email = 'concurrency@test.local' AND d.version = 'conc-1.0';
+    " &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+  if [[ $rc -ne 0 ]]; then echo "una inserción concurrente de consent_records falló"; return 1; fi
+  docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null -d gates -c "
+    DO \$\$
+    DECLARE actual int; broken record;
+    BEGIN
+      SELECT count(*) INTO actual FROM public.consent_records WHERE user_ref_hmac LIKE 'ref-conc-%';
+      IF actual <> $n THEN
+        RAISE EXCEPTION 'se esperaban % filas de las inserciones concurrentes, hubo %', $n, actual;
+      END IF;
+      SELECT * INTO broken FROM public.verify_consent_chain();
+      IF FOUND THEN
+        RAISE EXCEPTION 'la cadena quedó rota tras % inserciones concurrentes: fila % — %', $n, broken.first_broken_id, broken.detail;
+      END IF;
+    END \$\$;
+  "
 }
 
 # ── 4b. INV-SEC (P2, independiente del módulo): tope de invitado en learning_answer/learning_start_exam ────────────
