@@ -95,6 +95,7 @@ function init() {
   bindDelegatedActions();
   bindReportChartControls();
   bindActions();
+  bindPrivacy();
   renderAll();
   void loadOverviewMetrics();
   void loadDojoStats();
@@ -4730,6 +4731,152 @@ async function publishSecurityKataDraft() {
   } catch (error) {
     $("#secKataStatus").textContent = `Error: ${error.message}`;
   }
+}
+
+// ── Consentimiento informado: acceso individual (T05.b, D-01) ────────────────────────────────────────────────────────
+// El módulo no usa la Basic Auth compartida + service role: cada administrador entra con su cuenta de Supabase Auth y un
+// factor TOTP (aal2), a través de /api/privacy/* (server.js), y admin-consent verifica JWT, TOTP y rol. Los tokens viven
+// SOLO en `privacyFlow` (memoria de esta pestaña): nunca en `state` (que "Guardar borrador" persiste), localStorage ni
+// sessionStorage, y nunca se escriben en el DOM ni en la consola. Recargar la página obliga a entrar de nuevo.
+const privacyFlow = { token: null, email: null, factorId: null, challengeId: null };
+
+const PRIVACY_ERRORS = {
+  forbidden: "Tu cuenta no tiene un rol del módulo de consentimiento. Pide a un administrador del módulo que te lo asigne.",
+  mfa_required: "Falta la verificación en dos pasos. Vuelve a entrar.",
+  missing_token: "La sesión del módulo no es válida. Vuelve a entrar.",
+  invalid_token: "La sesión del módulo no es válida. Vuelve a entrar.",
+  token_expired: "La sesión del módulo caducó. Vuelve a entrar.",
+  anonymous_session: "Las sesiones de invitado no pueden administrar el módulo.",
+};
+
+async function privacyCall(path, { session, body, method = "POST" } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (session) headers["X-Admin-Session"] = session;
+  try {
+    const response = await fetch(`/api/privacy${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const data = await response.json().catch(() => null);
+    return { status: response.status, data };
+  } catch {
+    return { status: 0, data: null };
+  }
+}
+
+function privacyMessage(text) {
+  $("#privacyMessage").textContent = text || "";
+}
+
+function privacyShow(step) {
+  $("#privacyLoginForm").hidden = step !== "login";
+  $("#privacyCodeForm").hidden = step !== "code";
+  $("#privacyIdentity").hidden = step !== "identity";
+  if (step !== "code") privacyClearEnroll();
+}
+
+function privacyClearEnroll() {
+  $("#privacyEnroll").hidden = true;
+  $("#privacyQr").removeAttribute("src");
+  $("#privacySecret").textContent = "";
+}
+
+function privacyReset(message = "") {
+  Object.assign(privacyFlow, { token: null, email: null, factorId: null, challengeId: null });
+  $("#privacyWho").textContent = "";
+  $("#privacyRoles").textContent = "";
+  $("#privacyCode").value = "";
+  privacyShow("login");
+  privacyMessage(message);
+}
+
+async function privacyChallenge() {
+  const challenge = await privacyCall(`/auth/factors/${privacyFlow.factorId}/challenge`, { session: privacyFlow.token, body: {} });
+  if (challenge.status !== 200 || !challenge.data?.id) return false;
+  privacyFlow.challengeId = challenge.data.id;
+  return true;
+}
+
+async function privacyLogin(event) {
+  event.preventDefault();
+  const email = $("#privacyEmail").value.trim();
+  const password = $("#privacyPassword").value;
+  $("#privacyPassword").value = ""; // la contraseña no se queda en el formulario
+  if (!email || !password) { privacyMessage("Escribe tu correo y tu contraseña."); return; }
+  privacyMessage("");
+
+  const login = await privacyCall("/auth/token?grant_type=password", { body: { email, password } });
+  if (login.status === 400) { privacyMessage("Correo o contraseña incorrectos."); return; }
+  if (login.status !== 200 || !login.data?.access_token) { privacyMessage("No se pudo iniciar sesión. Inténtalo de nuevo."); return; }
+  privacyFlow.token = login.data.access_token;
+  privacyFlow.email = login.data.user?.email || email;
+
+  // Un factor TOTP verificado: pedir el código. Ninguno (o solo altas abandonadas): dar de alta uno nuevo con QR.
+  const user = await privacyCall("/auth/user", { session: privacyFlow.token, method: "GET" });
+  const factor = (user.data?.factors || []).find((f) => f.factor_type === "totp" && f.status === "verified");
+  if (factor) {
+    privacyFlow.factorId = factor.id;
+  } else {
+    const enroll = await privacyCall("/auth/factors", {
+      session: privacyFlow.token,
+      body: { factor_type: "totp", friendly_name: `Panel central ${new Date().toISOString()}` },
+    });
+    const qr = enroll.data?.totp?.qr_code;
+    if (enroll.status !== 200 || !enroll.data?.id || typeof qr !== "string" || !qr.startsWith("data:image/")) {
+      privacyReset("No se pudo activar la verificación en dos pasos. Inténtalo de nuevo.");
+      return;
+    }
+    privacyFlow.factorId = enroll.data.id;
+    $("#privacyQr").src = qr;
+    $("#privacySecret").textContent = enroll.data.totp.secret || "";
+  }
+
+  if (!(await privacyChallenge())) { privacyReset("No se pudo iniciar la verificación en dos pasos. Inténtalo de nuevo."); return; }
+  privacyShow("code");
+  $("#privacyEnroll").hidden = !!factor;
+  $("#privacyCode").focus();
+}
+
+async function privacyVerify(event) {
+  event.preventDefault();
+  const code = $("#privacyCode").value.trim();
+  if (!/^\d{6}$/.test(code)) { privacyMessage("El código tiene 6 dígitos."); return; }
+  $("#privacyCode").value = "";
+
+  const verify = await privacyCall(`/auth/factors/${privacyFlow.factorId}/verify`, {
+    session: privacyFlow.token,
+    body: { challenge_id: privacyFlow.challengeId, code },
+  });
+  if (verify.status !== 200 || !verify.data?.access_token) {
+    privacyMessage("Código incorrecto o vencido. Espera al siguiente código de tu aplicación e inténtalo de nuevo.");
+    await privacyChallenge(); // un desafío nuevo para el siguiente intento
+    $("#privacyCode").focus();
+    return;
+  }
+  privacyFlow.token = verify.data.access_token; // aal2: la única sesión que el módulo acepta
+  privacyClearEnroll();
+
+  // Primera acción del módulo: admin-consent registra la sesión en la bitácora a nombre de este administrador.
+  const session = await privacyCall("/fn/admin-consent/session", { session: privacyFlow.token });
+  if (session.status !== 200) {
+    const reason = PRIVACY_ERRORS[session.data?.error] || "No se pudo verificar la sesión del módulo. Inténtalo de nuevo.";
+    await privacyLogout(reason);
+    return;
+  }
+  $("#privacyWho").textContent = privacyFlow.email;
+  $("#privacyRoles").textContent = (session.data.roles || []).join(", ");
+  privacyMessage("");
+  privacyShow("identity");
+}
+
+async function privacyLogout(message = "") {
+  const token = privacyFlow.token;
+  privacyReset(message);
+  if (token) await privacyCall("/auth/logout", { session: token });
+}
+
+function bindPrivacy() {
+  $("#privacyLoginForm").addEventListener("submit", privacyLogin);
+  $("#privacyCodeForm").addEventListener("submit", privacyVerify);
+  $("#privacyCancel").addEventListener("click", () => void privacyLogout());
+  $("#privacyLogout").addEventListener("click", () => void privacyLogout());
 }
 
 init();

@@ -45,6 +45,7 @@
           <button class="nav-item" data-panel="occupations">Ocupaciones</button>
           <button class="nav-item" data-panel="ads">Propaganda</button>
           <button class="nav-item" data-panel="reports">Reportes</button>
+          <button class="nav-item" data-panel="consent">Consentimiento informado</button>
         </nav>
 
         <div class="rail-card">
@@ -1170,6 +1171,61 @@
               <thead id="reportDetailHead"><tr><th>Indicador</th><th>Total</th></tr></thead>
               <tbody id="reportDetailRows"></tbody>
             </table></div>
+          </article>
+        </section>
+
+        <!-- Consentimiento informado (T05.b, D-01): no usa el acceso compartido de la consola. Cada administrador entra con su
+             propia cuenta de Supabase Auth y un código TOTP; la sesión vive solo en memoria (ver privacy* en app.js). -->
+        <section id="consent" class="panel">
+          <div class="section-toolbar">
+            <div>
+              <span class="label">CONSENTIMIENTO INFORMADO</span>
+              <h2>Acceso individual al módulo</h2>
+              <p class="muted">Este módulo no usa el acceso compartido de la consola. Cada administrador entra con su propia cuenta y un código de verificación en dos pasos, y cada acción queda registrada a su nombre.</p>
+            </div>
+          </div>
+          <article class="card privacy-access">
+            <p id="privacyMessage" class="privacy-message" role="alert"></p>
+
+            <form id="privacyLoginForm" class="form-grid compact" novalidate>
+              <label>
+                Correo
+                <input id="privacyEmail" type="email" autocomplete="username" required />
+              </label>
+              <label>
+                Contraseña
+                <input id="privacyPassword" type="password" autocomplete="current-password" required />
+              </label>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Entrar</button>
+              </div>
+            </form>
+
+            <div id="privacyEnroll" class="privacy-enroll" hidden>
+              <h3>Activa la verificación en dos pasos</h3>
+              <p class="muted">Escanea el código con tu aplicación de autenticación (Google Authenticator, Microsoft Authenticator, Authy…) o escribe la clave a mano. Después, escribe el código de 6 dígitos que muestre.</p>
+              <img id="privacyQr" alt="Código QR para la aplicación de autenticación" width="180" height="180" />
+              <p>Clave: <code id="privacySecret"></code></p>
+            </div>
+
+            <form id="privacyCodeForm" class="form-grid compact" novalidate hidden>
+              <label>
+                Código de 6 dígitos
+                <input id="privacyCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
+              </label>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Verificar</button>
+                <button id="privacyCancel" class="btn secondary" type="button">Cancelar</button>
+              </div>
+            </form>
+
+            <div id="privacyIdentity" class="privacy-identity" hidden>
+              <p>Sesión individual: <strong id="privacyWho"></strong></p>
+              <p>Roles: <span id="privacyRoles"></span></p>
+              <div class="modal-actions">
+                <button id="privacyLogout" class="btn secondary" type="button">Cerrar sesión del módulo</button>
+              </div>
+            </div>
           </article>
         </section>
       </main>

@@ -21,10 +21,10 @@ const openMenuIfNarrow = async (page: Page) => {
 }
 
 test.describe('consola admin: estructura', () => {
-  test('carga sin violaciones de CSP ni scroll horizontal, con 15 secciones y la actual marcada', async ({ page }) => {
+  test('carga sin violaciones de CSP ni scroll horizontal, con 16 secciones y la actual marcada', async ({ page }) => {
     const csp = await open(page)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    expect(await page.locator('.nav-item').count()).toBe(15)
+    expect(await page.locator('.nav-item').count()).toBe(16) // 16.ª: Consentimiento informado (T05.b)
     await expect(page.locator('.nav-item[aria-current="page"]')).toHaveText('Resumen')
     await expect(page.getByRole('link', { name: 'Saltar al contenido' })).toBeAttached()
     expect(csp).toEqual([])

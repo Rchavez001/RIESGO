@@ -2123,3 +2123,14 @@ ol.decision-list { padding-left: 20px; display: grid; gap: 8px; }
 #reportKpis strong, #reportKpis em { overflow-wrap: anywhere; }
 .report-chart-3d { max-width: 100%; }
 @media (max-width: 720px) { #reports .modal-actions { display: grid; gap: 8px; } #reports .modal-actions .btn { width: 100%; } .bi-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Consentimiento informado — acceso individual (T05.b). `hidden` debe ganar a `.form-grid`/`.modal-actions`. */
+#consent [hidden] { display: none !important; }
+.privacy-access { max-width: 640px; display: grid; gap: 16px; }
+.privacy-message:empty { display: none; }
+.privacy-message { margin: 0; padding: 10px 12px; border-left: 3px solid #C62828; background: rgba(198, 40, 40, 0.12); color: #EEF2F7; }
+.privacy-enroll img { display: block; background: #fff; padding: 8px; border-radius: 4px; width: 180px; height: 180px; }
+.privacy-enroll code { overflow-wrap: anywhere; font-size: 1rem; letter-spacing: 0.08em; }
+.privacy-identity p { margin: 0 0 8px; }
+#privacyCode { letter-spacing: 0.3em; font-variant-numeric: tabular-nums; max-width: 12ch; }
+@media (max-width: 720px) { #consent .modal-actions { display: grid; gap: 8px; } #consent .modal-actions .btn { width: 100%; } }

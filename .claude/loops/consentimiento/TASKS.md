@@ -59,7 +59,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests negativos obligatorios:** sin token, token con firma alterada, token expirado,
     token con claim `role: service_role` forjado, usuario sin rol, rol insuficiente.
 
-- [ ] **T05 — Identidad individual en `central-admin-app` para este módulo** (SEC-03, H08)
+- [x] **T05 — Identidad individual en `central-admin-app` para este módulo** (SEC-03, H08) (hecha 2026-09-30: T05.a iteración 16, T05.b iteración 17)
   - **Estado:** desbloqueada por **D-01 = A** (Supabase Auth + TOTP, JWT del admin hacia `admin-consent`, roles en `admin_roles`). Depende de T04 (`auth-guard.ts`), aún sin hacer.
   - Según D-01: login del admin con Supabase Auth (y MFA si procede) y envío del JWT del admin
     a `admin-consent`; las rutas del módulo no usan el proxy con service role.
@@ -79,7 +79,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       borrar el TOTP de un admin o generarle un enlace de acceso).
     - **Aceptación:** pruebas negativas de cada ruta; la acción `admin.session_verified` queda con el `actor_id` del
       token verificado; Basic Auth sola no alcanza ninguna tabla, RPC ni función del módulo.
-  - [ ] **T05.b — UI del panel: login individual con TOTP** (depende de T05.a)
+  - [x] **T05.b — UI del panel: login individual con TOTP** (depende de T05.a) (hecha 2026-09-30, iteración 17; TOTP del proyecto hospedado sin confirmar, ver PROGRESS.md)
     - Pantalla de acceso del módulo (correo + contraseña), alta del factor TOTP (QR) si no existe, verificación del
       código, identidad y roles visibles, cierre de sesión. Token solo en memoria (no `localStorage`).
     - TOTP habilitado en `config.toml` local (`[auth.mfa.totp]`); confirmar que está habilitado en el proyecto hospedado.
