@@ -459,3 +459,41 @@ En el resultado habrá IP reales. No me pegues las IP completas: basta con decir
   IP real en el proyecto hospedado (D-08, tarea separada `T03-prod`) y, en cascada, `T03-sec`.
 - Porcentaje: estricto 6 de 28 = **21,4 %** (antes 17,9 %). Ponderado: T03 pasa de 60 % a 100 % →
   1125/2800 = **≈ 40,2 %** (antes ≈ 38,8 %).
+
+## Iteración 19 — 2026-09-30 — T06 cierre: regla de no-hueco al retirar el aviso publicado
+- Cambios: `supabase/migrations/077_consent_documents_no_gap_on_retire.sql` (nuevo: función
+  `enforce_consent_document_no_gap_on_retire()` + `CREATE CONSTRAINT TRIGGER
+  consent_documents_no_gap_on_retire ... DEFERRABLE INITIALLY DEFERRED ... WHEN (OLD.status =
+  'published' AND NEW.status = 'retired')`); `supabase/tests/consent/consent_documents_lifecycle.sql`
+  (nuevo, 7 aserciones); `.claude/loops/consentimiento/gates.sh` (`sql_ciclo_de_vida_in`: aplica la
+  migración 077 y corre la prueba nueva).
+- Diseño: la regla "retirar deja sin publicada solo si se publica otra en la misma transacción" no se
+  puede expresar con una restricción inmediata (dejaría un instante sin fila `published` incluso en el
+  caso correcto: retirar y luego publicar el reemplazo). Se usa una restricción **diferible** que solo
+  se activa en la transición `published → retired` (no en `draft → retired`, que no exige reemplazo) y
+  se comprueba al final de la transacción — o antes, con `SET CONSTRAINTS ... IMMEDIATE`, que es lo que
+  usa la prueba para no depender de un `COMMIT` real dentro del script de `psql`.
+- Pruebas añadidas: `consent_documents_lifecycle.sql` (7): editar contenido publicado falla (`content_md`,
+  `purposes`, `title`); el borrador sí se edita; publicar una segunda versión con otra ya publicada choca
+  con el índice único; retirar la publicada sin reemplazo falla con el mensaje nuevo y no deja nada a
+  medias (v1.0 sigue `published` tras el intento); retirar v1.0 y publicar v1.1 en la misma transacción
+  sí se permite (termina habiendo exactamente una publicada); un borrador retirado directamente
+  (`draft → retired`) no dispara la restricción; permisos (`anon`/`authenticated` no escriben, `anon` sí
+  lee por la RLS que filtra a `published`).
+- **Rojo confirmado antes de implementar:** corrida manual de la prueba nueva contra 073+074+075 (sin la
+  077): las aserciones 1–3 pasaron (ya estaban cubiertas por lo existente en 073), la 4 falló con
+  `constraint "consent_documents_no_gap_on_retire" does not exist` — la razón correcta, porque la
+  restricción todavía no existía.
+- Gates: OK (typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e,
+  deno-check, deno-test, sql-ciclo-de-vida [incluida la prueba nueva], sql-guest-limit; db-reset SKIP
+  explícito); `docker ps` sin contenedores de gates después.
+- Desviaciones de SPEC: ninguna. TASKS.md pedía la migración siguiente disponible; se detectó que 076
+  (`learning_guest_limit`, ajena al módulo) ya ocupaba ese número, así que 077 es la primera libre.
+- Riesgos / pendientes detectados: (1) el seed de desarrollo (`load_seed_aviso.cjs`) sigue siendo un
+  script aparte, no una migración — mencionado en la reconciliación de T06 pero no listado como "Falta"
+  accionable; no se tocó. (2) `admin-consent` (T14) todavía no existe: hoy solo `service_role` puede
+  publicar/retirar `consent_documents` directamente por SQL; cuando T14 escriba esas acciones deberá
+  manejar el error de la restricción 077 (mensaje "sin aviso vigente") como un 409/422 legible para el
+  panel, no como un 500 genérico.
+- Porcentaje: estricto 7 de 28 = **25,0 %** (antes 21,4 %). Ponderado: T06 pasa de 55 % a 100 % →
+  1170/2800 = **≈ 41,8 %** (antes ≈ 40,2 %).

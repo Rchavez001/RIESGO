@@ -128,8 +128,10 @@ sql_ciclo_de_vida_in() {
   psql_in -d gates < "$MIGRATIONS/073_consent_module_foundation.sql"
   psql_in -d gates < "$MIGRATIONS/074_consent_evidence_unlink_and_stable_hash.sql"
   psql_in -d gates < "$MIGRATIONS/075_privacy_settings_versioning.sql"
+  psql_in -d gates < "$MIGRATIONS/077_consent_documents_no_gap_on_retire.sql"
   psql_in -d gates < "$TESTS/lifecycle.sql"
   psql_in -d gates < "$TESTS/settings_versioning.sql"
+  psql_in -d gates < "$TESTS/consent_documents_lifecycle.sql"
   psql_in -d gates < "$TESTS/admin_roles.sql"
 }
 
