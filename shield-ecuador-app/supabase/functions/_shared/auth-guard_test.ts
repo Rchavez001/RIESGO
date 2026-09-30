@@ -27,6 +27,7 @@ const baseClaims = (): JWTPayload => ({
   role: 'authenticated',
   email: 'ana@example.test',
   is_anonymous: false,
+  aal: 'aal2',
 })
 
 async function sign(claims: JWTPayload, opts: { key?: KeyLike; exp?: string | number; kid?: string; noExp?: boolean } = {}) {
@@ -173,6 +174,22 @@ Deno.test('los roles se consultan para el sub VERIFICADO, y nunca si el token es
 Deno.test('un claim de rol en el token no concede nada: el rol sale de admin_roles', async () => {
   const token = await sign({ ...baseClaims(), privacy_role: 'privacy_admin', app_metadata: { roles: ['privacy_admin'] } })
   await expectAuthError(() => requireRole(req(`Bearer ${token}`), ['privacy_admin'], options([])), 403, 'forbidden')
+})
+
+// T05.a (D-01): los roles del módulo exigen el segundo factor (TOTP) verificado en ESTA sesión.
+Deno.test('requireRole con sesión aal1 (sin TOTP) o sin claim aal → 403 mfa_required, sin consultar roles', async () => {
+  lookupCalls.length = 0
+  const aal1 = await sign({ ...baseClaims(), aal: 'aal1' })
+  await expectAuthError(() => requireRole(req(`Bearer ${aal1}`), ['privacy_admin'], options(['privacy_admin'])), 403, 'mfa_required')
+  const { aal: _omit, ...sinAal } = baseClaims()
+  const noAal = await sign(sinAal)
+  await expectAuthError(() => requireRole(req(`Bearer ${noAal}`), ['privacy_admin'], options(['privacy_admin'])), 403, 'mfa_required')
+  assertEquals(lookupCalls, [])
+})
+
+Deno.test('requireUser no exige TOTP: un usuario normal (aal1) sigue siendo un usuario', async () => {
+  const aal1 = await sign({ ...baseClaims(), aal: 'aal1' })
+  assertEquals((await requireUser(req(`Bearer ${aal1}`), options())).userId, USER_ID)
 })
 
 Deno.test('error al consultar admin_roles → falla cerrado (503 role_lookup_failed)', async () => {

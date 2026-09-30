@@ -5,7 +5,7 @@
 //   Nunca lee claims de un token sin verificar (a diferencia del decodificador ad hoc de funciones antiguas, H01).
 //   Solo acepta usuarios individuales: `role = authenticated` con `sub` UUID. Rechaza `service_role`, la clave `anon`
 //   y las sesiones anónimas (`is_anonymous`), aunque su firma sea válida.
-// - `requireRole(req, roles)`: tras `requireUser`, lee los roles en `admin_roles` (migración 073) con el JWT del propio
+// - `requireRole(req, roles)`: tras `requireUser`, exige `aal = aal2` (TOTP, D-01) y lee los roles en `admin_roles` (migración 073) con el JWT del propio
 //   usuario, bajo la política RLS `admin_roles_self_read`: el rol sale de la base, nunca de un claim. Falla cerrado.
 //
 // Claves: por defecto el JWKS del proyecto (`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`, claves asimétricas
@@ -38,7 +38,7 @@ export interface AuthGuardOptions {
 
 export type AuthErrorCode =
   | 'missing_token' | 'invalid_token' | 'token_expired' | 'not_user_token'
-  | 'anonymous_session' | 'forbidden' | 'role_lookup_failed' | 'auth_unavailable'
+  | 'anonymous_session' | 'mfa_required' | 'forbidden' | 'role_lookup_failed' | 'auth_unavailable'
 
 /** Error con estado HTTP. El `code` es estable y apto para el cliente: no incluye el token ni detalles de la verificación. */
 export class AuthError extends Error {
@@ -126,6 +126,9 @@ export async function requireRole(
   }
 
   const user = await requireUser(req, opts)
+  // D-01: los roles del módulo exigen el segundo factor (TOTP) verificado en esta sesión. `aal` lo pone Supabase Auth
+  // en el JWT (ya verificado arriba): `aal2` solo tras verificar un factor.
+  if (user.claims.aal !== 'aal2') throw new AuthError(403, 'mfa_required')
 
   let granted: string[]
   try {

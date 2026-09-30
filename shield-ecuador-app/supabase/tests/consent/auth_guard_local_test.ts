@@ -70,18 +70,13 @@ Deno.test('sesión anónima real del Auth local → 403 anonymous_session', asyn
   await expectAuthError(() => requireUser(req(session.access_token)), 403, 'anonymous_session')
 })
 
-Deno.test('requireRole con admin_roles real: sin rol → 403; con privacy_editor → OK; pide privacy_admin → 403', async () => {
+// T05.a: los roles exigen TOTP. Un token de solo contraseña del Auth local es `aal1` y se rechaza aunque haya rol.
+// (Roles con aal2 real, con un código TOTP de verdad: T05.b, cuando TOTP esté habilitado en config.toml.)
+Deno.test('requireRole con token real de solo contraseña (aal1) → 403 mfa_required, tenga o no rol', async () => {
   const u = await newUser('roles')
-  await expectAuthError(() => requireRole(req(u.token), ['privacy_editor']), 403, 'forbidden')
+  await expectAuthError(() => requireRole(req(u.token), ['privacy_editor']), 403, 'mfa_required')
   await call('/rest/v1/admin_roles', SERVICE, { user_id: u.id, role: 'privacy_editor' }, { Prefer: 'return=minimal' })
-  const ok = await requireRole(req(u.token), ['privacy_editor', 'privacy_admin'])
-  assertEquals([ok.userId, ok.roles], [u.id, ['privacy_editor']])
-  await expectAuthError(() => requireRole(req(u.token), ['privacy_admin']), 403, 'forbidden')
-})
-
-Deno.test('el rol de otra persona no se ve: RLS de admin_roles con el JWT del usuario', async () => {
-  const admin = await newUser('otra')
-  await call('/rest/v1/admin_roles', SERVICE, { user_id: admin.id, role: 'privacy_admin' }, { Prefer: 'return=minimal' })
-  const u = await newUser('mirona')
-  await expectAuthError(() => requireRole(req(u.token), ['privacy_admin']), 403, 'forbidden')
+  await expectAuthError(() => requireRole(req(u.token), ['privacy_editor']), 403, 'mfa_required')
+  // requireUser (usuarios normales) no exige TOTP
+  assertEquals((await requireUser(req(u.token))).userId, u.id)
 })

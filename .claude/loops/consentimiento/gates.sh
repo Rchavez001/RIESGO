@@ -82,7 +82,7 @@ panel_e2e() {
 # ── 3. Funciones (Deno) ──────────────────────────────────────────────────────────────────────────────────────────────
 deno_check() {
   $DENO check supabase/functions/secure-register-user/index.ts supabase/functions/get-consent-notice/index.ts \
-    supabase/functions/_shared/auth-guard.ts \
+    supabase/functions/_shared/auth-guard.ts supabase/functions/admin-consent/index.ts \
     ../.claude/loops/consentimiento/diag/diag-network-headers/index.ts
 }
 deno_test() {

@@ -413,3 +413,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.security-easm-scan]
 verify_jwt = false
+
+# Consent module (SEC-01): the gateway verifies the JWT, and the function verifies it again itself (_shared/auth-guard.ts:
+# signature against the project's JWKS, TOTP/aal2 and role from admin_roles). Explicit so it is never flipped by mistake.
+[functions.admin-consent]
+verify_jwt = true

@@ -65,6 +65,26 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     a `admin-consent`; las rutas del módulo no usan el proxy con service role.
   - **Aceptación:** una acción del módulo queda atribuida al `actor_id` del admin real;
     las credenciales Basic Auth compartidas ya no bastan para el módulo.
+  - **División (2026-09-29, antes de codificar):** la tarea abarca backend, proxy del panel y UI; se parte en dos.
+  - [x] **T05.a — Identidad individual: backend y proxy del panel** (hecha 2026-09-30, iteración 16)
+    - `auth-guard.ts`: `requireRole` exige `aal = aal2` (TOTP verificado) → 403 `mfa_required`.
+    - `admin-consent` (esqueleto; T14–T16 añaden el resto): `POST /session` con `requireRole` (cualquier rol del módulo)
+      que registra `admin.session_verified` en `admin_audit_log` con el `actor_id` real (la service role solo es transporte;
+      la bitácora no admite escrituras de `authenticated`). Falla cerrado si no puede registrar. `verify_jwt = true`.
+    - `central-admin-app/server.js`: rutas `/api/privacy/auth/*` (lista cerrada: token por contraseña/refresh, `user`,
+      `logout`, alta/desafío/verificación de factor; clave `anon`, nunca service role) y `/api/privacy/fn/admin-consent/*`
+      (JWT del admin en `X-Admin-Session` → `Authorization: Bearer`; sin él, 401 sin llegar a Supabase). El proxy con
+      service role rechaza (403) las tablas y RPC del módulo (ruta y query decodificadas, incluidos los embebidos de
+      PostgREST), la función `admin-consent` y todo `/api/auth/v1/` (no lo usa `app.js`; con service role permitiría
+      borrar el TOTP de un admin o generarle un enlace de acceso).
+    - **Aceptación:** pruebas negativas de cada ruta; la acción `admin.session_verified` queda con el `actor_id` del
+      token verificado; Basic Auth sola no alcanza ninguna tabla, RPC ni función del módulo.
+  - [ ] **T05.b — UI del panel: login individual con TOTP** (depende de T05.a)
+    - Pantalla de acceso del módulo (correo + contraseña), alta del factor TOTP (QR) si no existe, verificación del
+      código, identidad y roles visibles, cierre de sesión. Token solo en memoria (no `localStorage`).
+    - TOTP habilitado en `config.toml` local (`[auth.mfa.totp]`); confirmar que está habilitado en el proyecto hospedado.
+    - **Aceptación:** prueba punta a punta contra Supabase local con un código TOTP real: login → aal2 →
+      `admin.session_verified` con el `actor_id` del admin.
 
 ## Fase 2 · Modelo de datos
 

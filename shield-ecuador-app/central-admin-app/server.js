@@ -10,6 +10,9 @@ const adminUser = process.env.CENTRAL_ADMIN_USER || '';
 const adminPassword = process.env.CENTRAL_ADMIN_PASSWORD || '';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// Public by design (it ships in every frontend build). Used only by the consent-module routes below, never with the
+// service role: there the identity is the individual administrator's own Supabase Auth session (D-01, H08).
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const tpotService = createTpotService(getConfigFromEnv(process.env));
 const rateBuckets = new Map();
 const TPOT_RATE_LIMIT_PER_MIN = Number(process.env.TPOT_RATE_LIMIT_PER_MIN) || 80;
@@ -20,6 +23,29 @@ const STATIC_FILES = new Set(['index.html', 'app.js', 'styles.css', 'cyber-sense
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_FAILED_AUTH = 10; // per client and 10 minutes
 const failedAuth = new Map();
+
+// Consent module (T05.a, SEC-03, H08). The shared Basic Auth + service role proxy must not reach any of its tables,
+// RPCs or its function: otherwise anyone with the shared password could grant themselves a privacy role or read the
+// evidence. Checked on the decoded path AND query (PostgREST decodes %5F and embeds related tables in `select`).
+// Prefixes cover the module's future tables too; nothing else in the console uses these names.
+const CONSENT_MODULE_RE = new RegExp(
+  '(^|[^a-z0-9_])(' +
+    '(consent_|privacy_|admin_roles|admin_audit|data_subject_)[a-z0-9_]*' +
+    '|has_privacy_role|my_consent_state|unlink_user_consent_evidence|verify_audit_chain|verify_consent_chain|next_case_number' +
+  ')($|[^a-z0-9_])' +
+  '|(^|[^a-z0-9_-])admin-consent($|[^a-z0-9_-])'
+);
+// The module's own routes. Auth: a closed list of what an administrator's login and TOTP need, sent with the anon key
+// (never the service role); nothing that creates users, sends links or removes factors.
+const PRIVACY_AUTH_ROUTES = [
+  ['POST', /^\/token\?grant_type=(password|refresh_token)$/],
+  ['GET', /^\/user$/],
+  ['POST', /^\/logout$/],
+  ['POST', /^\/factors$/],
+  ['POST', /^\/factors\/[0-9a-f-]{36}\/(challenge|verify)$/],
+];
+const PRIVACY_FN_RE = /^\/fn\/admin-consent(\/[A-Za-z0-9_-]+)*(\?[A-Za-z0-9_=&.-]*)?$/;
+const JWT_SHAPE_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 // script-src has no 'unsafe-inline': inline event handlers were replaced by data-act delegation (a real XSS sink).
 // puter.js is allowed because the news agent loads it on demand; its API calls need connect-src.
@@ -118,12 +144,32 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if ((req.url || '').startsWith('/api/privacy/')) {
+    handlePrivacy(req, res);
+    return;
+  }
+
+  // Auth with the service role (admin API: create users, generate sign-in links, delete MFA factors) is closed: the
+  // console never used it, and it let the shared password impersonate an individual administrator (H08).
+  if ((req.url || '').startsWith('/api/auth/v1/')) {
+    sendJson(res, 403, { error: 'Forbidden' });
+    return;
+  }
+
   if (
     (req.url || '').startsWith('/api/rest/v1/') ||
-    (req.url || '').startsWith('/api/auth/v1/') ||
     (req.url || '').startsWith('/api/storage/v1/') ||
     (req.url || '').startsWith('/api/functions/v1/')
   ) {
+    const surface = decodedLower(req.url || '');
+    if (surface === null) {
+      sendJson(res, 400, { error: 'Bad request' });
+      return;
+    }
+    if (CONSENT_MODULE_RE.test(surface)) {
+      sendJson(res, 403, { error: 'module_requires_individual_session' });
+      return;
+    }
     proxySupabase(req, res);
     return;
   }
@@ -213,9 +259,76 @@ async function proxySupabase(req, res) {
     return;
   }
 
-  const originalUrl = req.url || '';
-  const targetPath = originalUrl.replace(/^\/api/, '');
-  const targetUrl = `${supabaseUrl}${targetPath}`;
+  const targetPath = (req.url || '').replace(/^\/api/, '');
+  await relay(req, res, `${supabaseUrl}${targetPath}`, {
+    apikey: supabaseServiceRoleKey,
+    Authorization: `Bearer ${supabaseServiceRoleKey}`,
+    'Content-Type': req.headers['content-type'] || 'application/json',
+    Prefer: req.headers.prefer || '',
+  });
+}
+
+// Consent-module routes: the administrator's own Supabase Auth session travels in X-Admin-Session (the Authorization
+// header already carries the console's Basic Auth) and is forwarded as the bearer, with the anon key. The service role
+// never goes out on these routes; the admin-consent function verifies the JWT, TOTP and role itself.
+async function handlePrivacy(req, res) {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    sendJson(res, 503, { error: 'Admin backend is not configured' });
+    return;
+  }
+  const rest = (req.url || '').slice('/api/privacy'.length);
+  const session = String(req.headers['x-admin-session'] || '');
+
+  if (rest.startsWith('/auth/')) {
+    const sub = rest.slice('/auth'.length);
+    if (!PRIVACY_AUTH_ROUTES.some(([method, re]) => method === req.method && re.test(sub))) {
+      sendJson(res, 404, { error: 'Not found' });
+      return;
+    }
+    if (session && !JWT_SHAPE_RE.test(session)) {
+      sendJson(res, 401, { error: 'admin_session_required' });
+      return;
+    }
+    await relay(req, res, `${supabaseUrl}/auth/v1${sub}`, anonHeaders(session));
+    return;
+  }
+
+  if (PRIVACY_FN_RE.test(rest)) {
+    if (!JWT_SHAPE_RE.test(session)) {
+      sendJson(res, 401, { error: 'admin_session_required' });
+      return;
+    }
+    await relay(req, res, `${supabaseUrl}/functions/v1${rest.slice('/fn'.length)}`, anonHeaders(session));
+    return;
+  }
+
+  sendJson(res, 404, { error: 'Not found' });
+}
+
+function anonHeaders(session) {
+  return {
+    apikey: supabaseAnonKey,
+    Authorization: `Bearer ${session || supabaseAnonKey}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+/** Lower-cased URL decoded until stable (max 3 rounds, against double encoding); null if it is not valid escaping. */
+function decodedLower(url) {
+  let s = url;
+  try {
+    for (let i = 0; i < 3; i += 1) {
+      const next = decodeURIComponent(s);
+      if (next === s) break;
+      s = next;
+    }
+  } catch {
+    return null;
+  }
+  return s.toLowerCase();
+}
+
+async function relay(req, res, targetUrl, headers) {
   let body;
   try {
     body = await readBody(req);
@@ -228,23 +341,18 @@ async function proxySupabase(req, res) {
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        apikey: supabaseServiceRoleKey,
-        Authorization: `Bearer ${supabaseServiceRoleKey}`,
-        'Content-Type': req.headers['content-type'] || 'application/json',
-        Prefer: req.headers.prefer || '',
-      },
+      headers,
       body: ['GET', 'HEAD'].includes(req.method || 'GET') ? undefined : body,
     });
 
     const responseBody = Buffer.from(await response.arrayBuffer());
-    const headers = {
+    const responseHeaders = {
       'Content-Type': response.headers.get('content-type') || 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
     };
     const contentRange = response.headers.get('content-range'); // PostgREST exact counts (Prefer: count=exact)
-    if (contentRange) headers['Content-Range'] = contentRange;
-    res.writeHead(response.status, headers);
+    if (contentRange) responseHeaders['Content-Range'] = contentRange;
+    res.writeHead(response.status, responseHeaders);
     res.end(responseBody);
   } catch {
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });

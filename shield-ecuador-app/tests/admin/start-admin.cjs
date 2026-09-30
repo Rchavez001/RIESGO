@@ -20,13 +20,14 @@ http.createServer((req, res) => {
     // Tests run in parallel and share this upstream: look a request up by a unique marker instead of "the last one".
     const marker = decodeURIComponent(req.url.slice('/__find?contains='.length))
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(recent.find((r) => r.url.includes(marker)) || null))
+    res.end(JSON.stringify(recent.find((r) => r.url.includes(marker) || r.body.includes(marker)) || null))
     return
   }
   const chunks = []
   req.on('data', (c) => chunks.push(c))
   req.on('end', () => {
-    last = { method: req.method, url: req.url, headers: req.headers, bytes: Buffer.concat(chunks).length }
+    const raw = Buffer.concat(chunks)
+    last = { method: req.method, url: req.url, headers: req.headers, bytes: raw.length, body: raw.subarray(0, 2048).toString('utf8') }
     recent.unshift(last)
     if (recent.length > 300) recent.pop()
     const url = req.url
@@ -67,6 +68,7 @@ const child = spawn(process.execPath, [path.join(__dirname, '..', '..', 'central
     CENTRAL_ADMIN_PASSWORD: 'test-pass-123',
     SUPABASE_URL: `http://127.0.0.1:${UPSTREAM_PORT}`,
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+    SUPABASE_ANON_KEY: 'test-anon-key',
     TPOT_RATE_LIMIT_PER_MIN: '5000', // the suite loads the T-Pot views from every device profile in parallel
   },
 })
