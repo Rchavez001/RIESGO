@@ -588,3 +588,66 @@ En el resultado habrá IP reales. No me pegues las IP completas: basta con decir
   que asuman lo contrario.
 - Porcentaje: estricto 8 de 28 = **28,6 %** (antes 25,0 %). Ponderado: T07 pasa de 85 % a 100 % →
   1185/2800 = **≈ 42,3 %** (antes ≈ 41,8 %).
+
+## Nota — 2026-09-30 — Auditoría completa de gates.sh: archivos SQL, otras puertas, autoprueba
+
+### 1) Cada archivo de prueba SQL, confirmado por separado (misma secuencia que gates.sh, mismo contenedor)
+Los 10 archivos que corre `sql-ciclo-de-vida` (`prereqs.sql`, las 4 migraciones 073/074/075/077, y los 4
+archivos de prueba) y los 6 que corre `sql-guest-limit` se ejecutaron uno por uno, en el mismo orden y
+misma base que usa `gates.sh`, con salida completa (sin `-o /dev/null`): **los 16 terminaron en `rc=0`**.
+En particular:
+- `admin_roles.sql` (T04): OK.
+- `guest_limit.sql` (INV-SEC): OK.
+- `consent_documents_lifecycle.sql` (T06): OK — con el fixture `cdl-1.0`/`1.1`/`1.2` de la corrección de
+  la iteración 21 (antes del nombre de fixture actual, esta prueba SÍ fallaba de verdad; ver la nota
+  anterior de esta bitácora).
+- Las de T07 (bloques nuevos en `lifecycle.sql` + `consent_records_concurrency_check` en `gates.sh`): OK.
+
+### 2) Revisión de las demás puertas: mismo defecto (comandos encadenados sin `&&` o sin capturar rc)
+Encontradas y corregidas dos más, mismo patrón que el de la iteración anterior:
+- **`deno_test()`**: dos invocaciones de `$DENO test` sueltas, sin `&&` — un fallo en la primera (las
+  pruebas de las funciones) quedaba oculto si la segunda (la función de diagnóstico) pasaba. Corregido
+  con `&&`.
+- **`lint_frontend()`**: `out="$(... 2>&1 || true)"` descartaba el código de salida real de eslint; si
+  eslint fallaba por una razón AJENA a hallazgos de lint (config rota, binario ausente, crash), la
+  salida no traía el resumen "N problems", `n` caía a `0` por el `${n:-0}`, y la puerta reportaba
+  "NOTA: lint con 0 problemas" — un fallo real disfrazado de éxito. Corregido: se captura el código de
+  salida real; si no hay resumen de problemas reconocible Y el código no es 0, es un fallo duro de la
+  puerta, no "0 problemas".
+- Revisadas y SIN el defecto (ya usaban `&&`, un solo comando, o `rc=$?` explícito): `typecheck_frontend`,
+  `unit_frontend`, `panel_unit`, `panel_e2e`, `deno_check`, `with_pg`, `db_reset`, y las dos funciones SQL
+  ya corregidas en la nota anterior.
+
+### 3) Modo `GATES_SELFTEST=1`
+Nuevo: sustituye cada una de las 10 puertas (las 9 habituales + `db-reset`, que bajo este flag corre
+también) por una variante que inyecta un fallo controlado **real** (ejecuta la herramienta de verdad
+contra una entrada rota — un archivo `.ts`/`.test.js`/`.spec.ts` temporal con un error genuino, una
+sentencia SQL `SELECT 1/0`, o —para `panel_unit`, cuyo `npm test` corre un único archivo fijo sin
+descubrimiento— un `throw` añadido al final de ese archivo real, con restauración exacta después,
+incluso si el script se interrumpe). Se espera que las 10 reporten `FAIL`; si alguna reporta `OK`, la
+autoprueba falla con código != 0 y señala cuál.
+
+**Resultado, `GATES_SELFTEST=1 bash gates.sh` (corrida completa):**
+```
+GATE typecheck-frontend: FAIL (8s)
+GATE lint-frontend:      FAIL (5s)
+GATE unit-frontend:      FAIL (10s)
+GATE panel-unit:         FAIL (1s)
+GATE panel-e2e:          FAIL (111s)
+GATE deno-check:         FAIL (3s)
+GATE deno-test:          FAIL (4s)
+GATE sql-ciclo-de-vida:  FAIL (4s)
+GATE sql-guest-limit:    FAIL (4s)
+GATE db-reset:           FAIL (0s)
+AUTOPRUEBA OK: las 10 puertas detectaron su fallo inyectado y reportaron FAIL.
+```
+Código de salida de la autoprueba: `0` (éxito de la autoprueba misma). Verificado además que el modo
+normal (sin `GATES_SELFTEST`) sigue pasando de verdad después de estos cambios (corrida completa: 9 OK,
+`db-reset` SKIP como siempre), y que cada archivo/línea temporal de la autoprueba se limpia sola —
+`git status` queda igual que antes de correrla, sin diffs residuales en ningún archivo tocado
+(`tpotService.test.js` restaurado byte a byte).
+
+### 4) ¿Alguna tarea cerrada con pruebas que fallan de verdad?
+Ninguna, aparte de la ya encontrada y corregida en la nota anterior (T06, iteración 19 → corregida en la
+misma iteración 21 en la que se descubrió). El punto 1 de esta auditoría confirma que las pruebas de T04,
+T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`.
