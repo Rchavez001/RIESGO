@@ -15,6 +15,7 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 | `.claude/loops/consentimiento/DECISIONS.md` | Preguntas que requieren decisión humana y decisiones ya tomadas. |
 | `.claude/loops/consentimiento/gates.sh` | Comandos de verificación del repo (lo creas en T00). |
 | `.claude/loops/consentimiento/seed/aviso_consentimiento_v1.0.md` | Texto semilla del aviso v1.0. |
+| `.claude/loops/consentimiento/PLAN_PRODUCCION_RELEASE.md` | Plan de release a producción: TODAS las migraciones aún sin aplicar, con orden, dependencias y verificación posterior de cada una. Se actualiza en cada iteración que cree una migración (ver REGLAS DURAS). |
 
 ---
 
@@ -97,6 +98,12 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 - Nunca modifiques una migración existente. Crea la siguiente disponible: detecta el número mayor
   en `supabase/migrations/` (la evaluación reporta hasta 072 con saltos) y usa el siguiente.
 - Cada migración debe aplicar limpia con `supabase db reset` desde cero.
+- **Toda iteración que cree una migración nueva debe actualizar
+  `.claude/loops/consentimiento/PLAN_PRODUCCION_RELEASE.md` en el MISMO commit**: añadir la migración a
+  su tabla resumen (número, de qué depende, qué cambia, verificación posterior) y a las secciones de
+  aplicar/verificar/reversa. El plan debe reflejar SIEMPRE el conjunto completo de migraciones aún sin
+  aplicar en producción, no solo la de esta iteración. (2026-09-30: el plan llevaba solo 074–075 mientras
+  el repo ya tenía 076 y 077 sin documentar; de ahí esta regla.)
 
 **Seguridad (derivadas de la evaluación ISO)**
 - **H01:** Prohibido usar `decodeJwtRole` o cualquier decodificación de JWT sin verificar firma
