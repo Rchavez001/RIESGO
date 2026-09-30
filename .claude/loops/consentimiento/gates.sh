@@ -137,9 +137,11 @@ sql_ciclo_de_vida_in() {
   psql_in -d gates < "$MIGRATIONS/074_consent_evidence_unlink_and_stable_hash.sql" && \
   psql_in -d gates < "$MIGRATIONS/075_privacy_settings_versioning.sql" && \
   psql_in -d gates < "$MIGRATIONS/077_consent_documents_no_gap_on_retire.sql" && \
+  psql_in -d gates < "$MIGRATIONS/078_data_subject_requests_case_numbers_and_status_update.sql" && \
   psql_in -d gates < "$TESTS/lifecycle.sql" && \
   psql_in -d gates < "$TESTS/settings_versioning.sql" && \
   psql_in -d gates < "$TESTS/consent_documents_lifecycle.sql" && \
+  psql_in -d gates < "$TESTS/data_subject_requests_lifecycle.sql" && \
   psql_in -d gates < "$TESTS/admin_roles.sql" && \
   consent_records_concurrency_check "$container"
 }

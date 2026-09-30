@@ -651,3 +651,42 @@ normal (sin `GATES_SELFTEST`) sigue pasando de verdad después de estos cambios 
 Ninguna, aparte de la ya encontrada y corregida en la nota anterior (T06, iteración 19 → corregida en la
 misma iteración 21 en la que se descubrió). El punto 1 de esta auditoría confirma que las pruebas de T04,
 T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`.
+
+## Iteración 22 — 2026-09-30 — T08 cierre: numeración de casos por año y actualización acotada
+- Cambios: `supabase/migrations/078_data_subject_requests_case_numbers_and_status_update.sql` (nuevo);
+  `.claude/loops/consentimiento/gates.sh` (078 y `data_subject_requests_lifecycle.sql` en la secuencia de
+  `sql-ciclo-de-vida`); `PLAN_PRODUCCION_RELEASE.md` (fila de 078 en la tabla resumen, orden de aplicación
+  074→...→078, secciones 1/2/3/4/5/6 y "Orden del release único" actualizadas — regla del `PROMPT.md`).
+- Diseño: `next_case_number()` pasa de una secuencia global (el prefijo cambiaba de año, el número nunca)
+  a una tabla `data_subject_request_counters (year PK, last_number)` con `INSERT ... ON CONFLICT (year) DO
+  UPDATE ... RETURNING` — atómico bajo concurrencia (upsert con bloqueo de fila), cada año empieza en
+  `000001` porque es una fila nueva en la tabla, no una operación sobre la del año anterior. La secuencia
+  vieja (`data_subject_request_seq`) se borra: sin otras referencias en el repo (`grep` confirmado antes).
+  `update_data_subject_request_status()` sigue el mismo patrón que `unlink_user_consent_evidence` (074):
+  bandera de sesión (`app.allow_case_status_update`) activada solo dentro de la función, alrededor del
+  único `UPDATE` permitido, y bitácora en la misma transacción (si falla el `INSERT` a `admin_audit_log`,
+  se deshace todo). El trigger bloquea `DELETE` siempre (sin excepción, a diferencia de `consent_records`
+  que si tiene la retención) y, aun con la bandera, cualquier columna que no sea `status`/`resolved_at`/
+  `resolution_note_ciphertext`.
+- Pruebas añadidas: `data_subject_requests_lifecycle.sql` (10): dos llamadas seguidas dan `000001`/`000002`
+  del año en curso; un año distinto (2019, sembrado a mano con contador en 999) no interfiere — la
+  siguiente llamada real da `000003`, no `001000` (así se probó la independencia por año sin necesitar
+  mockear `now()`); `UPDATE`/`DELETE` directos (sin la función) fallan con el mensaje de cada trigger;
+  la función cambia `status` a `en_proceso` (sin resolver) y a `atendida` (con `resolved_at` y la nota
+  cifrada), 2 filas en `admin_audit_log`; un estado fuera del `CHECK` de la tabla se rechaza (la función
+  no valida aparte, confía en el `CHECK` — mismo patrón que el resto del módulo); una solicitud inexistente
+  da error claro y no deja bitácora huérfana; con la bandera puesta a mano, cambiar otra columna igual
+  falla; permisos (`service_role` sí ejecuta la función, `authenticated`/`anon` no, ni leen la tabla
+  directamente); `verify_audit_chain()` íntegra al final.
+- **Rojo confirmado antes de implementar:** contra 073+074+075+077 (sin 078), la prueba falla en el primer
+  paso que usa la tabla nueva: `relation "public.data_subject_request_counters" does not exist` — la razón
+  correcta, porque la migración aún no existía.
+- Gates: OK (typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e,
+  deno-check, deno-test, sql-ciclo-de-vida [incluida la prueba nueva], sql-guest-limit; db-reset SKIP
+  explícito); `docker ps` sin contenedores de gates después.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. `data_subject_request_counters` no tiene política RLS
+  propia más allá del `REVOKE ALL` de `authenticated`/`anon` (igual que las demás tablas internas del
+  módulo, pensada para leerse/escribirse solo a través de las funciones `SECURITY DEFINER`).
+- Porcentaje: estricto 9 de 28 = **32,1 %** (antes 28,6 %). Ponderado: T08 pasa de 55 % a 100 % →
+  1230/2800 = **≈ 43,9 %** (antes ≈ 42,3 %).
