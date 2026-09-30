@@ -5,7 +5,7 @@
 #
 #   bash .claude/loops/consentimiento/gates.sh
 #   GATES_ONLY="deno-test sql-ciclo-de-vida" bash …/gates.sh     # solo algunas puertas
-#   GATES_DB_RESET=1 bash …/gates.sh                              # incluye `supabase db reset` (necesita el stack local)
+#   GATES_DB_RESET=1 bash …/gates.sh                              # incluye la puerta db-reset (necesita `supabase start` en marcha)
 #   GATES_SELFTEST=1 bash …/gates.sh                              # autoprueba: cada puerta inyecta su propio fallo
 #                                                                  # controlado y se espera que TODAS reporten FAIL
 #
@@ -202,8 +202,75 @@ sql_guest_limit_in() {
   psql_in -d gt < "$LTESTS/guest_limit.sql"
 }
 
-# ── 5. `supabase db reset` (recrea la base LOCAL desde cero) ─────────────────────────────────────────────────────────
-db_reset() { supabase db reset --yes; }
+# ── 5. `db-reset`: "baseline + pendientes" (D-13, T00-extra-exec). NO usa `supabase db reset`:
+# las migraciones 001-072 no se reproducen desde cero (004 define `is_admin()` antes de crear la
+# columna que usa, en cualquier versión de Postgres; ver D-13 en DECISIONS.md). En su lugar, contra
+# el stack de `supabase start` YA EN MARCHA (que provee auth/storage/realtime/extensiones
+# gestionadas): reinicia solo el esquema `public`, carga `supabase/baseline/prod_schema.sql`
+# (esquema de producción tras 001-073, revisado y sin secretos), verifica que el resultado coincide
+# con ese archivo (diff vacío salvo ruido de formato conocido), aplica en orden las migraciones
+# aún pendientes de producción (hoy 074-078, ver PLAN_PRODUCCION_RELEASE.md — mantener esta lista en
+# el mismo commit que actualice ese plan) y corre las aserciones de esquema/permisos del ensayo de
+# release. Es destructiva para el esquema `public` de la base local (igual que antes con
+# `supabase db reset`): por eso sigue tras GATES_DB_RESET=1.
+DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+BASELINE="supabase/baseline/prod_schema.sql"
+PENDING_MIGRATIONS=(
+  074_consent_evidence_unlink_and_stable_hash
+  075_privacy_settings_versioning
+  076_learning_guest_limit
+  077_consent_documents_no_gap_on_retire
+  078_data_subject_requests_case_numbers_and_status_update
+)
+
+# No-op salvo bajo GATES_SELFTEST, que la sustituye por una que rompe el esquema a propósito
+# justo después de cargar el baseline, para probar que la comparación de abajo sí lo detecta.
+db_reset_corrupt_hook() { :; }
+
+# Ojo de orden: psql 10.x dejar de reconocer opciones tras el primer argumento posicional (aquí, la
+# URI de conexión) y las reporta como "argumento extra" en vez de aplicarlas — las opciones SIEMPRE
+# van antes de la URI, nunca después.
+psql_db() { psql -v ON_ERROR_STOP=1 -q "$@" "$DB_URL"; }
+
+db_reset() {
+  if ! psql -q -c 'select 1' "$DB_URL" >/dev/null 2>&1; then
+    echo "no se pudo conectar a $DB_URL — ¿está \`supabase start\` en marcha?"
+    return 1
+  fi
+  psql_db -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;' && \
+  psql_db -o /dev/null -f "$BASELINE" && \
+  db_reset_corrupt_hook && \
+  db_reset_verify_baseline_diff && \
+  db_reset_apply_pending && \
+  psql_db -o /dev/null -f "$TESTS/baseline_pending_migrations.sql"
+}
+
+# El pg_dump LOCAL añade 2 líneas que el de producción no trae (`CREATE SCHEMA IF NOT EXISTS
+# "public"` + `ALTER SCHEMA "public" OWNER TO "postgres"`, boilerplate del propio pg_dump) y
+# antepone un `REVOKE USAGE ON SCHEMA "public" FROM PUBLIC` donde producción tenía un `GRANT USAGE
+# ON SCHEMA "public" TO "postgres"` explícito (misma ACL resultante, forma distinta de expresarla:
+# postgres ya tiene acceso por ser superusuario en cualquiera de las dos). Documentado también en
+# la cabecera de `prod_schema.sql`. Se descartan esas líneas de AMBOS lados antes de comparar;
+# cualquier otra diferencia (tabla, columna, función, política, trigger) hace fallar la puerta.
+db_reset_verify_baseline_diff() {
+  local dump="$LOGS/db-reset-dump.sql"
+  supabase db dump --local -s public -f "$dump" >/dev/null 2>&1 || { echo "\`supabase db dump --local\` falló"; return 1; }
+  local strip='/^CREATE SCHEMA IF NOT EXISTS "public";$/d; /^ALTER SCHEMA "public" OWNER TO "postgres";$/d; /^GRANT USAGE ON SCHEMA "public" TO "postgres";$/d; /^REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;$/d'
+  grep -v '^--' "$dump" | grep -v '^[[:space:]]*$' | sed -E "$strip" > "$LOGS/db-reset-dump.clean.sql"
+  grep -v '^--' "$BASELINE" | grep -v '^[[:space:]]*$' | sed -E "$strip" > "$LOGS/db-reset-baseline.clean.sql"
+  if ! diff -u "$LOGS/db-reset-baseline.clean.sql" "$LOGS/db-reset-dump.clean.sql" > "$LOGS/db-reset-diff.log"; then
+    echo "el esquema recién cargado no coincide con $BASELINE (más allá del ruido de formato documentado en su cabecera):"
+    cat "$LOGS/db-reset-diff.log"
+    return 1
+  fi
+}
+
+db_reset_apply_pending() {
+  local m
+  for m in "${PENDING_MIGRATIONS[@]}"; do
+    psql_db -o /dev/null -f "$MIGRATIONS/$m.sql" || { echo "migración pendiente $m falló"; return 1; }
+  done
+}
 
 # ── 6. Autoprueba de las propias puertas: GATES_SELFTEST=1 sustituye cada función de verificación por una
 # variante que inyecta un fallo controlado (real: ejecuta la herramienta de verdad contra una entrada rota,
@@ -304,7 +371,11 @@ SELFTEST_SPEC
     psql_in -d gt -c "SELECT 1/0;"
   }
 
-  db_reset() { false; }
+  # Fallo real, no un atajo: rompe el esquema justo después de cargar el baseline (columna extra
+  # en una tabla real) y deja que la comparación de verdad lo detecte.
+  db_reset_corrupt_hook() {
+    psql_db -c 'ALTER TABLE public.app_secrets ADD COLUMN __gates_selftest_broken boolean;'
+  }
 fi
 
 gate typecheck-frontend  typecheck_frontend
@@ -319,7 +390,7 @@ gate sql-guest-limit     sql_guest_limit
 if [[ "${GATES_DB_RESET:-0}" == "1" || "${GATES_SELFTEST:-0}" == "1" ]]; then
   gate db-reset db_reset
 else
-  skip db-reset "opt-in: GATES_DB_RESET=1 y stack local en marcha; ver línea base: las migraciones antiguas no se reproducen desde cero en PG17 (004)"
+  skip db-reset "opt-in: GATES_DB_RESET=1 y \`supabase start\` en marcha; carga supabase/baseline/prod_schema.sql (D-13) + migraciones 074-078, es destructiva para el esquema public local"
 fi
 
 echo

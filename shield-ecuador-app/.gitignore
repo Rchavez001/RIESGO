@@ -21,6 +21,7 @@ node_modules/
 # Local provider state
 .gcloud-config/
 supabase/.temp/
+supabase/.branches/
 
 # Runtime logs and archives
 *.log

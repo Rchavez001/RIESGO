@@ -750,3 +750,80 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
   hasta que un humano decida D-13 y, si es la opción A, entregue el dump de producción.
 - Porcentaje: sin cambio (T00-extra es una tarea `-extra`, no cuenta en los 28 numerados; sigue en 32,1 % / ≈ 43,9 %,
   igual que la iteración 22).
+
+## Iteración 24 — 2026-09-30 — T00-extra-exec: baseline de producción (D-13, opción A') y puerta `db-reset`
+- **D-13 decidida por la persona responsable (opción A'):** el dump se guarda FUERA de `supabase/migrations/`, en
+  `supabase/baseline/prod_schema.sql`; **no se archiva ni se modifica ningún archivo de `supabase/migrations/`**
+  (001–072 siguen donde estaban) — a diferencia de la opción A original de T00-extra-exec, que proponía archivarlos.
+  El dump (`baseline_prod_2026-09-30.sql`, 184 KB / 5314 líneas) lo generó la persona responsable fuera de esta sesión
+  (`supabase db dump --schema-only --linked`, solo lectura) desde su carpeta personal; esta sesión no tuvo ni tiene
+  credenciales de producción.
+- **Revisión del dump (paso 1, antes de versionar nada):**
+  - **Secretos: 0.** Búsqueda de patrones (claves, tokens, JWT `eyJ...`, `sk_live`/`sk_test`, `AKIA...`, bloques
+    `-----BEGIN`, base64/hex largos en `DEFAULT`, correos personales) sin resultados. Lo único relacionado con secretos
+    son REFERENCIAS por nombre a Supabase Vault (`app_secrets.secret_id`, `get_decrypted_secret(secret_id)`,
+    `set_provider_secret(...)`, `cron_shared_secret` dentro de `dispatch_news_agent`/`dispatch_security_*`): los
+    valores reales viven solo en Vault, nunca en el esquema.
+  - **Datos personales: 0** (dump `--schema-only`, sin filas; los `DEFAULT` revisados uno por uno son enums/JSON
+    vacíos, sin PII).
+  - **Roles del sistema:** el dump no trae `CREATE ROLE`/`ALTER ROLE` (el propio `--schema-only` no los incluye); nada
+    que quitar. Confirmado además que `anon`/`authenticated`/`service_role`/`postgres` ya existen en un `supabase
+    start` real antes de cargar nada.
+  - **`auth`/`storage`/`realtime`:** el dump no define esos esquemas (solo referencia `auth.users`, `auth.uid()`,
+    `auth.role()`, `storage.buckets`, ya provistos por `supabase start`). Se quitó 1 línea real de ese tipo:
+    `ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres"` (objeto de replicación gestionado por el servicio
+    Realtime, no por este módulo).
+  - **Extensiones gestionadas:** se quitaron las 6 líneas `CREATE EXTENSION IF NOT EXISTS` (`pg_cron`, `pg_net`,
+    `pg_stat_statements`, `pgcrypto`, `supabase_vault`, `uuid-ossp`). Verificado contra un `supabase start` real
+    (`\dx` antes de cargar cualquier cosa): `pg_net`, `pg_stat_statements`, `pgcrypto`, `supabase_vault` y `uuid-ossp`
+    ya están instaladas de fábrica. `pg_cron` NO la provee `supabase start` (producción la instaló en `pg_catalog`, no
+    en `extensions`, donde la crea la migración 037 local) — pero ningún objeto del dump ni de 074–078 usa el esquema
+    `cron`, así que se omite sin reemplazo en vez de arrastrar esa discrepancia.
+  - Todo lo anterior queda documentado también en la cabecera del propio `supabase/baseline/prod_schema.sql`.
+- **Puerta `db-reset` reescrita** (`gates.sh`): ya NO llama a `supabase db reset` (que sigue sin poder reproducir
+  001–072 desde cero, D-13). Contra el stack de `supabase start` YA EN MARCHA: `DROP SCHEMA public CASCADE; CREATE
+  SCHEMA public;`, carga `supabase/baseline/prod_schema.sql`, compara el resultado contra ese archivo
+  (`supabase db dump --local -s public` + diff, tolerando solo el ruido de formato documentado en la cabecera del
+  baseline), aplica en orden 074→075→076→077→078 (lista fija en `gates.sh`, a mantener junto con
+  `PLAN_PRODUCCION_RELEASE.md`) y corre `supabase/tests/consent/baseline_pending_migrations.sql` (nuevo: aserciones de
+  esquema/permisos del ensayo de release — cadenas vacías, `is_current` ausente, permisos de
+  `unlink_user_consent_evidence`/`update_data_subject_request_status`, RLS de `privacy_email_verifications`, trigger
+  077 diferible, `GUEST_LIMIT_REACHED` en 076, `next_case_number()` = `CD-<año>-000001` desde un contador en cero). Se
+  queda tras `GATES_DB_RESET=1` (sigue siendo destructiva para el `public` local, igual que antes).
+  `db_reset_corrupt_hook` (no-op normalmente) se sustituye bajo `GATES_SELFTEST=1` por una que rompe el esquema de
+  verdad (columna extra en `app_secrets`) justo después de cargar el baseline, para probar que la comparación de
+  abajo detecta un desvío real, no un atajo.
+  **Hallazgo de entorno (no relacionado con el diseño):** `psql` 10.7 (el que hay en el PATH de esta máquina) deja de
+  reconocer opciones (`-v`, `-q`, `-c`, `-f`) si aparecen DESPUÉS de la URI de conexión en la línea de comandos (las
+  reporta como "argumento extra" y las ignora, sin fallar con error — silenciosamente ejecuta solo `psql` sin
+  opciones). Todas las llamadas de la puerta nueva ponen las opciones ANTES de la URI (`psql_db()`, helper nuevo).
+- **Verificación (paso 4, obligatoria):**
+  - Baseline cargado limpio sobre un `supabase start` real (Postgres 17 local): sin errores.
+  - `supabase db dump --local -s public` del resultado, comparado con `supabase/baseline/prod_schema.sql`: coinciden
+    salvo 2 líneas de ruido de herramienta (`CREATE SCHEMA IF NOT EXISTS "public"` + `ALTER SCHEMA "public" OWNER TO
+    "postgres"` que el `pg_dump` LOCAL añade y el de producción no; `REVOKE USAGE ON SCHEMA "public" FROM PUBLIC` que
+    antepone a sus `GRANT` donde producción tenía un `GRANT ... TO "postgres"` explícito — misma ACL resultante).
+    Ninguna diferencia de tabla, columna, función, política ni trigger.
+  - Las 5 migraciones pendientes (074–078) se aplicaron limpias y en orden sobre ese esquema (sin errores) — eso es el
+    ensayo del release.
+- Cambios: `supabase/baseline/prod_schema.sql` (nuevo); `.claude/loops/consentimiento/gates.sh` (puerta `db-reset`
+  reescrita + `db_reset_corrupt_hook` en `GATES_SELFTEST` + mensajes de ayuda/`SKIP` actualizados);
+  `supabase/tests/consent/baseline_pending_migrations.sql` (nuevo); `shield-ecuador-app/.gitignore`
+  (`supabase/.branches/`, metadata local de `supabase start`/branching); `TASKS.md` (T00-extra-exec `[x]`); este
+  archivo. **`supabase/migrations/` sin tocar** (confirmado con `git status` antes de commitear).
+- Pruebas añadidas: `supabase/tests/consent/baseline_pending_migrations.sql` (17 aserciones sobre 074–078 aplicadas
+  sobre el baseline).
+- Gates: **OK completo** (`bash gates.sh`: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend,
+  panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit; `db-reset` SKIP por defecto, como
+  antes). Con `GATES_DB_RESET=1 GATES_ONLY=db-reset`: **OK**. Con `GATES_SELFTEST=1` completo (las 10 puertas): **OK**
+  — `db-reset` detecta su fallo inyectado por la razón correcta (columna extra en `app_secrets` rompe el diff contra
+  el baseline). Al terminar, se dejó el stack local en el estado canónico (baseline + 074–078 aplicadas, sin la
+  columna rota de la autoprueba).
+- Desviaciones de SPEC: ninguna (tarea fuera de la numeración SPEC). Desviación respecto al enunciado ORIGINAL de
+  T00-extra-exec (que describía la opción A: archivar 001–072 y crear `000_baseline_schema.sql` dentro de
+  `supabase/migrations/`): D-13 se decidió por la opción A', descrita arriba — el enunciado de la tarea en `TASKS.md`
+  quedó desactualizado frente a D-13 y se corrigió al cerrar esta iteración.
+- Riesgos / pendientes detectados: ninguno nuevo. El archivo `baseline_prod_2026-09-30.sql` en la carpeta personal de
+  la persona responsable (fuera del repo) lo borra ella misma; esta sesión no lo tocó para borrarlo. Regenerar
+  `supabase/baseline/prod_schema.sql` tras cada release (documentado en su propia cabecera).
+- Porcentaje: sin cambio (T00-extra-exec es una tarea `-extra`, no cuenta en los 28 numerados).
