@@ -79,7 +79,22 @@
       "Bash(rm -rf:*)",
       "Bash(rm -r:*)",
       "Bash(Remove-Item -Recurse:*)",
-      "Bash(*.bundle*)"
+      "Bash(*.bundle*)",
+      "PowerShell(git gc:*)",
+      "PowerShell(git reflog:*)",
+      "PowerShell(git prune:*)",
+      "PowerShell(git stash drop:*)",
+      "PowerShell(git stash clear:*)",
+      "PowerShell(git clean:*)",
+      "PowerShell(git filter-repo:*)",
+      "PowerShell(git reset --hard:*)",
+      "PowerShell(git push:*)",
+      "PowerShell(git branch -D:*)",
+      "PowerShell(git worktree prune:*)",
+      "PowerShell(Remove-Item:*)",
+      "PowerShell(rm:*)",
+      "PowerShell(del:*)",
+      "PowerShell(*.bundle*)"
     ]
   }
 }
