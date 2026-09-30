@@ -82,6 +82,7 @@ panel_e2e() {
 # ── 3. Funciones (Deno) ──────────────────────────────────────────────────────────────────────────────────────────────
 deno_check() {
   $DENO check supabase/functions/secure-register-user/index.ts supabase/functions/get-consent-notice/index.ts \
+    supabase/functions/_shared/auth-guard.ts \
     ../.claude/loops/consentimiento/diag/diag-network-headers/index.ts
 }
 deno_test() {
@@ -108,6 +109,7 @@ sql_ciclo_de_vida() {
   psql_in -d gates < "$MIGRATIONS/075_privacy_settings_versioning.sql"
   psql_in -d gates < "$TESTS/lifecycle.sql"
   psql_in -d gates < "$TESTS/settings_versioning.sql"
+  psql_in -d gates < "$TESTS/admin_roles.sql"
 }
 
 # ── 4b. INV-SEC (P2, independiente del módulo): tope de invitado en learning_answer/learning_start_exam ────────────

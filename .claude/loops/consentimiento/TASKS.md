@@ -49,7 +49,8 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - `maskIp(ip)`: IPv4 → `a.b.c.xxx`; IPv6 → primeros 3 hextetos + `xxxx::`.
   - **Tests:** XFF con varias IP, IPv6, IPv4-mapped, cabecera ausente, valor basura, body con `ip`.
 
-- [ ] **T04 — Verificación de identidad y roles** (SEC-01, SEC-02)
+- [x] **T04 — Verificación de identidad y roles** (SEC-01, SEC-02) (hecha 2026-09-29, iteración 15)
+  - **Resultado:** `_shared/auth-guard.ts` — `requireUser` verifica firma con `jose` contra el JWKS del proyecto (solo ES256/RS256; `exp` obligatorio; `aud=authenticated`; emisor si `SUPABASE_JWT_ISSUER`), exige `role=authenticated` + `sub` UUID y rechaza `is_anonymous`; `requireRole` lee `admin_roles` con el JWT del propio usuario (RLS `admin_roles_self_read`) y falla cerrado (503). 23 pruebas en `auth-guard_test.ts` + `supabase/tests/consent/admin_roles.sql` (puerta `sql-ciclo-de-vida`). Pendiente para T05/T14: confirmar que el proyecto hospedado firma con claves asimétricas (ver PROGRESS.md, iteración 15).
   - **Estado real (2026-09-29, reconciliación):** PARCIAL. Hecho: tabla `admin_roles` con RLS (`admin_roles_self_read`, sin INSERT/UPDATE/DELETE para `authenticated`/`anon`) y `has_privacy_role(required_role)` (migración `073_consent_module_foundation.sql:6-24`).
   - **Falta:** `_shared/auth-guard.ts` no existe (confirmado: el archivo no está en el árbol); por tanto tampoco existen `requireUser`/`requireRole` ni sus pruebas negativas (sin token, firma alterada, expirado, `role: service_role` forjado, sin rol, rol insuficiente). Bloquea T05 y, en cascada, la identidad individual del panel para el resto de tareas de Fase 3 en adelante.
   - `_shared/auth-guard.ts`: `requireUser(req)` verificando JWT criptográficamente;

@@ -10,4 +10,9 @@ CREATE TABLE IF NOT EXISTS public.users (
 DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE service_role; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Como en Supabase: las tablas nuevas de `public` nacen con todos los privilegios para estos roles; así los REVOKE de las
+-- migraciones se prueban de verdad (sin esto, un "permission denied" pasaría aunque la migración no revocara nada).
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 INSERT INTO public.users (email, role) VALUES ('admin@test.local', 'admin');
