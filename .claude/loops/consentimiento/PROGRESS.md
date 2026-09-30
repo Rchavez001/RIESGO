@@ -425,3 +425,37 @@ En el resultado habrá IP reales. No me pegues las IP completas: basta con decir
 - Desviaciones de SPEC: ninguna.
 - Riesgos / pendientes detectados: (1) **TOTP en el proyecto hospedado sin confirmar** (Dashboard → Authentication → Multi-Factor → App Authenticator/TOTP): sin él, ningún admin puede llegar a aal2 y el módulo queda cerrado (falla cerrado, no abierto). (2) Sin refresco de sesión: el token dura `jwt_expiry` (1 h); después, la siguiente acción devolverá `token_expired` y habrá que entrar de nuevo (T21 debe mostrarlo bien). Recargar la página también obliga a entrar (a propósito: nada en almacenamiento). (3) **`echarts-gl` lanza "Invalid expression."** al arrancar en la emulación de Android (Galaxy S9+, a veces Pixel 7), desde el gráfico 3D de Reportes: **preexistente** (reproducido con el código de `HEAD` sin T05.b: 1 de 6), intermitente, ajeno al módulo; hace fallar `shell.spec.ts:24` en esos perfiles fuera de gates (gates solo corre escritorio). No corregido. (4) Nota de herramientas: un `Stop-Process` que filtra por `CommandLine -match "start-admin.cjs"` mata también al bash que lo lanza si esa cadena aparece en su propia línea de comandos (salida 255 sin texto); `gates.sh` no se ve afectado (su línea de comandos no la contiene).
 - Porcentaje: estricto 5 de 28 = **17,9 %** (antes 14,3 %). Ponderado: T05 pasa de 50 % a 100 % → 1085/2800 = **≈ 38,8 %** (antes ≈ 37,0 %).
+
+## Iteración 18 — 2026-09-30 — T03 cierre: `maskIp` y normalización IPv4-mapped/zona IPv6
+- **Previo a la tarea, con OK explícito de la persona responsable:** limpieza de `~/.claude/settings.json`
+  (nivel usuario, fuera del repo) siguiendo los hallazgos anotados sin tocar en la iteración 17: (a) eliminadas
+  17 reglas `allow` de `curl -u` con credenciales en claro (todas apuntaban a servicios locales del proyecto,
+  `localhost:3100` y `127.0.0.1:3198`/`localhost:3198`, panel admin); (b) eliminadas 15 reglas `allow` que
+  envolvían `node -e`, `bash -c`/`python -c`/`python3 -c` y `powershell -Command`, algunas con comodín abierto
+  (`' *`) que permitían esquivar una `deny` por prefijo. Backup del archivo original guardado junto al mismo
+  (`settings.json.bak.<timestamp>`). El hook `PostToolUse` que hace `git add` de cada archivo editado/escrito
+  se inspeccionó y se dejó intacto (no se pidió borrarlo). Sin commit: es config de usuario, no del repo.
+- Cambios: `supabase/functions/_shared/client-ip.ts` (`maskIp(ip)` nueva; `normalizeIp` ahora colapsa
+  IPv4-mapped IPv6 —cualquier forma de entrada, vía el parser `URL` que ya canonicaliza— a la IPv4 plana
+  con `ipv4FromHexPair`, y descarta la zona `%iface` antes de validar, ya que solo tiene sentido local y
+  nunca la añade un proxy de red).
+- Pruebas añadidas: `client-ip_test.ts` +5 (7→12): IPv4-mapped en varias formas de entrada normaliza igual
+  que la IPv4 pura, incluida dentro de la cadena `X-Forwarded-For`; zona IPv6 descartada (con y sin corchetes,
+  interfaz con nombre y numérica); `maskIp` IPv4 oculta el último octeto; `maskIp` IPv6 conserva los 3
+  primeros hextetos (expandidos) y oculta el resto con `xxxx::`, incluido un IPv4-mapped (se enmascara como
+  IPv4, coherente con que ya normaliza a IPv4); `maskIp` de un valor no-IP → `null`.
+- **Rojo confirmado antes de implementar:** el import de `maskIp` en la prueba falla la comprobación de tipos
+  (`TS2305: no exported member 'maskIp'`) porque la función no existía — el mismo `deno test` la reporta como
+  fallo de compilación, no se pudo llegar a ejecutar ningún caso.
+- Gates: OK (typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e,
+  deno-check, deno-test [12 nuevas incluidas], sql-ciclo-de-vida, sql-guest-limit; db-reset SKIP explícito);
+  `docker ps` sin contenedores de gates después.
+- Desviaciones de SPEC: ninguna. La forma exacta de `maskIp` para IPv6 (TASKS.md: "primeros 3 hextetos +
+  `xxxx::`") no estaba más detallada en SPEC.md; se interpretó como los primeros 3 grupos de la dirección
+  **expandida** a 8 hextetos (no de la forma comprimida con `::`), para que el prefijo mostrado sea siempre
+  de 48 bits reales y no dependa de dónde cayó la compresión. Documentado aquí por si un humano prefiere
+  otro formato de presentación.
+- Riesgos / pendientes detectados: ninguno nuevo. Sigue abierto lo ya conocido: medición de la cabecera de
+  IP real en el proyecto hospedado (D-08, tarea separada `T03-prod`) y, en cascada, `T03-sec`.
+- Porcentaje: estricto 6 de 28 = **21,4 %** (antes 17,9 %). Ponderado: T03 pasa de 60 % a 100 % →
+  1125/2800 = **≈ 40,2 %** (antes ≈ 38,8 %).
