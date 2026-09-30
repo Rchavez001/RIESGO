@@ -827,3 +827,28 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
   la persona responsable (fuera del repo) lo borra ella misma; esta sesión no lo tocó para borrarlo. Regenerar
   `supabase/baseline/prod_schema.sql` tras cada release (documentado en su propia cabecera).
 - Porcentaje: sin cambio (T00-extra-exec es una tarea `-extra`, no cuenta en los 28 numerados).
+
+## Iteración 25 — 2026-09-30 — T09: pruebas propias de `get-consent-notice` y `verify_jwt` documentado; cierra T09
+- **Punto de partida:** T09 estaba "CASI" — el render de marcadores (`_shared/consent-render.ts`) y `loadPublishedNotice`
+  (`_shared/consent-notice.ts`) ya tenían cobertura (`consent-render_test.ts`) y ya los reutiliza `secure-register-user`,
+  pero la función `get-consent-notice` en sí no tenía ninguna prueba propia (solo un `e2e_local.cjs` manual), y
+  `supabase/config.toml` no traía la entrada `[functions.get-consent-notice]` pese a que la función corre con
+  `verify_jwt = false` (única excepción de SEC-01, y debía estar documentada explícitamente).
+- Cambios: `supabase/functions/get-consent-notice/index_test.ts` (nuevo); `supabase/config.toml` (entrada
+  `[functions.get-consent-notice] verify_jwt = false` con el motivo, junto a la de `admin-consent`); `TASKS.md` (T09
+  `[x]`); este archivo.
+- Pruebas añadidas (`index_test.ts`, 6, contra la función real levantada con `Deno.serve`, una Supabase falsa detrás):
+  camino feliz (huella y campos verificados contra `renderConsent`/`sha256Hex` calculados de forma independiente, no
+  contra el propio código de la función); la huella cambia si cambian los settings vigentes sin tocar el documento;
+  sin documento publicado → 404 con el mensaje fijo, sin detalles internos; marcador desconocido y marcador conocido
+  sin valor → 500 `NOTICE_INVALID` en ambos casos, comprobando que la respuesta no contiene el texto ni el nombre del
+  marcador roto; método no permitido → 405; preflight `OPTIONS` → 200 con `Access-Control-Allow-Origin`.
+- Gates: OK completo (`bash gates.sh`: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit,
+  panel-e2e, deno-check, deno-test [incluye las 6 pruebas nuevas], sql-ciclo-de-vida, sql-guest-limit; db-reset SKIP
+  explícito, como siempre). `deno test` del archivo nuevo corrido también de forma aislada antes de la corrida completa.
+- Desviaciones de SPEC: ninguna. Se deja explícito, tal como ya anotaba TASKS.md antes de esta iteración, que la
+  sanitización del Markdown (parte de SEC-08) es responsabilidad del cliente (T18, sin empezar) y que no aplica
+  validación de esquema de entrada porque la función no acepta body (`GET` sin parámetros).
+- Riesgos / pendientes detectados: ninguno nuevo.
+- Porcentaje: estricto 10 de 28 = **35,7 %** (antes 32,1 %). Ponderado: T09 pasa de 80 % a 100 % →
+  1250/2800 = **≈ 44,6 %** (antes ≈ 43,9 %).

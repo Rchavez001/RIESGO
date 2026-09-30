@@ -119,9 +119,9 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 3 · Backend
 
-- [ ] **T09 — `get-consent-notice`** (REQ-02, SEC-08)
+- [x] **T09 — `get-consent-notice`** (REQ-02, SEC-08) (hecha 2026-09-30, iteración 25)
   - **Estado real (2026-09-29, reconciliación):** CASI. Hecho: `get-consent-notice` con render de los 11 marcadores del aviso (`_shared/consent-render.ts`), marcador desconocido o sin valor → error (nunca silencioso), huella sobre el texto renderizado; 10 pruebas en `_shared/consent-render_test.ts` (confirmado con `grep -c '^Deno.test'`, incluido el seed real completo e incompleto).
-  - **Falta:** no existe `supabase/functions/get-consent-notice/index_test.ts` (confirmado: no hay ningún `*_test.ts` en esa carpeta) — la única cobertura de la función en sí es punta a punta local (`e2e_local.cjs`), no una prueba propia y aislada; sanitización del Markdown pendiente (a propósito, se hace en cliente, T18).
+  - **Cierre (iteración 25):** `supabase/functions/get-consent-notice/index_test.ts` (nuevo, 6 pruebas): camino feliz (huella y campos calculados de forma independiente con `renderConsent`/`sha256Hex`, contra la respuesta real de la función); la huella cambia si cambian los settings vigentes sin tocar el documento; sin documento publicado → 404 sin filtrar detalles internos; marcador desconocido o conocido-sin-valor → 500 `NOTICE_INVALID` sin exponer el texto ni el marcador en la respuesta; método no permitido → 405; preflight `OPTIONS` → 200 con cabeceras CORS. `supabase/config.toml`: entrada `[functions.get-consent-notice] verify_jwt = false` documentada (única excepción de SEC-01: pública, solo lectura, sin acción administrativa que atribuir). Sanitización del Markdown queda fuera de esta tarea a propósito (se hace en cliente, T18, ver SPEC/T09 original); no se valida esquema de entrada porque la función no acepta body (GET puro).
   - Render de marcadores con settings vigentes; marcador desconocido → error en borrador,
     nunca en producción silenciosa; sanitización; `rendered_sha256` sobre el Markdown renderizado.
   - **Tests:** huella estable; cambia si cambia settings; marcador faltante detectado.

@@ -420,3 +420,10 @@ verify_jwt = false
 # signature against the project's JWKS, TOTP/aal2 and role from admin_roles). Explicit so it is never flipped by mistake.
 [functions.admin-consent]
 verify_jwt = true
+
+# Consent module (SEC-01): the ONE documented exception. Public, read-only — it serves the published
+# privacy notice to visitors who have no account yet (registration screen, public privacy policy page).
+# It writes nothing and reads only privacy_settings_current/consent_documents, so there is no admin
+# action to attribute (H08 does not apply) and no reason to require a JWT the caller cannot have yet.
+[functions.get-consent-notice]
+verify_jwt = false
