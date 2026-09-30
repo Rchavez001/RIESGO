@@ -852,3 +852,48 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
 - Riesgos / pendientes detectados: ninguno nuevo.
 - Porcentaje: estricto 10 de 28 = **35,7 %** (antes 32,1 %). Ponderado: T09 pasa de 80 % a 100 % →
   1250/2800 = **≈ 44,6 %** (antes ≈ 43,9 %).
+
+## Iteración 26 — 2026-09-30 — T10: esquema explícito (SEC-08) en `secure-register-user`; cierra T10
+- **Punto de partida:** T10 estaba "CASI" — el registro atómico, la compensación, el rate limit fail-closed y el 409 por
+  huella ya funcionaban y tenían 9 pruebas. Faltaban dos cosas puntuales: (1) SEC-08 pide "validación de entrada con
+  esquema (zod o equivalente ya usado en el repo)" y `secure-register-user` solo tenía validación ad hoc campo a campo;
+  (2) el código de error real es `"notice_changed"` en minúscula, no `NOTICE_CHANGED` como escribe la SPEC.
+- **Esquema (SEC-08):** `RegisterBodySchema` (zod 3.23.8 vía esm.sh, el mismo import y versión que ya usa
+  `quiz-generator/index.ts` — "equivalente ya usado en el repo") se valida con `safeParse` justo después de leer el
+  body, antes de la RPC de cuota o de cualquier llamada a la base: así un payload con forma inválida no gasta una fila
+  del rate limit. Los campos quedan **opcionales** en el esquema donde el código de dominio ya toleraba su ausencia
+  (`normalizeText`/`normalizeEmail` con `?? ""`) — el esquema solo rechaza **tipos equivocados** (p. ej. `email` como
+  número) y **tamaños desmesurados** (topes generosos: 320/1000/200 caracteres según el campo, `decisions` acotado a
+  200 elementos), nunca las ventanas finas de longitud que ya exigen `validateRegistration`/`validateConsentNotice`
+  (`invalid_password` para 5 caracteres, `invalid_full_name` para vacío, huella distinta → `notice_changed`, finalidad
+  obligatoria no otorgada → `missing_required_consent`). Un fallo de esquema lanza `Error("invalid_input")` y ese
+  nombre se agregó a `knownValidationErrors`: cae en el mismo `catch` genérico que ya usan todos los demás rechazos de
+  dominio (400, mensaje fijo), sin generar un evento `unhandled_exception` de más — ningún cambio en el contrato de
+  respuesta del endpoint, solo una puerta más temprana y explícita.
+- **`notice_changed` vs. `NOTICE_CHANGED` (decisión, no una D-nn porque no bloquea nada ni requiere criterio de
+  negocio):** se dejó el código tal como está en producción. `frontend/src/contexts/AuthContext.tsx`,
+  `RegisterScreen.tsx` y sus pruebas (`AuthContext.test.tsx`, `tests/frontend/register.spec.ts`) ya están construidos
+  sobre la cadena en minúscula; normalizar el código habría significado tocar cuatro archivos y sus pruebas para
+  igualar un detalle de formato que la SPEC nunca declaró como requisito de negocio (el requisito es "409 con un
+  código reconocible", no una grafía concreta). Se actualizó en su lugar la tabla de funciones de `SPEC.md`
+  (`secure-register-user`) para que documente el contrato real.
+- Cambios: `supabase/functions/secure-register-user/index.ts` (import de `zod`, `RegisterBodySchema`, la línea de
+  `safeParse`, `"invalid_input"` en `knownValidationErrors`); `supabase/functions/secure-register-user/index_test.ts`
+  (+1 prueba, 4 variantes); `.claude/loops/consentimiento/SPEC.md` (nota sobre `notice_changed`); `TASKS.md` (T10
+  `[x]`); este archivo.
+- Pruebas añadidas: `index_test.ts` — "esquema de entrada (SEC-08): tipos equivocados o desmesurados → 400 genérico,
+  sin tocar nada ni disparar unhandled_exception", con 4 variantes (`email` numérico; `consent_notice.decisions` como
+  cadena en vez de arreglo; `decisions` con 201 elementos, uno más que el tope; `settings_version` como texto). Falla
+  por la razón correcta: desactivé temporalmente la línea del `safeParse` (comentario `TEMP-DISABLED-FOR-VERIFICATION`,
+  revertido antes de continuar) y confirmé que sin el guard esas mismas cuatro entradas ya no se rechazan por tipo o
+  tamaño — una de ellas (`settings_version: 'tres'`) incluso pasa la comparación de huella y devuelve 409 en vez de
+  400, la prueba lo capturó (`AssertionError: 409 !== 400`).
+- Gates: OK completo (`bash gates.sh`: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit,
+  panel-e2e, deno-check [incluye el nuevo import de zod], deno-test [10/10 en `secure-register-user/index_test.ts`],
+  sql-ciclo-de-vida, sql-guest-limit; db-reset SKIP explícito, como siempre).
+- Desviaciones de SPEC: la tabla de funciones de `SPEC.md` para `secure-register-user` pasa de citar `NOTICE_CHANGED`
+  a documentar `notice_changed` (minúscula), para reflejar el contrato que ya consume el frontend en producción, según
+  lo explicado arriba.
+- Riesgos / pendientes detectados: ninguno nuevo.
+- Porcentaje: estricto 11 de 28 = **39,3 %** (antes 35,7 %). Ponderado: T10 pasa de 85 % a 100 % →
+  1265/2800 = **≈ 45,2 %** (antes ≈ 44,6 %).

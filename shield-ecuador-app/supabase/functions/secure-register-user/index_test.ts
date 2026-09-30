@@ -234,3 +234,25 @@ Deno.test({
     }
   },
 })
+
+Deno.test({
+  name: 'esquema de entrada (SEC-08): tipos equivocados o desmesurados → 400 genérico, sin tocar nada ni disparar unhandled_exception', ...opts,
+  async fn() {
+    reset()
+    const bad = await validBody()
+    for (const overrides of [
+      { email: 12345 }, // tipo equivocado, no una cadena
+      { consent_notice: { ...bad.consent_notice, decisions: 'no-es-un-arreglo' } },
+      { consent_notice: { ...bad.consent_notice, decisions: Array.from({ length: 201 }, () => ({ purpose_code: 'x', decision: 'granted' })) } },
+      { consent_notice: { ...bad.consent_notice, settings_version: 'tres' } },
+    ]) {
+      calls.length = 0
+      const res = await post({ ...bad, ...overrides })
+      await res.body?.cancel()
+      assertEquals(res.status, 400)
+      assertEquals(sent((c) => CREATES_SOMETHING.test(`${c.method} ${c.path}`)), [])
+      // "invalid_input" está en knownValidationErrors: no debe generar un evento de excepción no manejada.
+      assertEquals(sent((c) => c.path === '/rest/v1/security_events' && JSON.stringify(c.body).includes('unhandled_exception')), [])
+    }
+  },
+})

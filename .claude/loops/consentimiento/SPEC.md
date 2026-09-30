@@ -241,7 +241,7 @@ UTC con microsegundos, sin espacios. Calcular en la función PL/pgSQL de inserci
 | Función | Auth | Propósito |
 |---|---|---|
 | `get-consent-notice` | pública | Devuelve versión publicada: `document_id`, `version`, `rendered_md`, `rendered_sha256`, `settings_version`, `purposes`, `privacy_policy_url`. Cache corta (60 s). |
-| `secure-register-user` (modificar) | pública + rate limit | Recibe datos de registro + `{document_id, rendered_sha256, settings_version, decisions:[{purpose_code, decision}], age_gate}`. Valida que la huella coincide con la versión vigente (si no: 409 `NOTICE_CHANGED`). Crea usuario y evidencia de forma atómica (REQ-07). |
+| `secure-register-user` (modificar) | pública + rate limit | Recibe datos de registro + `{document_id, rendered_sha256, settings_version, decisions:[{purpose_code, decision}], age_gate}`. Valida que la huella coincide con la versión vigente (si no: 409 `notice_changed`, minúscula — así lo consumen `AuthContext.tsx`/`RegisterScreen.tsx` y sus pruebas; T10 normalizó este documento en vez del código para no tocar el contrato ya usado en producción). Crea usuario y evidencia de forma atómica (REQ-07). |
 | `submit-consent` | usuario | Re-consentimiento (REQ-09). |
 | `update-my-consent` | usuario | Otorgar/revocar opcionales (REQ-08). |
 | `request-data-subject-right` | usuario | Crea caso, envía correos (REQ-10). Si el envío falla, el caso queda registrado y el aviso pendiente en `email_outbox` (REQ-21). |

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { z } from "https://esm.sh/zod@3.23.8"
 import { checkRateLimit } from "../_shared/rate-limit.ts"
 import { logSecurityEvent } from "../_shared/security-events.ts"
 import { getClientIp } from "../_shared/client-ip.ts"
@@ -14,6 +15,29 @@ const corsHeaders = {
 
 type Purpose = { code: string; label: string; description?: string; required: boolean; order?: number }
 type ConsentDecisionInput = { purpose_code?: unknown; decision?: unknown }
+
+// SEC-08: explicit schema gate on the raw body — type/shape/size only, checked before any DB or
+// business work (so garbage payloads never touch the rate-limit RPC). Fields stay optional here
+// even where they are actually required: the specific domain rules (email format, password length
+// window, valid business_type, notice-hash match, required purpose granted…) are unchanged, still
+// enforced below by validateRegistration/validateConsentNotice, and still produce the same generic
+// 400 either way — this only rejects wrong types and unreasonably large values.
+const RegisterBodySchema = z.object({
+  email: z.string().max(320).optional(),
+  password: z.string().max(1000).optional(),
+  full_name: z.string().max(1000).optional(),
+  business_type: z.string().max(200).optional(),
+  age_gate: z.unknown().optional(),
+  consent_notice: z.object({
+    document_id: z.string().max(200),
+    rendered_sha256: z.string().max(200),
+    settings_version: z.number(),
+    decisions: z.array(z.object({
+      purpose_code: z.string().max(100),
+      decision: z.string().max(50),
+    })).max(200).optional(),
+  }).nullable().optional(),
+}).passthrough() // passthrough: CLIENT_IP_SPOOF_KEYS below still needs to see stray `ip`/`client_ip` keys.
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
@@ -31,6 +55,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}))
+    if (!RegisterBodySchema.safeParse(body).success) throw new Error("invalid_input")
     const email = normalizeEmail(body.email)
     const password = String(body.password ?? "")
     const fullName = normalizeText(body.full_name, 120)
@@ -188,7 +213,7 @@ serve(async (req) => {
     }
     console.error("secure-register-user failed:", safeError(error))
     const knownValidationErrors = [
-      "invalid_email", "invalid_password", "invalid_full_name", "invalid_business_type",
+      "invalid_input", "invalid_email", "invalid_password", "invalid_full_name", "invalid_business_type",
       "missing_client_ip", "notice_not_published", "settings_unavailable", "notice_invalid", "missing_required_consent",
     ]
     if (!knownValidationErrors.includes((error as Error)?.message)) {
