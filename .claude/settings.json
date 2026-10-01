@@ -55,7 +55,24 @@
       "Bash(sed -i \"s/from 'playwright'/from '@playwright\\\\/test'/\" /tmp/inspect_sidebar.mjs)",
       "Bash(cp /tmp/inspect_sidebar.mjs ./inspect_sidebar_tmp.mjs)",
       "Bash(node inspect_sidebar_tmp.mjs)",
-      "Bash(powershell -Command \"Stop-Process -Id 52092 -Force -ErrorAction SilentlyContinue\")"
+      "Bash(powershell -Command \"Stop-Process -Id 52092 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(bash .claude/loops/consentimiento/gates.sh:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx -y deno@2.9.6 check:*)",
+      "Bash(npx -y deno@2.9.6 test:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(supabase start:*)",
+      "Bash(supabase stop:*)",
+      "Bash(supabase status:*)"
     ],
     "additionalDirectories": [
       "C:\\Users\\APS-EC~1\\AppData\\Local\\Temp\\claude\\c--Users-aps-ecuador-Riesgo\\6ea9345f-47aa-4cf4-96ef-87a6e6cc589f\\scratchpad"
