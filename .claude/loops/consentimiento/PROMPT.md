@@ -25,6 +25,11 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
    - Lee `PROGRESS.md` (últimas 3 entradas), `DECISIONS.md` y `TASKS.md`.
    - Ejecuta `git status` y `git log --oneline -5`. Si hay cambios sin commit de una iteración previa
      interrumpida: evalúalos; si pasan los gates, haz commit; si no, revísalos y termina esa tarea primero.
+   - **Antes de atribuir archivos sin commitear a "otra sesión": revisa los logs (`loop-consentimiento/logs/iter-*.log`)
+     y las transcripciones de las iteraciones headless recientes (`~/.claude/projects/`) — hasta ahora siempre han
+     sido restos del propio loop** (p. ej. 2026-10-01: una iteración que investigaba TEST-INT.a confundió sus propios
+     `supabase/` huérfano y `.sql` sin terminar con un "proceso concurrente", cuando en realidad era ella misma en
+     una ejecución anterior del mismo `run-loop.sh`).
 
 2. **Elegir la tarea.** La primera tarea `[ ]` de `TASKS.md` cuyas dependencias estén `[x]` y que no
    esté marcada `⛔ BLOQUEADA`. Si una tarea depende de una decisión `ABIERTA` en `DECISIONS.md`,
