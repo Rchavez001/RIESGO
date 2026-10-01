@@ -156,6 +156,14 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Estado (2026-10-01, iteración 31):** `supabase/tests/consent/e2e_local.cjs` YA cubre, contra Postgres real, la inserción atómica (3 filas, una por finalidad) y el 409 por huella (`notice_changed`) — nada que añadir ahí. Falta solo el tercer caso: **compensación si falla la inserción de evidencia** (hoy solo probado contra el fake en memoria de `index_test.ts`, línea ~169). Esta iteración NO pudo escribir ni verificar ese caso contra Postgres real: ver el bloqueo de entorno documentado en PROGRESS.md (mismo tipo que D-14, esta vez sobre el gate `db-reset` en vez de sobre una migración nueva). Sigue siendo la primera subtarea ejecutable de TEST-INT.
   - [ ] **TEST-INT.b — Integración real: `update-my-consent` / `submit-consent` (T11)**
     - Cubrir al menos el rechazo de revocar la finalidad obligatoria y el re-consentimiento (`requires_reconsent`), contra Postgres real.
+    - **Borrador ya escrito (2026-10-01, iteración 3 del run-loop de ese día):** `loop-consentimiento/borradores/TEST-INT.b_consent_write_endpoints.sql`
+      cubre `channel='mi_privacidad'` (revocar opcional vía `update-my-consent`) y `channel='reconsentimiento'`
+      (`submit-consent`) contra el CHECK/trigger de cadena reales de la migración 073, más un caso negativo (`channel`
+      inválido). Vive fuera de `supabase/tests/consent/` a propósito (ver cabecera del archivo) para que `gates.sh` no
+      lo descubra todavía sin verificar. Al retomar esta subtarea: partir de ese borrador (no reescribir desde cero),
+      confirmarlo contra un Postgres real (`GATES_ONLY=sql-ciclo-de-vida bash .claude/loops/consentimiento/gates.sh`
+      copiándolo primero a `supabase/tests/consent/`) y, solo cuando pase, moverlo (no copiarlo) a
+      `supabase/tests/consent/consent_write_endpoints.sql` en el mismo commit que cierra la subtarea.
   - [ ] **TEST-INT.c — Integración real: `request-data-subject-right` (T13)** ⛔ BLOQUEADA (depende de T13, aún sin escribir — no hay función que auditar todavía; ejecutar en cuanto T13 se cierre)
   - [ ] **TEST-INT.d — Integración real: `admin-consent` (T14)**
     - El propio fix de T14 (migración 080) ya se verificó contra Postgres real (`publish_consent_document_e2e_local.cjs`). Confirmar que las demás acciones de `handler_test.ts` con escritura real (borrador, diff, preview, retire, cuatro ojos) también tienen equivalente en `supabase/tests/consent/*.sql` o en un script `_local.cjs`; añadir lo que falte.
