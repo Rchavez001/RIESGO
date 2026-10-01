@@ -6,6 +6,9 @@
 #   bash .claude/loops/consentimiento/gates.sh
 #   GATES_ONLY="deno-test sql-ciclo-de-vida" bash …/gates.sh     # solo algunas puertas
 #   GATES_DB_RESET=1 bash …/gates.sh                              # incluye la puerta db-reset (necesita `supabase start` en marcha)
+#   GATES_FULL=1 bash …/gates.sh                                  # panel-e2e corre en los 7 perfiles de playwright.admin.config.ts
+#                                                                  # (por defecto solo desktop-chrome y pixel-7-chrome). Obligatorio
+#                                                                  # antes de release y cada 5 iteraciones (ver PROMPT.md).
 #   GATES_SELFTEST=1 bash …/gates.sh                              # autoprueba: cada puerta inyecta su propio fallo
 #                                                                  # controlado y se espera que TODAS reporten FAIL
 #
@@ -69,7 +72,11 @@ unit_frontend()      { (cd frontend && CI=true npx react-scripts test --watchAll
 
 # ── 2. Panel de administración (central-admin-app, Node sin dependencias) ──────────────────────────────────────────
 panel_unit() { (cd central-admin-app && npm test) && node tests/url-guard.test.cjs && node tests/shuffle-options.test.cjs; }
-# Playwright del panel contra el server.js real con un upstream simulado (tests/admin/start-admin.cjs). Un perfil, reporter line.
+# Playwright del panel contra el server.js real con un upstream simulado (tests/admin/start-admin.cjs). Reporter line.
+# Por defecto solo 2 de los 7 perfiles de playwright.admin.config.ts (desktop-chrome, pixel-7-chrome: uno de
+# escritorio y uno móvil representativo) para mantener la iteración rápida. GATES_FULL=1 corre los 7 perfiles
+# (iphone-se-safari, iphone-14-safari, ipad-safari, pixel-7-chrome, galaxy-s9-chrome, desktop-chrome,
+# desktop-safari) — obligatorio antes de release y cada 5 iteraciones (ver PROMPT.md).
 # El servidor de pruebas del panel (:3198) se REUTILIZA entre corridas (reuseExistingServer) y su limitador de autenticaciones fallidas
 # (10 cada 10 min) es en memoria: una segunda corrida seguida recibía 429 en vez de 401. Se cierra cualquier start-admin.cjs antes y después.
 stop_panel_test_server() {
@@ -79,10 +86,14 @@ stop_panel_test_server() {
     pkill -f start-admin.cjs >/dev/null 2>&1 || true
   fi
 }
+PANEL_E2E_PROJECTS_DEFAULT=(desktop-chrome pixel-7-chrome)
+PANEL_E2E_PROJECTS_FULL=(iphone-se-safari iphone-14-safari ipad-safari pixel-7-chrome galaxy-s9-chrome desktop-chrome desktop-safari)
 panel_e2e() {
-  local rc=0
+  local rc=0 p project_args=() projects=("${PANEL_E2E_PROJECTS_DEFAULT[@]}")
+  [[ "${GATES_FULL:-0}" == "1" ]] && projects=("${PANEL_E2E_PROJECTS_FULL[@]}")
+  for p in "${projects[@]}"; do project_args+=(--project="$p"); done
   stop_panel_test_server
-  PW_TEST_HTML_REPORT_OPEN=never npx playwright test -c playwright.admin.config.ts --project=desktop-chrome --reporter=line --workers=2 --timeout=60000 || rc=$?
+  PW_TEST_HTML_REPORT_OPEN=never npx playwright test -c playwright.admin.config.ts "${project_args[@]}" --reporter=line --workers=2 --timeout=60000 || rc=$?
   stop_panel_test_server
   return $rc
 }

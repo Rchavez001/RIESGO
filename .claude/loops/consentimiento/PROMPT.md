@@ -45,6 +45,13 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
    terminar en código 0. Si algo falla, corrige y repite (máx. 3 ciclos). Si tras 3 ciclos sigue
    fallando: revierte los cambios de esta tarea (`git restore`/`git stash`), documenta el error en
    `PROGRESS.md`, marca la tarea `⚠ REINTENTAR` con el motivo y termina la iteración.
+   - Por defecto, `panel-e2e` corre solo en los perfiles `desktop-chrome` y `pixel-7-chrome`.
+   - **Verificación completa obligatoria:** ejecuta además `GATES_FULL=1 bash .claude/loops/consentimiento/gates.sh`
+     (los 7 perfiles de `playwright.admin.config.ts`) **cada 5 iteraciones** (cuando el número de
+     iteración que vas a registrar en `PROGRESS.md` sea múltiplo de 5) **y siempre antes de cualquier
+     release a producción** (incluida la tarea T99). Si `GATES_FULL=1` falla en un perfil que
+     `GATES_FULL` no corre por defecto, trátalo igual que cualquier otro fallo del paso 6 (corrige,
+     repite, o revierte y marca `⚠ REINTENTAR`) antes de cerrar la iteración o el release.
 
 7. **Registrar y cerrar.**
    - Marca la tarea `[x]` en `TASKS.md`.
@@ -61,7 +68,8 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
    - Termina tu respuesta con `<promise>ITERACION_OK</promise>`.
 
 8. **Condiciones de salida especiales.**
-   - Si TODAS las tareas están `[x]` y `gates.sh` pasa completo, ejecuta la tarea T99 si no está
+   - Si TODAS las tareas están `[x]` y `gates.sh` pasa completo **incluyendo una corrida con
+     `GATES_FULL=1`** (obligatoria antes de release, ver paso 6), ejecuta la tarea T99 si no está
      hecha; cuando lo esté, responde con `<promise>LOOP_COMPLETO</promise>`.
    - Si no hay tareas ejecutables porque todas dependen de decisiones abiertas: resume las preguntas
      en `DECISIONS.md` (formato abajo) y responde con `<promise>BLOQUEADO</promise>`.
