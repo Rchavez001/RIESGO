@@ -36,6 +36,13 @@ for i in $(seq 1 "$MAX_ITER"); do
     --settings "$LOOP_DIR/headless-settings.json" \
     --max-turns "$MAX_TURNS" 2>&1 | tee "$log" || true
 
+  # Límite de uso/sesión de Claude Code (no es un fallo de la iteración: no hay nada que reintentar
+  # hasta que el límite se libere). Se detiene de inmediato, sin sumar a `fails` ni a la cuenta de
+  # iteraciones consecutivas sin cierre limpio.
+  if grep -qiE "hit your session limit|usage limit" "$log"; then
+    echo "⏳ Límite de uso/sesión alcanzado (ver $log). Deteniendo el loop; vuelve a ejecutar cuando se libere."
+    exit 4
+  fi
   if grep -q "<promise>LOOP_COMPLETO</promise>" "$log"; then
     echo "✅ Loop completo. Revisa PROGRESS.md y abre el PR manualmente."; exit 0
   fi
