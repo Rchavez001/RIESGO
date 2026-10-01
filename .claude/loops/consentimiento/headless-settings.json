@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Write(.claude/settings.local.json)",
+      "Edit(.claude/loops/consentimiento/gates.sh)",
+      "Write(.claude/loops/consentimiento/gates.sh)",
+      "Edit(.claude/loops/consentimiento/run-loop.sh)",
+      "Write(.claude/loops/consentimiento/run-loop.sh)"
+    ]
+  }
+}

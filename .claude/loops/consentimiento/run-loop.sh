@@ -24,9 +24,13 @@ for i in $(seq 1 "$MAX_ITER"); do
   log="$LOOP_DIR/logs/iter-$(printf '%03d' "$i")-$ts.log"
   echo "════ Iteración $i/$MAX_ITER · $ts ════"
 
-  # Los permisos (allow/deny) se leen de .claude/settings.json del proyecto.
+  # Los permisos (allow/deny) se leen de .claude/settings.json del proyecto, más
+  # headless-settings.json: deniega tocar los propios archivos de permisos y del loop
+  # (gates.sh, run-loop.sh) para que la ejecución headless no pueda ampliarse privilegios
+  # ni alterar sus propias puertas de verificación.
   claude -p "$(cat "$LOOP_DIR/PROMPT.md")" \
     --permission-mode acceptEdits \
+    --settings "$LOOP_DIR/headless-settings.json" \
     --max-turns "$MAX_TURNS" 2>&1 | tee "$log" || true
 
   if grep -q "<promise>LOOP_COMPLETO</promise>" "$log"; then
