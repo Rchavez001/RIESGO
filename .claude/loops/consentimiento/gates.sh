@@ -6,14 +6,34 @@
 #   bash .claude/loops/consentimiento/gates.sh
 #   GATES_ONLY="deno-test sql-ciclo-de-vida" bash …/gates.sh     # solo algunas puertas
 #   GATES_DB_RESET=1 bash …/gates.sh                              # incluye la puerta db-reset (necesita `supabase start` en marcha)
+#   GATES_E2E_LOCAL=1 bash …/gates.sh                             # incluye la puerta e2e-local (levanta/reutiliza `supabase start`)
 #   GATES_FULL=1 bash …/gates.sh                                  # panel-e2e corre en los 7 perfiles de playwright.admin.config.ts
 #                                                                  # (por defecto solo desktop-chrome y pixel-7-chrome). Obligatorio
 #                                                                  # antes de release y cada 5 iteraciones (ver PROMPT.md).
 #   GATES_SELFTEST=1 bash …/gates.sh                              # autoprueba: cada puerta inyecta su propio fallo
 #                                                                  # controlado y se espera que TODAS reporten FAIL
 #
+# Las mismas opciones también existen como argumentos (--only "…", --db-reset, --e2e-local, --full, --selftest):
+# el permiso que una sesión headless tiene concedido es el literal "Bash(bash .claude/loops/consentimiento/gates.sh:*)",
+# que cubre cualquier texto AÑADIDO DESPUÉS de ese prefijo exacto pero no una invocación con variables de entorno
+# DELANTE (`GATES_ONLY=… bash …/gates.sh` ya no empieza por "bash" y no coincide con el patrón — ver D-14 en
+# DECISIONS.md e iteración 31 en PROGRESS.md, ambas bloqueadas por esto). Con los argumentos, la sesión headless
+# puede pedir cualquier modo sin tropezar con esa falta de coincidencia:
+#   bash .claude/loops/consentimiento/gates.sh --only e2e-local --e2e-local
+#
 # Requiere Node (npx) y Docker en marcha (para la puerta SQL). Deno se fija a la versión con la que se escribieron las pruebas.
 set -uo pipefail
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --only) GATES_ONLY="$2"; shift 2 ;;
+    --db-reset) GATES_DB_RESET=1; shift ;;
+    --e2e-local) GATES_E2E_LOCAL=1; shift ;;
+    --full) GATES_FULL=1; shift ;;
+    --selftest) GATES_SELFTEST=1; shift ;;
+    *) echo "gates.sh: argumento desconocido: $1 (usar --only, --db-reset, --e2e-local, --full, --selftest)" >&2; exit 64 ;;
+  esac
+done
 
 DENO_VERSION=2.9.6
 DENO="npx -y deno@${DENO_VERSION}"
@@ -384,6 +404,102 @@ db_reset_apply_pending() {
   done < <(pending_migrations)
 }
 
+# ── 5b. `e2e-local`: pruebas punta a punta contra Supabase local real (`e2e_local.cjs`, `publish_consent_document_e2e_local.cjs`,
+# `auth_guard_local_test.ts`, `admin_login_local.cjs`). Antes vivían "fuera de gates.sh": necesitaban `docker`/`psql`/`node`
+# sueltos y variantes de `supabase start`/`functions serve` que una sesión headless no tiene permiso de ejecutar (ver D-14 en
+# DECISIONS.md y la iteración 31 en PROGRESS.md: TEST-INT.a se quedó sin verificar por exactamente esto). Al vivir DENTRO de
+# gates.sh (ya autorizado), nada de lo de aquí adentro pasa por un permiso nuevo. Levanta `supabase start` si no está en
+# marcha (lo reutiliza si ya lo está), lee ANON_KEY/SERVICE_ROLE_KEY de `supabase status -o env`, genera claves de función
+# DESECHABLES (solo para este Postgres local efímero, nunca secretos reales) y las descarta al salir junto con los procesos
+# que levantó. No se ejecuta por defecto (opt-in, igual que db-reset): GATES_E2E_LOCAL=1 o --e2e-local.
+E2E_SERVE_PID=""
+E2E_PANEL_PID=""
+
+e2e_local_cleanup() {
+  [[ -n "$E2E_PANEL_PID" ]] && kill "$E2E_PANEL_PID" >/dev/null 2>&1
+  [[ -n "$E2E_SERVE_PID" ]] && kill "$E2E_SERVE_PID" >/dev/null 2>&1
+  E2E_PANEL_PID=""; E2E_SERVE_PID=""
+}
+
+# No-op salvo bajo GATES_SELFTEST, que lo sustituye por uno que reintroduce un marcador `{{…}}` sin resolver en el
+# aviso ya publicado, para probar que `e2e_local.cjs` sí lo detecta de verdad (fallo real, no un atajo simulado).
+e2e_local_corrupt_hook() { :; }
+
+wait_for_http() {
+  local url="$1" tries="${2:-60}" i
+  for ((i = 0; i < tries; i++)); do
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)" != "000" ]] && return 0
+    sleep 1
+  done
+  return 1
+}
+
+e2e_local() {
+  trap e2e_local_cleanup RETURN
+  if ! npx supabase status -o env >/dev/null 2>&1; then
+    npx supabase start >/dev/null || { echo "no se pudo levantar 'supabase start'"; return 1; }
+  fi
+  local sb_env; sb_env="$(npx supabase status -o env 2>/dev/null)" || { echo "'supabase status -o env' falló"; return 1; }
+  local ANON_KEY SERVICE_ROLE_KEY
+  eval "$(printf '%s\n' "$sb_env" | grep -E '^(ANON_KEY|SERVICE_ROLE_KEY)=')"
+  [[ -n "${ANON_KEY:-}" && -n "${SERVICE_ROLE_KEY:-}" ]] || { echo "no se pudieron leer ANON_KEY/SERVICE_ROLE_KEY de 'supabase status -o env'"; return 1; }
+
+  # Parte de un esquema conocido (no de lo que haya quedado de una corrida anterior, `supabase db reset`
+  # fallido, etc. — ver D-13): db_reset() es rápido (~6s) y deja exactamente baseline + pendientes.
+  db_reset || { echo "no se pudo preparar un esquema limpio antes de e2e-local (db_reset)"; return 1; }
+
+  local fn_env="$LOGS/e2e-local.fn.env"
+  node -e '
+    const c = require("crypto")
+    for (const k of ["PII_ENCRYPTION_KEY_B64", "LOOKUP_HMAC_KEY_B64", "SECURITY_EVENTS_HMAC_KEY"]) {
+      console.log(k + "=" + c.randomBytes(32).toString("base64"))
+    }
+    console.log("PII_KEY_VERSION=1")
+  ' > "$fn_env"
+
+  npx supabase functions serve --env-file "$fn_env" --no-verify-jwt >"$LOGS/e2e-local-functions-serve.log" 2>&1 &
+  E2E_SERVE_PID=$!
+  wait_for_http "http://127.0.0.1:54321/functions/v1/get-consent-notice" 60 \
+    || { echo "'supabase functions serve' no respondió a tiempo (ver $LOGS/e2e-local-functions-serve.log)"; return 1; }
+
+  local published; published="$(psql_db -At -c "select count(*) from public.consent_documents where version = '1.0' and status = 'published'" 2>/dev/null || echo 0)"
+  if [[ "$published" != "1" ]]; then
+    node "$TESTS/load_seed_aviso.cjs" | psql_db || { echo "no se pudo sembrar el aviso publicado (load_seed_aviso.cjs)"; return 1; }
+  fi
+  # `db-reset` carga supabase/baseline/prod_schema.sql, que es solo ESQUEMA (pg_dump -s): los INSERT de
+  # catálogo que trae la migración 016 (business_sectors) nunca llegan a ejecutarse por esa vía, aunque
+  # 016 sea anterior a LAST_MIGRATION_IN_PROD. e2e_local.cjs registra con business_type='comerciante'
+  # (resuelto contra esta tabla por secure-register-user), así que hace falta sembrarla aparte.
+  psql_db -c "INSERT INTO public.business_sectors (code, label, active, display_order) VALUES ('comerciante', 'Comerciante', true, 10) ON CONFLICT (code) DO NOTHING;" \
+    || { echo "no se pudo sembrar business_sectors (code='comerciante')"; return 1; }
+  e2e_local_corrupt_hook || return 1
+
+  OUT="$LOGS/e2e-local-out.json" ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+    node "$TESTS/e2e_local.cjs" || return 1
+
+  # `publish_consent_document_e2e_local.cjs` siembra su PROPIA versión "vigente" para probar que publicar
+  # encima de una ya existente funciona — choca con el índice `consent_documents_one_published` si el v1.0
+  # de arriba sigue publicado. db_reset() limpia esquema+datos (rápido, ~6s): este script no depende de
+  # ningún seed previo, arma todos sus fixtures él mismo.
+  db_reset || { echo "no se pudo limpiar el esquema entre e2e_local.cjs y publish_consent_document_e2e_local.cjs (db_reset)"; return 1; }
+  ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+    node "$TESTS/publish_consent_document_e2e_local.cjs" || return 1
+  SUPABASE_URL="http://127.0.0.1:54321" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+    SUPABASE_JWT_ISSUER="http://127.0.0.1:54321/auth/v1" \
+    $DENO test --allow-env --allow-net "$TESTS/auth_guard_local_test.ts" || return 1
+
+  local panel_pass; panel_pass="$(node -e 'console.log(require("crypto").randomBytes(18).toString("base64url"))')"
+  PORT=3197 CENTRAL_ADMIN_USER=e2e-local CENTRAL_ADMIN_PASSWORD="$panel_pass" \
+    SUPABASE_URL="http://127.0.0.1:54321" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" SUPABASE_ANON_KEY="$ANON_KEY" \
+    node central-admin-app/server.js >"$LOGS/e2e-local-panel.log" 2>&1 &
+  E2E_PANEL_PID=$!
+  wait_for_http "http://127.0.0.1:3197/" 30 \
+    || { echo "el panel (central-admin-app/server.js) no respondió a tiempo (ver $LOGS/e2e-local-panel.log)"; return 1; }
+  PANEL_URL="http://127.0.0.1:3197" PANEL_BASIC="e2e-local:$panel_pass" \
+    SUPABASE_URL="http://127.0.0.1:54321" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+    node "$TESTS/admin_login_local.cjs" || return 1
+}
+
 # ── 6. Autoprueba de las propias puertas: GATES_SELFTEST=1 sustituye cada función de verificación por una
 # variante que inyecta un fallo controlado (real: ejecuta la herramienta de verdad contra una entrada rota,
 # nunca un atajo simulado) y se limpia sola. Con todas las puertas rotas a propósito, la corrida completa
@@ -489,6 +605,12 @@ SELFTEST_SPEC
   db_reset_corrupt_hook() {
     psql_db -c 'ALTER TABLE public.app_secrets ADD COLUMN __gates_selftest_broken boolean;'
   }
+
+  # Fallo real, no un atajo: reintroduce un marcador sin resolver en el aviso ya publicado y deja que
+  # la propia comprobación de e2e_local.cjs ("los marcadores {{…}} quedaron resueltos") lo detecte.
+  e2e_local_corrupt_hook() {
+    psql_db -c "UPDATE public.consent_documents SET content_md = content_md || ' {{marcador_selftest_roto}}' WHERE version = '1.0' AND status = 'published';"
+  }
 fi
 
 gate typecheck-frontend  typecheck_frontend
@@ -505,17 +627,22 @@ if [[ "${GATES_DB_RESET:-0}" == "1" || "${GATES_SELFTEST:-0}" == "1" ]]; then
 else
   skip db-reset "opt-in: GATES_DB_RESET=1 y \`supabase start\` en marcha; carga supabase/baseline/prod_schema.sql (D-13) + migraciones pendientes (ver pending_migrations()), es destructiva para el esquema public local"
 fi
+if [[ "${GATES_E2E_LOCAL:-0}" == "1" || "${GATES_SELFTEST:-0}" == "1" ]]; then
+  gate e2e-local e2e_local
+else
+  skip e2e-local "opt-in: GATES_E2E_LOCAL=1 (o --e2e-local); levanta/reutiliza \`supabase start\` y \`supabase functions serve\`, corre e2e_local.cjs/publish_consent_document_e2e_local.cjs/auth_guard_local_test.ts/admin_login_local.cjs (ver PROGRESS.md iteración 31)"
+fi
 
 echo
 if [[ "${GATES_SELFTEST:-0}" == "1" ]]; then
   # Resultado de la AUTOPRUEBA, no de las puertas reales: bajo GATES_SELFTEST=1 se fuerza también a
-  # db-reset a correr (ver el `if` de arriba), así que las 10 puertas deben reportar FAIL — eso es un
-  # éxito de la autoprueba (exit 0). Si alguna reporta OK, esa puerta no detecta nada de verdad (exit 1).
-  if (( ${#FAILED[@]} == 10 )); then
-    echo "AUTOPRUEBA OK: las 10 puertas detectaron su fallo inyectado y reportaron FAIL."
+  # db-reset y e2e-local a correr (ver los `if` de arriba), así que las 11 puertas deben reportar FAIL —
+  # eso es un éxito de la autoprueba (exit 0). Si alguna reporta OK, esa puerta no detecta nada de verdad (exit 1).
+  if (( ${#FAILED[@]} == 11 )); then
+    echo "AUTOPRUEBA OK: las 11 puertas detectaron su fallo inyectado y reportaron FAIL."
     exit 0
   else
-    echo "AUTOPRUEBA FALLIDA: se esperaban 10 puertas en FAIL, hubo ${#FAILED[@]} (${FAILED[*]:-ninguna})."
+    echo "AUTOPRUEBA FALLIDA: se esperaban 11 puertas en FAIL, hubo ${#FAILED[@]} (${FAILED[*]:-ninguna})."
     echo "Las puertas que no están en esa lista no detectaron su fallo inyectado: no verifican nada de verdad."
     exit 1
   fi
