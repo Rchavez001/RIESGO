@@ -897,3 +897,61 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
 - Riesgos / pendientes detectados: ninguno nuevo.
 - Porcentaje: estricto 11 de 28 = **39,3 %** (antes 35,7 %). Ponderado: T10 pasa de 85 % a 100 % →
   1265/2800 = **≈ 45,2 %** (antes ≈ 44,6 %).
+
+## Iteración 27 — 2026-09-30 — T11: `update-my-consent` y `submit-consent`; cierra T11
+- **Punto de partida:** T11 sin iniciar. Ninguna de las dos funciones existía en `supabase/functions/`. Depende de T04
+  (`auth-guard.ts`, hecho) y T07 (`consent_records`, hecho) — ambas desbloqueadas, siguiente tarea `[ ]` ejecutable en
+  `TASKS.md`.
+- **Diseño:** mismo patrón que `secure-register-user`/`get-consent-notice` (un `serve()` por archivo, cliente de
+  Supabase con service role a nivel de módulo, sin DI): más cercano a lo que ya hace la Fase 3 del módulo que al
+  esqueleto `handler.ts`/`index.ts` de `admin-consent` (pensado para acciones de administración con bitácora, no para
+  endpoints de usuario). `_shared/consent-write.ts` (nuevo) extrae `parsePurposes` y la inserción de una fila de
+  `consent_records` con IP/UA cifrados con AAD (SEC-04) — la misma forma que ya escribe `secure-register-user`, pero
+  sin tocar su copia local (no es parte de esta tarea y ya tiene sus propias pruebas).
+  - `update-my-consent` (REQ-08): `requireUser` (JWT del propio usuario); body `{purpose_code, action:'grant'|'revoke'}`
+    validado con zod ANTES de tocar la cuota (SEC-08, mismo orden que T10); carga el aviso vigente
+    (`loadPublishedNotice`) para resolver `purposes` y los campos que exige cada fila (`document_id`, `rendered_sha256`,
+    `settings_version`); la finalidad obligatoria no se puede tocar por esta vía (`400 required_purpose` — retirarla
+    significa pedir la baja, T13, no una fila aquí); escribe `decision='granted'|'revoked'`, `channel='mi_privacidad'`.
+  - `submit-consent` (REQ-09): mismo body que el registro
+    (`document_id, rendered_sha256, settings_version, decisions:[{purpose_code,decision}]`); solo tiene sentido si el
+    aviso vigente se publicó con `requires_reconsent=true` — si no, `409 reconsent_not_required` sin escribir nada (no
+    es un "aceptar aviso" genérico que compita con `update-my-consent` para las opcionales: decisión de contrato de API,
+    no de negocio, documentada en `TASKS.md` en vez de abrir una D-nn); huella distinta a la vigente → `409
+    notice_changed` (igual que el registro); finalidad obligatoria no otorgada → `400 missing_required_consent`, nada
+    escrito (el frontend decide luego, con eso, si ofrece baja o cerrar sesión — REQ-09 — pero esta función no decide
+    por él); si acepta, una fila por finalidad con `channel='reconsentimiento'`.
+  - Ambas: rate limit fail-closed (SEC-07) con bucket de identidad = `userId` ya verificado por `requireUser` (no
+    correo ni IP en claro — se pasa por el parámetro `email` de `checkRateLimit`, que solo lo usa como cadena opaca
+    para el HMAC; documentado en el propio código para que no se confunda con un correo real) además del bucket de IP
+    que `checkRateLimit` siempre revisa; IP exclusivamente de `getClientIp` (proxy de confianza, REQ-05), nunca del
+    body.
+- Cambios: `supabase/functions/_shared/consent-write.ts` (nuevo); `supabase/functions/update-my-consent/{index.ts,
+  index_test.ts}` (nuevos); `supabase/functions/submit-consent/{index.ts, index_test.ts}` (nuevos);
+  `.claude/loops/consentimiento/gates.sh` (`deno_check` y su copia bajo `GATES_SELFTEST` listan los dos `index.ts`
+  nuevos); `TASKS.md` (T11 `[x]`); este archivo.
+- Pruebas añadidas: 10 en `update-my-consent/index_test.ts` + 9 en `submit-consent/index_test.ts` (19 nuevas), contra la
+  función real levantada con `Deno.serve`, con una Supabase y un JWKS falsos detrás — el JWT es real (firmado con
+  `jose`), así que `requireUser` lo verifica criptográficamente, no se simula la verificación. Cubren los 3 criterios de
+  aceptación de la tarea (revocar opcional → fila `revoked`; no se puede revocar la obligatoria; re-consentimiento solo
+  si `requires_reconsent`) más: otorgar opcional → `granted`; finalidad desconocida → `400`; sesión anónima → `403`;
+  tipos de dato inválidos rechazados ANTES de llamar a la cuota (confirmado con una bandera que detecta si se llamó);
+  cuota no disponible → `503` fail-closed, nada escrito; método no permitido / preflight CORS; opcional omitida en
+  `submit-consent` → `denied` por omisión; cifrado de la IP verificado desencriptándola con `decryptConsentColumn` (no
+  solo "el campo no está en claro"). Dos de las comprobaciones centrales se verificaron además desactivando
+  temporalmente el guard correspondiente (comentario `TEMP-DISABLED-FOR-VERIFICATION`, revertido antes de continuar):
+  sin la línea `if (purpose.required) …` en `update-my-consent`, la prueba de la finalidad obligatoria falla con `200`
+  en vez de `400 required_purpose`; sin la comparación de huella en `submit-consent`, la prueba de huella distinta falla
+  con `200` en vez de `409 notice_changed` — ambas por la razón correcta, ambas revertidas y vueltas a pasar antes de
+  cerrar la tarea.
+- Gates: **OK completo** (`bash gates.sh`: typecheck-frontend, lint-frontend [14 = línea base, sin cambio], unit-frontend,
+  panel-unit, panel-e2e, deno-check [incluye los 2 `index.ts` nuevos], deno-test [19 pruebas nuevas, total del paquete],
+  sql-ciclo-de-vida, sql-guest-limit; db-reset SKIP explícito, como siempre).
+- Desviaciones de SPEC: ninguna. Decisión de contrato de API (no de negocio, no requiere D-nn): `submit-consent`
+  rechaza con `409 reconsent_not_required` cuando el aviso vigente no exige reconsentimiento, documentada en `TASKS.md`
+  junto a T11.
+- Riesgos / pendientes detectados: ninguno nuevo. Pendiente natural para T19 (frontend "Mi privacidad") y T20
+  (re-consentimiento al iniciar sesión): ambos endpoints ya existen y están probados, pero nada en el frontend los
+  llama todavía.
+- Porcentaje: estricto 12 de 28 = **42,9 %** (antes 39,3 %). Ponderado: T11 pasa de 0 % a 100 % →
+  1365/2800 = **≈ 48,8 %** (antes ≈ 45,2 %).

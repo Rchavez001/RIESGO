@@ -91,6 +91,7 @@ panel_e2e() {
 deno_check() {
   $DENO check supabase/functions/secure-register-user/index.ts supabase/functions/get-consent-notice/index.ts \
     supabase/functions/_shared/auth-guard.ts supabase/functions/admin-consent/index.ts \
+    supabase/functions/update-my-consent/index.ts supabase/functions/submit-consent/index.ts \
     ../.claude/loops/consentimiento/diag/diag-network-headers/index.ts
 }
 deno_test() {
@@ -342,6 +343,7 @@ SELFTEST_SPEC
     SELFTEST_CLEANUP+=("$f")
     $DENO check supabase/functions/secure-register-user/index.ts supabase/functions/get-consent-notice/index.ts \
       supabase/functions/_shared/auth-guard.ts supabase/functions/admin-consent/index.ts \
+      supabase/functions/update-my-consent/index.ts supabase/functions/submit-consent/index.ts \
       ../.claude/loops/consentimiento/diag/diag-network-headers/index.ts "$f"; rc=$?
     rm -f "$f"; return $rc
   }
