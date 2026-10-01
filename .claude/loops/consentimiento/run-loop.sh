@@ -9,7 +9,7 @@ LOOP_DIR=".claude/loops/consentimiento"
 WORK_DIR="loop-consentimiento"
 BRANCH="feature/consentimiento-lopdp"
 MAX_ITER="${MAX_ITER:-30}"
-MAX_TURNS="${MAX_TURNS:-80}"
+MAX_TURNS="${MAX_TURNS:-100}"
 PAUSE="${PAUSE:-5}"
 
 command -v claude >/dev/null || { echo "Claude Code (claude) no está instalado"; exit 1; }
@@ -58,10 +58,17 @@ for i in $(seq 1 "$MAX_ITER"); do
   # headless-settings.json: deniega tocar los propios archivos de permisos y del loop
   # (gates.sh, run-loop.sh) para que la ejecución headless no pueda ampliarse privilegios
   # ni alterar sus propias puertas de verificación.
+  # --output-format stream-json --verbose: vuelca cada turno (texto, uso de herramientas, resultados,
+  # permisos denegados) en JSONL dentro de $log, en vez de solo el texto final. Antes, cuando una
+  # iteración terminaba sin cierre limpio (p. ej. "Reached max turns"), la única forma de saber en qué
+  # se gastaron los turnos era buscar la transcripción completa en ~/.claude/projects/ a mano; ahora
+  # queda en el log de ESTA misma corrida. Los `grep` de abajo (promesas, límite de sesión) siguen
+  # funcionando igual: buscan una subcadena literal, y el JSON no la altera.
   claude -p "$(cat "$LOOP_DIR/PROMPT.md")" \
     --permission-mode acceptEdits \
     --settings "$LOOP_DIR/headless-settings.json" \
-    --max-turns "$MAX_TURNS" 2>&1 | tee "$log" || true
+    --max-turns "$MAX_TURNS" \
+    --output-format stream-json --verbose 2>&1 | tee "$log" || true
 
   # Límite de uso/sesión de Claude Code (no es un fallo de la iteración: no hay nada que reintentar
   # hasta que el límite se libere). Se detiene de inmediato, sin sumar a `fails` ni a la cuenta de
