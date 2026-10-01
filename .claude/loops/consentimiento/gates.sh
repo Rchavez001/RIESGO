@@ -219,6 +219,7 @@ sql_ciclo_de_vida_in() {
   while IFS= read -r f; do psql_in -d gates < "$f" || return 1; done < <(pending_migrations_consent)
   while IFS= read -r f; do psql_in -d gates < "$f" || return 1; done < <(consent_test_files)
   consent_records_concurrency_check "$container"
+  publish_consent_document_concurrency_check "$container"
 }
 
 # T07: inserciones concurrentes de consent_records deben mantener la cadena de hash válida. Necesita
@@ -257,6 +258,50 @@ consent_records_concurrency_check() {
       SELECT * INTO broken FROM public.verify_consent_chain();
       IF FOUND THEN
         RAISE EXCEPTION 'la cadena quedó rota tras % inserciones concurrentes: fila % — %', $n, broken.first_broken_id, broken.detail;
+      END IF;
+    END \$\$;
+  "
+}
+
+# 080: dos llamadas a publish_consent_document() en paralelo (misma fila vigente) deben serializarse por
+# el SELECT ... FOR UPDATE de la función, nunca dejar dos filas 'published' a la vez ni corromper la
+# bitácora. Misma razón que consent_records_concurrency_check: necesita conexiones REALES simultáneas.
+publish_consent_document_concurrency_check() {
+  local container="$1"
+  docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null -d gates -c "
+    INSERT INTO public.users (id, email) VALUES
+      ('b1111111-1111-4111-8111-111111111111', 'pdc-concurrency-creator@test.local'),
+      ('b2222222-2222-4222-8222-222222222222', 'pdc-concurrency-admin@test.local');
+    INSERT INTO public.admin_roles (user_id, role) VALUES ('b2222222-2222-4222-8222-222222222222', 'privacy_admin');
+    INSERT INTO public.consent_documents (version, title, content_md, content_sha256, purposes, status, created_by) VALUES
+      ('pdc-conc-A', 'A', 'mdA', 'shaA', '[]'::jsonb, 'draft', 'b1111111-1111-4111-8111-111111111111'),
+      ('pdc-conc-B', 'B', 'mdB', 'shaB', '[]'::jsonb, 'draft', 'b1111111-1111-4111-8111-111111111111');
+  " || return 1
+  local v pid pids=() rc=0
+  for v in pdc-conc-A pdc-conc-B; do
+    docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null -d gates -c "
+      SELECT public.publish_consent_document((SELECT id FROM public.consent_documents WHERE version = '$v'),
+        'b2222222-2222-4222-8222-222222222222', 'privacy_admin', 'aal2', 'hmac-pdc-concurrency', 'concurrencia $v');
+    " &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+  if [[ $rc -ne 0 ]]; then echo "una publicación concurrente de publish_consent_document falló"; return 1; fi
+  docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null -d gates -c "
+    DO \$\$
+    DECLARE published_count int; audit_count int; broken record;
+    BEGIN
+      SELECT count(*) INTO published_count FROM public.consent_documents WHERE status = 'published';
+      IF published_count <> 1 THEN
+        RAISE EXCEPTION 'se esperaba exactamente 1 publicada tras publicar en paralelo, hubo %', published_count;
+      END IF;
+      SELECT count(*) INTO audit_count FROM public.admin_audit_log WHERE reason IN ('concurrencia pdc-conc-A', 'concurrencia pdc-conc-B');
+      IF audit_count <> 2 THEN
+        RAISE EXCEPTION 'se esperaban 2 filas de bitácora de la concurrencia, hubo %', audit_count;
+      END IF;
+      SELECT * INTO broken FROM public.verify_audit_chain();
+      IF FOUND THEN
+        RAISE EXCEPTION 'la cadena de bitácora quedó rota tras publicar en paralelo: fila % — %', broken.first_broken_id, broken.detail;
       END IF;
     END \$\$;
   "

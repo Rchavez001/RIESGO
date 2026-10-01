@@ -1,4 +1,4 @@
-# Plan de release único — migraciones pendientes (074–078) a producción
+# Plan de release único — migraciones pendientes (074–081) a producción
 
 **Estado: GUARDADO, NO SE EJECUTA POR SEPARADO.** Decisión del responsable: esto se aplicará en **un único release** junto con las
 funciones, el frontend y el aviso ya publicado. No se aplican por su cuenta antes de tiempo. Proyecto `wbbcjiqzbzswxsmwjqlw`.
@@ -21,11 +21,15 @@ y a las secciones 3/4/6, en el mismo commit que crea la migración. Este documen
 | 4 | `077_consent_documents_no_gap_on_retire.sql` | 073 (tabla `consent_documents`, ya en prod) | Restricción diferible (`CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED`): retirar la versión publicada sin publicar un reemplazo en la misma transacción falla | El trigger existe y es `DEFERRABLE`/`INITIALLY DEFERRED` (consulta en sección 4). Prueba funcional completa (retirar+publicar de verdad) queda pendiente hasta que exista un aviso publicado real — no se puede probar en prod con `consent_documents` vacía |
 | 5 | `078_data_subject_requests_case_numbers_and_status_update.sql` | 073 (tabla `data_subject_requests`, ya en prod) | Nueva tabla `data_subject_request_counters` (uno por año) y `next_case_number()` pasa de secuencia global a numeración `CD-AAAA-NNNNNN` que reinicia en `000001` cada año; `data_subject_requests` gana `update_data_subject_request_status()` (solo `service_role`, con bitácora atómica) como única vía para cambiar `status`/`resolved_at`/`resolution_note_ciphertext` — antes la tabla no tenía ninguna vía de `UPDATE`; `DELETE` queda bloqueado siempre | `next_case_number()` da `CD-<año>-000001` la primera vez tras el release (contador nuevo); el trigger `data_subject_requests_restrict_update` existe; permisos de la función (`service_role` sí, `authenticated`/`anon` no) |
 | 6 | `079_email_transport_and_outbox.sql` | 073 (tabla `users`/`admin_roles`, ya en prod) | Tres tablas nuevas (T12.b): `email_transport_settings` (versionada, solo INSERT, patrón de 075 — modo `resend`/`smtp`, placeholder v1 en modo `resend`), `email_transport_tests` (resultado de cada correo de prueba, append-only, sin destinatario ni cuerpo) y `email_outbox` (avisos pendientes cuando el envío falla, solo `reference_table`/`reference_id`, sin datos del titular; `UPDATE`/`DELETE` bloqueados salvo `mark_email_outbox_sent()`). RLS activa, sin acceso para `anon`/`authenticated` en ninguna de las tres | `email_transport_settings_current` da la v1 en modo `resend`; `mark_email_outbox_sent()` existe y solo la ejecuta `service_role`; `email_transport_tests`/`email_outbox` sin privilegios para `anon`/`authenticated` |
+| 7 | `080_publish_consent_document_atomic.sql` | 073 (tabla `consent_documents`), 077 (restricción diferible) | Nueva función `publish_consent_document()`: retira la vigente + publica el borrador + bitácora en UNA transacción real (con candado consultivo `pg_advisory_xact_lock`), con rol `privacy_admin`/`aal2`/motivo/"cuatro ojos" verificados DENTRO de la función. Arregla T14 (`admin-consent`): publicar con dos llamadas `UPDATE` sueltas violaba SIEMPRE la restricción diferible de 077 en cuanto ya había una versión publicada — verificado contra Postgres real antes de esta migración, ver PROGRESS.md. No toca filas existentes | La función existe y solo la ejecuta `service_role`; publicar con una vigente existente funciona (antes fallaba siempre); dos publicaciones simultáneas dejan exactamente una vigente (prueba de concurrencia en `gates.sh`) |
+| 8 | `081_fix_digest_schema_qualification.sql` | 073 (las 4 funciones que corrige) | `CREATE OR REPLACE` de `consent_records_chain_trigger`/`verify_consent_chain`/`admin_audit_log_chain_trigger`/`verify_audit_chain`: califican `extensions.digest(...)` en vez de `digest(...)` a secas. Arregla un defecto preexistente de 073 (ya en prod): en Supabase real pgcrypto vive en `extensions`, no en `public`; cualquier función `SECURITY DEFINER ... SET search_path = public` que dispare estos triggers (`unlink_user_consent_evidence` 074, `update_data_subject_request_status` 078, `publish_consent_document` 080, y las que vengan) fallaba con `function digest(text, unknown) does not exist` — confirmado también en `update_data_subject_request_status`, ya desplegable, no solo en 080. Sin este arreglo, 080 (y en la práctica cualquier acción administrativa que mute `consent_records`/`admin_audit_log` desde una función con `search_path` acotado) falla en producción. No toca filas existentes, solo `CREATE OR REPLACE FUNCTION` | `verify_consent_chain()`/`verify_audit_chain()` siguen dando vacío; una llamada real a `update_data_subject_request_status()` o `publish_consent_document()` ya no da `function digest(text, unknown) does not exist` |
 
-**Orden de aplicación: 074 → 075 → 076 → 077 → 078 → 079.** Es el orden en que `supabase db push` las aplica automáticamente (por
-número de archivo); no hay forma de empujar 077/078/079 sin arrastrar 076, que ya ocupa ese número en la carpeta. 076 no es del módulo de
-consentimiento, pero viaja en el mismo `push` porque le tocó ese hueco; es segura por su cuenta (`CREATE OR REPLACE`, no toca datos,
+**Orden de aplicación: 074 → 075 → 076 → 077 → 078 → 079 → 080 → 081.** Es el orden en que `supabase db push` las aplica automáticamente
+(por número de archivo); no hay forma de empujar 077/078/079/080/081 sin arrastrar 076, que ya ocupa ese número en la carpeta. 076 no es del
+módulo de consentimiento, pero viaja en el mismo `push` porque le tocó ese hueco; es segura por su cuenta (`CREATE OR REPLACE`, no toca datos,
 sin guarda de precondición) y no depende de ni bloquea a las demás.
+**081 es la más urgente de aplicar en cuanto se abra la ventana de release**: sin ella, `update_data_subject_request_status()` (078, ya
+cerrada) también falla contra producción real en cuanto alguien la llame — no es exclusivo de 080.
 
 ## Qué cambia y qué NO
 - 074: ver tabla arriba.
@@ -38,6 +42,12 @@ sin guarda de precondición) y no depende de ni bloquea a las demás.
   ninguna tabla existente. Nadie llama todavía a `mark_email_outbox_sent()` ni escribe en `email_outbox`/`email_transport_tests`
   (las acciones de `admin-consent` que lo harán son T12.c/T12.d, aún sin hacer): aplicar 079 no cambia el comportamiento de ninguna
   función ya desplegada, solo dejan el esquema listo para cuando esas tareas se cierren.
+- 080: ver tabla arriba. Función nueva; no toca filas existentes. Nadie la llama todavía desde producción (la acción `publish` de
+  `admin-consent` que la usa no está desplegada hasta que se despliegue la función junto con el resto de esta ventana).
+- 081: ver tabla arriba. `CREATE OR REPLACE FUNCTION` puro sobre 4 funciones de 073; no cambia esquema ni borra datos. Si `consent_records`/
+  `admin_audit_log` ya tienen filas en producción (evidencia real), sus cadenas (`row_hash`/`prev_hash`) NO se recalculan ni se tocan — solo
+  cambia cómo se calculan los `row_hash` de las filas FUTURAS. `verify_consent_chain()`/`verify_audit_chain()` deben seguir dando vacío
+  antes y después (ver sección 4).
 - **No toca** `users`, `auth`, ni ninguna tabla que use la app hoy. Las funciones desplegadas (`secure-register-user` v18 y el resto) no
   leen ninguna de estas tablas: siguen funcionando igual (076 sí las usa, pero solo endurece una regla ya vigente en el frontend).
 - **Fuera de esta ventana**: `get-consent-notice`, la nueva `secure-register-user` y el frontend del módulo de consentimiento.
@@ -70,7 +80,7 @@ union all select 'privacy_settings con verificación pendiente', count(*) from p
 
 ```bash
 cd shield-ecuador-app
-supabase migration list        # esperado: 073 en local y remoto; 074, 075, 076, 077 y 078 solo en local
+supabase migration list        # esperado: 073 en local y remoto; 074-081 solo en local
 ```
 
 ## 2. Respaldo (obligatorio antes del `db push`)
@@ -91,8 +101,8 @@ supabase migration list        # esperado: 073 en local y remoto; 074, 075, 076,
   5. No se continúa sin la confirmación de que la copia externa existe y se verificó.
 - `supabase db dump` no incluye el esquema `auth`; las cuentas de Auth dependen de la copia diaria/PITR del panel. Anotarlo en la constancia.
 - Qué se pierde de verdad al aplicar: 4 columnas de `privacy_settings` (las 3 de verificación están vacías —lo comprueba la guarda— y
-  `is_current` solo dice cuál es la vigente, que pasa a ser la de mayor versión). Ningún dato de usuarios. 076, 077, 078 y 079 no
-  eliminan nada (079 solo crea tablas nuevas).
+  `is_current` solo dice cuál es la vigente, que pasa a ser la de mayor versión). Ningún dato de usuarios. 076-081 no eliminan nada
+  (079 solo crea tablas nuevas; 080/081 solo crean/reemplazan funciones).
 
 ## 3. Aplicar (una sola orden)
 ```bash
@@ -101,10 +111,12 @@ supabase db push
 # 075_privacy_settings_versioning.sql, 076_learning_guest_limit.sql,
 # 077_consent_documents_no_gap_on_retire.sql,
 # 078_data_subject_requests_case_numbers_and_status_update.sql,
-# 079_email_transport_and_outbox.sql. Si lista algo más o menos: PARAR.
+# 079_email_transport_and_outbox.sql,
+# 080_publish_consent_document_atomic.sql,
+# 081_fix_digest_schema_qualification.sql. Si lista algo más o menos: PARAR.
 ```
 Cada migración corre en su propia transacción. Si falla una, las anteriores ya aplicadas quedan así (074 y 075 son seguras por sí
-solas; 076, 077, 078 y 079 también, al ser aditivas). Si falla una guarda, no se cambia nada de esa migración en particular.
+solas; 076-081 también, al ser aditivas). Si falla una guarda, no se cambia nada de esa migración en particular.
 
 ## 4. Verificación posterior (solo lectura)
 ```sql
@@ -131,9 +143,20 @@ select count(*) from public.data_subject_request_counters;   -- 0 (nadie ha llam
 select has_function_privilege('service_role', 'public.update_data_subject_request_status(uuid,uuid,text,text,text,jsonb,text)', 'EXECUTE'),
        has_function_privilege('authenticated', 'public.update_data_subject_request_status(uuid,uuid,text,text,text,jsonb,text)', 'EXECUTE'),
        has_function_privilege('anon', 'public.update_data_subject_request_status(uuid,uuid,text,text,text,jsonb,text)', 'EXECUTE');   -- t | f | f
+
+-- 080 (nuevo): la función existe, permisos correctos
+select has_function_privilege('service_role', 'public.publish_consent_document(uuid,uuid,text,text,text,text)', 'EXECUTE'),
+       has_function_privilege('authenticated', 'public.publish_consent_document(uuid,uuid,text,text,text,text)', 'EXECUTE'),
+       has_function_privilege('anon', 'public.publish_consent_document(uuid,uuid,text,text,text,text)', 'EXECUTE');   -- t | f | f
+
+-- 081 (nuevo): las cadenas se siguen verificando OK con las funciones corregidas, y digest() ya no explota
+-- con search_path acotado (reproducir el error directo es innecesario; esta consulta ya ejercita digest()
+-- calificado con extensions. a través de verify_*_chain()).
+select * from public.verify_consent_chain();   -- 0 filas (igual que antes de 081: no cambia el resultado, solo el cálculo)
+select * from public.verify_audit_chain();     -- 0 filas
 ```
 ```bash
-supabase migration list        # 074, 075, 076, 077, 078 y 079 en local y remoto
+supabase migration list        # 074-081 en local y remoto
 ```
 ```sql
 -- 076 (nuevo): la función lleva el código de error estable
@@ -185,6 +208,12 @@ no se revierte: se corrige hacia delante. Con la tabla vacía:
   public.email_transport_settings, public.email_transport_tests, public.email_outbox CASCADE` (arrastra la vista, los triggers y
   `mark_email_outbox_sent()`). Nada más depende de estas tres tablas (ninguna función desplegada las usa todavía). Si ya hay avisos
   reales en `email_outbox` o pruebas en `email_transport_tests`, no se revierte: se corrige hacia delante, igual que el resto.
+- **080:** trivial mientras no se haya publicado nada real con ella — `DROP FUNCTION public.publish_consent_document(uuid,uuid,text,text,text,text);`.
+  Si ya se usó para publicar una versión real, revertir no deshace esa publicación (el documento sigue publicado/retirado según
+  corresponda); no hay pérdida de datos, solo se relaja de vuelta a lo que había antes (nada: la función no existía).
+- **081:** revertir significaría volver a `digest(...)` sin calificar en las 4 funciones — NO tiene sentido hacerlo: eso reintroduce el
+  bug que 081 arregla. Si algo saliera mal con 081 en particular, se corrige hacia delante con otra migración `CREATE OR REPLACE`, nunca
+  revirtiendo a la versión rota.
 No la preparo hasta que la pidas: no se espera usarla.
 
 ## Orden del release único (todo o nada)
@@ -193,7 +222,7 @@ están completos (D-07); (2) T03 medido y la cabecera de IP de confianza decidid
 verificado (sección 2); (4) `gates.sh` en verde sobre la rama del release; (5) PR revisado.
 
 1. Secretos (los crea la persona responsable, nunca el loop): `LOOKUP_HMAC_KEY_B64` (ya existe), `TRUSTED_PROXY_HOPS` si aplica.
-2. `supabase db push` → 074 + 075 + 076 + 077 + 078 + 079 (secciones 1–4 de este plan).
+2. `supabase db push` → 074 + 075 + 076 + 077 + 078 + 079 + 080 + 081 (secciones 1–4 de este plan).
 3. `supabase functions deploy` de `get-consent-notice` y `secure-register-user` (y el resto de funciones del módulo que lleguen en el release).
 4. Publicar el aviso v1.0 con los datos reales (sin marcadores sin resolver). En este punto, hacer la prueba funcional pendiente
    de 077 (sección 4): con un segundo borrador listo, retirar v1.0 sin reemplazo debe fallar; retirar y publicar el reemplazo en

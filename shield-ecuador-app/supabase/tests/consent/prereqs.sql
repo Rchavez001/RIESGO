@@ -1,5 +1,11 @@
 -- Lo mínimo de Supabase que necesitan las migraciones 073/074 en un Postgres vacío (solo para pruebas).
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- pgcrypto va en el esquema `extensions`, como en un Supabase real (nunca en `public`): instalarlo en
+-- `public` escondía que `consent_records_chain_trigger`/`admin_audit_log_chain_trigger`/`verify_*_chain`
+-- (073) llamaban a `digest()` sin calificar el esquema — roto contra Supabase real para cualquier función
+-- `SECURITY DEFINER ... SET search_path = public` que dispare esos triggers (encontrado verificando 080
+-- contra un Supabase local real; arreglado en la migración 081, ver su cabecera).
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid());
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
