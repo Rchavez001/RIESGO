@@ -143,7 +143,7 @@ Recomendación técnica: A. Es la única que da reproducibilidad real sin tocar 
 Tareas bloqueadas: T00-extra-exec.
 Decisión: Opción A modificada (A'). El dump de esquema de producción se guarda en `supabase/baseline/prod_schema.sql`, FUERA de `supabase/migrations/`. La carpeta de migraciones no se modifica ni se archiva nada (001–072 siguen donde están), para no desalinear `supabase_migrations.schema_migrations` de producción ni romper el `supabase db push` del plan de release. La puerta `db-reset` de `gates.sh` se reemplaza por "baseline + pendientes": base local con auth/storage de `supabase start`, carga del dump de producción y aplicación en orden de las migraciones pendientes según `PLAN_PRODUCCION_RELEASE.md` (hoy 074–077); después, las pruebas SQL. Esa puerta funciona además como ensayo del release sobre un esquema idéntico al de producción, y se incluye en la autoprueba (`GATES_SELFTEST`). El dump lo genero yo fuera de la sesión (`supabase db dump --linked`, solo lectura), se revisa en busca de secretos antes de versionarlo y se regenera después de cada release. Las opciones B, C y D quedan descartadas.
 
-### D-14 — Esta sesión no puede verificar una migración SQL nueva contra Postgres real ni editar `gates.sh`: ¿cómo seguir con T12.b y tareas futuras que necesiten lo mismo?  [ABIERTA]
+### D-14 — Esta sesión no puede verificar una migración SQL nueva contra Postgres real ni editar `gates.sh`: ¿cómo seguir con T12.b y tareas futuras que necesiten lo mismo?  [DECIDIDA 2026-10-01]
 Contexto (T12, iteración 28, 2026-10-01): al intentar T12.b (migración `email_transport_settings`/`email_transport_tests`/`email_outbox`) choqué con dos bloqueos distintos, ninguno relacionado con el diseño de la migración en sí:
 1. **No pude editar `.claude/loops/consentimiento/gates.sh`.** El intento de `Edit` dio directamente "File is in a directory that is denied by your permission settings" — esto es la protección del propio harness de Claude Code sobre `.claude/` como directorio sensible (la razón por la que, según PROGRESS.md, el paquete del loop ya se partió en dos sitios), no la lista `deny` de `headless-settings.json` (que ni siquiera llegué a activar). Pasó igual aunque el prompt describe esta ejecución como "modo interactivo".
 2. **No pude ejecutar `docker run`/`psql` sueltos.** Cada intento (`docker run --rm postgres:16 …`, un script en `C:/tmp` que hacía lo mismo, incluso `where deno` o `npx -y deno@2.9.6 --version` sin el patrón exacto ya en la lista) devolvió "This command requires approval" sin que nadie lo aprobara en el turno. Lo único que SÍ corrió fue la invocación exacta ya permitida `bash .claude/loops/consentimiento/gates.sh` (y las variantes `npx -y deno@2.9.6 check:*`/`test:*`, `npx tsc *`, `npx eslint`, etc., ya en `.claude/settings.json`); con env vars delante (`GATES_ONLY=… bash …`) ya no coincide con el patrón y también se bloqueó.
@@ -154,4 +154,16 @@ B) Relajar `headless-settings.json`/el permiso del harness para que esta sesión
 C) Mover la verificación SQL de nuevas migraciones a un paso explícitamente manual fuera del loop (yo redacto migración+prueba+diff de `gates.sh` como propuesta, un humano los aplica y confirma el resultado antes de que la tarea se de por cerrada), documentado como excepción permanente al protocolo estándar del loop para cualquier tarea que cree tablas/migraciones nuevas.
 Recomendación técnica: A como excepción puntual cada vez que se dé el bloqueo (rápido, no relaja ninguna protección); si se repite con frecuencia, formalizarlo como C.
 Tareas bloqueadas: T12.b (y, en cascada, T12.c, T12.d, T13, T17 en la parte que necesite tablas/migraciones nuevas verificadas en esta misma sesión).
-Decisión:
+Decisión: **A, aplicada en una sesión interactiva aparte (2026-10-01)** — sin la restricción de permisos que bloqueó la
+iteración 28 (headless), se editó `.claude/loops/consentimiento/gates.sh` y se corrió `docker run`/`psql` sueltos sin
+problema. En el mismo gesto se generalizó `gates.sh` (commit aparte del de la migración): ahora descubre solas (1) las
+migraciones pendientes de `supabase/migrations/` (número de archivo mayor que `LAST_MIGRATION_IN_PROD`, con una lista
+de exclusión explícita para migraciones de otro módulo que no comparten el esquema mínimo de pruebas, hoy solo 076) y
+(2) los archivos de prueba SQL nuevos de `supabase/tests/consent/*.sql` (orden fijo para los que tienen dependencia de
+datos entre sí; cualquier archivo nuevo se añade solo al final). Con eso, T12.b (migración 079 + su prueba) se verificó
+contra un Postgres 16 efímero real dos veces (`GATES_ONLY=sql-ciclo-de-vida bash .claude/loops/consentimiento/gates.sh`)
+**sin volver a tocar `gates.sh`** — el caso general que motivó esta decisión queda resuelto, no solo el caso puntual de
+079. Para la próxima vez que el loop headless (iteración normal, no una sesión interactiva como esta) tope con el mismo
+bloqueo de permisos al crear una migración: usar la opción A tal como se describió arriba (una sesión sin esa
+restricción hace el gesto completo), ya que generalizar `gates.sh` solo evita tener que volver a editarlo — no resuelve
+por sí solo la restricción de permisos de la sesión headless sobre `.claude/` ni sobre `docker`/`psql` sueltos.

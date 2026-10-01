@@ -20,9 +20,10 @@ y a las secciones 3/4/6, en el mismo commit que crea la migración. Este documen
 | 3 | `076_learning_guest_limit.sql` | **Ninguna del módulo de consentimiento** — usa `learning_progress`/`learning_dojos`/`learning_attempts` de la línea base, ya en producción. Independiente de 073–075 y de 077. | Tope de 10 preguntas para invitados en `learning_answer`; `learning_start_exam` rechaza sesión anónima. Ambas capas para INV-SEC (P2), ajeno al módulo de consentimiento. | Invitado de prueba: la pregunta 11 da `GUEST_LIMIT_REACHED`; presentar examen como invitado da `GUEST_LIMIT_REACHED` |
 | 4 | `077_consent_documents_no_gap_on_retire.sql` | 073 (tabla `consent_documents`, ya en prod) | Restricción diferible (`CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED`): retirar la versión publicada sin publicar un reemplazo en la misma transacción falla | El trigger existe y es `DEFERRABLE`/`INITIALLY DEFERRED` (consulta en sección 4). Prueba funcional completa (retirar+publicar de verdad) queda pendiente hasta que exista un aviso publicado real — no se puede probar en prod con `consent_documents` vacía |
 | 5 | `078_data_subject_requests_case_numbers_and_status_update.sql` | 073 (tabla `data_subject_requests`, ya en prod) | Nueva tabla `data_subject_request_counters` (uno por año) y `next_case_number()` pasa de secuencia global a numeración `CD-AAAA-NNNNNN` que reinicia en `000001` cada año; `data_subject_requests` gana `update_data_subject_request_status()` (solo `service_role`, con bitácora atómica) como única vía para cambiar `status`/`resolved_at`/`resolution_note_ciphertext` — antes la tabla no tenía ninguna vía de `UPDATE`; `DELETE` queda bloqueado siempre | `next_case_number()` da `CD-<año>-000001` la primera vez tras el release (contador nuevo); el trigger `data_subject_requests_restrict_update` existe; permisos de la función (`service_role` sí, `authenticated`/`anon` no) |
+| 6 | `079_email_transport_and_outbox.sql` | 073 (tabla `users`/`admin_roles`, ya en prod) | Tres tablas nuevas (T12.b): `email_transport_settings` (versionada, solo INSERT, patrón de 075 — modo `resend`/`smtp`, placeholder v1 en modo `resend`), `email_transport_tests` (resultado de cada correo de prueba, append-only, sin destinatario ni cuerpo) y `email_outbox` (avisos pendientes cuando el envío falla, solo `reference_table`/`reference_id`, sin datos del titular; `UPDATE`/`DELETE` bloqueados salvo `mark_email_outbox_sent()`). RLS activa, sin acceso para `anon`/`authenticated` en ninguna de las tres | `email_transport_settings_current` da la v1 en modo `resend`; `mark_email_outbox_sent()` existe y solo la ejecuta `service_role`; `email_transport_tests`/`email_outbox` sin privilegios para `anon`/`authenticated` |
 
-**Orden de aplicación: 074 → 075 → 076 → 077 → 078.** Es el orden en que `supabase db push` las aplica automáticamente (por número de
-archivo); no hay forma de empujar 077/078 sin arrastrar 076, que ya ocupa ese número en la carpeta. 076 no es del módulo de
+**Orden de aplicación: 074 → 075 → 076 → 077 → 078 → 079.** Es el orden en que `supabase db push` las aplica automáticamente (por
+número de archivo); no hay forma de empujar 077/078/079 sin arrastrar 076, que ya ocupa ese número en la carpeta. 076 no es del módulo de
 consentimiento, pero viaja en el mismo `push` porque le tocó ese hueco; es segura por su cuenta (`CREATE OR REPLACE`, no toca datos,
 sin guarda de precondición) y no depende de ni bloquea a las demás.
 
@@ -33,6 +34,10 @@ sin guarda de precondición) y no depende de ni bloquea a las demás.
 - 077: ver tabla arriba. Solo añade una función y un trigger; no toca filas existentes ni esquema de columnas.
 - 078: ver tabla arriba. Tabla nueva (`data_subject_request_counters`, vacía al aplicar) y dos funciones nuevas; no toca filas
   existentes de `data_subject_requests` (hoy vacía en prod, según la comprobación de la sección 1) ni cambia columnas.
+- 079: ver tabla arriba. Tres tablas nuevas, todas vacías al aplicar salvo el placeholder de `email_transport_settings` v1; no toca
+  ninguna tabla existente. Nadie llama todavía a `mark_email_outbox_sent()` ni escribe en `email_outbox`/`email_transport_tests`
+  (las acciones de `admin-consent` que lo harán son T12.c/T12.d, aún sin hacer): aplicar 079 no cambia el comportamiento de ninguna
+  función ya desplegada, solo dejan el esquema listo para cuando esas tareas se cierren.
 - **No toca** `users`, `auth`, ni ninguna tabla que use la app hoy. Las funciones desplegadas (`secure-register-user` v18 y el resto) no
   leen ninguna de estas tablas: siguen funcionando igual (076 sí las usa, pero solo endurece una regla ya vigente en el frontend).
 - **Fuera de esta ventana**: `get-consent-notice`, la nueva `secure-register-user` y el frontend del módulo de consentimiento.
@@ -45,10 +50,9 @@ sin guarda de precondición) y no depende de ni bloquea a las demás.
 - [ ] Disco local con al menos 2 GB libres (el 100 % de `C:` ya causó un incidente).
 
 ## 1. Comprobaciones de solo lectura (SQL Editor del panel, o `psql` al pooler)
-Las guardas de 074/075 abortan solas si esto no se cumple, pero conviene verlo antes. 076, 077 y 078 no tienen guardas de
+Las guardas de 074/075 abortan solas si esto no se cumple, pero conviene verlo antes. 076, 077, 078 y 079 no tienen guardas de
 precondición (076 es un `CREATE OR REPLACE` puro; 077 no falla por datos existentes, solo cambia el comportamiento futuro de un
-`UPDATE` que retire una versión publicada; 078 crea objetos nuevos y no toca filas de `data_subject_requests`, que la comprobación
-de abajo ya espera en 0).
+`UPDATE` que retire una versión publicada; 078 y 079 crean objetos nuevos y no tocan filas existentes).
 ```sql
 -- 074 aborta si consent_records ya tiene evidencia (no reescribe hashes).
 select 'consent_records'          as tabla, count(*) from public.consent_records
@@ -87,7 +91,8 @@ supabase migration list        # esperado: 073 en local y remoto; 074, 075, 076,
   5. No se continúa sin la confirmación de que la copia externa existe y se verificó.
 - `supabase db dump` no incluye el esquema `auth`; las cuentas de Auth dependen de la copia diaria/PITR del panel. Anotarlo en la constancia.
 - Qué se pierde de verdad al aplicar: 4 columnas de `privacy_settings` (las 3 de verificación están vacías —lo comprueba la guarda— y
-  `is_current` solo dice cuál es la vigente, que pasa a ser la de mayor versión). Ningún dato de usuarios. 076, 077 y 078 no eliminan nada.
+  `is_current` solo dice cuál es la vigente, que pasa a ser la de mayor versión). Ningún dato de usuarios. 076, 077, 078 y 079 no
+  eliminan nada (079 solo crea tablas nuevas).
 
 ## 3. Aplicar (una sola orden)
 ```bash
@@ -95,10 +100,11 @@ supabase db push
 # Debe listar EXACTAMENTE, en este orden: 074_consent_evidence_unlink_and_stable_hash.sql,
 # 075_privacy_settings_versioning.sql, 076_learning_guest_limit.sql,
 # 077_consent_documents_no_gap_on_retire.sql,
-# 078_data_subject_requests_case_numbers_and_status_update.sql. Si lista algo más o menos: PARAR.
+# 078_data_subject_requests_case_numbers_and_status_update.sql,
+# 079_email_transport_and_outbox.sql. Si lista algo más o menos: PARAR.
 ```
 Cada migración corre en su propia transacción. Si falla una, las anteriores ya aplicadas quedan así (074 y 075 son seguras por sí
-solas; 076, 077 y 078 también, al ser aditivas). Si falla una guarda, no se cambia nada de esa migración en particular.
+solas; 076, 077, 078 y 079 también, al ser aditivas). Si falla una guarda, no se cambia nada de esa migración en particular.
 
 ## 4. Verificación posterior (solo lectura)
 ```sql
@@ -127,7 +133,7 @@ select has_function_privilege('service_role', 'public.update_data_subject_reques
        has_function_privilege('anon', 'public.update_data_subject_request_status(uuid,uuid,text,text,text,jsonb,text)', 'EXECUTE');   -- t | f | f
 ```
 ```bash
-supabase migration list        # 074, 075, 076, 077 y 078 en local y remoto
+supabase migration list        # 074, 075, 076, 077, 078 y 079 en local y remoto
 ```
 ```sql
 -- 076 (nuevo): la función lleva el código de error estable
@@ -136,6 +142,18 @@ select prosrc ~ 'GUEST_LIMIT_REACHED' from pg_proc where proname = 'learning_sta
 ```
 Prueba funcional de 076 (fuera del SQL Editor, con una sesión anónima real): responder 11 preguntas de un dojo como invitado →
 la 11.ª da `GUEST_LIMIT_REACHED`; llamar a `learning_start_exam` como invitado → `GUEST_LIMIT_REACHED`.
+
+```sql
+-- 079 (nuevo): transporte de correo en modo resend desde el placeholder, y permisos de la cola
+select transport_version, mode from public.email_transport_settings_current;   -- 1 | resend
+select has_function_privilege('service_role', 'public.mark_email_outbox_sent(uuid)', 'EXECUTE'),
+       has_function_privilege('authenticated', 'public.mark_email_outbox_sent(uuid)', 'EXECUTE'),
+       has_function_privilege('anon', 'public.mark_email_outbox_sent(uuid)', 'EXECUTE');  -- t | f | f
+select count(*) from public.email_outbox;         -- 0 (nadie ha encolado un aviso aún)
+select count(*) from public.email_transport_tests; -- 0 (nadie ha probado el transporte aún)
+```
+079 no tiene prueba funcional de envío real pendiente para este release: ninguna función desplegada escribe todavía en estas tres
+tablas (T12.c/T12.d, que sí lo harán, no están hechas). Solo se verifica que el esquema y los permisos quedaron como se espera.
 
 Desde fuera, con la clave anon de la app: `GET /rest/v1/privacy_settings_current` debe dar "permission denied"; `GET /rest/v1/consent_documents`
 debe dar `[]`. Y comprobar que el login y el registro actuales siguen funcionando (registro de prueba con la versión vigente de la app).
@@ -163,6 +181,10 @@ no se revierte: se corrige hacia delante. Con la tabla vacía:
   `next_case_number()` con la secuencia vieja (`data_subject_request_seq`, que 078 borra — habría que volver a crearla). Si ya
   existen casos con `case_number` nuevo (`CD-AAAA-NNNNNN` reiniciado), no se revierte: son válidos y únicos por sí mismos, no hay
   colisión posible con revertir la función que los generó.
+- **079:** trivial mientras no se haya encolado ningún aviso real ni corrido ninguna prueba de transporte — `DROP TABLE
+  public.email_transport_settings, public.email_transport_tests, public.email_outbox CASCADE` (arrastra la vista, los triggers y
+  `mark_email_outbox_sent()`). Nada más depende de estas tres tablas (ninguna función desplegada las usa todavía). Si ya hay avisos
+  reales en `email_outbox` o pruebas en `email_transport_tests`, no se revierte: se corrige hacia delante, igual que el resto.
 No la preparo hasta que la pidas: no se espera usarla.
 
 ## Orden del release único (todo o nada)
@@ -171,7 +193,7 @@ están completos (D-07); (2) T03 medido y la cabecera de IP de confianza decidid
 verificado (sección 2); (4) `gates.sh` en verde sobre la rama del release; (5) PR revisado.
 
 1. Secretos (los crea la persona responsable, nunca el loop): `LOOKUP_HMAC_KEY_B64` (ya existe), `TRUSTED_PROXY_HOPS` si aplica.
-2. `supabase db push` → 074 + 075 + 076 + 077 + 078 (secciones 1–4 de este plan).
+2. `supabase db push` → 074 + 075 + 076 + 077 + 078 + 079 (secciones 1–4 de este plan).
 3. `supabase functions deploy` de `get-consent-notice` y `secure-register-user` (y el resto de funciones del módulo que lleguen en el release).
 4. Publicar el aviso v1.0 con los datos reales (sin marcadores sin resolver). En este punto, hacer la prueba funcional pendiente
    de 077 (sección 4): con un segundo borrador listo, retirar v1.0 sin reemplazo debe fallar; retirar y publicar el reemplazo en
