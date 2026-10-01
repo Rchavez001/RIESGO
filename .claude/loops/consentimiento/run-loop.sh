@@ -21,6 +21,20 @@ if [[ "$current" != "$BRANCH" ]]; then
 fi
 mkdir -p "$WORK_DIR/logs"
 
+# Mismo aviso que al empezar cada iteración (ver más abajo), pero disparado al TERMINAR el loop
+# por cualquier motivo (los `exit 0/1/2/3/4` de abajo, o una señal/error no previsto) — con `trap ... EXIT`
+# se ejecuta siempre, así el límite de sesión (exit 4) ya no puede dejar cambios sin commitear sin que
+# se note en la terminal/log de esa misma corrida.
+warn_dirty_on_exit() {
+  local dirty
+  dirty="$(git status --short 2>/dev/null || true)"
+  if [[ -n "$dirty" ]]; then
+    echo "⚠️  El loop está terminando con cambios sin commitear:"
+    echo "$dirty" | sed 's/^/    /'
+  fi
+}
+trap warn_dirty_on_exit EXIT
+
 fails=0
 for i in $(seq 1 "$MAX_ITER"); do
   ts="$(date +%Y%m%d-%H%M%S)"
