@@ -27,6 +27,19 @@ for i in $(seq 1 "$MAX_ITER"); do
   log="$WORK_DIR/logs/iter-$(printf '%03d' "$i")-$ts.log"
   echo "════ Iteración $i/$MAX_ITER · $ts ════"
 
+  # Aviso de archivos sin commitear DE UNA ITERACIÓN ANTERIOR (p. ej. una que murió a mitad de camino
+  # por un límite de sesión, como iter-002-20261001-000211.log: 843 líneas de T14 quedaron sin commitear
+  # y sin que nadie se enterara hasta una sesión interactiva aparte, varias horas después). El paso 1 del
+  # protocolo (PROMPT.md) ya le pide al agente que las evalúe, pero si la iteración siguiente también
+  # muere pronto (p. ej. otro límite de sesión inmediato), nadie ve el aviso salvo que alguien lea los
+  # logs a mano. Esto lo deja a la vista en la terminal/log de ESTA iteración, antes de invocar a Claude
+  # — no bloquea el loop (el agente puede seguir resolviéndolo él mismo), solo evita que pase inadvertido.
+  dirty="$(git status --short 2>/dev/null || true)"
+  if [[ -n "$dirty" ]]; then
+    echo "⚠️  Hay cambios sin commitear de ANTES de esta iteración — revisar si son de una iteración interrumpida:"
+    echo "$dirty" | sed 's/^/    /'
+  fi
+
   # Los permisos (allow/deny) se leen de .claude/settings.json del proyecto, más
   # headless-settings.json: deniega tocar los propios archivos de permisos y del loop
   # (gates.sh, run-loop.sh) para que la ejecución headless no pueda ampliarse privilegios
