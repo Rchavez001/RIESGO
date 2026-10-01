@@ -29,6 +29,69 @@ LOGS="$WORK/logs"; mkdir -p "$LOGS"
 MIGRATIONS=supabase/migrations
 TESTS=supabase/tests/consent
 
+# ── Descubrimiento automático de migraciones y pruebas pendientes ──────────────────────────────────────────────────
+# Última migración ya aplicada en producción (ver "Tabla resumen" en PLAN_PRODUCCION_RELEASE.md): toda
+# migración de supabase/migrations/ con número de archivo mayor se trata como pendiente. Así una migración
+# nueva (con su prueba en supabase/tests/consent/) se recoge sola en las puertas SQL sin tocar este script.
+# Actualizar este número en el mismo commit que PLAN_PRODUCCION_RELEASE.md tras cada release real a producción.
+LAST_MIGRATION_IN_PROD=73
+
+pending_migrations() {
+  local f base num
+  for f in "$MIGRATIONS"/*.sql; do
+    base="$(basename "$f")"
+    num="${base%%_*}"
+    [[ "$num" =~ ^[0-9]+$ ]] || continue
+    (( 10#$num > LAST_MIGRATION_IN_PROD )) && printf '%s\n' "$f"
+  done | sort
+}
+
+# Migraciones pendientes que NO son del módulo de consentimiento: viven en el mismo directorio por
+# numeración de archivo, pero pertenecen a otro módulo con su propia puerta (076, learning_guest_limit →
+# sql-guest-limit) y declaran variables tipadas contra tablas (`learning_progress`, …) que el esquema
+# mínimo de `prereqs.sql` no crea — PL/pgSQL valida esos tipos al CREATE FUNCTION, así que cargarla aquí
+# rompería la puerta sin que el módulo de consentimiento tenga nada que ver. `db-reset` sí la aplica
+# (carga el esquema completo de producción, donde esas tablas existen): esta lista solo afecta a la
+# cadena de consentimiento, vía pending_migrations_consent().
+PENDING_MIGRATIONS_CONSENT_EXCLUDE=(076_learning_guest_limit)
+
+pending_migrations_consent() {
+  local f base x skip
+  while IFS= read -r f; do
+    base="$(basename "$f")"
+    skip=0
+    for x in "${PENDING_MIGRATIONS_CONSENT_EXCLUDE[@]}"; do
+      [[ "${base%.sql}" == "$x" ]] && { skip=1; break; }
+    done
+    (( skip )) || printf '%s\n' "$f"
+  done < <(pending_migrations)
+}
+
+# Pruebas SQL del módulo. `prereqs.sql` (prerrequisitos) se carga aparte siempre primero, y
+# `baseline_pending_migrations.sql` la corre solo la puerta `db-reset` contra el baseline de producción, no
+# aquí: ambas quedan excluidas del descubrimiento. El resto tiene dependencias de orden documentadas en su
+# propia cabecera (p. ej. `lifecycle.sql` siembra `consent_records` con ids 1-3 que `consent_documents_lifecycle.sql`
+# da por hecho que ya existen) — esas van primero, en el orden fijo de abajo. Cualquier archivo NUEVO del
+# directorio que no esté en esa lista se añade solo, en orden alfabético, al final: así una prueba nueva se
+# ejecuta sin editar este script (si dependiera del orden de las de abajo, añadirla aquí a mano).
+CONSENT_TESTS_ORDERED=(lifecycle.sql settings_versioning.sql consent_documents_lifecycle.sql data_subject_requests_lifecycle.sql admin_roles.sql)
+CONSENT_TESTS_EXCLUDE=(prereqs.sql baseline_pending_migrations.sql)
+
+consent_test_files() {
+  local f base x known
+  for base in "${CONSENT_TESTS_ORDERED[@]}"; do
+    [[ -f "$TESTS/$base" ]] && printf '%s\n' "$TESTS/$base"
+  done
+  for f in "$TESTS"/*.sql; do
+    base="$(basename "$f")"
+    known=0
+    for x in "${CONSENT_TESTS_ORDERED[@]}" "${CONSENT_TESTS_EXCLUDE[@]}"; do
+      [[ "$base" == "$x" ]] && { known=1; break; }
+    done
+    (( known )) || printf '%s\n' "$f"
+  done
+}
+
 # ── Línea base: puertas que ya fallaban ANTES de este módulo. Cada una con su motivo; se siguen ejecutando y mostrando. ──
 BASELINE_FAIL=(
   # (se rellena tras medir; ver "Línea base de gates" en PROGRESS.md)
@@ -145,20 +208,16 @@ with_pg() {
 
 sql_ciclo_de_vida() { with_pg consent-gates sql_ciclo_de_vida_in; }
 sql_ciclo_de_vida_in() {
-  local container="$1"
+  local container="$1" f
   psql_in() { docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 -q -o /dev/null "$@"; }
-  psql_in -d postgres -c "CREATE DATABASE gates" && \
-  psql_in -d gates < "$TESTS/prereqs.sql" && \
-  psql_in -d gates < "$MIGRATIONS/073_consent_module_foundation.sql" && \
-  psql_in -d gates < "$MIGRATIONS/074_consent_evidence_unlink_and_stable_hash.sql" && \
-  psql_in -d gates < "$MIGRATIONS/075_privacy_settings_versioning.sql" && \
-  psql_in -d gates < "$MIGRATIONS/077_consent_documents_no_gap_on_retire.sql" && \
-  psql_in -d gates < "$MIGRATIONS/078_data_subject_requests_case_numbers_and_status_update.sql" && \
-  psql_in -d gates < "$TESTS/lifecycle.sql" && \
-  psql_in -d gates < "$TESTS/settings_versioning.sql" && \
-  psql_in -d gates < "$TESTS/consent_documents_lifecycle.sql" && \
-  psql_in -d gates < "$TESTS/data_subject_requests_lifecycle.sql" && \
-  psql_in -d gates < "$TESTS/admin_roles.sql" && \
+  psql_in -d postgres -c "CREATE DATABASE gates" || return 1
+  psql_in -d gates < "$TESTS/prereqs.sql" || return 1
+  # 073 (fundación del módulo) siempre primero; luego toda migración pendiente del módulo de
+  # consentimiento (> LAST_MIGRATION_IN_PROD, sin las ajenas de PENDING_MIGRATIONS_CONSENT_EXCLUDE),
+  # descubierta sola — ver pending_migrations_consent() arriba.
+  psql_in -d gates < "$MIGRATIONS/073_consent_module_foundation.sql" || return 1
+  while IFS= read -r f; do psql_in -d gates < "$f" || return 1; done < <(pending_migrations_consent)
+  while IFS= read -r f; do psql_in -d gates < "$f" || return 1; done < <(consent_test_files)
   consent_records_concurrency_check "$container"
 }
 
@@ -225,19 +284,11 @@ sql_guest_limit_in() {
 # gestionadas): reinicia solo el esquema `public`, carga `supabase/baseline/prod_schema.sql`
 # (esquema de producción tras 001-073, revisado y sin secretos), verifica que el resultado coincide
 # con ese archivo (diff vacío salvo ruido de formato conocido), aplica en orden las migraciones
-# aún pendientes de producción (hoy 074-078, ver PLAN_PRODUCCION_RELEASE.md — mantener esta lista en
-# el mismo commit que actualice ese plan) y corre las aserciones de esquema/permisos del ensayo de
-# release. Es destructiva para el esquema `public` de la base local (igual que antes con
-# `supabase db reset`): por eso sigue tras GATES_DB_RESET=1.
+# aún pendientes de producción (descubiertas solas por pending_migrations(), ver arriba) y corre las
+# aserciones de esquema/permisos del ensayo de release. Es destructiva para el esquema `public` de la
+# base local (igual que antes con `supabase db reset`): por eso sigue tras GATES_DB_RESET=1.
 DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 BASELINE="supabase/baseline/prod_schema.sql"
-PENDING_MIGRATIONS=(
-  074_consent_evidence_unlink_and_stable_hash
-  075_privacy_settings_versioning
-  076_learning_guest_limit
-  077_consent_documents_no_gap_on_retire
-  078_data_subject_requests_case_numbers_and_status_update
-)
 
 # No-op salvo bajo GATES_SELFTEST, que la sustituye por una que rompe el esquema a propósito
 # justo después de cargar el baseline, para probar que la comparación de abajo sí lo detecta.
@@ -283,9 +334,9 @@ db_reset_verify_baseline_diff() {
 
 db_reset_apply_pending() {
   local m
-  for m in "${PENDING_MIGRATIONS[@]}"; do
-    psql_db -o /dev/null -f "$MIGRATIONS/$m.sql" || { echo "migración pendiente $m falló"; return 1; }
-  done
+  while IFS= read -r m; do
+    psql_db -o /dev/null -f "$m" || { echo "migración pendiente $(basename "$m") falló"; return 1; }
+  done < <(pending_migrations)
 }
 
 # ── 6. Autoprueba de las propias puertas: GATES_SELFTEST=1 sustituye cada función de verificación por una
@@ -407,7 +458,7 @@ gate sql-guest-limit     sql_guest_limit
 if [[ "${GATES_DB_RESET:-0}" == "1" || "${GATES_SELFTEST:-0}" == "1" ]]; then
   gate db-reset db_reset
 else
-  skip db-reset "opt-in: GATES_DB_RESET=1 y \`supabase start\` en marcha; carga supabase/baseline/prod_schema.sql (D-13) + migraciones 074-078, es destructiva para el esquema public local"
+  skip db-reset "opt-in: GATES_DB_RESET=1 y \`supabase start\` en marcha; carga supabase/baseline/prod_schema.sql (D-13) + migraciones pendientes (ver pending_migrations()), es destructiva para el esquema public local"
 fi
 
 echo
