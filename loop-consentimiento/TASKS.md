@@ -186,8 +186,9 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - Si el envío del correo falla, el caso **se registra igual**, el titular ve su número de caso y el aviso queda pendiente en `email_outbox` (T12).
   - **Tests:** caso creado, 2 correos en `FakeEmailSender`, fecha límite correcta en días calendario (incluye un plazo que cruza fin de semana: cuenta igual), rate limit, y **envío fallido → caso registrado + aviso pendiente**.
 
-- [ ] **T14 — `admin-consent`: versiones y publicación** (REQ-01, REQ-13 a–d, SEC-02)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. La función `admin-consent` no existe (confirmado con `ls supabase/functions/`); no confundir con `T14-fix`, que es el versionado de `privacy_settings` (migración 075, ya hecho) y no aporta nada a esta tarea. Depende de T04 (`auth-guard.ts`) y T06 (modelo de `consent_documents`, ya hecho).
+- [x] **T14 — `admin-consent`: versiones y publicación** (REQ-01, REQ-13 a–d, SEC-02) (hecha 2026-10-01, commit `f23df35`; checkbox corregido 2026-10-01 — el mensaje de ese commit decía "TASKS.md: T14 cerrada" pero su diff nunca tocó esta línea)
+  - **Resultado:** `admin-consent` (`handler.ts`/`index.ts`) con acciones de borrador, diff, preview, publish (vía `publish_consent_document()`, migración 080, RPC atómica con `pg_advisory_xact_lock`) y retire; motivo obligatorio; cuatro ojos; bitácora con before/after. 33/33 tests (`handler_test.ts`) + verificación punta a punta contra Postgres real (`publish_consent_document_e2e_local.cjs`, TOTP real) que reprodujo el fallo de `publishDraft` con dos `UPDATE` sueltos antes de la migración 080 y confirmó el arreglo después.
+  - **Estado real (2026-09-29, reconciliación — histórico, superado el 2026-10-01):** Sin iniciar. La función `admin-consent` no existe (confirmado con `ls supabase/functions/`); no confundir con `T14-fix`, que es el versionado de `privacy_settings` (migración 075, ya hecho) y no aporta nada a esta tarea. Depende de T04 (`auth-guard.ts`) y T06 (modelo de `consent_documents`, ya hecho).
   - Acciones de borrador, diff, preview, publish (transacción: retira vigente + publica nueva),
     retire; motivo obligatorio; cuatro ojos si está activo; bitácora con before/after.
   - **Tests:** editor no publica; admin publica; con cuatro ojos el autor no publica su borrador;
