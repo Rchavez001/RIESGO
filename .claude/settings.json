@@ -26,7 +26,6 @@
       "Bash(/c/Users/aps-ecuador/.claude/skills/gstack/browse/dist/browse wait *)",
       "Bash(taskkill //PID 34224 //F)",
       "Bash(\"/c/Users/aps-ecuador/.claude/skills/gstack/browse/dist/browse\" stop *)",
-      "Bash(npx supabase *)",
       "Bash(/c/Users/aps-ecuador/.claude/skills/gstack/browse/dist/browse attrs *)",
       "Bash(gcloud run *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://cyberdojo-admin-61855290194.us-central1.run.app/)",
@@ -100,6 +99,15 @@
       "Bash(rm -r:*)",
       "Bash(Remove-Item -Recurse:*)",
       "Bash(*.bundle*)",
+      "Bash(*--linked*)",
+      "Bash(*--db-url*)",
+      "Bash(*supabase db push*)",
+      "Bash(*supabase db reset*)",
+      "Bash(*supabase functions deploy*)",
+      "Bash(*supabase secrets*)",
+      "Bash(*supabase link*)",
+      "Bash(*supabase migration repair*)",
+      "Bash(*supabase projects*)",
       "PowerShell(git gc:*)",
       "PowerShell(git reflog:*)",
       "PowerShell(git prune:*)",
@@ -117,7 +125,16 @@
       "PowerShell(Remove-Item:*)",
       "PowerShell(rm:*)",
       "PowerShell(del:*)",
-      "PowerShell(*.bundle*)"
+      "PowerShell(*.bundle*)",
+      "PowerShell(*--linked*)",
+      "PowerShell(*--db-url*)",
+      "PowerShell(*supabase db push*)",
+      "PowerShell(*supabase db reset*)",
+      "PowerShell(*supabase functions deploy*)",
+      "PowerShell(*supabase secrets*)",
+      "PowerShell(*supabase link*)",
+      "PowerShell(*supabase migration repair*)",
+      "PowerShell(*supabase projects*)"
     ]
   }
 }
