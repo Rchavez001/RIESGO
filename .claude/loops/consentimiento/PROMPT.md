@@ -38,13 +38,24 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 4. **Pruebas primero.** Escribe o amplía las pruebas que materializan los criterios de aceptación
    (incluye casos negativos: usuario sin rol, token manipulado, IP en el body, texto de otra versión,
    intento de UPDATE/DELETE sobre evidencia). Confirma que fallan por la razón correcta.
+   **Toda operación que escriba en la BD necesita al menos una prueba contra Postgres real; los fakes
+   en memoria no bastan para cerrar una tarea.** (2026-10-01: `admin-consent`/T14 publicaba con dos
+   llamadas sueltas que SIEMPRE fallaban contra Postgres real por una restricción `DEFERRABLE` — los 24
+   tests de la función pasaban igual porque usaban un store en memoria que nunca ejecuta esa restricción.
+   Ver T14 y TEST-INTEGRACION en TASKS.md, PROGRESS.md.) Para una Edge Function con un `Deps` inyectado
+   (store en memoria + `supabase/tests/consent/*.sql` o un script `_local.cjs` contra `supabase start`),
+   la prueba de integración puede vivir en cualquiera de los dos sitios — lo que no vale es dejar una
+   operación de escritura cubierta SOLO por el fake.
 
 5. **Implementar** el cambio mínimo que las haga pasar, respetando las REGLAS DURAS de abajo.
 
 6. **Verificar.** Ejecuta `bash .claude/loops/consentimiento/gates.sh`. Todos los gates deben
    terminar en código 0. Si algo falla, corrige y repite (máx. 3 ciclos). Si tras 3 ciclos sigue
-   fallando: revierte los cambios de esta tarea (`git restore`/`git stash`), documenta el error en
-   `PROGRESS.md`, marca la tarea `⚠ REINTENTAR` con el motivo y termina la iteración.
+   fallando: guarda los cambios de esta tarea con `git stash push -m "iter-N-fallida-<tarea>"`
+   (nunca `git restore`/`git checkout --`/`git checkout .`: esos DESCARTAN el trabajo sin
+   commitear; el stash lo conserva para que un humano decida si algo es rescatable), anota el
+   nombre exacto del stash en `PROGRESS.md`, documenta el error, marca la tarea `⚠ REINTENTAR`
+   con el motivo y termina la iteración.
    - Por defecto, `panel-e2e` corre solo en los perfiles `desktop-chrome` y `pixel-7-chrome`.
    - **Verificación completa obligatoria:** ejecuta además `GATES_FULL=1 bash .claude/loops/consentimiento/gates.sh`
      (los 7 perfiles de `playwright.admin.config.ts`) **cada 5 iteraciones** (cuando el número de
@@ -64,7 +75,9 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
      - Desviaciones de SPEC: <ninguna | detalle>
      - Riesgos / pendientes detectados: <...>
      ```
-   - `git add -A && git commit -m "feat(consent): Tnn <título corto> [REQ-xx]"`.
+   - `git add <ruta1> <ruta2> ...` listando explícitamente cada archivo que tocó esta iteración
+     (nunca `git add -A` ni `git add .`: arrastrarían cualquier cambio ajeno sin commitear que
+     hubiera en el árbol) y luego `git commit -m "feat(consent): Tnn <título corto> [REQ-xx]"`.
    - Termina tu respuesta con `<promise>ITERACION_OK</promise>`.
 
 8. **Condiciones de salida especiales.**
