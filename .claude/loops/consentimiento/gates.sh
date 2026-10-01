@@ -414,11 +414,14 @@ db_reset_apply_pending() {
 # que levantó. No se ejecuta por defecto (opt-in, igual que db-reset): GATES_E2E_LOCAL=1 o --e2e-local.
 E2E_SERVE_PID=""
 E2E_PANEL_PID=""
+E2E_TMPDIR=""
 
 e2e_local_cleanup() {
   [[ -n "$E2E_PANEL_PID" ]] && kill "$E2E_PANEL_PID" >/dev/null 2>&1
   [[ -n "$E2E_SERVE_PID" ]] && kill "$E2E_SERVE_PID" >/dev/null 2>&1
   E2E_PANEL_PID=""; E2E_SERVE_PID=""
+  [[ -n "$E2E_TMPDIR" ]] && rm -rf "$E2E_TMPDIR"
+  E2E_TMPDIR=""
 }
 
 # No-op salvo bajo GATES_SELFTEST, que lo sustituye por uno que reintroduce un marcador `{{…}}` sin resolver en el
@@ -448,7 +451,12 @@ e2e_local() {
   # fallido, etc. — ver D-13): db_reset() es rápido (~6s) y deja exactamente baseline + pendientes.
   db_reset || { echo "no se pudo preparar un esquema limpio antes de e2e-local (db_reset)"; return 1; }
 
-  local fn_env="$LOGS/e2e-local.fn.env"
+  # Artefactos de ESTA corrida (sobre todo el .env con las claves de función) fuera del repo, en una
+  # carpeta temporal que e2e_local_cleanup() borra siempre al salir: nunca deben quedar sueltos en
+  # loop-consentimiento/logs/ (ver .gitignore de esa carpeta) ni, mucho menos, commiteados.
+  E2E_TMPDIR="$(mktemp -d)" || { echo "no se pudo crear el directorio temporal de e2e-local"; return 1; }
+
+  local fn_env="$E2E_TMPDIR/e2e-local.fn.env"
   node -e '
     const c = require("crypto")
     for (const k of ["PII_ENCRYPTION_KEY_B64", "LOOKUP_HMAC_KEY_B64", "SECURITY_EVENTS_HMAC_KEY"]) {
@@ -457,10 +465,10 @@ e2e_local() {
     console.log("PII_KEY_VERSION=1")
   ' > "$fn_env"
 
-  npx supabase functions serve --env-file "$fn_env" --no-verify-jwt >"$LOGS/e2e-local-functions-serve.log" 2>&1 &
+  npx supabase functions serve --env-file "$fn_env" --no-verify-jwt >"$E2E_TMPDIR/functions-serve.log" 2>&1 &
   E2E_SERVE_PID=$!
   wait_for_http "http://127.0.0.1:54321/functions/v1/get-consent-notice" 60 \
-    || { echo "'supabase functions serve' no respondió a tiempo (ver $LOGS/e2e-local-functions-serve.log)"; return 1; }
+    || { echo "'supabase functions serve' no respondió a tiempo"; cat "$E2E_TMPDIR/functions-serve.log" 2>/dev/null; return 1; }
 
   local published; published="$(psql_db -At -c "select count(*) from public.consent_documents where version = '1.0' and status = 'published'" 2>/dev/null || echo 0)"
   if [[ "$published" != "1" ]]; then
@@ -474,7 +482,7 @@ e2e_local() {
     || { echo "no se pudo sembrar business_sectors (code='comerciante')"; return 1; }
   e2e_local_corrupt_hook || return 1
 
-  OUT="$LOGS/e2e-local-out.json" ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+  OUT="$E2E_TMPDIR/e2e-local-out.json" ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
     node "$TESTS/e2e_local.cjs" || return 1
 
   # `publish_consent_document_e2e_local.cjs` siembra su PROPIA versión "vigente" para probar que publicar
@@ -491,10 +499,10 @@ e2e_local() {
   local panel_pass; panel_pass="$(node -e 'console.log(require("crypto").randomBytes(18).toString("base64url"))')"
   PORT=3197 CENTRAL_ADMIN_USER=e2e-local CENTRAL_ADMIN_PASSWORD="$panel_pass" \
     SUPABASE_URL="http://127.0.0.1:54321" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" SUPABASE_ANON_KEY="$ANON_KEY" \
-    node central-admin-app/server.js >"$LOGS/e2e-local-panel.log" 2>&1 &
+    node central-admin-app/server.js >"$E2E_TMPDIR/panel.log" 2>&1 &
   E2E_PANEL_PID=$!
   wait_for_http "http://127.0.0.1:3197/" 30 \
-    || { echo "el panel (central-admin-app/server.js) no respondió a tiempo (ver $LOGS/e2e-local-panel.log)"; return 1; }
+    || { echo "el panel (central-admin-app/server.js) no respondió a tiempo"; cat "$E2E_TMPDIR/panel.log" 2>/dev/null; return 1; }
   PANEL_URL="http://127.0.0.1:3197" PANEL_BASIC="e2e-local:$panel_pass" \
     SUPABASE_URL="http://127.0.0.1:54321" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
     node "$TESTS/admin_login_local.cjs" || return 1

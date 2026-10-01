@@ -1,2 +1,3 @@
-*.log
-db-reset-*.sql
+*
+!.gitignore
+!.gitkeep
