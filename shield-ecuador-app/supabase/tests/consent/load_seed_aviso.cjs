@@ -12,7 +12,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 
-const seedPath = path.resolve(__dirname, '../../../../.claude/loops/consentimiento/seed/aviso_consentimiento_v1.0.md')
+const seedPath = path.resolve(__dirname, '../../../../loop-consentimiento/seed/aviso_consentimiento_v1.0.md')
 const raw = fs.readFileSync(seedPath, 'utf8').replace(/\r\n/g, '\n')
 
 const purposesComment = raw.match(/<!--\s*\nFINALIDADES[\s\S]*?-->\s*$/)

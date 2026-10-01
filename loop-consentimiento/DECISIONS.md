@@ -86,7 +86,7 @@ Decisión:
 
 ### D-08 — ¿Qué cabecera trae la IP real del titular en Supabase hospedado?  [ABIERTA]
 Contexto: medido en LOCAL (proxy Kong): añade la IP real AL FINAL de `X-Forwarded-For` y deja delante lo que envíe el cliente; `X-Real-IP` la fija el proxy. La primera entrada es falsificable. Falta medir el hospedado (probablemente hay Cloudflare delante). Afecta la IP de la evidencia (REQ-05), el rate limit y `security_events` (T03-sec).
-Método (sin desplegar nada): consulta del Logs Explorer sobre `function_edge_logs`; solo si no alcanza, una función de diagnóstico temporal con JWT de admin. Ver `.claude/loops/consentimiento/diag/README.md`.
+Método (sin desplegar nada): consulta del Logs Explorer sobre `function_edge_logs`; solo si no alcanza, una función de diagnóstico temporal con JWT de admin. Ver `loop-consentimiento/diag/README.md`.
 Opciones: A) `cf-connecting-ip` B) posición fija en `X-Forwarded-For` (`TRUSTED_PROXY_HOPS`) C) `X-Real-IP`
 Recomendación técnica: la que resulte de la medición; sin medir, no cambiar el rate limit (con la topología equivocada todos compartirían un bucket).
 Tareas bloqueadas: T03-prod, T03-sec, T99 (paso a producción).

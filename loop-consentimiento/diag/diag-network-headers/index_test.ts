@@ -1,4 +1,4 @@
-// Run: deno test --allow-env --allow-net .claude/loops/consentimiento/diag/diag-network-headers/index_test.ts
+// Run: deno test --allow-env --allow-net loop-consentimiento/diag/diag-network-headers/index_test.ts
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts"
 
 const fakeCalls: string[] = []

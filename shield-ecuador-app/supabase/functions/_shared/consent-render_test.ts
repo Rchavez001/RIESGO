@@ -68,7 +68,7 @@ Deno.test('la huella es estable y cambia si cambia cualquier valor que el usuari
 })
 
 Deno.test('el seed real del aviso v1.0 se renderiza limpio con datos completos', () => {
-  const seed = Deno.readTextFileSync(new URL('../../../../.claude/loops/consentimiento/seed/aviso_consentimiento_v1.0.md', import.meta.url))
+  const seed = Deno.readTextFileSync(new URL('../../../../loop-consentimiento/seed/aviso_consentimiento_v1.0.md', import.meta.url))
   const out = renderConsent(seed, SETTINGS, DOC)
   assertEquals(out.unknown, [], 'el seed usa un marcador que el renderizador no conoce')
   assertEquals(out.unresolved, [])
@@ -79,7 +79,7 @@ Deno.test('el seed real del aviso v1.0 se renderiza limpio con datos completos',
 })
 
 Deno.test('el seed real con datos INCOMPLETOS reporta exactamente lo que falta (lo que bloquearía publicar)', () => {
-  const seed = Deno.readTextFileSync(new URL('../../../../.claude/loops/consentimiento/seed/aviso_consentimiento_v1.0.md', import.meta.url))
+  const seed = Deno.readTextFileSync(new URL('../../../../loop-consentimiento/seed/aviso_consentimiento_v1.0.md', import.meta.url))
   const out = renderConsent(seed, { ...SETTINGS, controller_name: null, controller_address: null, controller_phone: null, dpo_contact: null, dpo_name: null }, { version: '1.0', published_at: null })
   assertEquals(out.unknown, [])
   assertEquals(out.unresolved.sort(), ['dpo_contacto', 'fecha_vigencia', 'responsable_domicilio', 'responsable_nombre', 'responsable_telefono'])

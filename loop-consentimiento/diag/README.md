@@ -54,7 +54,7 @@ blanca de cabeceras de red de la propia petición, no escribe nada, no registra 
 
 ```bash
 # 1. copiar a supabase/functions (desde la raíz del repo)
-cp -r .claude/loops/consentimiento/diag/diag-network-headers shield-ecuador-app/supabase/functions/
+cp -r loop-consentimiento/diag/diag-network-headers shield-ecuador-app/supabase/functions/
 rm shield-ecuador-app/supabase/functions/diag-network-headers/index_test.ts
 
 # 2. desplegar SOLO esa función

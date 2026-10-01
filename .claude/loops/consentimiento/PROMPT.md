@@ -9,13 +9,13 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 
 | Archivo | Uso |
 |---|---|
-| `.claude/loops/consentimiento/SPEC.md` | Requisitos (REQ-xx, SEC-xx) y modelo de datos. Fuente de verdad. |
-| `.claude/loops/consentimiento/TASKS.md` | Backlog ordenado con criterios de aceptación. Marca `[x]` al cerrar. |
-| `.claude/loops/consentimiento/PROGRESS.md` | Bitácora de iteraciones. Añade una entrada al final. Nunca borres entradas. |
-| `.claude/loops/consentimiento/DECISIONS.md` | Preguntas que requieren decisión humana y decisiones ya tomadas. |
-| `.claude/loops/consentimiento/gates.sh` | Comandos de verificación del repo (lo creas en T00). |
-| `.claude/loops/consentimiento/seed/aviso_consentimiento_v1.0.md` | Texto semilla del aviso v1.0. |
-| `.claude/loops/consentimiento/PLAN_PRODUCCION_RELEASE.md` | Plan de release a producción: TODAS las migraciones aún sin aplicar, con orden, dependencias y verificación posterior de cada una. Se actualiza en cada iteración que cree una migración (ver REGLAS DURAS). |
+| `loop-consentimiento/SPEC.md` | Requisitos (REQ-xx, SEC-xx) y modelo de datos. Fuente de verdad. |
+| `loop-consentimiento/TASKS.md` | Backlog ordenado con criterios de aceptación. Marca `[x]` al cerrar. |
+| `loop-consentimiento/PROGRESS.md` | Bitácora de iteraciones. Añade una entrada al final. Nunca borres entradas. |
+| `loop-consentimiento/DECISIONS.md` | Preguntas que requieren decisión humana y decisiones ya tomadas. |
+| `.claude/loops/consentimiento/gates.sh` | Comandos de verificación del repo (lo creas en T00). Protegido: fuera del alcance de Edit/Write en modo headless. |
+| `loop-consentimiento/seed/aviso_consentimiento_v1.0.md` | Texto semilla del aviso v1.0. |
+| `loop-consentimiento/PLAN_PRODUCCION_RELEASE.md` | Plan de release a producción: TODAS las migraciones aún sin aplicar, con orden, dependencias y verificación posterior de cada una. Se actualiza en cada iteración que cree una migración (ver REGLAS DURAS). |
 
 ---
 
@@ -107,7 +107,7 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
   en `supabase/migrations/` (la evaluación reporta hasta 072 con saltos) y usa el siguiente.
 - Cada migración debe aplicar limpia con `supabase db reset` desde cero.
 - **Toda iteración que cree una migración nueva debe actualizar
-  `.claude/loops/consentimiento/PLAN_PRODUCCION_RELEASE.md` en el MISMO commit**: añadir la migración a
+  `loop-consentimiento/PLAN_PRODUCCION_RELEASE.md` en el MISMO commit**: añadir la migración a
   su tabla resumen (número, de qué depende, qué cambia, verificación posterior) y a las secciones de
   aplicar/verificar/reversa. El plan debe reflejar SIEMPRE el conjunto completo de migraciones aún sin
   aplicar en producción, no solo la de esta iteración. (2026-09-30: el plan llevaba solo 074–075 mientras

@@ -4,6 +4,9 @@
 set -euo pipefail
 
 LOOP_DIR=".claude/loops/consentimiento"
+# TASKS/PROGRESS/DECISIONS/SPEC/seed/diag/logs viven en loop-consentimiento/ (fuera de .claude/): Claude
+# Code trata todo lo bajo .claude/ como "sensitive file" y el loop headless no podría editarlos ahí.
+WORK_DIR="loop-consentimiento"
 BRANCH="feature/consentimiento-lopdp"
 MAX_ITER="${MAX_ITER:-30}"
 MAX_TURNS="${MAX_TURNS:-80}"
@@ -16,12 +19,12 @@ current="$(git branch --show-current)"
 if [[ "$current" != "$BRANCH" ]]; then
   git switch "$BRANCH" 2>/dev/null || git switch -c "$BRANCH"
 fi
-mkdir -p "$LOOP_DIR/logs"
+mkdir -p "$WORK_DIR/logs"
 
 fails=0
 for i in $(seq 1 "$MAX_ITER"); do
   ts="$(date +%Y%m%d-%H%M%S)"
-  log="$LOOP_DIR/logs/iter-$(printf '%03d' "$i")-$ts.log"
+  log="$WORK_DIR/logs/iter-$(printf '%03d' "$i")-$ts.log"
   echo "════ Iteración $i/$MAX_ITER · $ts ════"
 
   # Los permisos (allow/deny) se leen de .claude/settings.json del proyecto, más
@@ -37,7 +40,7 @@ for i in $(seq 1 "$MAX_ITER"); do
     echo "✅ Loop completo. Revisa PROGRESS.md y abre el PR manualmente."; exit 0
   fi
   if grep -q "<promise>BLOQUEADO</promise>" "$log"; then
-    echo "⛔ Bloqueado: completa las decisiones en $LOOP_DIR/DECISIONS.md y vuelve a ejecutar."; exit 2
+    echo "⛔ Bloqueado: completa las decisiones en $WORK_DIR/DECISIONS.md y vuelve a ejecutar."; exit 2
   fi
   if grep -q "<promise>ITERACION_OK</promise>" "$log"; then
     fails=0

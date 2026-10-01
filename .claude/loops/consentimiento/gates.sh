@@ -19,9 +19,13 @@ DENO_VERSION=2.9.6
 DENO="npx -y deno@${DENO_VERSION}"
 
 ROOT="$(git rev-parse --show-toplevel)"
-LOOP="$ROOT/.claude/loops/consentimiento"
+# Archivos de trabajo (TASKS/PROGRESS/DECISIONS/SPEC/seed/diag/logs) viven en loop-consentimiento/, fuera
+# de .claude/, porque Claude Code trata todo lo bajo .claude/ como "sensitive file" y el loop headless no
+# podría editarlos (ver PROGRESS.md). gates.sh, PROMPT.md, run-loop.sh y headless-settings.json se quedan
+# dentro de .claude/loops/consentimiento/ precisamente para quedar protegidos de esa misma ejecución headless.
+WORK="$ROOT/loop-consentimiento"
 cd "$ROOT/shield-ecuador-app"
-LOGS="$LOOP/logs"; mkdir -p "$LOGS"
+LOGS="$WORK/logs"; mkdir -p "$LOGS"
 MIGRATIONS=supabase/migrations
 TESTS=supabase/tests/consent
 
@@ -103,12 +107,12 @@ deno_check() {
   $DENO check supabase/functions/secure-register-user/index.ts supabase/functions/get-consent-notice/index.ts \
     supabase/functions/_shared/auth-guard.ts supabase/functions/admin-consent/index.ts \
     supabase/functions/update-my-consent/index.ts supabase/functions/submit-consent/index.ts \
-    ../.claude/loops/consentimiento/diag/diag-network-headers/index.ts
+    ../loop-consentimiento/diag/diag-network-headers/index.ts
 }
 deno_test() {
   # Aparte: la función de diagnóstico (T03, temporal) también escucha en :8000 y no puede compartir proceso con las otras.
   $DENO test --allow-env --allow-net --allow-read supabase/functions/ && \
-  $DENO test --allow-env --allow-net ../.claude/loops/consentimiento/diag/diag-network-headers/index_test.ts
+  $DENO test --allow-env --allow-net ../loop-consentimiento/diag/diag-network-headers/index_test.ts
 }
 
 # ── 4. SQL en un Postgres 16 efímero: migraciones del módulo + pruebas autoverificables ─────────────────────────────
@@ -355,7 +359,7 @@ SELFTEST_SPEC
     $DENO check supabase/functions/secure-register-user/index.ts supabase/functions/get-consent-notice/index.ts \
       supabase/functions/_shared/auth-guard.ts supabase/functions/admin-consent/index.ts \
       supabase/functions/update-my-consent/index.ts supabase/functions/submit-consent/index.ts \
-      ../.claude/loops/consentimiento/diag/diag-network-headers/index.ts "$f"; rc=$?
+      ../loop-consentimiento/diag/diag-network-headers/index.ts "$f"; rc=$?
     rm -f "$f"; return $rc
   }
 

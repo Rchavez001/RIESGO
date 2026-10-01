@@ -1,7 +1,10 @@
 # PROGRESS — Módulo de Consentimiento Informado y Derechos del Titular
 
 Última actualización: 2026-09-28 (tarde). Fuente de requisitos: SPEC v1.0 (REQ-01…20, SEC-01…09).
-El paquete del loop (PROMPT, SPEC, TASKS, DECISIONS, seed, run-loop.sh) está instalado en `.claude/loops/consentimiento/` y el trabajo sigue en la rama
+El paquete del loop se reparte en dos sitios (2026-09-30, por la protección "sensitive file" de Claude Code sobre todo lo bajo `.claude/`: el
+loop headless no podía editar sus propios archivos de trabajo ahí): `PROMPT.md`, `gates.sh`, `run-loop.sh` y `headless-settings.json` siguen en
+`.claude/loops/consentimiento/` (protegidos de edición por el propio loop headless); `SPEC.md`, `TASKS.md`, `PROGRESS.md`, `DECISIONS.md`,
+`PLAN_PRODUCCION_RELEASE.md`, `PLAN_RAMAS.md`, `seed/`, `diag/` y `logs/` viven en `loop-consentimiento/` (raíz del repo). El trabajo sigue en la rama
 `feature/consentimiento-lopdp`. Este archivo tiene dos partes: las secciones de loop (mapa del repo, línea base, iteraciones — al final) y el
 historial previo al loop (estado, decisiones, hallazgos abiertos). Los pasos 2 y 3 de instalación del README (fusionar `settings.loop.json` y añadir
 `CLAUDE.md.fragmento`) NO se han hecho: cambian permisos e instrucciones del proyecto y los decide la persona responsable.
@@ -45,8 +48,8 @@ historial previo al loop (estado, decisiones, hallazgos abiertos). Los pasos 2 y
 
 **Frontend**: `src/screens/RegisterScreen.tsx` (aviso primero), `src/contexts/AuthContext.tsx` (`signUp` con consentimiento, errores con `.code`), `src/index.css` (`.consent-*`), `tests/frontend/register.spec.ts`.
 
-**Herramientas** (`.claude/loops/consentimiento/`): `gates.sh` (Deno 2.9.6 fijado + SQL en Postgres efímero + función de diagnóstico),
-`diag/` (T03: consulta del Logs Explorer y función de diagnóstico temporal, NO desplegada), `PLAN_PRODUCCION_074_075.md`.
+**Herramientas:** `.claude/loops/consentimiento/gates.sh` (Deno 2.9.6 fijado + SQL en Postgres efímero + función de diagnóstico),
+`loop-consentimiento/diag/` (T03: consulta del Logs Explorer y función de diagnóstico temporal, NO desplegada), `PLAN_PRODUCCION_074_075.md`.
 Playwright: `CLAUDECODE=1` ⇒ reporter `line` y timeout 60 s.
 
 ## Decisiones tomadas
@@ -729,8 +732,8 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
   (`000_zzz_local_test_only.sql` y los contenedores Postgres sueltos usados para medir) se crearon fuera de
   `supabase/migrations/` real solo durante la medición y se borraron/eliminaron al terminar; `git status` queda limpio
   salvo los cambios de esta iteración (`TASKS.md`, `DECISIONS.md`, este archivo).
-- Cambios: `.claude/loops/consentimiento/TASKS.md` (T00-extra marcada `[x]` con el hallazgo; nueva `T00-extra-exec` ⛔
-  D-13 al final); `.claude/loops/consentimiento/DECISIONS.md` (D-13, ABIERTA); este archivo (corrección de la línea base
+- Cambios: `loop-consentimiento/TASKS.md` (T00-extra marcada `[x]` con el hallazgo; nueva `T00-extra-exec` ⛔
+  D-13 al final); `loop-consentimiento/DECISIONS.md` (D-13, ABIERTA); este archivo (corrección de la línea base
   de `db-reset` en la sección "Línea base de gates" — ya no dice "específico de Postgres 17").
 - Pruebas añadidas: ninguna (tarea de investigación/propuesta, sin cambio de código ejecutable). Verificación empírica
   con `supabase db reset` real (dos veces) y con contenedores Postgres 16/17 sueltos (auth simulado), documentada arriba.
@@ -879,7 +882,7 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
   (`secure-register-user`) para que documente el contrato real.
 - Cambios: `supabase/functions/secure-register-user/index.ts` (import de `zod`, `RegisterBodySchema`, la línea de
   `safeParse`, `"invalid_input"` en `knownValidationErrors`); `supabase/functions/secure-register-user/index_test.ts`
-  (+1 prueba, 4 variantes); `.claude/loops/consentimiento/SPEC.md` (nota sobre `notice_changed`); `TASKS.md` (T10
+  (+1 prueba, 4 variantes); `loop-consentimiento/SPEC.md` (nota sobre `notice_changed`); `TASKS.md` (T10
   `[x]`); este archivo.
 - Pruebas añadidas: `index_test.ts` — "esquema de entrada (SEC-08): tipos equivocados o desmesurados → 400 genérico,
   sin tocar nada ni disparar unhandled_exception", con 4 variantes (`email` numérico; `consent_notice.decisions` como
