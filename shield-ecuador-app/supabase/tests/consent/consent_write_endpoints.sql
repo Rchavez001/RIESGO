@@ -82,3 +82,5 @@ SELECT pg_temp.expect_error($$
     FROM public.users u, public.consent_documents d
     WHERE u.email = 'cwe-user@example.test' AND d.version = 'cwe-1.0'
 $$, 'consent_records_channel_check');
+
+\echo OK: filas reales de update-my-consent/submit-consent contra el CHECK y la cadena de 073 (T11)

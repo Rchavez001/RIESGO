@@ -154,16 +154,17 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - [ ] **TEST-INT.a — Integración real: `secure-register-user` (T10)** ⚠ REINTENTAR (bloqueador de entorno, ver Iteración 31 en PROGRESS.md)
     - Cubrir al menos la inserción atómica de evidencia (una fila por finalidad, compensación si falla) y el 409 por huella, contra Postgres real.
     - **Estado (2026-10-01, iteración 31):** `supabase/tests/consent/e2e_local.cjs` YA cubre, contra Postgres real, la inserción atómica (3 filas, una por finalidad) y el 409 por huella (`notice_changed`) — nada que añadir ahí. Falta solo el tercer caso: **compensación si falla la inserción de evidencia** (hoy solo probado contra el fake en memoria de `index_test.ts`, línea ~169). Esta iteración NO pudo escribir ni verificar ese caso contra Postgres real: ver el bloqueo de entorno documentado en PROGRESS.md (mismo tipo que D-14, esta vez sobre el gate `db-reset` en vez de sobre una migración nueva). Sigue siendo la primera subtarea ejecutable de TEST-INT.
-  - [ ] **TEST-INT.b — Integración real: `update-my-consent` / `submit-consent` (T11)**
-    - Cubrir al menos el rechazo de revocar la finalidad obligatoria y el re-consentimiento (`requires_reconsent`), contra Postgres real.
-    - **Borrador ya escrito (2026-10-01, iteración 3 del run-loop de ese día):** `loop-consentimiento/borradores/TEST-INT.b_consent_write_endpoints.sql`
-      cubre `channel='mi_privacidad'` (revocar opcional vía `update-my-consent`) y `channel='reconsentimiento'`
-      (`submit-consent`) contra el CHECK/trigger de cadena reales de la migración 073, más un caso negativo (`channel`
-      inválido). Vive fuera de `supabase/tests/consent/` a propósito (ver cabecera del archivo) para que `gates.sh` no
-      lo descubra todavía sin verificar. Al retomar esta subtarea: partir de ese borrador (no reescribir desde cero),
-      confirmarlo contra un Postgres real (`GATES_ONLY=sql-ciclo-de-vida bash .claude/loops/consentimiento/gates.sh`
-      copiándolo primero a `supabase/tests/consent/`) y, solo cuando pase, moverlo (no copiarlo) a
-      `supabase/tests/consent/consent_write_endpoints.sql` en el mismo commit que cierra la subtarea.
+  - [x] **TEST-INT.b — Integración real: `update-my-consent` / `submit-consent` (T11)** (hecha 2026-10-01, iteración 32)
+    - **Resultado:** `supabase/tests/consent/consent_write_endpoints.sql` (movido desde el borrador de la iteración
+      anterior, con un `\echo OK: …` final añadido para que `gates.sh` lo reporte igual que el resto de archivos del
+      directorio). Cubre, contra un Postgres real (puerta `sql-ciclo-de-vida`), lo que los 19 tests Deno de
+      `update-my-consent`/`submit-consent` (fake en memoria) no podían: el literal `channel='mi_privacidad'`
+      (`update-my-consent`) y `channel='reconsentimiento'` (`submit-consent`) contra el `CHECK` real de la migración
+      073 y el trigger de cadena de hash, más un caso negativo (`'mi-privacidad'` con guion → rechazado por el
+      `CHECK`). Verificado rojo→verde: se cambió temporalmente el conteo esperado de la primera aserción (1 → 2,
+      con el prefijo `TEMP-DISABLED-FOR-VERIFICATION`) y `GATE sql-ciclo-de-vida` falló exactamente en esa línea con
+      el mensaje esperado; revertido y vuelto a pasar antes de cerrar la tarea. `consent_test_files()` lo descubrió
+      solo (orden alfabético tras los archivos de orden fijo), sin tocar `gates.sh`.
   - [ ] **TEST-INT.c — Integración real: `request-data-subject-right` (T13)** ⛔ BLOQUEADA (depende de T13, aún sin escribir — no hay función que auditar todavía; ejecutar en cuanto T13 se cierre)
   - [ ] **TEST-INT.d — Integración real: `admin-consent` (T14)**
     - El propio fix de T14 (migración 080) ya se verificó contra Postgres real (`publish_consent_document_e2e_local.cjs`). Confirmar que las demás acciones de `handler_test.ts` con escritura real (borrador, diff, preview, retire, cuatro ojos) también tienen equivalente en `supabase/tests/consent/*.sql` o en un script `_local.cjs`; añadir lo que falte.

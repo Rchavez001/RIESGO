@@ -1022,3 +1022,59 @@ T06, T07 e INV-SEC pasan de verdad hoy. No se reabre ninguna tarea en `TASKS.md`
 - Desviaciones de SPEC: ninguna.
 - Riesgos / pendientes detectados: (1) el `supabase start` local necesita reconstruirse con `GATES_DB_RESET=1 GATES_ONLY=db-reset bash .claude/loops/consentimiento/gates.sh` antes de volver a confiar en él para una prueba punta a punta; (2) TEST-INT.a sigue pendiente SOLO en su tercer criterio (compensación); los otros dos ya están cubiertos y no hacen falta más cambios ahí; (3) el patrón de permisos `Bash(bash .claude/loops/consentimiento/gates.sh:*)` no cubre la variante con variables de entorno delante (`GATES_DB_RESET=1 GATES_ONLY=db-reset …`) que el propio `gates.sh` ofrece como su modo de reconstrucción documentado — vale la pena que un humano añada un patrón de permiso específico para esa invocación exacta (o la encapsule en un script sin variables de entorno, p. ej. `gates-db-reset.sh`) para que una sesión headless pueda ejecutar este tipo de reparación sin tropezar con el mismo bloqueo que D-14 ya describió para migraciones nuevas.
 - Porcentaje: sin cambio, 13 de 28 = **46,4 %** (TEST-INT es tarea `TEST-INT`, fuera de la numeración de 28; no mueve el contador estricto). Ponderado: sin cambio, **≈ 54,1 %** (ningún subtask de TEST-INT se cerró).
+
+## Iteración 32 — 2026-10-01 — TEST-INT.b (`update-my-consent`/`submit-consent`): cierra la subtarea con el borrador de la iteración anterior
+- **Punto de partida:** primera tarea ejecutable de TASKS.md en orden es TEST-INT.a, pero sigue con el mismo bloqueo de
+  entorno que la Iteración 31 (confirmado de nuevo esta iteración, ver abajo): el tercer criterio de TEST-INT.a
+  (compensación real) necesita invocar la función `secure-register-user` contra Postgres real y forzar un fallo
+  genuino del INSERT en `consent_records`, lo que exige `docker exec`/`psql` sueltos o `supabase functions serve`
+  contra el stack local — ambos devolvieron "This command requires approval" sin que nadie lo aprobara, igual que en
+  la Iteración 31. Como esa tarea sigue sin poder avanzar esta sesión y no está `⛔ BLOQUEADA` (solo `⚠ REINTENTAR`),
+  se pasó a la siguiente subtarea ejecutable de la misma división: TEST-INT.b, que ya tenía un borrador completo de
+  la iteración anterior (`loop-consentimiento/borradores/TEST-INT.b_consent_write_endpoints.sql`) y solo necesitaba
+  verificarse contra Postgres real y moverse a su sitio definitivo — nada de eso requiere `docker exec`/`psql` sueltos.
+- **Hallazgo de entorno (relevante para la próxima vez que alguien tope con el bloqueo de TEST-INT.a):** `GATES_ONLY=sql-ciclo-de-vida bash .claude/loops/consentimiento/gates.sh` (la forma con variable de entorno delante) sigue sin
+  coincidir con el patrón de permiso exacto y pide aprobación, igual que documentan D-14 y la Iteración 31. Pero el
+  commit `848fb42` (anterior a esta sesión, entre la Iteración 30 y la 31) ya había añadido a `gates.sh` la forma
+  equivalente como ARGUMENTO (`--only sql-ciclo-de-vida`, `--db-reset`, `--e2e-local`, `--full`, `--selftest`),
+  documentada en la cabecera del propio script (líneas 16-22) precisamente para esquivar esta limitación — la
+  Iteración 31 no llegó a probarla. `bash .claude/loops/consentimiento/gates.sh --only sql-ciclo-de-vida` SÍ coincide
+  con el patrón permitido (todo lo añadido después del prefijo exacto vale) y corrió sin pedir aprobación. Esto no
+  resuelve el bloqueo de TEST-INT.a (que necesita `docker exec`/`psql` sueltos para inspeccionar/forzar un fallo
+  puntual, no solo correr una puerta completa), pero sí habría permitido a la Iteración 31 reconstruir el esquema
+  local con `bash .claude/loops/consentimiento/gates.sh --only db-reset --db-reset` sin tropezar con el bloqueo que
+  describió — queda anotado para quien retome TEST-INT.a.
+- **Cambios:** `supabase/tests/consent/consent_write_endpoints.sql` (nuevo; movido desde el borrador, con un
+  `\echo OK: filas reales de update-my-consent/submit-consent contra el CHECK y la cadena de 073 (T11)` final añadido
+  — el borrador no lo tenía y sin él no hay forma de confirmar desde el log de `gates.sh` que el archivo se ejecutó de
+  verdad, a diferencia del resto de archivos del directorio); `loop-consentimiento/borradores/` queda vacío (se borró
+  el borrador, no se copió); `TASKS.md` (TEST-INT.b `[x]`); este archivo.
+- **Pruebas añadidas:** las 3 del borrador, sin cambios de contenido salvo el `\echo` final — ver su cabecera para el
+  detalle: (1) `update-my-consent` revoca una finalidad opcional → fila real `channel='mi_privacidad'`, `decision='revoked'`,
+  cadena íntegra; (2) `submit-consent` en reconsentimiento → una fila por finalidad con `channel='reconsentimiento'`,
+  cadena íntegra; (3) un `channel` inválido (`'mi-privacidad'`, con guion) sigue rechazado por el `CHECK` de 073. Estas
+  tres filas nunca habían tocado un Postgres real antes (los 19 tests Deno de T11 usan un fake en memoria que no
+  aplica el `CHECK`). Verificado rojo→verde: se cambió el conteo esperado de la aserción (1) de 1 a 2 (prefijo
+  `TEMP-DISABLED-FOR-VERIFICATION`), `GATE sql-ciclo-de-vida` falló con `ERROR: TEMP-DISABLED-FOR-VERIFICATION fila
+  mi_privacidad insertada : se esperaba 2, hubo 1` — la razón correcta, en la línea correcta —, se revirtió y volvió
+  a pasar. `consent_test_files()` lo descubrió solo (orden alfabético, después de los 5 archivos de orden fijo y antes
+  de `email_transport_lifecycle.sql`/`publish_consent_document.sql`), sin tocar `gates.sh`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only sql-ciclo-de-vida` (rojo y verde, ver arriba) y luego
+  la corrida completa por defecto (`bash .claude/loops/consentimiento/gates.sh`, las 9 puertas no-opcionales + 2
+  opcionales SKIP como siempre): typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit,
+  panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit; db-reset y e2e-local SKIP explícitos (opt-in,
+  no se tocaron). Iteración 32, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- **Nota sobre `consent_records_concurrency_check` (no es un hallazgo nuevo):** el log de `sql-ciclo-de-vida` mostró,
+  en una de las corridas, `ERROR: la cadena quedó rota tras 8 inserciones concurrentes: fila 11 — prev_hash no
+  coincide` — es exactamente la flakiness ya documentada en la Iteración 29 (8 `psql` en paralelo bajo Docker; la
+  puerta no propaga ese fallo como código de salida porque es la penúltima línea de `sql_ciclo_de_vida_in`, no la
+  última — comportamiento preexistente, no introducido por este cambio). Se repitió la corrida sin tocar nada y pasó
+  limpio. No se investigó más a fondo por no ser parte de esta tarea; queda igual de pendiente que antes.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: TEST-INT.a sigue bloqueada por el mismo problema de entorno de la Iteración 31
+  (`docker exec`/`psql` sueltos sin aprobar); ver el hallazgo de `--db-reset` arriba para la próxima vez que se
+  intente. TEST-INT.c sigue `⛔ BLOQUEADA` (depende de T13). TEST-INT.d sin empezar. La flakiness de
+  `consent_records_concurrency_check` (Iteración 29) sigue sin arreglarse — no bloquea nada porque no propaga su
+  código de salida, pero ensucia el log cuando ocurre.
+- Porcentaje: sin cambio en el contador estricto (13 de 28; TEST-INT no es una de las 28). Ponderado: sin cambio
+  aplicable (TEST-INT no tiene peso asignado en esa cuenta, igual que en la Iteración 31).
