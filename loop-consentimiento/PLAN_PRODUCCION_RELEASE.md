@@ -105,7 +105,11 @@ supabase migration list        # esperado: 073 en local y remoto; 074-081 solo e
   (079 solo crea tablas nuevas; 080/081 solo crean/reemplazan funciones).
 
 ## 3. Aplicar (una sola orden)
+Esta máquina no debe quedar vinculada a un proyecto de producción entre sesiones: vincular justo antes y
+desvincular justo después acota la ventana en la que `supabase db push`/`functions deploy` podrían alcanzar
+producción por error.
 ```bash
+supabase link --project-ref wbbcjiqzbzswxsmwjqlw
 supabase db push
 # Debe listar EXACTAMENTE, en este orden: 074_consent_evidence_unlink_and_stable_hash.sql,
 # 075_privacy_settings_versioning.sql, 076_learning_guest_limit.sql,
@@ -181,6 +185,11 @@ tablas (T12.c/T12.d, que sí lo harán, no están hechas). Solo se verifica que 
 Desde fuera, con la clave anon de la app: `GET /rest/v1/privacy_settings_current` debe dar "permission denied"; `GET /rest/v1/consent_documents`
 debe dar `[]`. Y comprobar que el login y el registro actuales siguen funcionando (registro de prueba con la versión vigente de la app).
 
+Terminada la verificación, desvincular el proyecto de esta máquina:
+```bash
+supabase unlink
+```
+
 ## 5. Criterios para abortar
 Cualquier guarda que salte, `db push` listando migraciones distintas a las 5 esperadas (en cualquier orden), o un error en las
 comprobaciones de la sección 4.
@@ -222,7 +231,7 @@ están completos (D-07); (2) T03 medido y la cabecera de IP de confianza decidid
 verificado (sección 2); (4) `gates.sh` en verde sobre la rama del release; (5) PR revisado.
 
 1. Secretos (los crea la persona responsable, nunca el loop): `LOOKUP_HMAC_KEY_B64` (ya existe), `TRUSTED_PROXY_HOPS` si aplica.
-2. `supabase db push` → 074 + 075 + 076 + 077 + 078 + 079 + 080 + 081 (secciones 1–4 de este plan).
+2. `supabase link --project-ref wbbcjiqzbzswxsmwjqlw`, luego `supabase db push` → 074 + 075 + 076 + 077 + 078 + 079 + 080 + 081 (secciones 1–4 de este plan), y `supabase unlink` al terminar de verificar (no dejar esta máquina vinculada a producción entre sesiones).
 3. `supabase functions deploy` de `get-consent-notice` y `secure-register-user` (y el resto de funciones del módulo que lleguen en el release).
 4. Publicar el aviso v1.0 con los datos reales (sin marcadores sin resolver). En este punto, hacer la prueba funcional pendiente
    de 077 (sección 4): con un segundo borrador listo, retirar v1.0 sin reemplazo debe fallar; retirar y publicar el reemplazo en

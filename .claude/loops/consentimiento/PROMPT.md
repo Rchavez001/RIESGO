@@ -12,6 +12,7 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 | `loop-consentimiento/SPEC.md` | Requisitos (REQ-xx, SEC-xx) y modelo de datos. Fuente de verdad. |
 | `loop-consentimiento/TASKS.md` | Backlog ordenado con criterios de aceptación. Marca `[x]` al cerrar. |
 | `loop-consentimiento/PROGRESS.md` | Bitácora de iteraciones. Añade una entrada al final. Nunca borres entradas. |
+| `loop-consentimiento/PROGRESS_ARCHIVO.md` | Archivo histórico (iteraciones antiguas y narrativa larga de tareas cerradas). **NO leer por defecto**: solo consultar si hace falta buscar un detalle puntual de una iteración antigua. |
 | `loop-consentimiento/DECISIONS.md` | Preguntas que requieren decisión humana y decisiones ya tomadas. |
 | `.claude/loops/consentimiento/gates.sh` | Comandos de verificación del repo (lo creas en T00). Protegido: fuera del alcance de Edit/Write en modo headless. |
 | `loop-consentimiento/seed/aviso_consentimiento_v1.0.md` | Texto semilla del aviso v1.0. |
@@ -22,7 +23,9 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 ## Protocolo de la iteración (sigue el orden, sin saltarte pasos)
 
 1. **Orientarte (máx. 5 min de lectura).**
-   - Lee `PROGRESS.md` (últimas 3 entradas), `DECISIONS.md` y `TASKS.md`.
+   - Lee `PROGRESS.md` (el resumen del inicio + las últimas 3 entradas), `DECISIONS.md` y `TASKS.md`.
+     No leas `PROGRESS_ARCHIVO.md` salvo que necesites buscar algo puntual de una iteración antigua:
+     el resumen al inicio de `PROGRESS.md` ya trae lo que hace falta saber.
    - Ejecuta `git status` y `git log --oneline -5`. Si hay cambios sin commit de una iteración previa
      interrumpida: evalúalos; si pasan los gates, haz commit; si no, revísalos y termina esa tarea primero.
    - **Antes de atribuir archivos sin commitear a "otra sesión": revisa los logs (`loop-consentimiento/logs/iter-*.log`)
