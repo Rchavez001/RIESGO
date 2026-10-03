@@ -74,4 +74,12 @@ SELECT pg_temp.expect(has_table_privilege('anon', 'public.consent_documents', 'I
 SELECT pg_temp.expect(has_table_privilege('authenticated', 'public.consent_documents', 'UPDATE'), false, 'authenticated no actualiza');
 SELECT pg_temp.expect(has_table_privilege('anon', 'public.consent_documents', 'SELECT'), true, 'anon sí puede leer (RLS filtra a published)');
 
+-- 8. UNIQUE(version) real (TEST-INT.d): el fake de handler_test.ts ("crear borrador con una version que
+--    ya existe → 409 version_exists") simula la colisión con su propio chequeo en JS; nunca ejecuta esta
+--    restricción contra Postgres real. `index.ts` traduce el SQLSTATE 23505 a 409 version_exists — lo que
+--    se prueba aquí es que Postgres sigue devolviendo esa violación tal cual.
+SELECT pg_temp.expect_error($$INSERT INTO public.consent_documents (version, title, content_md, content_sha256, purposes, status, created_by)
+  SELECT 'cdl-1.0', 'Aviso con version duplicada', 'x', 'sha-x', '["registro_aprendizaje"]'::jsonb, 'draft', id FROM public.users WHERE role = 'admin'$$,
+  'duplicate key value violates unique constraint "consent_documents_version_key"');
+
 \echo OK: reglas de consent_documents (073 + 077)

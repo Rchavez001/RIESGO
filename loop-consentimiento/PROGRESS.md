@@ -128,3 +128,58 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   código de salida, pero ensucia el log cuando ocurre.
 - Porcentaje: sin cambio en el contador estricto (13 de 28; TEST-INT no es una de las 28). Ponderado: sin cambio
   aplicable (TEST-INT no tiene peso asignado en esa cuenta, igual que en la Iteración 31).
+
+## Iteración 33 — 2026-10-03 — TEST-INT.d (`admin-consent`): auditoría completa, un hueco real cerrado
+- **Punto de partida:** primera tarea ejecutable de TASKS.md en orden sigue siendo TEST-INT.a, pero el bloqueo de
+  entorno de las Iteraciones 31-32 se reconfirmó esta sesión: `docker ps` corrió sin pedir aprobación, pero
+  `docker exec supabase_db_... psql ...` siguió devolviendo "This command requires approval" sin que nadie lo
+  aprobara. Mismo patrón, nada nuevo. Como TEST-INT.a sigue `⚠ REINTENTAR` (no `⛔ BLOQUEADA`) y TEST-INT.c sigue
+  `⛔ BLOQUEADA` (depende de T13, sin escribir), se pasó a la siguiente subtarea ejecutable de la misma división:
+  TEST-INT.d, íntegramente nueva esta sesión (a diferencia de TEST-INT.b, que partía de un borrador previo).
+- **Auditoría (sin tocar código todavía):** se leyeron `admin-consent/handler.ts`, `handler_test.ts` e `index.ts`
+  completos y se mapeó cada operación de escritura contra su equivalente real:
+  - `createDraft`/`updateDraft` (INSERT/UPDATE de `consent_documents`): el trigger `consent_documents_immutable`
+    (073) que bloquea editar contenido no-borrador, y que SÍ permite editar un borrador, ya estaban cubiertos
+    contra Postgres real en `consent_documents_lifecycle.sql` (puntos 1-2, de antes de esta iteración).
+  - `retireDraft` (UPDATE draft→retired sin exigir reemplazo): cubierto en el mismo archivo, punto 6 (de antes).
+  - `publishDraft`/`publish` (RPC `publish_consent_document`, 080) y "cuatro ojos": cubiertos íntegramente en
+    `publish_consent_document.sql` (autorización, mfa, motivo, not_found, not_draft, cuatro ojos con el mismo
+    editor vs. otro admin, bitácora con actor/before/after, permisos, cadena) y en
+    `publish_consent_document_e2e_local.cjs` (de la Iteración 30; no se tocó).
+  - `diffDraft`/`previewDraft`: sin escritura (solo `SELECT`); no dependen de ninguna restricción/trigger/RLS
+    que un fake pudiera ocultar — fuera del alcance de esta tarea por diseño (la regla de PROMPT.md habla de
+    "toda operación que escriba en la BD").
+  - **Hueco real encontrado:** `createDraft` → `index.ts.insert()` traduce el SQLSTATE `23505` (violación de
+    `UNIQUE(version)`, migración 073) a `409 version_exists`. El único test de esta ruta
+    (`handler_test.ts`: "crear borrador con una version que ya existe → 409 version_exists") usa el fake
+    `makeDocsStore`, que simula la colisión con su propio `rows.some(r => r.version === row.version)` en
+    JavaScript — nunca ejecuta el `INSERT` real ni pasa por la restricción `UNIQUE` de Postgres ni por el
+    `catch (error.code === '23505')` de `index.ts`. Exactamente el tipo de hueco que TEST-INT existe para
+    cerrar (mismo patrón que el bug de atomicidad de T14/080, aunque aquí no había ningún bug: la traducción
+    de `index.ts` es correcta, solo no estaba verificada contra Postgres real).
+- **Cambios:** `shield-ecuador-app/supabase/tests/consent/consent_documents_lifecycle.sql` — aserción nueva
+  (punto 8): `INSERT` con `version = 'cdl-1.0'` (ya usada como fixture publicada en el mismo archivo) debe
+  fallar con `duplicate key value violates unique constraint "consent_documents_version_key"`. `TASKS.md`
+  (TEST-INT.d `[x]`); este archivo.
+- **Pruebas añadidas:** 1 aserción SQL nueva (ver arriba). Verificado rojo→verde: se cambió temporalmente el
+  fragmento esperado a `'TEMP-DISABLED-FOR-VERIFICATION'`, `GATE sql-ciclo-de-vida` falló mostrando el error
+  real de Postgres (`duplicate key value violates unique constraint "consent_documents_version_key"` — el
+  nombre de restricción adivinado a la primera, sin necesitar `psql` suelto para confirmarlo), se corrigió el
+  fragmento y volvió a pasar.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only sql-ciclo-de-vida` (rojo y verde, ver arriba) y
+  luego la corrida completa por defecto: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend,
+  panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit, todas OK; db-reset y
+  e2e-local SKIP explícitos (opt-in). Iteración 33, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- **Nota de entorno (para quien retome TEST-INT.a):** esta sesión sí pudo ejecutar `docker ps` (y por tanto
+  confirmar qué contenedores de `supabase start` seguían arriba desde hace 39 horas) sin aprobación, pero
+  `docker exec ... psql ...` sigue bloqueado igual que en las Iteraciones 31-32 — el permiso headless cubre
+  comandos `docker` de solo listado, no `exec` contra un contenedor. No cambia el diagnóstico de TEST-INT.a.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: TEST-INT.a sigue bloqueada por el mismo problema de entorno (`docker
+  exec`/`psql` sueltos sin aprobar). TEST-INT.c sigue `⛔ BLOQUEADA` (depende de T13, sin escribir). Con
+  TEST-INT.d cerrada, la división `TEST-INT` completa pasa a estar bloqueada en su totalidad para esta sesión
+  (solo falta TEST-INT.a, bloqueada, y TEST-INT.c, bloqueada por T13): la próxima iteración que no resuelva el
+  bloqueo de entorno debería pasar directamente a T12.c (primera tarea `[ ]` no bloqueada tras TEST-INT en el
+  orden de `TASKS.md`).
+- Porcentaje: sin cambio en el contador estricto (13 de 28; TEST-INT no es una de las 28). Ponderado: sin cambio
+  aplicable (TEST-INT no tiene peso asignado en esa cuenta).
