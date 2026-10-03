@@ -123,6 +123,31 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
   entradas de `git stash` — con ellas, ~139 MB de video y la mayoría de ~77 MB de imágenes que nunca
   se habían commiteado en ninguna rama. No existía necesidad técnica de ese paso; de ahí esta regla.)
 
+**Comandos en modo headless**
+- La ÚNICA forma de ejecutar las puertas de verificación es `bash .claude/loops/consentimiento/gates.sh`
+  (ruta relativa, tal cual, desde la raíz del repo) con sus propias opciones: `--only <puerta>`,
+  `--db-reset`, `--e2e-local`, `--full`, `--selftest`. El permiso headless concedido es el literal
+  `Bash(bash .claude/loops/consentimiento/gates.sh:*)`: cubre cualquier texto añadido DESPUÉS de ese
+  prefijo exacto, pero nada que lo rompa.
+- Nunca con variables de entorno delante (`GATES_ONLY=… bash …/gates.sh`, `GATES_FULL=1 bash …/gates.sh`):
+  deja de empezar por "bash" y la sesión headless lo deniega sin que nadie lo apruebe. Usa el argumento
+  equivalente (`--only "…"`, `--full`, etc.) en su lugar.
+- Nunca con ruta absoluta (`bash C:/Users/…/gates.sh`): no coincide con el patrón permitido.
+- Nunca después de un `cd` ni encadenado con `&&`/`;` a otro comando (p. ej.
+  `cd shield-ecuador-app && bash …/gates.sh`, o `bash …/gates.sh --only x; echo "EXIT=$?"`): un comando
+  compuesto exige aprobar cada parte por separado y se deniega igual en modo headless. Invoca `gates.sh`
+  solo, en su propia llamada a Bash.
+- Prohibido invocar `docker`, `psql`, `supabase db|functions|secrets …` o `npx supabase …` directamente
+  (sueltos o dentro de un comando compuesto): ninguno coincide con el patrón permitido y el intento se
+  deniega sin aviso visible salvo que se revise el log. Si una verificación necesita algo que `gates.sh`
+  no ofrece, no lo intentes: documenta la necesidad en `DECISIONS.md` (ver D-14 para el precedente) y
+  termina la iteración.
+  (2026-10-01: `iter-001-20261001-185739.log` registra exactamente estos intentos denegados —
+  `docker exec … psql …` suelto, `GATES_ONLY=… bash …/gates.sh`, `cd … && npx supabase status`,
+  `cd … && docker exec … psql …`, y `bash …/gates.sh --only …; echo "EXIT=$?"` — todos con "This command
+  requires approval" o el error de comando compuesto; la única invocación que corrió limpia fue
+  `bash .claude/loops/consentimiento/gates.sh --only sql-ciclo-de-vida` sola, sin nada antes ni después.)
+
 **Migraciones**
 - Nunca modifiques una migración existente. Crea la siguiente disponible: detecta el número mayor
   en `supabase/migrations/` (la evaluación reporta hasta 072 con saltos) y usa el siguiente.
@@ -148,7 +173,20 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
   (trigger + RLS + revocación de privilegios), salvo el job de retención definido en la SPEC.
 - Ningún `console.log` con PII, IP, correo, token o texto cifrado.
 
+**Economía**
+- No lances subagentes (`Agent`) ni forks salvo que una búsqueda sea realmente extensa (varias carpetas,
+  convención de nombres desconocida, o no sabes dónde vive algo). Para todo lo demás, lee los archivos
+  directamente con `Read`/`Grep`/`Glob`: delegar cuesta más tokens y tiempo que leer tú mismo.
+- Cuando SÍ haga falta un subagente de búsqueda (p. ej. `Explore` o `general-purpose` para localizar
+  código), invócalo con `model: "haiku"` (parámetro `model` de la herramienta `Agent`): es más barato y
+  basta para localizar archivos/patrones. No uses Haiku para escribir código, diseñar pruebas o decidir
+  sobre REGLAS DURAS: eso se queda en el modelo de esta sesión.
+
 **Calidad**
+- Al escribir o reescribir un archivo largo (p. ej. `PROGRESS.md` completo, `SPEC.md`, un `gates.sh`
+  ampliado), hazlo en ediciones parciales (`Edit` por secciones, o varias escrituras incrementales), nunca
+  volcando el archivo entero en una sola respuesta: una salida de más de ~8000 tokens se corta a mitad de
+  archivo y lo deja corrupto a mitad de iteración.
 - TypeScript estricto; sin `any` nuevos salvo justificación en comentario.
 - No mezcles tareas: si descubres otro defecto, anótalo en `PROGRESS.md` ("pendientes detectados")
   y, si es de seguridad, agrégalo al final de `TASKS.md` como `Tnn-extra`.
