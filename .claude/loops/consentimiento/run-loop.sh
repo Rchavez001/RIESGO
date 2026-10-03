@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Ejecutor del loop de consentimiento informado (modo headless de Claude Code).
 # Uso:  MAX_ITER=30 bash .claude/loops/consentimiento/run-loop.sh
+#       bash .claude/loops/consentimiento/classify_test.sh   # prueba classify_iteration()/
+#                                                              # decide_usage_limit() de lib-classify.sh,
+#                                                              # sin invocar `claude` ni sourcear/ejecutar
+#                                                              # este script
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib-classify.sh"
 
 LOOP_DIR=".claude/loops/consentimiento"
 # TASKS/PROGRESS/DECISIONS/SPEC/seed/diag/logs viven en loop-consentimiento/ (fuera de .claude/): Claude
@@ -70,28 +77,52 @@ for i in $(seq 1 "$MAX_ITER"); do
     --max-turns "$MAX_TURNS" \
     --output-format stream-json --verbose 2>&1 | tee "$log" || true
 
-  # Límite de uso/sesión de Claude Code (no es un fallo de la iteración: no hay nada que reintentar
-  # hasta que el límite se libere). Se detiene de inmediato, sin sumar a `fails` ni a la cuenta de
-  # iteraciones consecutivas sin cierre limpio.
-  if grep -qiE "hit your session limit|usage limit" "$log"; then
-    echo "⏳ Límite de uso/sesión alcanzado (ver $log). Deteniendo el loop; vuelve a ejecutar cuando se libere."
-    exit 4
-  fi
-  if grep -q "<promise>LOOP_COMPLETO</promise>" "$log"; then
-    echo "✅ Loop completo. Revisa PROGRESS.md y abre el PR manualmente."; exit 0
-  fi
-  if grep -q "<promise>BLOQUEADO</promise>" "$log"; then
-    echo "⛔ Bloqueado: completa las decisiones en $WORK_DIR/DECISIONS.md y vuelve a ejecutar."; exit 2
-  fi
-  if grep -q "<promise>ITERACION_OK</promise>" "$log"; then
-    fails=0
-  else
-    fails=$((fails+1))
-    echo "⚠ Iteración sin cierre limpio ($fails consecutivas)."
-    if (( fails >= 3 )); then
-      echo "🛑 3 iteraciones seguidas sin cierre. Revisión humana necesaria."; exit 3
-    fi
-  fi
+  # Clasificación por el evento final del log (classify_iteration(), en lib-classify.sh): lee SOLO la
+  # última línea no vacía, nunca el log completo. Un `grep` sobre todo el archivo da falsos positivos
+  # en cuanto la propia iteración lee/edita/diffea este script, cuyo texto contiene literalmente
+  # "<promise>LOOP_COMPLETO</promise>" y "usage limit" (ver cabecera de lib-classify.sh).
+  classification="$(classify_iteration "$log")"
+  case "$classification" in
+    LIMITE\ *)
+      # Límite de uso/sesión de Claude Code (no es un fallo de la iteración: no sumamos a `fails` ni a
+      # la cuenta de iteraciones consecutivas sin cierre limpio en ningún caso de los dos de abajo).
+      # - SEMANAL, o no se pudo leer/interpretar la hora de reinicio: se detiene de inmediato (igual
+      #   que antes), para que un humano decida.
+      # - SESIÓN con hora de reinicio legible: espera hasta esa hora + 5 min (mostrando la hora de
+      #   reanudación) y continúa sola. MAX_ITER sigue siendo el tope duro: esta espera consume un `i`
+      #   del `for`, nunca lo rodea.
+      decision="$(decide_usage_limit "${classification#LIMITE }")"
+      if [[ "$decision" == WAIT\ * ]]; then
+        resume_epoch="${decision#WAIT }"
+        now_epoch="$(date +%s)"
+        wait_seconds=$(( resume_epoch - now_epoch ))
+        (( wait_seconds < 0 )) && wait_seconds=0
+        echo "⏳ Límite de SESIÓN alcanzado (ver $log)."
+        echo "   Reanudando a las $(date -d "@$resume_epoch" '+%Y-%m-%d %H:%M %Z') (hora de reinicio + 5 min; espera ${wait_seconds}s). MAX_ITER=$MAX_ITER sigue limitando el total de iteraciones."
+        sleep "$wait_seconds"
+        echo "▶️  Fin de la espera. Retomando el loop (próxima iteración: $((i + 1)))."
+        continue
+      fi
+      echo "⏳ Límite de uso/sesión alcanzado (ver $log): ${decision#STOP }. Deteniendo el loop; vuelve a ejecutar cuando se libere."
+      exit 4
+      ;;
+    LOOP_COMPLETO)
+      echo "✅ Loop completo. Revisa PROGRESS.md y abre el PR manualmente."; exit 0
+      ;;
+    BLOQUEADO)
+      echo "⛔ Bloqueado: completa las decisiones en $WORK_DIR/DECISIONS.md y vuelve a ejecutar."; exit 2
+      ;;
+    ITERACION_OK)
+      fails=0
+      ;;
+    *)
+      fails=$((fails+1))
+      echo "⚠ Iteración sin cierre limpio ($fails consecutivas)."
+      if (( fails >= 3 )); then
+        echo "🛑 3 iteraciones seguidas sin cierre. Revisión humana necesaria."; exit 3
+      fi
+      ;;
+  esac
   sleep "$PAUSE"
 done
 echo "Se alcanzó MAX_ITER=$MAX_ITER sin completar."; exit 1
