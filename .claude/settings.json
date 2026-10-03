@@ -108,6 +108,7 @@
       "Bash(*supabase link*)",
       "Bash(*supabase migration repair*)",
       "Bash(*supabase projects*)",
+      "Bash(*run-loop.sh*)",
       "PowerShell(git gc:*)",
       "PowerShell(git reflog:*)",
       "PowerShell(git prune:*)",
@@ -134,7 +135,8 @@
       "PowerShell(*supabase secrets*)",
       "PowerShell(*supabase link*)",
       "PowerShell(*supabase migration repair*)",
-      "PowerShell(*supabase projects*)"
+      "PowerShell(*supabase projects*)",
+      "PowerShell(*run-loop.sh*)"
     ]
   }
 }
