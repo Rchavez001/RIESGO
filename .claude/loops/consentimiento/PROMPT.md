@@ -64,6 +64,14 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
    commitear; el stash lo conserva para que un humano decida si algo es rescatable), anota el
    nombre exacto del stash en `PROGRESS.md`, documenta el error, marca la tarea `⚠ REINTENTAR`
    con el motivo y termina la iteración.
+   - **Si el fallo es de infraestructura, no de tu código** (Docker no disponible o caído, un puerto
+     ya ocupado, el stack de Supabase/Postgres que no arranca — p. ej. `docker info` falla, `supabase
+     start` no levanta, "address already in use", un contenedor zombi): no intentes diagnosticarlo con
+     comandos sueltos (`docker exec`, `psql`, `supabase status`, etc.: están prohibidos en modo headless,
+     ver REGLAS DURAS, y solo gastan turnos sin que puedas arreglar nada desde aquí). Termina la
+     iteración de inmediato con `<promise>BLOQUEADO</promise>`, citando en tu respuesta y en
+     `PROGRESS.md` el mensaje de error exacto que dio `gates.sh`, para que un humano revise el entorno
+     antes de la siguiente iteración.
    - Por defecto, `panel-e2e` corre solo en los perfiles `desktop-chrome` y `pixel-7-chrome`.
    - **Verificación completa obligatoria:** ejecuta además `GATES_FULL=1 bash .claude/loops/consentimiento/gates.sh`
      (los 7 perfiles de `playwright.admin.config.ts`) **cada 5 iteraciones** (cuando el número de
