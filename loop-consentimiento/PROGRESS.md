@@ -183,3 +183,73 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   orden de `TASKS.md`).
 - Porcentaje: sin cambio en el contador estricto (13 de 28; TEST-INT no es una de las 28). Ponderado: sin cambio
   aplicable (TEST-INT no tiene peso asignado en esa cuenta).
+
+---
+## Iteración 34 — 2026-10-03 — T12.c (`SmtpSender` + anti-SSRF): retoma el WIP en stash, cierra con una desviación de SPEC real documentada
+- **Punto de partida:** la primera tarea ejecutable en orden seguía bloqueada (TEST-INT.a por el entorno, TEST-INT.c
+  por T13); la Iteración 33 ya había señalado que la siguiente debía ser T12.c. `git status` mostraba `deno.lock` y
+  `url-guard.ts` modificados más 4 archivos nuevos sin commitear bajo `_shared/email/`. Antes de tocar nada: comparé
+  esos 4 archivos y el diff de `url-guard.ts` byte a byte contra `git stash show stash@{0}^3:…` (el borrador
+  `wip-T12c-smtp-ssrf-iteracion-accidental-20261003` que el commit `7384065` documentó) — son idénticos. Confirmado
+  que es el propio WIP del loop (restos de una ejecución accidental de `run-loop.sh` del 2026-10-03, no un proceso
+  concurrente) y que el único cambio en `url-guard.ts` es `export` en `PRIVATE_SUFFIXES`, como exigía la nota de
+  TASKS.md antes de confiar en el resto. El stash queda intacto (no se tocó; sigue disponible como respaldo).
+- **Librería elegida (pendiente de justificar desde T12.c original): `denomailer@1.6.0`.** Deno nativo (sin shim de
+  Node), soporta TLS implícito en el puerto 465 de fábrica, y evita escribir a mano el framing EHLO/AUTH/DATA (fácil
+  de hacer mal). Justificación ya estaba en el comentario de `smtp-sender.ts`; esta iteración solo la confirma.
+- **Hallazgo real al auditar el borrador contra SEC-09/REQ-21(d):** la SPEC pide "conectar a la IP ya validada (sin
+  volver a resolver)". `assertSafeSmtpTarget` sí resuelve DNS y rechaza IP privada/loopback/link-local/metadatos
+  (incluido IPv4-mapped) — pero `SmtpSender.send()` descarta `target.resolvedIp` y llama a `deliverWithDenomailer`
+  con el **hostname original**, que denomailer vuelve a resolver él mismo. Confirmado leyendo el código fuente de
+  `denomailer` en la caché local de Deno (`client/basic/client.ts`, cacheado previamente — no hubo red externa en
+  esta sesión): tanto `Deno.connectTls({hostname, port})` (TLS implícito, nuestro caso) como el `Deno.startTls(conn,
+  {hostname})` posterior a STARTTLS usan el **mismo** campo `hostname` para la conexión TCP y para la validación del
+  certificado (SNI); no expone ningún punto para inyectar una conexión ya abierta ni para separar "IP para conectar"
+  de "nombre para validar el certificado". Conectar literalmente a la IP ya resuelta rompería la validación TLS
+  contra cualquier servidor SMTP real (su certificado es por hostname, no por IP) — sustituir "SSRF más difícil" por
+  "TLS roto en producción" no es una mejora. La única forma de lograr el pineo literal exigido por la SPEC sería
+  abrir el socket a mano (`Deno.connect` a la IP + `Deno.startTls` con `hostname` = nombre original para el SNI) y
+  manejar el protocolo SMTP sin denomailer — exactamente el riesgo de framing que `denomailer` se eligió para evitar.
+  **Decisión de esta iteración (técnica, no de negocio): mantener la revalidación de `assertSafeSmtpTarget` justo
+  antes de cada `send()` (ya implementada) como mitigación — reduce la ventana de "TOCTOU"/DNS-rebinding a los
+  milisegundos entre dos resoluciones DNS seguidas dentro de la misma llamada, no la elimina.** Mismo nivel de
+  protección que ya acepta `url-guard.ts` para otros destinos configurables por un admin (`news-agent-core.ts`,
+  `check-security-alerts`, `save-provider-key`): tampoco pinea IP ahí. El host SMTP solo lo configura `privacy_admin`
+  (rol de confianza), no un usuario no autenticado, lo que acota el modelo de amenaza frente a un SSRF clásico de
+  entrada arbitraria. Añadida **D-15** en `DECISIONS.md` (abierta, bloquea T99 — release — no T12.c ni T12.d) para
+  que un humano confirme si este nivel basta o si se justifica invertir en el socket manual antes de producción.
+- **Cambios:** ninguno de código nuevo más allá del borrador ya existente (se dejó tal cual tras confirmarlo
+  idéntico al stash y pasar gates limpio). `shield-ecuador-app/supabase/functions/_shared/email/ssrf-guard.ts`,
+  `smtp-sender.ts` y sus `_test.ts`; `shield-ecuador-app/supabase/functions/_shared/url-guard.ts` (export de
+  `PRIVATE_SUFFIXES`); `shield-ecuador-app/deno.lock` (hashes de `denomailer@1.6.0` y su dependencia transitiva
+  `std@0.173.0/encoding/base64.ts`). `loop-consentimiento/TASKS.md` (T12.c `[x]`, nota de desviación). Este archivo.
+  `loop-consentimiento/DECISIONS.md` (D-15, abierta).
+- **Pruebas:** las 19 ya escritas en el borrador (12 en `ssrf-guard_test.ts`: puertos, IPv4/IPv6 privada/pública,
+  IPv4-mapped, sufijos internos, literal vs. DNS, ambos tipos de registro fallan, una A privada basta aunque la AAAA
+  sea pública; 7 en `smtp-sender_test.ts`: puerto no permitido, host privado, sin contraseña, error de denomailer
+  nunca propaga texto crudo, camino feliz con host/puerto/credenciales/mensaje correctos). No se escribió ninguna
+  prueba nueva esta iteración: las existentes ya cubren los criterios de aceptación alcanzables (todo lo de SEC-09
+  salvo el pineo de IP, documentado arriba como desviación, no como hueco de prueba).
+- **Gates:** corrida completa por defecto. En verde: typecheck-frontend, lint-frontend [14 = línea base],
+  unit-frontend, panel-unit, panel-e2e, deno-check, deno-test (incluye las 19 pruebas nuevas dentro de la corrida
+  recursiva de `deno test supabase/functions/`, sin tocar `gates.sh`). **`sql-ciclo-de-vida` y `sql-guest-limit`
+  NO se pudieron verificar esta iteración:** Docker Desktop no tenía el daemon arriba en esta sesión (`docker:
+  failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine`), confirmado con dos corridas
+  seguidas (mismo error ambas). No es una regresión de este cambio — T12.c no toca ninguna migración ni archivo SQL,
+  y el error es de conexión al daemon, no una aserción fallida. No hay camino permitido para arrancar Docker Desktop
+  desde esta sesión (fuera de los directorios de trabajo permitidos para explorar `Program Files`; las REGLAS DURAS
+  además prohíben invocar `docker` directamente para intentar repararlo). db-reset y e2e-local SKIP explícitos
+  (opt-in) como siempre. Iteración 34, no múltiplo de 5: `GATES_FULL=1` no es obligatorio. **Pendiente para la
+  próxima iteración (o un humano): confirmar que Docker Desktop está arriba y volver a correr `sql-ciclo-de-vida`/
+  `sql-guest-limit` — ninguno de los dos quedó verificado en verde desde la Iteración 33.**
+- Desviaciones de SPEC: **SEC-09/REQ-21(d), parcial** — "conectar a la IP ya validada (sin volver a resolver)" no se
+  implementa tal cual por incompatibilidad con la librería SMTP elegida y con la validación TLS por hostname (ver
+  hallazgo arriba); se mitiga revalidando antes de cada envío. Ver D-15.
+- Riesgos / pendientes detectados: D-15 abierta, bloquea T99. T12.d (acciones de `admin-consent`, contraseña
+  cifrada, plantillas) sigue sin empezar; ahora desbloqueada (dependía de T12.b y T12.c, ambas cerradas). Docker
+  Desktop abajo en esta sesión: `sql-ciclo-de-vida`/`sql-guest-limit` sin verificar desde la Iteración 33 (ver
+  "Gates" arriba) — la próxima iteración debería confirmar Docker arriba y volver a correrlas antes de asumir que
+  el estado SQL del módulo sigue siendo el de la Iteración 33.
+- Porcentaje: estricto 14 de 28 = **50,0 %** (antes 13/28 ≈ 46,4 %). Ponderado: T12 tiene 4 subtareas (a-d); con
+  T12.c cerrada llevan 3 de 4 → T12 pasa de 50 % a 75 % de su propio peso; cálculo exacto pendiente de la tabla de
+  pesos completa (ver T12.d para cerrar T12 del todo).

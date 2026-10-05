@@ -167,3 +167,37 @@ contra un Postgres 16 efímero real dos veces (`GATES_ONLY=sql-ciclo-de-vida bas
 bloqueo de permisos al crear una migración: usar la opción A tal como se describió arriba (una sesión sin esa
 restricción hace el gesto completo), ya que generalizar `gates.sh` solo evita tener que volver a editarlo — no resuelve
 por sí solo la restricción de permisos de la sesión headless sobre `.claude/` ni sobre `docker`/`psql` sueltos.
+
+### D-15 — `SmtpSender`: ¿basta revalidar el objetivo antes de cada envío, o hace falta pinear la conexión a la IP ya resuelta?  [DECIDIDA 2026-10-03]
+Contexto (T12.c, iteración 34, 2026-10-03): SEC-09/REQ-21(d) de la SPEC pide, para el transporte SMTP configurable por
+`privacy_admin`, "resolver el DNS y rechazar IP privadas… conectar a la IP ya validada (sin volver a resolver)".
+`_shared/email/ssrf-guard.ts` (`assertSafeSmtpTarget`) sí resuelve DNS y rechaza IP privada/loopback/link-local/
+metadatos/IPv4-mapped — pero `_shared/email/smtp-sender.ts` conecta con `denomailer@1.6.0` usando el **hostname
+original**, no la IP ya validada: confirmado leyendo el código fuente de `denomailer` (`client/basic/client.ts`,
+cacheado localmente) que tanto `Deno.connectTls({hostname, port})` (TLS implícito, nuestro caso) como el
+`Deno.startTls(conn, {hostname})` posterior a STARTTLS usan el mismo campo `hostname` para la conexión TCP Y para la
+validación del certificado (SNI) — no hay ningún punto para inyectar una conexión ya abierta ni para separar "IP para
+conectar" de "nombre para validar el certificado". El resultado: `denomailer` vuelve a resolver el DNS él mismo justo
+antes de conectar, dejando una ventana de milisegundos entre la validación y la conexión real donde, en teoría, un
+DNS-rebinding podría cambiar la respuesta (el atacante necesitaría controlar el DNS del host SMTP configurado, que
+solo puede fijar `privacy_admin`, un rol de confianza — no es una entrada arbitraria de un usuario no autenticado).
+Opciones:
+A) **Mantener la revalidación antes de cada envío (ya implementada), aceptar la ventana residual.** Mismo nivel de
+   protección que ya acepta `url-guard.ts` para otros destinos admin-configurables (`news-agent-core.ts`,
+   `check-security-alerts`, `save-provider-key`): ninguno pinea IP tampoco. Sin costo adicional de desarrollo.
+B) **Pinear la IP con un socket manual.** Abrir `Deno.connect` a la IP ya validada y `Deno.startTls(conn, {hostname:
+   <nombre original>})` para el SNI/certificado (separa "conectar" de "validar"), e implementar el protocolo SMTP
+   (EHLO/AUTH/DATA) a mano sobre esa conexión en vez de usar `denomailer`. Elimina la ventana, pero reintroduce
+   exactamente el riesgo que `denomailer` se eligió para evitar (framing SMTP manual, fácil de hacer mal) y es una
+   pieza de código considerablemente mayor que mantener.
+C) **Buscar o forkear una librería SMTP para Deno que exponga el punto de inyección** (conexión pre-abierta, o
+   `hostname` para SNI separado de `host`/IP para conectar). No se investigó en esta iteración si existe alguna.
+Recomendación técnica: A por ahora (es el mismo bar que el resto del repo ya acepta para destinos admin-configurables,
+y el modelo de amenaza real —admin de confianza, no entrada arbitraria— es más débil que un SSRF clásico); dejar B/C
+para si hay un endurecimiento de política de seguridad que lo exija explícitamente antes de producción.
+Tareas bloqueadas: T99 (paso a producción). No bloquea T12.c (cerrada con esta desviación documentada) ni T12.d.
+Decisión: Opción A. Revalidar el destino (assertSafeSmtpTarget) inmediatamente antes de cada envío y aceptar la
+ventana residual de DNS-rebinding, igual que url-guard.ts para otros destinos configurados por admin. Condiciones:
+solo privacy_admin con aal2 puede configurar SMTP; puertos limitados a 465/2525; registrar en la bitácora el host
+y la IP validada en cada prueba de configuración; documentar el riesgo residual en SPEC.md (REQ-21). Reevaluar si
+se cambia de librería SMTP.

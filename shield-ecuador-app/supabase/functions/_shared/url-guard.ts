@@ -4,7 +4,7 @@
 //
 // Pure functions (no Deno APIs) so they can be unit tested from Node; see tests/url-guard.test.cjs.
 
-const PRIVATE_SUFFIXES = ['.localhost', '.local', '.internal', '.intranet', '.lan', '.home', '.corp', '.private']
+export const PRIVATE_SUFFIXES = ['.localhost', '.local', '.internal', '.intranet', '.lan', '.home', '.corp', '.private']
 
 function ipv4Parts(host: string): number[] | null {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
