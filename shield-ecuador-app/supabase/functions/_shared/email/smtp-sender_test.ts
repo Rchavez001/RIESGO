@@ -87,3 +87,29 @@ Deno.test('send: target SSRF rechazado (puerto no permitido) -> no hay resolvedI
   const result = await sender.send(message)
   assertEquals(result.resolvedIp, undefined)
 })
+
+Deno.test('send: revalida en CADA llamada, no cachea el veredicto SSRF (DNS-rebinding entre dos envíos, D-15)', async () => {
+  let call = 0
+  let delivered = 0
+  const sender = new SmtpSender({
+    ...baseOptions({
+      // assertSafeSmtpTarget resuelve A y AAAA por cada invocación (2 llamadas a resolveDns por
+      // send()): las dos primeras (round 1, A+AAAA del primer send()) devuelven una IP pública; las
+      // dos siguientes (round 2, segundo send()) una privada. Si assertSafeSmtpTarget se ejecutara
+      // una sola vez (p. ej. cacheado en el constructor o en el primer send()), el segundo envío
+      // pasaría igual con la IP pública vieja. Debe rechazarse.
+      resolveDns: async () => {
+        call += 1
+        const round = Math.ceil(call / 2)
+        return round === 1 ? ['203.0.113.10'] : ['10.0.0.5']
+      },
+    }),
+    deliver: async () => { delivered += 1 },
+  })
+  const first = await sender.send(message)
+  assertEquals(first, { ok: true, resolvedIp: '203.0.113.10' })
+  const second = await sender.send(message)
+  assertEquals(second, { ok: false, errorCode: 'smtp_host_private' })
+  assertEquals(call, 4)
+  assertEquals(delivered, 1)
+})
