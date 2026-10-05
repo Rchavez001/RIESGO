@@ -41,7 +41,7 @@ Deno.test('send: sin contraseña -> smtp_password_missing, sin llamar a deliver'
   let called = false
   const sender = new SmtpSender({ ...baseOptions({ getPassword: async () => null }), deliver: async () => { called = true } })
   const result = await sender.send(message)
-  assertEquals(result, { ok: false, errorCode: 'smtp_password_missing' })
+  assertEquals(result, { ok: false, errorCode: 'smtp_password_missing', resolvedIp: '203.0.113.10' })
   assertEquals(called, false)
 })
 
@@ -51,7 +51,7 @@ Deno.test('send: deliver lanza error -> smtp_send_failed, nunca el texto crudo (
     deliver: async () => { throw new Error('535 Authentication failed for user avisos@example.test pass s3cret') },
   })
   const result = await sender.send(message)
-  assertEquals(result, { ok: false, errorCode: 'smtp_send_failed' })
+  assertEquals(result, { ok: false, errorCode: 'smtp_send_failed', resolvedIp: '203.0.113.10' })
 })
 
 Deno.test('send: camino feliz -> deliver recibe host/puerto/credenciales/remitente/mensaje correctos', async () => {
@@ -61,7 +61,7 @@ Deno.test('send: camino feliz -> deliver recibe host/puerto/credenciales/remiten
     deliver: async (args) => { captured = args },
   })
   const result = await sender.send(message)
-  assertEquals(result, { ok: true })
+  assertEquals(result, { ok: true, resolvedIp: '203.0.113.10' })
   assertEquals(captured, {
     host: 'smtp.example.test',
     port: 465,
@@ -71,4 +71,19 @@ Deno.test('send: camino feliz -> deliver recibe host/puerto/credenciales/remiten
     fromEmail: 'avisos@example.test',
     message,
   })
+})
+
+Deno.test('send: la IP validada (resolvedIp) viaja en el resultado para que el llamador la registre en bitácora (D-15)', async () => {
+  const sender = new SmtpSender({
+    ...baseOptions({ resolveDns: async () => ['198.51.100.7'] }),
+    deliver: async () => {},
+  })
+  const result = await sender.send(message)
+  assertEquals(result, { ok: true, resolvedIp: '198.51.100.7' })
+})
+
+Deno.test('send: target SSRF rechazado (puerto no permitido) -> no hay resolvedIp que registrar', async () => {
+  const sender = new SmtpSender({ ...baseOptions({ port: 587 }), deliver: async () => {} })
+  const result = await sender.send(message)
+  assertEquals(result.resolvedIp, undefined)
 })

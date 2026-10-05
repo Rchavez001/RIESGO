@@ -13,6 +13,8 @@ export interface EmailSendResult {
   ok: boolean
   /** Stable, non-sensitive reason when ok is false — never the provider's raw error text (may leak secrets/PII). */
   errorCode?: string
+  /** SmtpSender only: the IP assertSafeSmtpTarget validated for this attempt (D-15), for the caller to log in the audit trail. Absent when the SSRF check itself rejected the target. */
+  resolvedIp?: string
 }
 
 export interface EmailSender {

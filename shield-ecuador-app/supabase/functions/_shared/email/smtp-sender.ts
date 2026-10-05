@@ -62,9 +62,13 @@ export class SmtpSender implements EmailSender {
   async send(message: EmailMessage): Promise<EmailSendResult> {
     const target = await assertSafeSmtpTarget(this.options.host, this.options.port, { resolveDns: this.options.resolveDns })
     if (!target.ok) return { ok: false, errorCode: target.errorCode }
+    // D-15 (decidida): el llamador (p. ej. send_test_email, T12.d) registra host + resolvedIp en
+    // email_transport_tests/admin_audit_log en cada prueba de configuración, para que la revalidación
+    // de esta línea quede trazada aunque el envío real falle después.
+    const { resolvedIp } = target
 
     const password = await this.options.getPassword()
-    if (!password) return { ok: false, errorCode: 'smtp_password_missing' }
+    if (!password) return { ok: false, errorCode: 'smtp_password_missing', resolvedIp }
 
     const deliver = this.options.deliver ?? deliverWithDenomailer
     try {
@@ -79,8 +83,8 @@ export class SmtpSender implements EmailSender {
       })
     } catch {
       // Never surface denomailer's raw error text: it can echo the password or full connection string.
-      return { ok: false, errorCode: 'smtp_send_failed' }
+      return { ok: false, errorCode: 'smtp_send_failed', resolvedIp }
     }
-    return { ok: true }
+    return { ok: true, resolvedIp }
   }
 }

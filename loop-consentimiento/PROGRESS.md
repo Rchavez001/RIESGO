@@ -253,3 +253,47 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: estricto 14 de 28 = **50,0 %** (antes 13/28 ≈ 46,4 %). Ponderado: T12 tiene 4 subtareas (a-d); con
   T12.c cerrada llevan 3 de 4 → T12 pasa de 50 % a 75 % de su propio peso; cálculo exacto pendiente de la tabla de
   pesos completa (ver T12.d para cerrar T12 del todo).
+
+---
+## Iteración 35 — 2026-10-03 — Sesión interactiva: D-15 decidida (opción A); verificado y cerrado un hueco real en T12.c
+- **Punto de partida:** la persona responsable decidió D-15 (opción A: revalidar con `assertSafeSmtpTarget` antes
+  de cada envío, aceptar la ventana residual de DNS-rebinding), con 4 condiciones explícitas: (1) solo
+  `privacy_admin` con `aal2` configura SMTP, (2) puertos limitados a 465/2525, (3) registrar en bitácora el host y
+  la IP validada en cada prueba de configuración, (4) documentar el riesgo residual en `SPEC.md` (REQ-21). `SPEC.md`
+  y `DECISIONS.md` ya quedaron actualizados en una sesión interactiva previa (commits `5512f88`, `0b97d1d`); esta
+  iteración verifica las 4 condiciones contra el código real de T12.c, no solo contra la documentación.
+- **Verificación de las 4 condiciones:** (1) y (2) ya estaban cerradas desde T12.b/T04 (`email_transport_settings`
+  solo admite modificarse vía acciones de `privacy_admin`, pendientes en T12.d; `smtpPortProblem()` en
+  `ssrf-guard.ts` rechaza cualquier puerto que no sea 465/2525). (4) cerrada en la sesión previa (`SPEC.md`
+  REQ-21(d)). **(3) tenía un hueco real:** `assertSafeSmtpTarget()` calcula `resolvedIp` en cada llamada, pero
+  `SmtpSender.send()` lo descartaba — `EmailSendResult` no tenía ningún campo para transportar esa IP hasta quien
+  tendría que registrarla (`send_test_email`, T12.d, aún sin escribir). Sin este campo, T12.d no podría cumplir la
+  condición (3) sin volver a resolver el DNS por su cuenta, duplicando la validación.
+- **Cambios:** `_shared/email/types.ts` (`EmailSendResult` gana `resolvedIp?: string`, documentado como "solo
+  `SmtpSender`, para que el llamador la registre en la bitácora (D-15)"); `_shared/email/smtp-sender.ts`
+  (`send()` propaga `target.resolvedIp` en los tres resultados posteriores a una validación SSRF exitosa:
+  éxito, `smtp_password_missing` y `smtp_send_failed` — así T12.d puede registrar host+IP aunque el envío real
+  falle después; ausente cuando el propio `assertSafeSmtpTarget` rechaza el destino, porque ahí no hay IP
+  validada que registrar). `TASKS.md` (T12.c: 21 pruebas en vez de 19, nota de D-15 decidida y del campo nuevo;
+  T12.d: nota de que `send_test_email` debe usar `resolvedIp`, no volver a resolver DNS). Este archivo.
+- **Pruebas añadidas:** `smtp-sender_test.ts` gana 2 pruebas nuevas (`resolvedIp` viaja en el resultado feliz con
+  un IP distinto al de las demás pruebas, para no confundirlo con un valor fijo; ausente cuando el SSRF rechaza
+  por puerto) y las 3 pruebas existentes de los otros caminos (`smtp_password_missing`, `smtp_send_failed`, camino
+  feliz) se actualizaron para exigir `resolvedIp` en su resultado. Total T12.c: 21 (12 de `ssrf-guard_test.ts` +
+  9 de `smtp-sender_test.ts`, antes 7).
+- **Gates:** corrida completa de `gates.sh` (9 puertas no-opcionales) en verde, incluidas `sql-ciclo-de-vida` y
+  `sql-guest-limit` (Docker arriba en esta sesión, a diferencia de la Iteración 34); `deno-test` cubre las 2
+  pruebas nuevas dentro de la corrida recursiva, sin tocar `gates.sh`. db-reset y e2e-local SKIP explícitos
+  (opt-in), como siempre.
+- Desviaciones de SPEC: ninguna nueva; la de REQ-21(d) (pineo de IP) sigue siendo la misma, ya documentada y
+  ahora con D-15 decidida en vez de abierta.
+- Riesgos / pendientes detectados: la condición (3) de D-15 queda **parcialmente** satisfecha — `resolvedIp`
+  ya está disponible para quien lo necesite, pero la persistencia real en `email_transport_tests`/bitácora sigue
+  dependiendo de que T12.d implemente `send_test_email` usando este campo (no inventando su propia resolución de
+  DNS). T12.d sigue sin empezar.
+- Porcentaje: sin cambio (T12.c ya estaba contado como cerrada; D-15 no es una de las 28 tareas numeradas).
+  Estricto 14/28 = 50,0 %. Ponderado: sin cambio frente a la Iteración 34; cierra ahí el cálculo que esa entrada
+  dejó pendiente — cada una de las 28 tareas pesa 100/2800 (confirmado con los saltos de ±25 por cuarto de
+  subtarea de T12 en las Iteraciones 28-29-30 de `PROGRESS_ARCHIVO.md`): T12 al 75 % de su peso propio (3 de 4
+  subtareas) son 75 de sus 100 puntos → 1515 (tras T14, Iteración 30) + 25 (T12.c, Iteración 34) = **1540/2800 ≈
+  55,0 %** (antes ≈ 54,1 %).
