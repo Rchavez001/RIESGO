@@ -48,6 +48,14 @@ for i in $(seq 1 "$MAX_ITER"); do
   log="$WORK_DIR/logs/iter-$(printf '%03d' "$i")-$ts.log"
   echo "════ Iteración $i/$MAX_ITER · $ts ════"
 
+  # Docker Desktop apagado tumbó las últimas 3 iteraciones (gates.sh gastaba la iteración completa sin
+  # poder correr sql-ciclo-de-vida/sql-guest-limit/db-reset/e2e-local). Comprobarlo ANTES de invocar a
+  # Claude: si falla, detener el loop de inmediato sin gastar esta iteración.
+  if [[ "$(check_docker)" != "OK" ]]; then
+    echo "⛔ Docker Desktop no está en marcha (docker info falló). Arráncalo y vuelve a ejecutar el loop."
+    exit 5
+  fi
+
   # Aviso de archivos sin commitear DE UNA ITERACIÓN ANTERIOR (p. ej. una que murió a mitad de camino
   # por un límite de sesión, como iter-002-20261001-000211.log: 843 líneas de T14 quedaron sin commitear
   # y sin que nadie se enterara hasta una sesión interactiva aparte, varias horas después). El paso 1 del

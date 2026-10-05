@@ -74,3 +74,16 @@ decide_usage_limit() {
   (( reset_epoch <= now_epoch )) && reset_epoch=$(( reset_epoch + 86400 ))
   echo "WAIT $(( reset_epoch + 300 ))"
 }
+
+# --- Verificación de Docker Desktop ----------------------------------------------------------------
+# Las últimas 3 iteraciones fallaron porque Docker Desktop estaba apagado: gates.sh gastó la iteración
+# completa (incluidos turnos de diagnóstico) sin poder correr sql-ciclo-de-vida/sql-guest-limit/db-reset/
+# e2e-local. Pura y mockeable: la prueba en classify_test.sh sombrea `docker` con una función antes de
+# llamarla, sin tocar el Docker real ni tener Docker instalado.
+check_docker() {
+  if docker info >/dev/null 2>&1; then
+    echo "OK"
+  else
+    echo "DOCKER_DOWN"
+  fi
+}

@@ -85,5 +85,20 @@ check_wait "mensaje real de iter-002 (resets 3am America/Guayaquil)" \
   "You've hit your session limit · resets 3am (America/Guayaquil)" \
   $(( three_am_epoch + 300 )) 65
 
+echo "== check_docker() (docker mockeado, sin tocar el Docker real) =="
+check_docker_case() {  # check_docker_case <nombre> <rc-mock-de-docker> <esperado>
+  local name="$1" mock_rc="$2" expected="$3" got
+  docker() { return "$mock_rc"; }
+  got="$(check_docker)"
+  unset -f docker
+  if [[ "$got" == "$expected" ]]; then
+    echo "  OK   $name -> $got"; pass=$((pass+1))
+  else
+    echo "  FAIL $name -> '$got' (esperaba '$expected')"; fail=$((fail+1))
+  fi
+}
+check_docker_case "docker arriba -> OK" 0 "OK"
+check_docker_case "docker caído -> DOCKER_DOWN" 1 "DOCKER_DOWN"
+
 echo "classify_test.sh: $pass OK, $fail FAIL"
 if (( fail > 0 )); then exit 1; else exit 0; fi
