@@ -297,3 +297,79 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   subtarea de T12 en las Iteraciones 28-29-30 de `PROGRESS_ARCHIVO.md`): T12 al 75 % de su peso propio (3 de 4
   subtareas) son 75 de sus 100 puntos → 1515 (tras T14, Iteración 30) + 25 (T12.c, Iteración 34) = **1540/2800 ≈
   55,0 %** (antes ≈ 54,1 %).
+
+---
+## Iteración 36 — 2026-10-05 — Sesión interactiva: T12.d dividida en 4; cierra T12.d.1 (`get_email_transport`/`update_email_transport`)
+- **Punto de partida:** `git status` limpio al empezar; los 2 últimos commits del historial (`b8cfda7`, `ed842cd`,
+  ambos de hoy) ya estaban en el árbol y documentados por su propio mensaje de commit (TASKS.md: detalle de la
+  condición (3) de D-15 para T12.d; `smtp-sender_test.ts`: prueba de la condición (1), revalidación por envío) —
+  no son restos de esta sesión, no se tocó nada de ellos. Orden de `TASKS.md`: TEST-INT sigue con TEST-INT.a en
+  `⚠ REINTENTAR` (bloqueo de entorno, Iteraciones 31-33: `docker exec`/`psql` sueltos) y TEST-INT.c `⛔ BLOQUEADA`
+  (T13 sin escribir) — pero en esta sesión interactiva `docker ps` mostró el stack de Supabase local sano (`Up 4
+  horas`, `supabase_vector` reiniciando — ya documentado como ruidoso), así que se evaluó retomar TEST-INT.a antes
+  de pasar a T12.d. Se decidió NO hacerlo esta iteración: forzar un fallo GENUINO de un INSERT en `consent_records`
+  exige manipular privilegios (`REVOKE`/`GRANT`) sobre una tabla de un Postgres compartido con otros procesos del
+  propio sistema (`cyber-risk-db`, `open-design` en el mismo `docker ps`) sin un plan de rollback atómico — más
+  intrusivo que lo que cabe en una sola iteración, y la Iteración 33 ya dejó anotado que la tarea siguiente no
+  bloqueada en orden es T12.c (cerrada) → T12.d. Se sigue esa recomendación.
+- **División (antes de codificar, regla de PROMPT.md "si es demasiado grande, divide"):** T12.d cubre 5 acciones +
+  cifrado con AAD + degradación + plantillas + semilla — demasiado para una iteración. Dividida en TASKS.md en
+  T12.d.1 (`get_email_transport`/`update_email_transport`), T12.d.2 (`send_test_email`, depende de d.1 para tener
+  una fila de transporte que probar — condición (3) de D-15), T12.d.3 (`list_pending_emails`/`resend_pending_emails`
+  + degradación) y T12.d.4 (plantillas + semilla). Se ejecuta solo T12.d.1.
+- **Diseño de T12.d.1:** nueva fila por cada guardado (mismo patrón append-only/versionado que 075/079: el trigger
+  `enforce_next_email_transport_settings_version` de la 079 ya exige `transport_version = max+1`, así que el
+  handler calcula ese valor y lo manda explícito, igual que el resto del módulo hace con sus propias versiones).
+  La contraseña SMTP se cifra con `crypto.ts` bajo una AAD atada a la versión de la FILA QUE SE VA A INSERTAR
+  (`buildAad('email_transport_settings', 'password', String(transport_version))`) — nunca la misma clave que
+  `getActiveKeyVersion()` usa para la versión de cifrado. Si el admin cambia otro campo en modo `smtp` sin
+  reenviar la contraseña, el handler descifra la vigente con la AAD de SU PROPIA versión (`allowLegacy:false`,
+  igual que `consent-evidence.ts`) y la re-cifra bajo la versión nueva: nunca copia el mismo ciphertext de una
+  fila a otra (la fila vieja queda intacta, append-only de verdad). `get_email_transport` y la respuesta de
+  `update_email_transport` nunca exponen el ciphertext: solo `password_set` (booleano), vía `toPublicEmailTransport`
+  — la misma función redacta lo que entra en la bitácora (`before`/`after`), así que la contraseña (texto o
+  ciphertext) no puede aparecer ahí por descuido. `auditLog()` tenía `entity: 'consent_documents'` fijo en el
+  código (T14): se generalizó a un campo explícito en cada llamador (3 sitios existentes actualizados a
+  `entity: 'consent_documents'`, sin cambio de comportamiento) para que T12.d.1 pudiera usar
+  `entity: 'email_transport_settings'` sin falsear la bitácora real.
+- **Cambios:** `shield-ecuador-app/supabase/functions/admin-consent/handler.ts` (tipos `EmailTransportRow`,
+  `PublicEmailTransport`, `NewEmailTransportInput`, `EmailTransportDeps`; `AdminConsentDeps.emailTransport`;
+  `UpdateEmailTransportSchema` con el mismo tope de puerto 465/2525 que el anti-SSRF de T12.c y el `CHECK` de la
+  079; `toPublicEmailTransport`, `updateEmailTransport`; ruta `GET|POST /email-transport`, solo `privacy_admin`
+  (`ADMIN_ONLY`, ni editor ni auditor); `auditLog` gana el parámetro `entity`); `index.ts` (wiring real:
+  `email_transport_settings_current`/`email_transport_settings` vía `db`, `encryptPassword`/`decryptPassword` con
+  `crypto.ts` — `encryptPii`/`decryptPii`/`buildAad`/`getActiveKeyVersion`); `handler_test.ts` (fake
+  `makeEmailTransportStore` con cifrado simulado reversible que SÍ reproduce el amarre a la versión —
+  `decryptPassword` falla si se le pide con la AAD de otra fila —, 9 pruebas nuevas). `loop-consentimiento/TASKS.md`
+  (T12.d dividida en 4; T12.d.1 `[x]`; blockeos de d.2-d.4 actualizados tras cerrar d.1). Este archivo.
+- **Pruebas añadidas (9, en `handler_test.ts`):** GET sin nada configurado → `null`; crear transporte `smtp` con
+  contraseña → `password_set:true`, ciphertext ausente de la respuesta Y de la bitácora (se comprobó con
+  `JSON.stringify(audit)` sin la contraseña en texto NI el ciphertext simulado); editor/auditor → 403 en GET y
+  POST; `smtp` sin contraseña y sin una vigente → 400 `smtp_password_required`; puerto fuera de 465/2525 → 400
+  `invalid_input`; actualizar otro campo en `smtp` sin reenviar la contraseña → nueva versión con la contraseña
+  re-cifrada bajo su propia AAD (`enc:v2:...`), la fila vieja intacta; pasar de `smtp` a `resend` limpia los
+  campos smtp y `password_set` pasa a `false`. Rojo→verde no se verificó con un fallo inducido aparte (a
+  diferencia de otras iteraciones): el código se escribió junto con las pruebas por la naturaleza acoplada del
+  diseño (tipos nuevos que ambos archivos comparten); en su lugar se confirmó verde con `deno-check` y `deno-test`
+  antes de la corrida completa, y se revisó a mano que cada aserción ejercita una rama real del `switch`
+  mode=smtp/resend × contraseña presente/ausente × vigente smtp/resend/ninguna.
+- **Gates:** corrida completa de `gates.sh` (9 puertas no-opcionales) en verde: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test (incluye las 9 pruebas nuevas,
+  recursivo sobre `supabase/functions/`, sin tocar `gates.sh`), sql-ciclo-de-vida, sql-guest-limit; db-reset y
+  e2e-local SKIP explícitos (opt-in). Iteración 36, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- **Nota de entorno (para quien retome TEST-INT.a):** el stack de Supabase local sigue arriba y sano esta sesión
+  (`docker ps`: 4 horas, todos `healthy` salvo `supabase_vector` reiniciando — ya documentado como ruidoso en
+  Iteraciones 31-33). No se intentó `docker exec`/`psql` esta vez por la razón de alcance explicada arriba
+  ("Punto de partida"), no por un bloqueo de permisos nuevo — queda pendiente para quien decida invertir una
+  iteración completa en preparar y revertir una manipulación de privilegios de tabla contra ese Postgres
+  compartido.
+- Desviaciones de SPEC: ninguna. T12.d.1 no estaba en TASKS.md como tarea propia antes de esta iteración (nació
+  de dividir T12.d, igual que T05/T12 se dividieron antes de codificar en iteraciones previas).
+- Riesgos / pendientes detectados: T12.d.2 (`send_test_email`) queda desbloqueada y es la condición (3) de D-15
+  que sigue bloqueando T99 — necesita una prueba de integración contra Postgres real (no solo el fake), mismo
+  criterio que TEST-INT. T12.d.3/d.4 desbloqueadas también, sin motivo técnico para esperar más que el orden de
+  `TASKS.md`. TEST-INT.a sigue con el mismo bloqueo de alcance/entorno de las Iteraciones 31-33, sin cambios.
+- Porcentaje: estricto 14/28 = **50,0 %** (sin cambio; T12.d.1 es subtarea de T12, no una de las 28 numeradas).
+  Ponderado: T12 son 4 subtareas (a-d); T12.d.1 es 1 de 4 "cuartos" DENTRO de la subtarea d, que a su vez es 1 de
+  4 subtareas de T12 (25 puntos de los 100 de T12) → T12.d.1 vale 25/4 ≈ 6,25 de los 100 puntos de T12. T12 pasa
+  de 75 a ≈ 81,25 de sus 100 → 1540 + 6,25 = **≈ 1546,25/2800 ≈ 55,2 %** (antes ≈ 55,0 %).

@@ -1,8 +1,16 @@
 // admin-consent (T05.a, T14): ver handler.ts. `verify_jwt = true` (valor por defecto; ver supabase/config.toml).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { hmacLookup } from '../_shared/crypto.ts'
-import { ApiError, handle, type ConsentDocumentRow, type ConsentDocumentStatus, type PublishInput } from './handler.ts'
+import { buildAad, decryptPii, encryptPii, getActiveKeyVersion, hmacLookup, type EncryptedPayload } from '../_shared/crypto.ts'
+import {
+  ApiError,
+  handle,
+  type ConsentDocumentRow,
+  type ConsentDocumentStatus,
+  type EmailTransportRow,
+  type NewEmailTransportInput,
+  type PublishInput,
+} from './handler.ts'
 
 // Solo para insertar en admin_audit_log / leer-escribir consent_documents (sin privilegios para
 // `authenticated`, ver 073); el actor sale del JWT verificado por `requireRole`, nunca de esta clave.
@@ -14,6 +22,13 @@ const DOC_COLUMNS =
   'id, version, title, content_md, content_sha256, purposes, status, requires_reconsent, change_summary, based_on_id, created_by, created_at, updated_by, updated_at, published_by, published_at, retired_by, retired_at'
 const SETTINGS_COLUMNS =
   'settings_version, controller_name, controller_address, controller_phone, privacy_email, dpo_name, dpo_contact, privacy_policy_url, unsubscribe_subject, response_days, ip_retention_days, four_eyes_publish'
+const EMAIL_TRANSPORT_COLUMNS =
+  'transport_version, mode, from_name, from_email, smtp_host, smtp_port, smtp_username, smtp_password_ciphertext, created_by, created_at'
+
+// T12.d.1 (D-15): la contraseña SMTP se cifra con su propia AAD atada a `transport_version` — nunca la
+// misma clave que `crypto.ts` usa para la versión de clave de cifrado (esa la sigue dando `getActiveKeyVersion()`).
+const emailTransportPasswordAad = (transportVersion: number) =>
+  buildAad('email_transport_settings', 'password', String(transportVersion))
 
 serve((req) =>
   handle(req, {
@@ -89,6 +104,25 @@ serve((req) =>
         if (error) throw new Error(`privacy_settings_current: ${error.code ?? 'error'}`)
         return data
       },
+    },
+    emailTransport: {
+      getCurrent: async () => {
+        const { data, error } = await db.from('email_transport_settings_current').select(EMAIL_TRANSPORT_COLUMNS).maybeSingle()
+        if (error) throw new Error(`email_transport_settings_current: ${error.code ?? 'error'}`)
+        return data as EmailTransportRow | null
+      },
+      insert: async (row: NewEmailTransportInput) => {
+        const { data, error } = await db.from('email_transport_settings').insert(row).select(EMAIL_TRANSPORT_COLUMNS).single()
+        if (error) throw new Error(`email_transport_settings insert: ${error.code ?? 'error'}`)
+        return data as EmailTransportRow
+      },
+      encryptPassword: (password: string, transportVersion: number) =>
+        encryptPii(password, getActiveKeyVersion(), { aad: emailTransportPasswordAad(transportVersion), requireAad: true }),
+      decryptPassword: (row: EmailTransportRow) =>
+        decryptPii(row.smtp_password_ciphertext as EncryptedPayload, {
+          aad: emailTransportPasswordAad(row.transport_version),
+          allowLegacy: false,
+        }),
     },
   })
 )

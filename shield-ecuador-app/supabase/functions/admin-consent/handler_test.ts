@@ -2,6 +2,8 @@
 // T05.a (SEC-03, H08): `POST /admin-consent/session` atribuye la sesión al admin individual del JWT verificado.
 // T14 (REQ-01, REQ-13 a–d, SEC-02): acciones de `consent_documents` (crear/editar borrador, diff, preview,
 // publicar — con "cuatro ojos" — y retirar un borrador), todas atribuidas y con bitácora before/after.
+// T12.d.1 (REQ-21, D-15): `get_email_transport`/`update_email_transport`, solo `privacy_admin`, contraseña
+// SMTP nunca en la respuesta ni en la bitácora.
 import { assertEquals, assertExists } from 'https://deno.land/std@0.168.0/testing/asserts.ts'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'https://deno.land/x/jose@v5.9.6/index.ts'
 import {
@@ -13,7 +15,10 @@ import {
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
   type DocumentsDeps,
+  type EmailTransportDeps,
+  type EmailTransportRow,
   type NewConsentDocumentInput,
+  type NewEmailTransportInput,
   type SettingsDeps,
 } from './handler.ts'
 
@@ -100,6 +105,28 @@ function makeDocsStore(
   return { documents, rows }
 }
 
+// Fake de `emailTransport`: cifrado simulado (nunca real) que SÍ reproduce la semántica que importa
+// probar aquí — una contraseña cifrada bajo la versión N solo se puede descifrar con la versión N (si
+// `decryptPassword` se llamara con la AAD de otra fila, igual que `crypto.ts` real, debe fallar).
+function makeEmailTransportStore(initial: EmailTransportRow[] = []): { emailTransport: EmailTransportDeps; rows: EmailTransportRow[] } {
+  const rows = [...initial]
+  const emailTransport: EmailTransportDeps = {
+    getCurrent: () => Promise.resolve(rows.length ? rows[rows.length - 1] : null),
+    insert: (row: NewEmailTransportInput) => {
+      const created: EmailTransportRow = { created_at: '2026-10-05T00:00:00Z', ...row }
+      rows.push(created)
+      return Promise.resolve(created)
+    },
+    encryptPassword: (password, transportVersion) => Promise.resolve(`enc:v${transportVersion}:${password}`),
+    decryptPassword: (row) => {
+      const match = /^enc:v(\d+):(.*)$/.exec(String(row.smtp_password_ciphertext))
+      if (!match || Number(match[1]) !== row.transport_version) throw new Error('aad_mismatch')
+      return Promise.resolve(match[2])
+    },
+  }
+  return { emailTransport, rows }
+}
+
 function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): SettingsDeps {
   const current: CurrentPrivacySettings = {
     settings_version: 1,
@@ -130,6 +157,7 @@ function fullDeps(opts: {
   failAudit?: boolean
   documents?: DocumentsDeps
   settings?: SettingsDeps
+  emailTransport?: EmailTransportDeps
 }): AdminConsentDeps {
   const audit = opts.audit ?? []
   return {
@@ -138,6 +166,7 @@ function fullDeps(opts: {
     audit: (entry) => (opts.failAudit ? Promise.reject(new Error('db')) : (audit.push(entry), Promise.resolve())),
     documents: opts.documents ?? makeDocsStore().documents,
     settings: opts.settings ?? settingsDeps(),
+    emailTransport: opts.emailTransport ?? makeEmailTransportStore().emailTransport,
   }
 }
 
@@ -503,4 +532,106 @@ Deno.test('si falla la bitácora al retirar, se revierte el UPDATE → 503 audit
   )
   assertEquals([res.status, (await res.json()).error], [503, 'audit_failed'])
   assertEquals(rows[0].status, 'draft')
+})
+
+// ── T12.d.1 (REQ-21, D-15): get_email_transport / update_email_transport ──────────────────────────────
+
+Deno.test('GET /email-transport sin nada configurado → 200 null', async () => {
+  const res = await handle(req(await sign(claims()), '/email-transport', 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), null)
+})
+
+Deno.test('admin configura smtp con contraseña: 200, password_set true, ciphertext NUNCA en la respuesta ni en la bitácora', async () => {
+  const audit: AuditEntry[] = []
+  const { emailTransport, rows } = makeEmailTransportStore()
+  const res = await handle(
+    req(await sign(claims()), '/email-transport', 'POST', {
+      mode: 'smtp', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+      smtp_host: 'smtp.example.test', smtp_port: 465, smtp_username: 'notificaciones', smtp_password: 'Secreto1',
+    }),
+    fullDeps({ roles: ['privacy_admin'], audit, emailTransport }),
+  )
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals([body.transport_version, body.mode, body.password_set], [1, 'smtp', true])
+  assertEquals('smtp_password_ciphertext' in body, false)
+  assertEquals(rows[0].smtp_password_ciphertext, 'enc:v1:Secreto1')
+  assertEquals(JSON.stringify(audit).includes('Secreto1'), false)
+  assertEquals(JSON.stringify(audit).includes('enc:v1'), false)
+  assertEquals(audit[0].action, 'email_transport.update')
+  assertEquals(audit[0].entity, 'email_transport_settings')
+  assertEquals(audit[0].before, null)
+})
+
+Deno.test('editor/auditor no pueden leer ni tocar el transporte → 403 forbidden', async () => {
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    const resGet = await handle(req(await sign(claims()), '/email-transport', 'GET'), fullDeps({ roles: [role] }))
+    assertEquals([resGet.status, (await resGet.json()).error], [403, 'forbidden'])
+    const resPost = await handle(
+      req(await sign(claims()), '/email-transport', 'POST', { mode: 'resend', from_name: 'x', from_email: 'a@example.test' }),
+      fullDeps({ roles: [role] }),
+    )
+    assertEquals([resPost.status, (await resPost.json()).error], [403, 'forbidden'])
+  }
+})
+
+Deno.test('pasar a smtp sin contraseña y sin una vigente → 400 smtp_password_required', async () => {
+  const res = await handle(
+    req(await sign(claims()), '/email-transport', 'POST', {
+      mode: 'smtp', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+      smtp_host: 'smtp.example.test', smtp_port: 465, smtp_username: 'notificaciones',
+    }),
+    fullDeps({ roles: ['privacy_admin'] }),
+  )
+  assertEquals([res.status, (await res.json()).error], [400, 'smtp_password_required'])
+})
+
+Deno.test('puerto fuera de 465/2525 → 400 invalid_input', async () => {
+  const res = await handle(
+    req(await sign(claims()), '/email-transport', 'POST', {
+      mode: 'smtp', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+      smtp_host: 'smtp.example.test', smtp_port: 587, smtp_username: 'notificaciones', smtp_password: 'Secreto1',
+    }),
+    fullDeps({ roles: ['privacy_admin'] }),
+  )
+  assertEquals([res.status, (await res.json()).error], [400, 'invalid_input'])
+})
+
+Deno.test('actualizar otro campo en modo smtp sin reenviar la contraseña: se re-cifra bajo la versión nueva, no se copia el mismo ciphertext', async () => {
+  const initial: EmailTransportRow = {
+    transport_version: 1, mode: 'smtp', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+    smtp_host: 'smtp.example.test', smtp_port: 465, smtp_username: 'notificaciones',
+    smtp_password_ciphertext: 'enc:v1:Secreto1', created_by: ADMIN_ID, created_at: '2026-10-01T00:00:00Z',
+  }
+  const { emailTransport, rows } = makeEmailTransportStore([initial])
+  const res = await handle(
+    req(await sign(claims()), '/email-transport', 'POST', {
+      mode: 'smtp', from_name: 'CiberDojo (nuevo nombre)', from_email: 'privacidad@example.test',
+      smtp_host: 'smtp.example.test', smtp_port: 465, smtp_username: 'notificaciones',
+    }),
+    fullDeps({ roles: ['privacy_admin'], emailTransport }),
+  )
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals([body.transport_version, body.password_set, body.from_name], [2, true, 'CiberDojo (nuevo nombre)'])
+  assertEquals(rows[1].smtp_password_ciphertext, 'enc:v2:Secreto1')
+  assertEquals(rows[0].smtp_password_ciphertext, 'enc:v1:Secreto1') // la fila vieja no se toca (append-only)
+})
+
+Deno.test('cambiar de smtp a resend limpia los campos smtp y password_set pasa a false', async () => {
+  const initial: EmailTransportRow = {
+    transport_version: 1, mode: 'smtp', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+    smtp_host: 'smtp.example.test', smtp_port: 465, smtp_username: 'notificaciones',
+    smtp_password_ciphertext: 'enc:v1:Secreto1', created_by: ADMIN_ID, created_at: '2026-10-01T00:00:00Z',
+  }
+  const { emailTransport, rows } = makeEmailTransportStore([initial])
+  const res = await handle(
+    req(await sign(claims()), '/email-transport', 'POST', { mode: 'resend', from_name: 'CiberDojo', from_email: 'privacidad@example.test' }),
+    fullDeps({ roles: ['privacy_admin'], emailTransport }),
+  )
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals([body.mode, body.password_set, body.smtp_host, body.smtp_port, body.smtp_username], ['resend', false, null, null, null])
+  assertEquals(rows[1].smtp_password_ciphertext, null)
 })

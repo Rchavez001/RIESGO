@@ -97,6 +97,47 @@ export interface SettingsDeps {
   getCurrent: () => Promise<CurrentPrivacySettings | null>
 }
 
+export type EmailTransportMode = 'resend' | 'smtp'
+
+export interface EmailTransportRow {
+  transport_version: number
+  mode: EmailTransportMode
+  from_name: string
+  from_email: string
+  smtp_host: string | null
+  smtp_port: number | null
+  smtp_username: string | null
+  /** Cifrado con AAD atada a `transport_version` (T12.d.1, D-15 condición (3) la reutiliza para el host/IP en T12.d.2). Nunca sale de este módulo en claro. */
+  smtp_password_ciphertext: unknown | null
+  created_by: string
+  created_at: string
+}
+
+export type PublicEmailTransport = Omit<EmailTransportRow, 'smtp_password_ciphertext'> & { password_set: boolean }
+
+export interface NewEmailTransportInput {
+  transport_version: number
+  mode: EmailTransportMode
+  from_name: string
+  from_email: string
+  smtp_host: string | null
+  smtp_port: number | null
+  smtp_username: string | null
+  smtp_password_ciphertext: unknown | null
+  created_by: string
+}
+
+export interface EmailTransportDeps {
+  getCurrent: () => Promise<EmailTransportRow | null>
+  insert: (row: NewEmailTransportInput) => Promise<EmailTransportRow>
+  /** Cifra una contraseña nueva bajo la AAD de la versión que se va a insertar (todavía no existe como fila). */
+  encryptPassword: (password: string, transportVersion: number) => Promise<unknown>
+  /** Descifra la contraseña de una fila YA EXISTENTE con la AAD atada a su propio `transport_version`
+   *  (nunca la de otra fila): así, cuando el admin no envía una contraseña nueva, se puede re-cifrar bajo
+   *  la versión siguiente sin arrastrar el mismo ciphertext de una versión a otra. */
+  decryptPassword: (row: EmailTransportRow) => Promise<string>
+}
+
 export interface AdminConsentDeps {
   guard?: AuthGuardOptions
   /** HMAC del correo normalizado (clave propia de búsqueda, H15): la bitácora no guarda el correo en claro. */
@@ -104,6 +145,7 @@ export interface AdminConsentDeps {
   audit: (entry: AuditEntry) => Promise<void>
   documents: DocumentsDeps
   settings: SettingsDeps
+  emailTransport: EmailTransportDeps
 }
 
 /** Error de dominio con código de estado HTTP, para las acciones de /documents. Nunca lleva datos sensibles en `code`. */
@@ -155,12 +197,25 @@ const UpdateDraftSchema = z
 
 const ReasonSchema = z.object({ reason: z.string().trim().min(1).max(2000) })
 
+// Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
+const UpdateEmailTransportSchema = z.object({
+  mode: z.enum(['resend', 'smtp']),
+  from_name: z.string().trim().min(1).max(300),
+  from_email: z.string().trim().min(1).max(254),
+  smtp_host: z.string().trim().min(1).max(255).optional(),
+  smtp_port: z.union([z.literal(465), z.literal(2525)]).optional(),
+  smtp_username: z.string().trim().min(1).max(255).optional(),
+  /** Si se omite en modo `smtp`, se conserva el acceso vigente (ver `updateEmailTransport`): nunca se
+   *  reenvía la contraseña actual desde el panel para "no cambiarla". */
+  smtp_password: z.string().min(1).max(500).optional(),
+})
+
 type Admin = VerifiedUser & { roles: readonly (typeof PRIVACY_ROLES)[number][] }
 
 async function auditLog(
   deps: AdminConsentDeps,
   admin: Admin,
-  entry: { action: string; entity_id: string; before: unknown; after: unknown; reason?: string | null },
+  entry: { action: string; entity: string; entity_id: string; before: unknown; after: unknown; reason?: string | null },
 ) {
   if (!admin.email) throw new AuthError(403, 'forbidden')
   await deps.audit({
@@ -168,7 +223,7 @@ async function auditLog(
     actor_email_hmac: await deps.emailHmac(admin.email.trim().toLowerCase()),
     actor_role: admin.roles.join(','),
     action: entry.action,
-    entity: 'consent_documents',
+    entity: entry.entity,
     entity_id: entry.entity_id,
     before: entry.before,
     after: entry.after,
@@ -215,7 +270,7 @@ async function createDraft(admin: Admin, deps: AdminConsentDeps, body: unknown):
   }
 
   const created = await deps.documents.insert(newDoc)
-  await auditLog(deps, admin, { action: 'consent_document.create', entity_id: created.id, before: null, after: created })
+  await auditLog(deps, admin, { action: 'consent_document.create', entity: 'consent_documents', entity_id: created.id, before: null, after: created })
   return created
 }
 
@@ -237,7 +292,7 @@ async function updateDraft(admin: Admin, deps: AdminConsentDeps, id: string, bod
 
   const updated = await deps.documents.updateIfStatus(id, 'draft', patch)
   if (!updated) throw new ApiError(409, 'concurrent_modification')
-  await auditLog(deps, admin, { action: 'consent_document.update', entity_id: id, before: current, after: updated })
+  await auditLog(deps, admin, { action: 'consent_document.update', entity: 'consent_documents', entity_id: id, before: current, after: updated })
   return updated
 }
 
@@ -332,6 +387,7 @@ async function retireDraft(admin: Admin, deps: AdminConsentDeps, id: string, bod
   try {
     await auditLog(deps, admin, {
       action: 'consent_document.retire',
+      entity: 'consent_documents',
       entity_id: id,
       before: draft,
       after: retired,
@@ -344,6 +400,65 @@ async function retireDraft(admin: Admin, deps: AdminConsentDeps, id: string, bod
   }
 
   return retired
+}
+
+function toPublicEmailTransport(row: EmailTransportRow): PublicEmailTransport {
+  const { smtp_password_ciphertext, ...rest } = row
+  return { ...rest, password_set: !!smtp_password_ciphertext }
+}
+
+async function updateEmailTransport(admin: Admin, deps: AdminConsentDeps, body: unknown): Promise<EmailTransportRow> {
+  const parsed = UpdateEmailTransportSchema.safeParse(body)
+  if (!parsed.success) throw new ApiError(400, 'invalid_input')
+  const input = parsed.data
+
+  const current = await deps.emailTransport.getCurrent()
+  const nextVersion = (current?.transport_version ?? 0) + 1
+
+  let smtpHost: string | null = null
+  let smtpPort: number | null = null
+  let smtpUsername: string | null = null
+  let smtpPasswordCiphertext: unknown | null = null
+
+  if (input.mode === 'smtp') {
+    if (!input.smtp_host || !input.smtp_port || !input.smtp_username) throw new ApiError(400, 'smtp_fields_required')
+    smtpHost = input.smtp_host
+    smtpPort = input.smtp_port
+    smtpUsername = input.smtp_username
+
+    if (input.smtp_password) {
+      smtpPasswordCiphertext = await deps.emailTransport.encryptPassword(input.smtp_password, nextVersion)
+    } else if (current?.mode === 'smtp' && current.smtp_password_ciphertext) {
+      // El admin no reenvía la contraseña vigente: se descifra bajo la AAD de SU PROPIA versión y se
+      // re-cifra bajo la nueva — nunca se copia el mismo ciphertext de una fila a otra (T12.d.1).
+      const existingPassword = await deps.emailTransport.decryptPassword(current)
+      smtpPasswordCiphertext = await deps.emailTransport.encryptPassword(existingPassword, nextVersion)
+    } else {
+      throw new ApiError(400, 'smtp_password_required')
+    }
+  }
+
+  const created = await deps.emailTransport.insert({
+    transport_version: nextVersion,
+    mode: input.mode,
+    from_name: input.from_name,
+    from_email: input.from_email,
+    smtp_host: smtpHost,
+    smtp_port: smtpPort,
+    smtp_username: smtpUsername,
+    smtp_password_ciphertext: smtpPasswordCiphertext,
+    created_by: admin.userId,
+  })
+
+  await auditLog(deps, admin, {
+    action: 'email_transport.update',
+    entity: 'email_transport_settings',
+    entity_id: String(created.transport_version),
+    before: current ? toPublicEmailTransport(current) : null,
+    after: toPublicEmailTransport(created),
+  })
+
+  return created
 }
 
 const EDITOR_ROLES = ['privacy_editor', 'privacy_admin'] as const
@@ -371,6 +486,21 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
         return json(503, { error: 'audit_failed' })
       }
       return json(200, { user_id: admin.userId, roles: admin.roles })
+    }
+
+    if (path === '/email-transport') {
+      if (req.method === 'GET') {
+        await requireRole(req, ADMIN_ONLY, deps.guard)
+        const current = await deps.emailTransport.getCurrent()
+        return json(200, current ? toPublicEmailTransport(current) : null)
+      }
+      if (req.method === 'POST') {
+        const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+        const body = await req.json().catch(() => ({}))
+        const updated = await updateEmailTransport(admin, deps, body)
+        return json(200, toPublicEmailTransport(updated))
+      }
+      return json(405, { error: 'method_not_allowed' })
     }
 
     if (path === '/documents') {
