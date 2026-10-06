@@ -519,3 +519,59 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: estricto 14/28 = **50,0 %** (sin cambio; T12.d.3 es subtarea de T12, no una de las 28 numeradas).
   Ponderado: T12.d.3 es otro 1/4 de la subtarea d (6,25 de los 100 puntos de T12, mismo cálculo que d.1/d.2).
   T12 pasa de ≈ 87,5 a ≈ 93,75 de sus 100 → 1552,5 + 6,25 = **≈ 1558,75/2800 ≈ 55,7 %** (antes ≈ 55,4 %).
+
+---
+## Iteración 39 — 2026-10-05 — Sesión interactiva: TEST-INT.e (`send_test_email`) cierra la condición (3) de D-15, que bloqueaba T99
+- **Punto de partida:** `git status` limpio; tarea encargada explícitamente esta sesión: la prueba de integración
+  contra Postgres real para `send_test_email` que las Iteraciones 31, 32, 33 y 37 no pudieron intentar por el
+  bloqueo de entorno headless (`docker exec`/`docker info` → "This command requires approval" sin aprobación
+  síncrona). Esta sesión es interactiva (como ya documentó D-14 para el caso de T12.b): `docker info` respondió
+  con normalidad (daemon arriba), así que se pudo ejecutar `bash .claude/loops/consentimiento/gates.sh` con sus
+  puertas SQL reales sin ningún bloqueo nuevo.
+- **Auditoría previa (sin tocar código):** se leyeron `admin-consent/handler.ts` (`sendTestEmail`, `auditLog`) e
+  `index.ts` (el callback `audit()` que hace `db.from('admin_audit_log').insert(entry)`, sin ninguna función RPC
+  de por medio) y se confirmó, con `grep` sobre `supabase/tests/consent/*.sql`, que ningún archivo existente
+  ejercitaba un `INSERT` directo en `admin_audit_log` con la forma de `email_transport.test` (las 7 pruebas de la
+  Iteración 37 en `handler_test.ts` usan el store en memoria de `makeEmailTransportStore`, que nunca pasa por el
+  trigger de cadena `admin_audit_log_chain` ni por `verify_audit_chain()`). Ese es el hueco real que cierra esta
+  tarea — mismo patrón que TEST-INT.b/d: el fake no puede fallar por una restricción que no existe en memoria.
+- **Diseño de la prueba:** no se usó un script `_e2e_local.cjs` punta a punta (como T14/080) porque el riesgo real
+  no está en el protocolo SMTP ni en la resolución DNS (ya cubiertos con fakes inyectables en `smtp-sender_test.ts`
+  desde T12.c/D-15), sino en la FORMA del `INSERT` directo contra el esquema real: que `smtp_host`/`resolved_ip`
+  realmente lleguen y se puedan leer desde `after` (JSONB sin ningún `CHECK` que un fake pudiera violar de otra
+  forma) y que el trigger de cadena de hash siga calculando `row_hash`/`prev_hash` reales y que `verify_audit_chain()`
+  no reporte ninguna fila rota. `supabase/tests/consent/email_transport_test_audit.sql` (nuevo, descubierto solo
+  por `consent_test_files()`, sin tocar `gates.sh`): reproduce con `INSERT` directo la forma exacta de los 3
+  caminos de `sendTestEmail()` — smtp con fallo (`smtp_send_failed`, host+IP en `after`), smtp con éxito (mismo
+  host, otra IP, para no confundir con un valor fijo), y resend (`smtp_host`/`resolved_ip` en `null`, "no aplica").
+  Usa un `entity_id` centinela (`'9001'`/`'9002'`) para no depender de qué versión de `email_transport_settings`
+  dejaron otros archivos de prueba (`email_transport_lifecycle.sql` corre antes, alfabéticamente, y ya avanzó la
+  vigente a la v2). Verifica además que ninguna de las 3 filas expone `password`/`smtp_password_ciphertext` en
+  `after` (mismo criterio que ya prueba `handler_test.ts` contra el fake, ahora confirmado contra Postgres real) y
+  cierra con `SELECT pg_temp.expect(EXISTS(SELECT 1 FROM public.verify_audit_chain()), false, …)` sobre TODA la
+  tabla (no solo las filas nuevas), mismo patrón que el punto 8 de `publish_consent_document.sql`.
+- **Cambios:** `shield-ecuador-app/supabase/tests/consent/email_transport_test_audit.sql` (nuevo, 1 archivo, sin
+  tocar `gates.sh` ni ninguna migración). `loop-consentimiento/TASKS.md` (TEST-INT.e `[x]`, nueva subtarea de la
+  división TEST-INT; nota de T12.d.2 actualizada: la condición de D-15 queda cerrada, ya no bloquea T99).
+  `loop-consentimiento/DECISIONS.md` (nota de Claude en D-15, sin tocar el campo "Decisión": condición (3)
+  verificada). Este archivo.
+- **Pruebas añadidas:** 1 archivo SQL nuevo con 9 aserciones (ver "Diseño" arriba). Verificado rojo→verde: se
+  cambió temporalmente el `resolved_ip` esperado del primer bloque a `'TEMP-DISABLED-FOR-VERIFICATION'`,
+  `GATE sql-ciclo-de-vida` falló mostrando `ERROR: resolved_ip quedó en la bitácora del intento fallido (D-15,
+  condición 3) : se esperaba TEMP-DISABLED-FOR-VERIFICATION, hubo 198.51.100.10` — la razón correcta, en la línea
+  correcta —, se revirtió y volvió a pasar.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only sql-ciclo-de-vida` (rojo y verde, ver arriba) y
+  luego la corrida completa por defecto: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend,
+  panel-unit, panel-e2e (275 s, perfiles `desktop-chrome`/`pixel-7-chrome`), deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit, todas OK; db-reset y e2e-local SKIP explícitos (opt-in, no hacían falta para esta tarea).
+  Iteración 39, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) `mark_email_outbox_sent()`/`email_outbox_restrict_update` (079) siguen sin
+  prueba de integración propia (anotado desde la Iteración 38; sigue esperando a T13 para tener datos reales que
+  ejercitar, no es parte de esta tarea); (2) TEST-INT.a sigue exactamente bloqueada como las Iteraciones 31-33 y 37
+  la dejaron (no se intentó de nuevo esta sesión: el foco explícito era TEST-INT.e); (3) con TEST-INT.e cerrada, la
+  división TEST-INT completa queda: a) `⚠ REINTENTAR` (entorno), b) `[x]`, c) `⛔ BLOQUEADA` (T13), d) `[x]`,
+  e) `[x]` — la próxima tarea ejecutable en orden de `TASKS.md` es T12.d.4 (plantillas + aviso semilla), última
+  subtarea de T12.d sin empezar.
+- Porcentaje: sin cambio en el contador estricto (14/28; TEST-INT no es una de las 28 numeradas) ni en el
+  ponderado (TEST-INT no tiene peso asignado en esa cuenta, igual que TEST-INT.a-d). D-15 ya no bloquea T99.

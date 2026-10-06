@@ -201,3 +201,6 @@ ventana residual de DNS-rebinding, igual que url-guard.ts para otros destinos co
 solo privacy_admin con aal2 puede configurar SMTP; puertos limitados a 465/2525; registrar en la bitácora el host
 y la IP validada en cada prueba de configuración; documentar el riesgo residual en SPEC.md (REQ-21). Reevaluar si
 se cambia de librería SMTP.
+Nota (Claude, 2026-10-05): condición (3) verificada contra Postgres real en TEST-INT.e (iteración 39,
+`supabase/tests/consent/email_transport_test_audit.sql`): la fila de `admin_audit_log` de `send_test_email` lleva
+`smtp_host`/`resolved_ip` y `verify_audit_chain()` sigue íntegra. Esta condición ya no bloquea T99.
