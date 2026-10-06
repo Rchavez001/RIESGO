@@ -10,6 +10,7 @@ import {
   handle,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
+  type EmailOutboxRow,
   type EmailTransportRow,
   type NewEmailTransportInput,
   type PublishInput,
@@ -27,6 +28,7 @@ const SETTINGS_COLUMNS =
   'settings_version, controller_name, controller_address, controller_phone, privacy_email, dpo_name, dpo_contact, privacy_policy_url, unsubscribe_subject, response_days, ip_retention_days, four_eyes_publish'
 const EMAIL_TRANSPORT_COLUMNS =
   'transport_version, mode, from_name, from_email, smtp_host, smtp_port, smtp_username, smtp_password_ciphertext, created_by, created_at'
+const EMAIL_OUTBOX_COLUMNS = 'id, reference_table, reference_id, created_at'
 
 // T12.d.1 (D-15): la contraseña SMTP se cifra con su propia AAD atada a `transport_version` — nunca la
 // misma clave que `crypto.ts` usa para la versión de clave de cifrado (esa la sigue dando `getActiveKeyVersion()`).
@@ -134,6 +136,26 @@ serve((req) =>
           tested_by: input.testedBy,
         })
         if (error) throw new Error(`email_transport_tests insert: ${error.code ?? 'error'}`)
+      },
+    },
+    // T12.d.3 (REQ-21f): ningún llamador escribe en `email_outbox` todavía (T13, sin empezar); por eso
+    // `rebuildMessage` no tiene ninguna `reference_table` que reconocer y siempre devuelve `null` (la fila
+    // queda pendiente, nunca se marca enviada sin un envío real). Cuando T13/T12.d.4 registren sus
+    // plantillas, este resolutor es el único punto que hay que ampliar.
+    emailOutbox: {
+      listPending: async () => {
+        const { data, error } = await db
+          .from('email_outbox')
+          .select(EMAIL_OUTBOX_COLUMNS)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true })
+        if (error) throw new Error(`email_outbox: ${error.code ?? 'error'}`)
+        return (data ?? []) as EmailOutboxRow[]
+      },
+      rebuildMessage: () => Promise.resolve(null),
+      markSent: async (id: string) => {
+        const { error } = await db.rpc('mark_email_outbox_sent', { p_outbox_id: id })
+        if (error) throw new Error(`mark_email_outbox_sent: ${error.code ?? 'error'}`)
       },
     },
     email: {

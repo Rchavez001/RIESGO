@@ -16,6 +16,8 @@ import {
   type CurrentPrivacySettings,
   type DocumentsDeps,
   type EmailDeps,
+  type EmailOutboxDeps,
+  type EmailOutboxRow,
   type EmailTransportDeps,
   type EmailTransportRow,
   type NewConsentDocumentInput,
@@ -23,7 +25,7 @@ import {
   type RateLimitCheck,
   type SettingsDeps,
 } from './handler.ts'
-import type { EmailSendResult } from '../_shared/email/types.ts'
+import type { EmailMessage, EmailSendResult } from '../_shared/email/types.ts'
 
 const KID = 'k1'
 const ADMIN_ID = '0d9b7c1e-2f3a-4b5c-8d6e-7f8091a2b3c4'
@@ -155,6 +157,26 @@ function makeEmailDeps(
   return { email, sent }
 }
 
+// Fake de `emailOutbox` (T12.d.3): un store en memoria con `status` interno para reproducir la regla de
+// `email_outbox` real (079) — `listPending` solo ve `status = 'pending'`, `markSent` es la única forma
+// de tocar una fila existente, y una fila ya enviada no vuelve a aparecer (sin duplicar el envío).
+function makeEmailOutboxStore(
+  initial: EmailOutboxRow[] = [],
+  opts: { rebuild?: (row: EmailOutboxRow) => Promise<EmailMessage | null> } = {},
+): { emailOutbox: EmailOutboxDeps; statusOf: (id: string) => 'pending' | 'sent' | undefined } {
+  const status = new Map<string, 'pending' | 'sent'>(initial.map((r) => [r.id, 'pending']))
+  const rows = new Map<string, EmailOutboxRow>(initial.map((r) => [r.id, r]))
+  const emailOutbox: EmailOutboxDeps = {
+    listPending: () => Promise.resolve([...rows.values()].filter((r) => status.get(r.id) === 'pending')),
+    rebuildMessage: opts.rebuild ?? (() => Promise.resolve(null)),
+    markSent: (id) => {
+      status.set(id, 'sent')
+      return Promise.resolve()
+    },
+  }
+  return { emailOutbox, statusOf: (id) => status.get(id) }
+}
+
 function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): SettingsDeps {
   const current: CurrentPrivacySettings = {
     settings_version: 1,
@@ -187,6 +209,7 @@ function fullDeps(opts: {
   settings?: SettingsDeps
   emailTransport?: EmailTransportDeps
   email?: EmailDeps
+  emailOutbox?: EmailOutboxDeps
 }): AdminConsentDeps {
   const audit = opts.audit ?? []
   return {
@@ -197,6 +220,7 @@ function fullDeps(opts: {
     settings: opts.settings ?? settingsDeps(),
     emailTransport: opts.emailTransport ?? makeEmailTransportStore().emailTransport,
     email: opts.email ?? makeEmailDeps().email,
+    emailOutbox: opts.emailOutbox ?? makeEmailOutboxStore().emailOutbox,
   }
 }
 
@@ -763,4 +787,128 @@ Deno.test('límite de intentos no disponible (fail-closed) → 503 rate_limit_un
 Deno.test('GET /email-transport/test → 405', async () => {
   const res = await handle(req(await sign(claims()), '/email-transport/test', 'GET'), fullDeps({ roles: ['privacy_admin'] }))
   assertEquals(res.status, 405)
+})
+
+// ── T12.d.3 (REQ-21f): GET /email-outbox y POST /email-outbox/resend ───────────────────────────────────
+
+const outboxRow = (over: Partial<EmailOutboxRow> = {}): EmailOutboxRow => ({
+  id: 'outbox-1', reference_table: 'data_subject_requests', reference_id: 'dsr-1', created_at: '2026-10-05T00:00:00Z', ...over,
+})
+
+Deno.test('GET /email-outbox: cuenta solo status=pending (una fila ya enviada no aparece)', async () => {
+  const { emailOutbox } = makeEmailOutboxStore([outboxRow(), outboxRow({ id: 'outbox-2' })])
+  await emailOutbox.markSent('outbox-2') // simula una fila ya enviada antes de esta petición
+  const res = await handle(req(await sign(claims()), '/email-outbox', 'GET'), fullDeps({ roles: ['privacy_admin'], emailOutbox }))
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.count, 1)
+  assertEquals(body.items, [outboxRow()])
+})
+
+Deno.test('con FakeEmailSender, el reenvío marca los pendientes como enviados y deja el resumen en bitácora', async () => {
+  const audit: AuditEntry[] = []
+  const { emailOutbox, statusOf } = makeEmailOutboxStore([outboxRow(), outboxRow({ id: 'outbox-2', reference_id: 'dsr-2' })], {
+    rebuild: (row) => Promise.resolve({ to: 'delegado@example.test', subject: `Caso ${row.reference_id}`, html: '<p>x</p>' }),
+  })
+  const { emailTransport } = makeEmailTransportStore([resendTransport()])
+  const { email, sent } = makeEmailDeps()
+  const res = await handle(
+    req(await sign(claims()), '/email-outbox/resend', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], audit, emailOutbox, emailTransport, email }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), { attempted: 2, sent: 2, skipped: 0, failed: 0 })
+  assertEquals(sent.length, 2)
+  assertEquals(statusOf('outbox-1'), 'sent')
+  assertEquals(statusOf('outbox-2'), 'sent')
+  assertEquals(audit[0].action, 'email_outbox.resend')
+  assertEquals(audit[0].entity, 'email_outbox')
+  assertEquals(audit[0].entity_id, null)
+  assertEquals(audit[0].after, { attempted: 2, sent: 2, skipped: 0, failed: 0 })
+})
+
+Deno.test('reintentar un aviso ya enviado no lo duplica: segunda llamada ve 0 pendientes', async () => {
+  const { emailOutbox } = makeEmailOutboxStore([outboxRow()], {
+    rebuild: (row) => Promise.resolve({ to: 'delegado@example.test', subject: row.reference_id, html: '<p>x</p>' }),
+  })
+  const { emailTransport } = makeEmailTransportStore([resendTransport()])
+  const { email, sent } = makeEmailDeps()
+  const d = fullDeps({ roles: ['privacy_admin'], emailOutbox, emailTransport, email })
+
+  const first = await handle(req(await sign(claims()), '/email-outbox/resend', 'POST'), d)
+  assertEquals(await first.json(), { attempted: 1, sent: 1, skipped: 0, failed: 0 })
+
+  const second = await handle(req(await sign(claims()), '/email-outbox/resend', 'POST'), d)
+  assertEquals(await second.json(), { attempted: 0, sent: 0, skipped: 0, failed: 0 })
+  assertEquals(sent.length, 1) // el segundo intento no volvió a llamar a email.send
+})
+
+Deno.test('sin plantilla registrada para esa reference_table: la fila queda pendiente (skipped, no sent)', async () => {
+  const { emailOutbox, statusOf } = makeEmailOutboxStore([outboxRow()]) // rebuild por defecto siempre devuelve null
+  const { emailTransport } = makeEmailTransportStore([resendTransport()])
+  const { email, sent } = makeEmailDeps()
+  const res = await handle(
+    req(await sign(claims()), '/email-outbox/resend', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], emailOutbox, emailTransport, email }),
+  )
+  assertEquals(await res.json(), { attempted: 1, sent: 0, skipped: 1, failed: 0 })
+  assertEquals(sent.length, 0)
+  assertEquals(statusOf('outbox-1'), 'pending')
+})
+
+Deno.test('si el envío real falla, la fila queda pendiente (failed, no sent) para reintentar después', async () => {
+  const { emailOutbox, statusOf } = makeEmailOutboxStore([outboxRow()], {
+    rebuild: (row) => Promise.resolve({ to: 'delegado@example.test', subject: row.reference_id, html: '<p>x</p>' }),
+  })
+  const { emailTransport } = makeEmailTransportStore([resendTransport()])
+  const { email } = makeEmailDeps({ result: { ok: false, errorCode: 'smtp_send_failed' } })
+  const res = await handle(
+    req(await sign(claims()), '/email-outbox/resend', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], emailOutbox, emailTransport, email }),
+  )
+  assertEquals(await res.json(), { attempted: 1, sent: 0, skipped: 0, failed: 1 })
+  assertEquals(statusOf('outbox-1'), 'pending')
+})
+
+Deno.test('sin transporte configurado y con pendientes: 400 email_transport_not_configured, nada enviado', async () => {
+  const { emailOutbox, statusOf } = makeEmailOutboxStore([outboxRow()], {
+    rebuild: (row) => Promise.resolve({ to: 'delegado@example.test', subject: row.reference_id, html: '<p>x</p>' }),
+  })
+  const { email, sent } = makeEmailDeps()
+  const res = await handle(
+    req(await sign(claims()), '/email-outbox/resend', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], emailOutbox, email }),
+  )
+  assertEquals([res.status, (await res.json()).error], [400, 'email_transport_not_configured'])
+  assertEquals(sent.length, 0)
+  assertEquals(statusOf('outbox-1'), 'pending')
+})
+
+Deno.test('sin pendientes: 200 con todo en cero, sin exigir transporte configurado', async () => {
+  const { emailOutbox } = makeEmailOutboxStore([])
+  const res = await handle(req(await sign(claims()), '/email-outbox/resend', 'POST'), fullDeps({ roles: ['privacy_admin'], emailOutbox }))
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), { attempted: 0, sent: 0, skipped: 0, failed: 0 })
+})
+
+Deno.test('editor/auditor no pueden listar ni reenviar avisos pendientes → 403 forbidden, nada enviado', async () => {
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    const { emailOutbox } = makeEmailOutboxStore([outboxRow()], { rebuild: () => Promise.resolve({ to: 'x@example.test', subject: 'x', html: '<p>x</p>' }) })
+    const { emailTransport } = makeEmailTransportStore([resendTransport()])
+    const { email, sent } = makeEmailDeps()
+    const resGet = await handle(req(await sign(claims()), '/email-outbox', 'GET'), fullDeps({ roles: [role], emailOutbox }))
+    assertEquals([resGet.status, (await resGet.json()).error], [403, 'forbidden'])
+    const resPost = await handle(
+      req(await sign(claims()), '/email-outbox/resend', 'POST'),
+      fullDeps({ roles: [role], emailOutbox, emailTransport, email }),
+    )
+    assertEquals([resPost.status, (await resPost.json()).error], [403, 'forbidden'])
+    assertEquals(sent.length, 0)
+  }
+})
+
+Deno.test('POST /email-outbox → 405; GET /email-outbox/resend → 405', async () => {
+  const token = await sign(claims())
+  assertEquals((await handle(req(token, '/email-outbox', 'POST'), fullDeps({ roles: ['privacy_admin'] }))).status, 405)
+  assertEquals((await handle(req(token, '/email-outbox/resend', 'GET'), fullDeps({ roles: ['privacy_admin'] }))).status, 405)
 })

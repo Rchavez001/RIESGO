@@ -154,6 +154,25 @@ export interface EmailDeps {
   checkTestRateLimit: (req: Request, actorEmail: string) => Promise<RateLimitCheck>
 }
 
+/** Fila de `email_outbox` (079): solo un puntero a la fila de origen, sin correo ni datos del titular. */
+export interface EmailOutboxRow {
+  id: string
+  reference_table: string
+  reference_id: string
+  created_at: string
+}
+
+export interface EmailOutboxDeps {
+  /** Solo `status = 'pending'`, de más antiguo a más nuevo. */
+  listPending: () => Promise<EmailOutboxRow[]>
+  /** Reconstruye el mensaje a partir de la fila de origen (`reference_table`/`reference_id`). `null` si
+   *  todavía no hay una plantilla registrada para esa tabla (p. ej. antes de que T13/T12.d.4 la añadan):
+   *  la fila se deja pendiente — nunca se marca enviada sin un envío real. */
+  rebuildMessage: (row: EmailOutboxRow) => Promise<EmailMessage | null>
+  /** `mark_email_outbox_sent` (079): única forma de tocar una fila existente. */
+  markSent: (id: string) => Promise<void>
+}
+
 export interface AdminConsentDeps {
   guard?: AuthGuardOptions
   /** HMAC del correo normalizado (clave propia de búsqueda, H15): la bitácora no guarda el correo en claro. */
@@ -163,6 +182,7 @@ export interface AdminConsentDeps {
   settings: SettingsDeps
   emailTransport: EmailTransportDeps
   email: EmailDeps
+  emailOutbox: EmailOutboxDeps
 }
 
 /** Error de dominio con código de estado HTTP, para las acciones de /documents. Nunca lleva datos sensibles en `code`. */
@@ -232,7 +252,7 @@ type Admin = VerifiedUser & { roles: readonly (typeof PRIVACY_ROLES)[number][] }
 async function auditLog(
   deps: AdminConsentDeps,
   admin: Admin,
-  entry: { action: string; entity: string; entity_id: string; before: unknown; after: unknown; reason?: string | null },
+  entry: { action: string; entity: string; entity_id: string | null; before: unknown; after: unknown; reason?: string | null },
 ) {
   if (!admin.email) throw new AuthError(403, 'forbidden')
   await deps.audit({
@@ -524,6 +544,45 @@ async function sendTestEmail(admin: Admin, deps: AdminConsentDeps, req: Request)
   return { success: result.ok, error_code: errorCode }
 }
 
+async function listPendingEmails(deps: AdminConsentDeps): Promise<{ count: number; items: EmailOutboxRow[] }> {
+  const items = await deps.emailOutbox.listPending()
+  return { count: items.length, items }
+}
+
+/** T12.d.3 (REQ-21f): reintenta los avisos que quedaron en `email_outbox` tras un fallo del transporte
+ *  activo. `rebuildMessage` puede devolver `null` (ninguna plantilla registrada todavía para esa
+ *  `reference_table`, p. ej. antes de que T13/T12.d.4 la añadan): esa fila se cuenta como `skipped`, no
+ *  se marca enviada. Nunca duplica un envío: solo opera sobre filas `status = 'pending'`. */
+async function resendPendingEmails(
+  admin: Admin,
+  deps: AdminConsentDeps,
+): Promise<{ attempted: number; sent: number; skipped: number; failed: number }> {
+  const pending = await deps.emailOutbox.listPending()
+  let sent = 0, skipped = 0, failed = 0
+  if (pending.length > 0) {
+    const transport = await deps.emailTransport.getCurrent()
+    if (!transport) throw new ApiError(400, 'email_transport_not_configured')
+    for (const row of pending) {
+      const message = await deps.emailOutbox.rebuildMessage(row)
+      if (!message) {
+        skipped += 1
+        continue
+      }
+      const result = await deps.email.send(transport, message)
+      if (result.ok) {
+        await deps.emailOutbox.markSent(row.id)
+        sent += 1
+      } else {
+        failed += 1
+      }
+    }
+  }
+
+  const summary = { attempted: pending.length, sent, skipped, failed }
+  await auditLog(deps, admin, { action: 'email_outbox.resend', entity: 'email_outbox', entity_id: null, before: null, after: summary })
+  return summary
+}
+
 const EDITOR_ROLES = ['privacy_editor', 'privacy_admin'] as const
 const ADMIN_ONLY = ['privacy_admin'] as const
 
@@ -555,6 +614,20 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
       if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
       const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
       const result = await sendTestEmail(admin, deps, req)
+      return json(200, result)
+    }
+
+    if (path === '/email-outbox/resend') {
+      if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+      const result = await resendPendingEmails(admin, deps)
+      return json(200, result)
+    }
+
+    if (path === '/email-outbox') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      await requireRole(req, ADMIN_ONLY, deps.guard)
+      const result = await listPendingEmails(deps)
       return json(200, result)
     }
 

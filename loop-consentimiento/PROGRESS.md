@@ -440,3 +440,82 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   Ponderado: T12.d.2 es otro 1/4 de la subtarea d (6,25 de los 100 puntos de T12, mismo cálculo que d.1 en la
   Iteración 36). T12 pasa de ≈ 81,25 a ≈ 87,5 de sus 100 → 1546,25 + 6,25 = **≈ 1552,5/2800 ≈ 55,4 %** (antes
   ≈ 55,2 %).
+
+## Iteración 38 — 2026-10-05 — T12.d.3 (`list_pending_emails` / `resend_pending_emails`): cierra la mecánica genérica de la cola, sin anticipar las plantillas de T13/T12.d.4
+- **Punto de partida:** `git status` limpio; `TASKS.md` con TEST-INT.a como primera tarea `[ ]` (solo
+  `⚠ REINTENTAR`, no `⛔ BLOQUEADA`). Antes de repetir el mismo bloqueo de entorno por cuarta vez (Iteraciones
+  31, 32, 33 y 37 ya lo confirmaron con `docker exec`/`docker info` sueltos → "This command requires approval"),
+  se revisó `.claude/settings.json`: la lista `allow` no tiene ninguna entrada para `docker`/`psql` sueltos (solo
+  `supabase start|stop|status`), idéntica a las sesiones anteriores — sin cambios en el entorno que justifiquen
+  reintentar el comando ya denegado tres veces (regla de CLAUDE.md: no reintentar lo ya denegado). TEST-INT.c
+  sigue `⛔ BLOQUEADA` (depende de T13) y TEST-INT.d ya está `[x]`: siguiente tarea ejecutable en orden,
+  **T12.d.3** (desbloqueada: T12.a/T12.b cerradas; T12.d.1 también cerrada, sin motivo para esperar).
+- **Diseño:** dos rutas nuevas con el mismo guard `ADMIN_ONLY` que `/email-transport`: `GET /email-outbox`
+  (`list_pending_emails`) y `POST /email-outbox/resend` (`resend_pending_emails`). Nueva dependencia
+  `EmailOutboxDeps` (`listPending`, `rebuildMessage`, `markSent`) en `AdminConsentDeps`.
+  - **El punto que decide el alcance de esta tarea:** `email_outbox` (079) solo guarda `reference_table`/
+    `reference_id` — un puntero genérico a la fila de origen, sin el contenido del correo. Reconstruir el
+    correo real (p. ej. el aviso al delegado de un caso `data_subject_requests`) exige la misma lógica de
+    plantilla que `request-data-subject-right` (T13, **aún sin escribir**) usaría la primera vez, más las
+    plantillas de T12.d.4 (**tampoco escritas**). Como T12.d.3 en `TASKS.md` solo depende de T12.a/T12.b (no
+    de T13 ni de T12.d.4), construir esa reconstrucción concreta ahora habría sido anticipar diseño de dos
+    tareas futuras sin ningún llamador real que lo ejerza todavía — exactamente lo que la regla de CLAUDE.md
+    de "nada especulativo" pide evitar. En vez de eso, `rebuildMessage(row): Promise<EmailMessage | null>`
+    queda como el único punto de extensión: `null` = "todavía no hay plantilla para esta `reference_table`"
+    → la fila se cuenta como `skipped` y se queda pendiente (nunca se marca enviada sin un envío real).
+    `index.ts` lo deja devolviendo `null` siempre, con un comentario que señala T13/T12.d.4 como lo único que
+    hay que ampliar cuando existan.
+  - `resendPendingEmails`: lista los pendientes; si hay al menos uno, exige transporte configurado (400
+    `email_transport_not_configured`, mismo código que `sendTestEmail`) — sin pendientes, responde `200` en
+    cero sin exigir transporte (no tiene sentido bloquear por algo que no se va a usar). Por cada pendiente:
+    `rebuildMessage` → si `null`, `skipped++`; si hay mensaje, `deps.email.send(transport, message)` → si
+    `ok`, `markSent(id)` (`mark_email_outbox_sent`, 079) y `sent++`; si no, `failed++` (la fila queda pendiente
+    para el siguiente intento, sin perderla). Bitácora `email_outbox.resend` con el resumen
+    `{attempted,sent,skipped,failed}` — es una acción por lotes, no sobre una fila: `entity_id: null` (se
+    amplió el tipo de `auditLog()` de `string` a `string | null` para admitirlo; ya era así en `AuditEntry`).
+  - `list_pending_emails` es solo lectura (sin bitácora, igual que `get_email_transport`): `{count, items}`
+    con `reference_table`/`reference_id`/`created_at` — nunca correo ni datos del titular, ya ausentes del
+    modelo de `email_outbox` por diseño de T12.b.
+- **Cambios:** `shield-ecuador-app/supabase/functions/admin-consent/handler.ts` (`EmailOutboxRow`,
+  `EmailOutboxDeps`, `AdminConsentDeps.emailOutbox`; `auditLog()` con `entity_id: string | null`;
+  `listPendingEmails`, `resendPendingEmails`; rutas `GET /email-outbox`, `POST /email-outbox/resend`);
+  `index.ts` (`EMAIL_OUTBOX_COLUMNS`; `emailOutbox.listPending` contra `email_outbox` real filtrando
+  `status='pending'`; `emailOutbox.rebuildMessage` → `null` con el comentario de alcance; `emailOutbox.markSent`
+  → `db.rpc('mark_email_outbox_sent', ...)`); `handler_test.ts` (`makeEmailOutboxStore`, fake con `status`
+  interno que reproduce la regla real de `email_outbox` — `listPending` solo ve `pending`, `markSent` es la
+  única forma de tocar una fila —; 10 pruebas nuevas). `loop-consentimiento/TASKS.md` (T12.d.3 `[x]`, con la
+  desviación de alcance documentada). Este archivo.
+- **Pruebas añadidas (10, en `handler_test.ts`):** `GET /email-outbox` cuenta solo `pending` (una fila ya
+  enviada no aparece); con `FakeEmailSender` + un `rebuild` fake, el reenvío marca los pendientes como
+  enviados y deja el resumen en bitácora; reintentar un aviso ya enviado no lo duplica (segunda llamada ve 0
+  pendientes, `email.send` no se vuelve a llamar); sin plantilla registrada para la `reference_table` →
+  `skipped`, sigue pendiente; si el envío real falla → `failed`, sigue pendiente (no se pierde, se puede
+  reintentar); sin transporte configurado y con pendientes → 400 sin enviar nada; sin pendientes → 200 en
+  cero sin exigir transporte; editor/auditor → 403 en ambas rutas sin que `email.send` se llame; método
+  incorrecto (`POST /email-outbox`, `GET /email-outbox/resend`) → 405.
+- **Gates:** corrida completa por defecto (`bash .claude/loops/consentimiento/gates.sh`, sin argumentos): las
+  9 puertas no-opcionales en verde — typecheck-frontend, lint-frontend [14 = línea base, preexistente],
+  unit-frontend, panel-unit, panel-e2e (246 s, perfiles `desktop-chrome`/`pixel-7-chrome` por defecto),
+  deno-check, deno-test (incluye las 10 pruebas nuevas dentro de la corrida recursiva de
+  `deno test supabase/functions/`, sin tocar `gates.sh`), sql-ciclo-de-vida, sql-guest-limit; db-reset y
+  e2e-local SKIP explícitos (opt-in, no se tocaron — no hace falta Postgres real para esta tarea: no se creó
+  ninguna migración ni se escribió ninguna fila nueva de `email_outbox` en producción). Iteración 38, no
+  múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna formal; alcance deliberadamente acotado (ver "Diseño" arriba) — `rebuildMessage`
+  sin ninguna `reference_table` reconocida todavía no es un hueco de esta tarea, es la frontera correcta hasta
+  que T13/T12.d.4 existan. No se añadió una prueba de integración contra Postgres real nueva: esta tarea no
+  escribe en ninguna restricción/trigger que un fake pudiera ocultar (`mark_email_outbox_sent` y el trigger
+  append-only de `email_outbox` ya quedaron fuera del alcance de T12.b, migración 079, sin prueba de integración
+  propia — anotado aquí como pendiente, no de esta tarea: ningún llamador real existe aún para ejercerlo con
+  datos reales).
+- Riesgos / pendientes detectados: (1) `mark_email_outbox_sent()` y el trigger `email_outbox_restrict_update`
+  (079) siguen sin una prueba de integración contra Postgres real (mismo patrón que TEST-INT, pero fuera de esa
+  división porque 079 es de T12, no de las funciones auditadas en TEST-INT.a–d) — anotarlo cuando T13 exista y
+  haya datos reales que ejercitar; (2) T12.d.4 (plantillas + aviso semilla) queda como la única subtarea de T12.d
+  sin empezar, desbloqueada (depende solo de T12.a, ya cerrada); (3) TEST-INT.a sigue exactamente bloqueada como
+  las Iteraciones 31-33 y 37 la dejaron (mismo motivo de entorno, confirmado de nuevo sin gastar un intento
+  denegado esta vez); (4) D-15 condición (3) sigue sin su prueba de integración, bloqueando T99, igual que la
+  Iteración 37 la dejó.
+- Porcentaje: estricto 14/28 = **50,0 %** (sin cambio; T12.d.3 es subtarea de T12, no una de las 28 numeradas).
+  Ponderado: T12.d.3 es otro 1/4 de la subtarea d (6,25 de los 100 puntos de T12, mismo cálculo que d.1/d.2).
+  T12 pasa de ≈ 87,5 a ≈ 93,75 de sus 100 → 1552,5 + 6,25 = **≈ 1558,75/2800 ≈ 55,7 %** (antes ≈ 55,4 %).
