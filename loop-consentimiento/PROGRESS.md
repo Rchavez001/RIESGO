@@ -687,3 +687,80 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: estricto 14 de 28 (T12.d.4 no es una de las 28 tareas numeradas; TEST-INT/T12 subtareas no
   cuentan aparte en este contador, igual que iteraciones previas). Ponderado: sin cambio aplicable a esta
   subtarea en ese contador.
+
+---
+## Iteración 42 — 2026-10-06 — Sesión interactiva: TEST-INT.a enganchada y cerrada; T13 dividida en subtareas sobre el WIP sin commitear; corrección del contador (T12 completa)
+- **Punto de partida:** `git status` con dos cambios: `supabase/functions/admin-consent/index.ts` modificado y
+  `supabase/functions/request-data-subject-right/` nuevo sin trackear — WIP de una sesión de T13 que se quedó
+  sin turnos a mitad. Encargo de la persona responsable, en 3 partes: (1) desbloquear y cerrar TEST-INT.a
+  aplicando el diff que dejó listo la Iteración 40/41 (esta sesión sí puede editar `.claude/loops/consentimiento/gates.sh`);
+  (2) dividir T13 en subtareas pequeñas en `TASKS.md` sin tocar el código del WIP; (3) confirmar si T12 quedó
+  completa y dar el porcentaje estricto y ponderado. El WIP de T13 no se tocó (ver Iteración 43 en adelante).
+- **TEST-INT.a:** aplicado el fragmento de `loop-consentimiento/borradores/gates-TEST-INT-a-compensacion.md`
+  dentro de `e2e_local()` en `gates.sh`, justo después de `node "$TESTS/e2e_local.cjs"`: revoca
+  `INSERT ON consent_records FROM service_role`, invoca `e2e_local_compensation.cjs`, restaura el `GRANT`
+  siempre (éxito o fallo), y propaga el fallo si lo hubo. Verificado rojo→verde de verdad (no un atajo): con el
+  `REVOKE` neutralizado a `true` (no-op), `e2e_local_compensation.cjs` falló correctamente (el `INSERT` no
+  estaba bloqueado de verdad: se creó perfil y usuario de auth, 1/4 comprobaciones OK); con el `REVOKE` real,
+  las 3 comprobaciones del 3er criterio pasan (`inserción de evidencia bloqueada de verdad... OK`,
+  `compensación: no quedó fila de perfil OK`, `compensación: no quedó usuario de auth OK`). Supuesto del
+  borrador confirmado en la práctica: el `REVOKE`/`GRANT` directo sobre la tabla sí quita y devuelve el
+  privilegio (si `service_role` lo heredara de otro rol, el `REVOKE` no habría bloqueado nada y el 3er criterio
+  habría seguido en rojo con el `REVOKE` real puesto).
+- **Hallazgo de entorno, no del módulo:** antes de llegar al resultado de arriba, `GATE e2e-local` falló dos
+  veces por causas ajenas al cambio de hoy: (1) el contenedor `supabase_edge_runtime_shield-ecuador-app` no
+  existía (`supabase start` lleva 24h+ sin él) y `supabase functions serve` fallaba con
+  `"failed to copy edge runtime main service into container: destination ... must be a directory"`;
+  `supabase_vector_shield-ecuador-app` en crash-loop en paralelo. Resuelto con `npx supabase stop` +
+  `npx supabase start` (recrea los contenedores; `vector` sigue reiniciándose solo pero no afecta a
+  funciones/DB). (2) Incluso ya sano, el primer arranque de `functions serve` es intermitente en esta máquina
+  (Windows + Docker Desktop): a veces responde al primer intento, a veces devuelve 503
+  `"name resolution failed"` o un `TypeError` al no resolver `rendered_md`/`access_token` en el cliente de
+  prueba durante uno-dos reintentos. Ninguno de los dos es un defecto de `secure-register-user`, de
+  `e2e_local.cjs` ni del cambio de hoy: `GATE e2e-local` es opt-in precisamente por esto (ver cabecera de
+  `gates.sh`) y ya se documentó variabilidad similar en iteraciones previas. Se resolvió reintentando hasta
+  obtener una corrida limpia; no se tocó `wait_for_http()` (ampliar su espera o reintentos queda fuera del
+  encargo de hoy, que era solo enganchar la compensación).
+- **T13 dividida (sin tocar el WIP):** `TASKS.md` — T13 pasa de una sola entrada `[ ]` a un párrafo de estado
+  describiendo el WIP exacto que quedó sin commitear (`handler.ts`/`handler_test.ts`/`index.ts` de
+  `request-data-subject-right`, y el cambio en `rebuildMessage` de `admin-consent/index.ts`) más 4 subtareas:
+  **T13.a** (verificar ese WIP con `gates.sh` completo y commitearlo si pasa — punto de partida obligatorio,
+  no reescribir), **T13.b** (pruebas HTTP de `index_test.ts`, hoy inexistentes: solo `handler.ts` está probado
+  con fakes), **T13.c** (cierra TEST-INT.c, integración real contra Postgres, ya anticipada como bloqueada por
+  T13 en la sección TEST-INT), **T13.d** (documentación y cierre). Ningún archivo de
+  `supabase/functions/request-data-subject-right/` ni la línea del WIP en `admin-consent/index.ts` se leyó más
+  allá de lo necesario para describir el estado — no se editó nada de ese código.
+- **Corrección del contador — T12 queda completa:** sus 4 subtareas (a, b, c, d.1-d.4) ya estaban `[x]` desde
+  la Iteración 41 (T12.d.4), pero la línea de cabecera de T12 en `TASKS.md` nunca se marcó `[x]` y el
+  "Porcentaje" de las Iteraciones 40-41 lo dejó pasar (41 dice "ponderado: sin cambio aplicable", que no es
+  correcto: T12.d.4 es la 4ª de las 4 subtareas de `d`, y cada una pesa 25/4 = 6,25 del ponderado igual que
+  d.1/d.2/d.3 en las Iteraciones 36-38). Corregido aquí, con el mismo criterio que cerró T14 en la Iteración 30
+  ("se cierra como tarea completa, no por partes"): **Estricto pasa de 14 a 15 de 28 = 53,6 %** (T12 ahora
+  cuenta como una de las 15 tareas numeradas completas). **Ponderado:** 1558,75 (Iteración 38, tras T12.d.3) +
+  6,25 (T12.d.4, pendiente de sumar) = **1565/2800 ≈ 55,9 %** (antes ≈ 55,7 % registrado, nunca actualizado).
+  TEST-INT.a (esta iteración) no mueve ninguno de los dos contadores: TEST-INT no es una de las 28 tareas
+  numeradas, igual que todas sus hermanas (TEST-INT.b/d/e) en iteraciones previas.
+- **Cambios:** `.claude/loops/consentimiento/gates.sh` (engancha `e2e_local_compensation.cjs` en `e2e_local()`,
+  según el diff del borrador); `loop-consentimiento/TASKS.md` (TEST-INT.a `[x]`; T12 `[x]`; T13 dividida en
+  T13.a-d sobre el WIP existente, sin tocarlo); borrado `loop-consentimiento/borradores/gates-TEST-INT-a-compensacion.md`
+  (ya aplicado, según sus propias instrucciones); este archivo. **No tocado:**
+  `supabase/functions/request-data-subject-right/*` ni la parte de `admin-consent/index.ts` del WIP de T13
+  (fuera del encargo de hoy).
+- **Pruebas:** ninguna nueva (la prueba ya existía desde la Iteración 40, `e2e_local_compensation.cjs`); hoy
+  queda enganchada y verificada rojo→verde contra Postgres real, dentro de `GATE e2e-local`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --e2e-local` (con `GATES_E2E_LOCAL=1`) completo:
+  typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check,
+  deno-test, sql-ciclo-de-vida, sql-guest-limit, e2e-local — todas OK (e2e-local necesitó un reintento por la
+  intermitencia de entorno descrita arriba); db-reset SKIP explícito (opt-in). Iteración 42, no múltiplo de 5:
+  `GATES_FULL=1` no es obligatorio.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) el WIP de T13 (`request-data-subject-right` + el cambio en
+  `admin-consent/index.ts`) sigue sin verificar con `gates.sh` ni commitear — T13.a es la próxima tarea
+  ejecutable en orden de `TASKS.md`; (2) TEST-INT.c sigue `⛔ BLOQUEADA` hasta que T13.a-b cierren (la función
+  tiene que existir commiteada antes de poder auditar su integración real); (3) la intermitencia de
+  `supabase functions serve` en esta máquina (ver hallazgo de entorno arriba) puede repetirse en la próxima
+  sesión que use `--e2e-local`; no se propone arreglar `wait_for_http()` sin que la persona responsable lo
+  pida, para no ampliar el alcance de hoy.
+- Porcentaje: **estricto 15 de 28 = 53,6 %** (antes 14/28 ≈ 50,0 %; corrección — T12 se cierra como tarea
+  completa). **Ponderado: 1565/2800 ≈ 55,9 %** (antes ≈ 55,7 % registrado; corrección del olvido de la
+  Iteración 41). TEST-INT.a no suma a ninguno de los dos contadores.

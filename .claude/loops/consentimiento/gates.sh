@@ -485,6 +485,19 @@ e2e_local() {
   OUT="$E2E_TMPDIR/e2e-local-out.json" ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
     node "$TESTS/e2e_local.cjs" || return 1
 
+  # TEST-INT.a (3er criterio): compensación real cuando el INSERT de consent_records falla en
+  # Postgres DE VERDAD (no un 500 simulado por el fake de index_test.ts) — revoca el privilegio real,
+  # deja que secure-register-user choque contra la restricción real, y lo restaura siempre (éxito o
+  # fallo del test).
+  local compensation_status=0
+  psql_db -c "REVOKE INSERT ON public.consent_records FROM service_role;" \
+    || { echo "no se pudo revocar INSERT en consent_records para TEST-INT.a"; return 1; }
+  ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+    node "$TESTS/e2e_local_compensation.cjs" || compensation_status=$?
+  psql_db -c "GRANT INSERT ON public.consent_records TO service_role;" \
+    || { echo "no se pudo restaurar el GRANT de INSERT en consent_records tras TEST-INT.a"; return 1; }
+  [[ "$compensation_status" -eq 0 ]] || return 1
+
   # `publish_consent_document_e2e_local.cjs` siembra su PROPIA versión "vigente" para probar que publicar
   # encima de una ya existente funciona — choca con el índice `consent_documents_one_published` si el v1.0
   # de arriba sigue publicado. db_reset() limpia esquema+datos (rápido, ~6s): este script no depende de
