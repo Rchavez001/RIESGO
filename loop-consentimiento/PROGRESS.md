@@ -635,3 +635,55 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   iteración no la tocó porque el protocolo pide intentar primero la tarea `[ ]` desbloqueada que antecede en
   el archivo (TEST-INT.a), no saltar directamente a la siguiente.
 - Porcentaje: sin cambio, 14/28 estricto; TEST-INT sigue sin peso asignado en el ponderado.
+
+## Iteración 41 — 2026-10-06 — T12.d.4 (plantillas de correo + aviso semilla): cierra la subtarea; TEST-INT.a reconfirmada sin cambios
+- **Punto de partida:** `git status` limpio; primera tarea `[ ]` en orden de `TASKS.md` sigue siendo TEST-INT.a
+  (`⚠ REINTENTAR`, no `⛔ BLOQUEADA`). Antes de saltarla, se repitió el intento exacto de la Iteración 40
+  (`Edit` sobre `.claude/loops/consentimiento/gates.sh` para enganchar `e2e_local_compensation.cjs`, usando
+  el diff ya listo en `loop-consentimiento/borradores/gates-TEST-INT-a-compensacion.md`): mismo resultado,
+  "File is in a directory that is denied by your permission settings". Nada cambió desde ayer (no hubo
+  intervención humana registrada en `DECISIONS.md` ni en el árbol); se documenta brevemente aquí en vez de
+  repetir el análisis completo de la Iteración 40 (ya cubre la causa y el plan). Se pasó a la siguiente tarea
+  ejecutable en orden: TEST-INT.c sigue `⛔ BLOQUEADA` (T13 sin escribir); T12.d.4 es la siguiente, tal como
+  ya anticiparon las Iteraciones 39 y 40.
+- **Hallazgo (sin tocar código todavía):** ninguna función existente invoca plantillas de correo con cuerpo
+  fijo — `admin-consent`/T12.d.1-3 solo arman mensajes de prueba (`send_test_email`) con asunto/html ad-hoc
+  en `handler.ts`. Las tres plantillas que pide la tarea (aviso al delegado, acuse al titular, código de
+  verificación) son para T13/`request-data-subject-right` y T15/`confirm_email_verification`, ninguna
+  escrita todavía — la tarea es correcta en alcance: dejar los builders listos y probados, sin anticipar su
+  enganche (mismo principio que T12.d.3 aplicó a `rebuildMessage`).
+- **Cambios:**
+  - `supabase/functions/_shared/email/templates.ts` (nuevo): tres funciones puras, sin acceso a BD/red —
+    `buildDelegateNoticeEmail` (REQ-10, D-06: `DelegateNoticeInput` no declara ningún campo de correo/IP del
+    titular, así que no hay nada que un llamador pueda filtrar por accidente), `buildSubjectAcknowledgementEmail`
+    (REQ-10, acuse con número de caso y fecha límite) y `buildEmailVerificationCodeEmail` (REQ-15, con nota
+    de que no se encola en `email_outbox`: un fallo se reporta al instante). Fecha límite renderizada en
+    zona America/Guayaquil (mismo patrón que `consent-render.ts`); `singleLine()` normaliza el asunto como
+    defensa en profundidad contra inyección de cabeceras, aunque hoy los valores (número de caso, tipo) son
+    generados por el servidor, no texto libre del usuario.
+  - `supabase/functions/_shared/email/templates_test.ts` (nuevo, 6 pruebas): asunto sin `\n`/`\r` en los tres
+    builders; el aviso al delegado no expone un correo/IP de titular simulados aunque se cuelen en un objeto
+    ampliado (`as DelegateNoticeInput`) — defensa en profundidad sobre D-06, ya que hoy ningún llamador real
+    puede pasarlos (el tipo no los declara); tipo traducido y fecha límite correctos; el código de verificación
+    aparece en el html del mensaje.
+  - `loop-consentimiento/seed/aviso_consentimiento_v1.0.md` §4: nuevo párrafo (mismo patrón
+    `<!-- PROPUESTA DE TEXTO NUEVO -->` que ya usa §8) declarando a Resend como proveedor de correo
+    transaccional con sede en EE. UU. y transferencia internacional del correo y contenido del mensaje
+    (REQ-21h). No se tocó la lista de `MARCADORES` (es texto fijo, no un marcador nuevo).
+  - `TASKS.md` (T12.d.4 `[x]`); este archivo.
+- **Pruebas añadidas:** `templates_test.ts` (6 Deno.test, detallados arriba).
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo — typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test (recoge `templates_test.ts`
+  sin cambios en `gates.sh`, porque `deno_test()` ya corre `deno test … supabase/functions/` recursivo),
+  sql-ciclo-de-vida, sql-guest-limit: todas OK; db-reset y e2e-local SKIP explícitos (opt-in, no se tocaron).
+  Iteración 41, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) TEST-INT.a sigue exactamente igual que en la Iteración 40 (mismo
+  bloqueador de permiso de `Edit` sobre `gates.sh`, mismo diff listo en el borrador); (2) las plantillas
+  nuevas quedan sin ningún llamador real hasta que se escriban T13 y T15 — es el alcance correcto de esta
+  tarea, no un hueco; (3) próxima tarea ejecutable en orden de `TASKS.md`: T13 (`request-data-subject-right`),
+  la primera `[ ]` no bloqueada que queda tras cerrar T12.d.4 (T12.d.4 era la última subtarea de T12; T12 en
+  conjunto queda cerrada en sus cuatro subtareas a/b/c/d.1-4).
+- Porcentaje: estricto 14 de 28 (T12.d.4 no es una de las 28 tareas numeradas; TEST-INT/T12 subtareas no
+  cuentan aparte en este contador, igual que iteraciones previas). Ponderado: sin cambio aplicable a esta
+  subtarea en ese contador.

@@ -62,6 +62,12 @@ en las consultas.
 La política definitiva debe explicar si existen perfiles o decisiones exclusivamente automatizadas,
 sus efectos y los mecanismos de revisión humana que correspondan.
 
+<!-- PROPUESTA DE TEXTO NUEVO — validar con asesoría legal (REQ-21h) -->
+Para enviarte confirmaciones, avisos sobre solicitudes de derechos y códigos de verificación, CiberDojo
+utiliza el proveedor de correo transaccional Resend, con sede en Estados Unidos. Enviarte estos mensajes
+implica una transferencia internacional de tu dirección de correo electrónico y del contenido del
+mensaje a ese proveedor, bajo sus garantías contractuales de protección de datos.
+
 ## 5. Conservación y seguridad
 
 Los datos de cuenta y aprendizaje se conservarán mientras mantengas tu cuenta y sean necesarios para
