@@ -373,3 +373,70 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   Ponderado: T12 son 4 subtareas (a-d); T12.d.1 es 1 de 4 "cuartos" DENTRO de la subtarea d, que a su vez es 1 de
   4 subtareas de T12 (25 puntos de los 100 de T12) → T12.d.1 vale 25/4 ≈ 6,25 de los 100 puntos de T12. T12 pasa
   de 75 a ≈ 81,25 de sus 100 → 1540 + 6,25 = **≈ 1546,25/2800 ≈ 55,2 %** (antes ≈ 55,0 %).
+
+## Iteración 37 — 2026-10-05 — T12.d.2 (`send_test_email`): cierra la acción; la condición (3) de D-15 sigue bloqueando T99
+- **Punto de partida:** `git status` limpio; `TASKS.md` con TEST-INT.a como primera tarea `[ ]` desbloqueada
+  (marcada solo `⚠ REINTENTAR`, no `⛔ BLOQUEADA`). Se intentó de nuevo, por si el entorno de esta sesión permitía
+  lo que las Iteraciones 31/32 no pudieron: `docker info` (sin ningún comando compuesto, solo para confirmar que
+  el daemon respondía antes de intentar nada más) devolvió "This command requires approval" sin que hubiera forma
+  de obtener una aprobación síncrona en este turno — mismo bloqueo exacto que D-14/Iteración 31/Iteración 32,
+  ahora confirmado una tercera vez. Sin reintentar el mismo comando denegado (regla de CLAUDE.md), se pasó a la
+  siguiente tarea ejecutable en orden de `TASKS.md`: TEST-INT.c sigue `⛔ BLOQUEADA` (depende de T13) y TEST-INT.d
+  ya está `[x]`, así que la siguiente es **T12.d.2** (desbloqueada: T12.d.1 cerrada en la Iteración 36).
+- **Diseño:** nueva ruta `POST /admin-consent/email-transport/test`, con el mismo guard que `/email-transport`
+  (`ADMIN_ONLY`: solo `privacy_admin`, `aal2` ya exigido por `requireRole`). Para que `handler.ts` siguiera siendo
+  comprobable con fakes (sin tocar red ni Postgres real desde `handler_test.ts`), el envío y el rate-limit se
+  inyectan como dependencias nuevas (`AdminConsentDeps.email: EmailDeps` con `send()` y `checkTestRateLimit()`) en
+  vez de llamar a `ResendSender`/`SmtpSender`/`checkRateLimit` directamente desde `handler.ts` — ese wiring real
+  vive solo en `index.ts`, igual que el resto del módulo separa lógica de dominio (`handler.ts`) de I/O (`index.ts`).
+  `EmailTransportDeps` gana `recordTest()` para la fila de `email_transport_tests` (079, ya existente, sin
+  migración nueva esta iteración). La función de dominio (`sendTestEmail`): (1) rate limit fail-closed por el
+  correo del admin (mismo patrón que T10/T11, nunca por IP/correo del titular — aquí no hay titular, es un admin
+  pidiendo probar su propia configuración); (2) 400 `email_transport_not_configured` si `getCurrent()` no devuelve
+  fila; (3) construye el mensaje de prueba (destinatario: el propio admin, nunca un tercero) y llama a
+  `deps.email.send(current, message)`; (4) registra SIEMPRE una fila en `email_transport_tests` y una entrada
+  `email_transport.test` en la bitácora, en los DOS caminos (éxito y fallo) — nunca solo el feliz, condición
+  explícita de la tarea; (5) la bitácora lleva `mode`, `success`, `error_code`, `smtp_host` (solo si `mode='smtp'`,
+  `null` en modo resend) y `resolved_ip` (de `EmailSendResult.resolvedIp`, condición (3) de D-15 — ausente/`null`
+  en modo resend, que no pasa por el anti-SSRF de `SmtpSender`, documentado como "no aplica" en vez de omitido en
+  silencio). La contraseña nunca llega a `sendTestEmail` como tal: `deps.email.send()` la resuelve internamente
+  (en `index.ts`, vía `decryptPassword`) y el resultado que vuelve (`EmailSendResult`) nunca la incluye.
+- **Cambios:** `shield-ecuador-app/supabase/functions/admin-consent/handler.ts` (import de `EmailMessage`/
+  `EmailSendResult` desde `_shared/email/types.ts`; `EmailTransportDeps.recordTest`; nuevas `RateLimitCheck`,
+  `EmailDeps`; `AdminConsentDeps.email`; función `sendTestEmail`; ruta `POST /email-transport/test`); `index.ts`
+  (import de `ResendSender`/`getResendApiKey`, `SmtpSender`, `checkRateLimit`; `emailTransport.recordTest` real
+  contra `email_transport_tests`; `email.send` real que elige `ResendSender`/`SmtpSender` según `transport.mode` y
+  descifra la contraseña con la misma AAD atada a `transport_version` que T12.d.1 ya usa; `email.checkTestRateLimit`
+  wired a `checkRateLimit` con `endpoint: 'admin-consent:send-test-email'`, `failClosed:true`); `handler_test.ts`
+  (`makeEmailTransportStore` gana `tests` — las filas que `recordTest` acumula —; fake nuevo `makeEmailDeps()`
+  controlable por resultado/rate-limit; 7 pruebas nuevas). `loop-consentimiento/TASKS.md` (T12.d.2 `[x]`, con la
+  condición de D-15 anotada como pendiente explícita). Este archivo.
+- **Pruebas añadidas (7, en `handler_test.ts`):** modo resend feliz → 200, fila en `email_transport_tests`,
+  bitácora con el actor y `entity_id` correctos; modo smtp con fallo simulado (`errorCode:'smtp_send_failed'`,
+  `resolvedIp:'198.51.100.10'`, IP de documentación RFC 5737) → `success:false` en la respuesta Y en
+  `email_transport_tests` Y en la bitácora, junto con `smtp_host`/`resolved_ip`, contraseña/ciphertext ausentes de
+  `JSON.stringify(audit)`; editor/auditor → 403 sin que `email.send` se llame ninguna vez; sin fila de transporte
+  → 400 sin enviar; rate limit agotado (`reason:'email'`) → 429 sin enviar; rate limit no disponible
+  (`reason:'unavailable'`) → 503 sin enviar (fail-closed, igual que T10/T11); `GET` → 405.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only "deno-check deno-test"` en verde primero (confirma
+  que las 7 pruebas nuevas pasan junto con las ~140 existentes del módulo); luego la corrida completa por defecto
+  (9 puertas no-opcionales: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit,
+  panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit) en verde; db-reset y e2e-local SKIP
+  explícitos (opt-in, no se tocaron — el bloqueo de `docker info` de esta misma sesión los habría dejado sin
+  forma de ejecutarse de todos modos). Iteración 37, no múltiplo de 5: `GATES_FULL=1` no es obligatorio.
+- Desviaciones de SPEC: ninguna. No se añadió prueba rojo→verde con un fallo inducido aparte (mismo motivo que la
+  Iteración 36: el código y las pruebas se escribieron juntos por el acoplamiento de los tipos nuevos); se
+  compensó revisando a mano que cada aserción nueva ejercita una rama real (éxito/fallo × resend/smtp ×
+  autorizado/no × con/sin transporte × con/sin cupo), y confirmando verde con `deno-check`/`deno-test` antes de
+  la corrida completa.
+- Riesgos / pendientes detectados: **la condición (3) de D-15 sigue sin la prueba de integración contra Postgres
+  real** que exige el criterio de aceptación (confirmar la fila exacta en `admin_audit_log` con host+IP+actor y
+  que `verify_audit_chain()` sigue íntegra después) — bloqueada por el mismo motivo de entorno que TEST-INT.a
+  (Iteraciones 31, 32 y esta), no por falta de diseño. D-15 sigue bloqueando T99 hasta que esa prueba se escriba
+  en una sesión que pueda levantar `supabase start`/`docker`/`psql` sueltos. T12.d.3 y T12.d.4 quedan desbloqueadas
+  (dependen de T12.a/T12.b, ya cerradas) para la siguiente iteración, sin motivo técnico para esperar más.
+  TEST-INT.a sigue exactamente como las Iteraciones 31-33 la dejaron.
+- Porcentaje: estricto 14/28 = **50,0 %** (sin cambio; T12.d.2 es subtarea de T12, no una de las 28 numeradas).
+  Ponderado: T12.d.2 es otro 1/4 de la subtarea d (6,25 de los 100 puntos de T12, mismo cálculo que d.1 en la
+  Iteración 36). T12 pasa de ≈ 81,25 a ≈ 87,5 de sus 100 → 1546,25 + 6,25 = **≈ 1552,5/2800 ≈ 55,4 %** (antes
+  ≈ 55,2 %).

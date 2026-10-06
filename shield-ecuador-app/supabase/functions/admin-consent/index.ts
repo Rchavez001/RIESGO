@@ -2,6 +2,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { buildAad, decryptPii, encryptPii, getActiveKeyVersion, hmacLookup, type EncryptedPayload } from '../_shared/crypto.ts'
+import { getResendApiKey, ResendSender } from '../_shared/email/resend-sender.ts'
+import { SmtpSender } from '../_shared/email/smtp-sender.ts'
+import { checkRateLimit } from '../_shared/rate-limit.ts'
 import {
   ApiError,
   handle,
@@ -123,6 +126,45 @@ serve((req) =>
           aad: emailTransportPasswordAad(row.transport_version),
           allowLegacy: false,
         }),
+      recordTest: async (input) => {
+        const { error } = await db.from('email_transport_tests').insert({
+          transport_version: input.transportVersion,
+          success: input.success,
+          error_code: input.errorCode,
+          tested_by: input.testedBy,
+        })
+        if (error) throw new Error(`email_transport_tests insert: ${error.code ?? 'error'}`)
+      },
+    },
+    email: {
+      send: async (transport, message) => {
+        if (transport.mode === 'resend') {
+          return new ResendSender({
+            senderName: transport.from_name,
+            senderEmail: transport.from_email,
+            getApiKey: () => getResendApiKey(db),
+          }).send(message)
+        }
+        if (!transport.smtp_host || !transport.smtp_port || !transport.smtp_username) {
+          return { ok: false, errorCode: 'smtp_fields_missing' }
+        }
+        return new SmtpSender({
+          host: transport.smtp_host,
+          port: transport.smtp_port,
+          username: transport.smtp_username,
+          getPassword: async () => {
+            if (!transport.smtp_password_ciphertext) return null
+            return await decryptPii(transport.smtp_password_ciphertext as EncryptedPayload, {
+              aad: emailTransportPasswordAad(transport.transport_version),
+              allowLegacy: false,
+            })
+          },
+          fromName: transport.from_name,
+          fromEmail: transport.from_email,
+        }).send(message)
+      },
+      checkTestRateLimit: (req, actorEmail) =>
+        checkRateLimit({ req, endpoint: 'admin-consent:send-test-email', email: actorEmail, failClosed: true }),
     },
   })
 )

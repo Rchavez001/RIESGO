@@ -15,12 +15,15 @@ import {
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
   type DocumentsDeps,
+  type EmailDeps,
   type EmailTransportDeps,
   type EmailTransportRow,
   type NewConsentDocumentInput,
   type NewEmailTransportInput,
+  type RateLimitCheck,
   type SettingsDeps,
 } from './handler.ts'
+import type { EmailSendResult } from '../_shared/email/types.ts'
 
 const KID = 'k1'
 const ADMIN_ID = '0d9b7c1e-2f3a-4b5c-8d6e-7f8091a2b3c4'
@@ -108,8 +111,13 @@ function makeDocsStore(
 // Fake de `emailTransport`: cifrado simulado (nunca real) que SÍ reproduce la semántica que importa
 // probar aquí — una contraseña cifrada bajo la versión N solo se puede descifrar con la versión N (si
 // `decryptPassword` se llamara con la AAD de otra fila, igual que `crypto.ts` real, debe fallar).
-function makeEmailTransportStore(initial: EmailTransportRow[] = []): { emailTransport: EmailTransportDeps; rows: EmailTransportRow[] } {
+type TestRow = { transport_version: number; success: boolean; error_code: string | null; tested_by: string }
+
+function makeEmailTransportStore(
+  initial: EmailTransportRow[] = [],
+): { emailTransport: EmailTransportDeps; rows: EmailTransportRow[]; tests: TestRow[] } {
   const rows = [...initial]
+  const tests: TestRow[] = []
   const emailTransport: EmailTransportDeps = {
     getCurrent: () => Promise.resolve(rows.length ? rows[rows.length - 1] : null),
     insert: (row: NewEmailTransportInput) => {
@@ -123,8 +131,28 @@ function makeEmailTransportStore(initial: EmailTransportRow[] = []): { emailTran
       if (!match || Number(match[1]) !== row.transport_version) throw new Error('aad_mismatch')
       return Promise.resolve(match[2])
     },
+    recordTest: (input) => {
+      tests.push({ transport_version: input.transportVersion, success: input.success, error_code: input.errorCode, tested_by: input.testedBy })
+      return Promise.resolve()
+    },
   }
-  return { emailTransport, rows }
+  return { emailTransport, rows, tests }
+}
+
+// Fake de `email` (T12.d.2): registra cada envío intentado y devuelve el resultado/rate-limit que
+// indique la prueba, sin tocar ningún proveedor real.
+function makeEmailDeps(
+  opts: { result?: EmailSendResult; rateLimited?: RateLimitCheck['reason'] } = {},
+): { email: EmailDeps; sent: Array<{ transport: EmailTransportRow; message: { to: string; subject: string; html: string } }> } {
+  const sent: Array<{ transport: EmailTransportRow; message: { to: string; subject: string; html: string } }> = []
+  const email: EmailDeps = {
+    send: (transport, message) => {
+      sent.push({ transport, message })
+      return Promise.resolve(opts.result ?? { ok: true })
+    },
+    checkTestRateLimit: () => Promise.resolve(opts.rateLimited ? { allowed: false, reason: opts.rateLimited } : { allowed: true }),
+  }
+  return { email, sent }
 }
 
 function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): SettingsDeps {
@@ -158,6 +186,7 @@ function fullDeps(opts: {
   documents?: DocumentsDeps
   settings?: SettingsDeps
   emailTransport?: EmailTransportDeps
+  email?: EmailDeps
 }): AdminConsentDeps {
   const audit = opts.audit ?? []
   return {
@@ -167,6 +196,7 @@ function fullDeps(opts: {
     documents: opts.documents ?? makeDocsStore().documents,
     settings: opts.settings ?? settingsDeps(),
     emailTransport: opts.emailTransport ?? makeEmailTransportStore().emailTransport,
+    email: opts.email ?? makeEmailDeps().email,
   }
 }
 
@@ -634,4 +664,103 @@ Deno.test('cambiar de smtp a resend limpia los campos smtp y password_set pasa a
   const body = await res.json()
   assertEquals([body.mode, body.password_set, body.smtp_host, body.smtp_port, body.smtp_username], ['resend', false, null, null, null])
   assertEquals(rows[1].smtp_password_ciphertext, null)
+})
+
+// ── T12.d.2 (REQ-21, D-15): POST /email-transport/test ───────────────────────────────────────────────
+
+const resendTransport = (over: Partial<EmailTransportRow> = {}): EmailTransportRow => ({
+  transport_version: 1, mode: 'resend', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+  smtp_host: null, smtp_port: null, smtp_username: null, smtp_password_ciphertext: null,
+  created_by: ADMIN_ID, created_at: '2026-10-05T00:00:00Z', ...over,
+})
+
+Deno.test('correo de prueba en modo resend: 200, fila en email_transport_tests y bitácora con el actor correcto', async () => {
+  const audit: AuditEntry[] = []
+  const { emailTransport, tests } = makeEmailTransportStore([resendTransport()])
+  const { email, sent } = makeEmailDeps()
+  const res = await handle(
+    req(await sign(claims()), '/email-transport/test', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], audit, emailTransport, email }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), { success: true, error_code: null })
+  assertEquals(sent.length, 1)
+  assertEquals(sent[0].message.to, 'Admin.Uno@Example.test')
+  assertEquals(tests, [{ transport_version: 1, success: true, error_code: null, tested_by: ADMIN_ID }])
+  assertEquals(audit[0].action, 'email_transport.test')
+  assertEquals(audit[0].entity, 'email_transport_settings')
+  assertEquals(audit[0].entity_id, '1')
+  assertEquals(audit[0].after, { mode: 'resend', success: true, error_code: null, smtp_host: null, resolved_ip: null })
+})
+
+Deno.test('correo de prueba en modo smtp que falla: 200 success:false, error_code en email_transport_tests y en bitácora junto con host + IP resuelta', async () => {
+  const audit: AuditEntry[] = []
+  const smtpTransport = resendTransport({
+    transport_version: 3, mode: 'smtp', smtp_host: 'smtp.example.test', smtp_port: 465,
+    smtp_username: 'notificaciones', smtp_password_ciphertext: 'enc:v3:Secreto1',
+  })
+  const { emailTransport, tests } = makeEmailTransportStore([smtpTransport])
+  const { email } = makeEmailDeps({ result: { ok: false, errorCode: 'smtp_send_failed', resolvedIp: '198.51.100.10' } })
+  const res = await handle(
+    req(await sign(claims()), '/email-transport/test', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], audit, emailTransport, email }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), { success: false, error_code: 'smtp_send_failed' })
+  assertEquals(tests, [{ transport_version: 3, success: false, error_code: 'smtp_send_failed', tested_by: ADMIN_ID }])
+  assertEquals(audit[0].after, {
+    mode: 'smtp', success: false, error_code: 'smtp_send_failed', smtp_host: 'smtp.example.test', resolved_ip: '198.51.100.10',
+  })
+  assertEquals(JSON.stringify(audit).includes('Secreto1'), false)
+  assertEquals(JSON.stringify(audit).includes('enc:v3'), false)
+})
+
+Deno.test('editor/auditor no pueden pedir un correo de prueba → 403 forbidden, nada enviado', async () => {
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    const { emailTransport } = makeEmailTransportStore([resendTransport()])
+    const { email, sent } = makeEmailDeps()
+    const res = await handle(
+      req(await sign(claims()), '/email-transport/test', 'POST'),
+      fullDeps({ roles: [role], emailTransport, email }),
+    )
+    assertEquals([res.status, (await res.json()).error], [403, 'forbidden'])
+    assertEquals(sent.length, 0)
+  }
+})
+
+Deno.test('sin transporte configurado → 400 email_transport_not_configured, nada enviado', async () => {
+  const { email, sent } = makeEmailDeps()
+  const res = await handle(
+    req(await sign(claims()), '/email-transport/test', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], email }),
+  )
+  assertEquals([res.status, (await res.json()).error], [400, 'email_transport_not_configured'])
+  assertEquals(sent.length, 0)
+})
+
+Deno.test('límite de intentos agotado → 429 rate_limited, nada enviado', async () => {
+  const { emailTransport } = makeEmailTransportStore([resendTransport()])
+  const { email, sent } = makeEmailDeps({ rateLimited: 'email' })
+  const res = await handle(
+    req(await sign(claims()), '/email-transport/test', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], emailTransport, email }),
+  )
+  assertEquals([res.status, (await res.json()).error], [429, 'rate_limited'])
+  assertEquals(sent.length, 0)
+})
+
+Deno.test('límite de intentos no disponible (fail-closed) → 503 rate_limit_unavailable, nada enviado', async () => {
+  const { emailTransport } = makeEmailTransportStore([resendTransport()])
+  const { email, sent } = makeEmailDeps({ rateLimited: 'unavailable' })
+  const res = await handle(
+    req(await sign(claims()), '/email-transport/test', 'POST'),
+    fullDeps({ roles: ['privacy_admin'], emailTransport, email }),
+  )
+  assertEquals([res.status, (await res.json()).error], [503, 'rate_limit_unavailable'])
+  assertEquals(sent.length, 0)
+})
+
+Deno.test('GET /email-transport/test → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/email-transport/test', 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
 })

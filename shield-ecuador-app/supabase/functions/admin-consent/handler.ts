@@ -8,6 +8,7 @@
 // (se revierten los UPDATE ya aplicados: ver `publishDocument`/`retireDocument`).
 import { AuthError, PRIVACY_ROLES, requireRole, type AuthGuardOptions, type VerifiedUser } from '../_shared/auth-guard.ts'
 import { renderConsent, sha256Hex, type PrivacySettingsForRender } from '../_shared/consent-render.ts'
+import type { EmailMessage, EmailSendResult } from '../_shared/email/types.ts'
 import { z } from 'https://esm.sh/zod@3.23.8'
 
 export interface AuditEntry {
@@ -136,6 +137,21 @@ export interface EmailTransportDeps {
    *  (nunca la de otra fila): así, cuando el admin no envía una contraseña nueva, se puede re-cifrar bajo
    *  la versión siguiente sin arrastrar el mismo ciphertext de una versión a otra. */
   decryptPassword: (row: EmailTransportRow) => Promise<string>
+  /** T12.d.2: registra el resultado de un correo de prueba (REQ-21) — nunca el texto del correo ni la contraseña. */
+  recordTest: (input: { transportVersion: number; success: boolean; errorCode: string | null; testedBy: string }) => Promise<void>
+}
+
+export interface RateLimitCheck {
+  allowed: boolean
+  reason?: string
+}
+
+export interface EmailDeps {
+  /** Envía con el proveedor del modo vigente (resend o smtp) — nunca lanza; un fallo del proveedor se
+   *  traduce a `EmailSendResult.ok = false` con un código estable (T12.a/T12.c). */
+  send: (transport: EmailTransportRow, message: EmailMessage) => Promise<EmailSendResult>
+  /** Mismo patrón fail-closed que T10/T11 (rate-limit.ts), con clave HMAC del admin que pide la prueba. */
+  checkTestRateLimit: (req: Request, actorEmail: string) => Promise<RateLimitCheck>
 }
 
 export interface AdminConsentDeps {
@@ -146,6 +162,7 @@ export interface AdminConsentDeps {
   documents: DocumentsDeps
   settings: SettingsDeps
   emailTransport: EmailTransportDeps
+  email: EmailDeps
 }
 
 /** Error de dominio con código de estado HTTP, para las acciones de /documents. Nunca lleva datos sensibles en `code`. */
@@ -461,6 +478,52 @@ async function updateEmailTransport(admin: Admin, deps: AdminConsentDeps, body: 
   return created
 }
 
+async function sendTestEmail(admin: Admin, deps: AdminConsentDeps, req: Request): Promise<{ success: boolean; error_code: string | null }> {
+  if (!admin.email) throw new AuthError(403, 'forbidden')
+
+  const rate = await deps.email.checkTestRateLimit(req, admin.email)
+  if (!rate.allowed) {
+    if (rate.reason === 'unavailable') throw new ApiError(503, 'rate_limit_unavailable')
+    throw new ApiError(429, 'rate_limited')
+  }
+
+  const current = await deps.emailTransport.getCurrent()
+  if (!current) throw new ApiError(400, 'email_transport_not_configured')
+
+  const message: EmailMessage = {
+    to: admin.email,
+    subject: 'Correo de prueba — Consentimiento informado (CiberDojo)',
+    html: '<p>Este es un correo de prueba del transporte de correo saliente configurado en el panel de Consentimiento informado.</p>',
+  }
+  const result = await deps.email.send(current, message)
+  const errorCode = result.ok ? null : (result.errorCode ?? 'unknown_error')
+
+  await deps.emailTransport.recordTest({
+    transportVersion: current.transport_version,
+    success: result.ok,
+    errorCode,
+    testedBy: admin.userId,
+  })
+
+  // D-15 condición (3): host + IP validada quedan en la bitácora en cada intento, éxito o fallo —
+  // nunca solo en el camino feliz. En modo resend no hay `resolvedIp` (SmtpSender es quien lo calcula).
+  await auditLog(deps, admin, {
+    action: 'email_transport.test',
+    entity: 'email_transport_settings',
+    entity_id: String(current.transport_version),
+    before: null,
+    after: {
+      mode: current.mode,
+      success: result.ok,
+      error_code: errorCode,
+      smtp_host: current.mode === 'smtp' ? current.smtp_host : null,
+      resolved_ip: result.resolvedIp ?? null,
+    },
+  })
+
+  return { success: result.ok, error_code: errorCode }
+}
+
 const EDITOR_ROLES = ['privacy_editor', 'privacy_admin'] as const
 const ADMIN_ONLY = ['privacy_admin'] as const
 
@@ -486,6 +549,13 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
         return json(503, { error: 'audit_failed' })
       }
       return json(200, { user_id: admin.userId, roles: admin.roles })
+    }
+
+    if (path === '/email-transport/test') {
+      if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+      const result = await sendTestEmail(admin, deps, req)
+      return json(200, result)
     }
 
     if (path === '/email-transport') {
