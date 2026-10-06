@@ -575,3 +575,63 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   subtarea de T12.d sin empezar.
 - Porcentaje: sin cambio en el contador estricto (14/28; TEST-INT no es una de las 28 numeradas) ni en el
   ponderado (TEST-INT no tiene peso asignado en esa cuenta, igual que TEST-INT.a-d). D-15 ya no bloquea T99.
+
+## Iteración 40 — 2026-10-06 — TEST-INT.a (`secure-register-user`): el bloqueador de la iteración 31 ya no existe, pero aparece uno nuevo (permiso de `Edit` sobre `gates.sh`); prueba escrita y lista, sin enganchar
+- **Punto de partida:** `git status` limpio; primera tarea `[ ]` desbloqueada en `TASKS.md` según el protocolo
+  (TEST-INT.a, `⚠ REINTENTAR`, no `⛔ BLOQUEADA`). Releída la Iteración 31: el bloqueo que registró
+  (`GATES_DB_RESET=1 GATES_ONLY=db-reset bash …/gates.sh` no coincide con el patrón de permiso por llevar
+  variables de entorno delante) tiene un camino alternativo que YA EXISTE en `gates.sh` desde antes de esa
+  iteración: los flags `--db-reset`/`--only db-reset` (sin variables de entorno, ver cabecera de `gates.sh`,
+  línea 16). Confirmado con la corrida por defecto (`bash .claude/loops/consentimiento/gates.sh`, sin flags):
+  las 9 puertas no opcionales en verde (typecheck/lint/unit-frontend, panel-unit, panel-e2e, deno-check/test,
+  sql-ciclo-de-vida, sql-guest-limit); Docker funciona.
+- **Diseño de la prueba que faltaba (3er criterio de TEST-INT.a: compensación real, no el fake de
+  `index_test.ts`):** `secure-register-user` no tiene ningún camino de negocio que haga fallar el `INSERT` en
+  `consent_records` por sí solo contra un esquema sano (`decision`/`channel` siempre toman valores válidos del
+  propio código; `document_id` siempre referencia un documento existente; `ip_hmac`/`user_ref_hmac` siempre se
+  calculan). La única forma de producir un fallo GENUINO de Postgres (no un atajo) es revocar el privilegio real
+  de `INSERT` a `service_role` sobre `consent_records` antes de la llamada HTTP y restaurarlo después — mismo
+  principio que `GATES_SELFTEST` ya usa para otras puertas ("ejecuta la herramienta de verdad contra una entrada
+  rota, nunca un atajo simulado"). Escrito: `supabase/tests/consent/e2e_local_compensation.cjs` — registra un
+  usuario nuevo (dominio `compensacion.local`, nunca usado por `e2e_local.cjs`) esperando que la función real
+  responda 400 "No se pudo completar el registro." (el mismo mensaje genérico de `consent_evidence_insert_failed`)
+  y comprueba, contra Postgres real vía el cliente admin, que NO quedó fila de perfil (`users`) y que el login
+  con esas credenciales falla (no quedó usuario de `auth`) — exactamente lo que la compensación de `index.ts`
+  (líneas 193-199) promete.
+- **Bloqueo nuevo, distinto al de la iteración 31 (misma familia que D-14, caso 1):** para que ese script se
+  ejecute con el privilegio ya revocado, hay que añadir 10 líneas a `e2e_local()` en `gates.sh` (revocar antes
+  de invocar `e2e_local_compensation.cjs`, restaurar después, siempre). El intento de `Edit` sobre
+  `.claude/loops/consentimiento/gates.sh` devolvió directamente "File is in a directory that is denied by your
+  permission settings" — la misma protección del harness que D-14 documentó para T12.b en la iteración 28 (no
+  es una restricción de "modo headless" descrita en PROMPT.md para comandos Bash; es el propio `Edit`/`Write`
+  sobre `.claude/`, y pasó igual en esta sesión). No se intentó ningún rodeo por Bash (heredoc/`sed` escribiendo
+  sobre el mismo archivo): esa protección existe deliberadamente para que el propio loop no pueda debilitar su
+  verificación (razón ya documentada en D-14), y un rodeo por otra vía del mismo tool contradiría exactamente
+  ese propósito.
+- **Dejado listo para una sesión sin esa restricción (D-14, opción A):**
+  `loop-consentimiento/borradores/gates-TEST-INT-a-compensacion.md` — contiene el fragmento exacto a pegar en
+  `gates.sh`, dónde va, y la verificación esperada (`bash .claude/loops/consentimiento/gates.sh --only e2e-local --e2e-local`
+  en verde). Incluye una advertencia: no se pudo confirmar en esta sesión que `service_role` tenga el privilegio
+  `INSERT` en `consent_records` por una concesión que un `REVOKE`/`GRANT` directo sobre la tabla pueda revertir
+  (vs. heredado de membresía de rol, en cuyo caso no bloquearía nada) — a verificar con `\dp consent_records`
+  al aplicar el cambio.
+- **Cambios:** `supabase/tests/consent/e2e_local_compensation.cjs` (nuevo, prueba HTTP real; no se ejecuta
+  todavía porque no está enganchada a `gates.sh`, así que no se cuenta como "pasando" ni se usa para cerrar
+  TEST-INT.a). `loop-consentimiento/borradores/gates-TEST-INT-a-compensacion.md` (nuevo, diff pendiente para
+  `gates.sh` + contexto). `loop-consentimiento/TASKS.md` (nota de TEST-INT.a actualizada: el bloqueo de la
+  iteración 31 ya no aplica; el bloqueo real es este, con referencia al borrador). Este archivo.
+- **Pruebas añadidas:** `e2e_local_compensation.cjs` (3 aserciones: 400 genérico, perfil no creado, login falla)
+  — escrita pero NO verificada contra Postgres real todavía (depende del enganche en `gates.sh`, bloqueado arriba).
+  No se afirma que TEST-INT.a esté más cerca de cerrarse de lo que ya estaba: dos de tres criterios seguían
+  cubiertos desde la iteración 31; el tercero sigue sin verificar, solo con un diseño más concreto.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` (sin flags, orientación inicial) — 9 puertas OK, 2 SKIP
+  explícitos (db-reset, e2e-local, opt-in). No se repitió tras este hallazgo porque no se tocó ningún archivo
+  que esas puertas cubran (`e2e_local_compensation.cjs` no está enganchado a nada todavía).
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) TEST-INT.a sigue en `⚠ REINTENTAR`, ahora con un bloqueador más preciso
+  y un diff listo para copiar-pegar (ver borrador); (2) el supuesto de privilegios de `service_role` sobre
+  `consent_records` queda sin confirmar (ver advertencia arriba); (3) la próxima tarea ejecutable en orden de
+  `TASKS.md` sigue siendo T12.d.4 (plantillas + aviso semilla), igual que concluyó la iteración 39 — esta
+  iteración no la tocó porque el protocolo pide intentar primero la tarea `[ ]` desbloqueada que antecede en
+  el archivo (TEST-INT.a), no saltar directamente a la siguiente.
+- Porcentaje: sin cambio, 14/28 estricto; TEST-INT sigue sin peso asignado en el ponderado.
