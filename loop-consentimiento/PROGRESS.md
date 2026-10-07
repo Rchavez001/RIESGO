@@ -895,3 +895,42 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Desviaciones de SPEC: ninguna.
 - Riesgos / pendientes detectados: T13.b (pruebas HTTP de `index.ts`), T13.c (integración real contra Postgres, cierra TEST-INT.c) y T13.d (documentación de cierre) siguen pendientes. `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador de Docker Desktop, iteraciones 43-44, no relacionado con T13).
 - Porcentaje: estricto sin cambio, 14/28 (T13 sigue sin cerrarse como tarea completa; T13.a es solo una de sus 4 subtareas, T13.b-d quedan pendientes).
+
+## Iteración 46 — 2026-10-07 — T13.b (`request-data-subject-right`): pruebas HTTP de `index.ts`
+- **Punto de partida:** primera tarea ejecutable de `TASKS.md` tras T13.a (iteración 45). `handler_test.ts` ya cubre
+  `createDataSubjectRequest` con fakes inyectados directamente; faltaba la capa HTTP de `index.ts` (auth, validación
+  del body, cuota, IP del cliente, enrutado por método, mapeo de errores a status+código JSON) — el mismo hueco que
+  ya cerraron `update-my-consent/index_test.ts` y `submit-consent/index_test.ts` para sus propias funciones.
+- **Cambios:** `supabase/functions/request-data-subject-right/index_test.ts` (nuevo). Mismo patrón que
+  `update-my-consent/index_test.ts`: arranca la función real (`await import('./index.ts')`) contra un servidor fake
+  que sirve JWKS, `check_rate_limit`, `privacy_settings_current`, `next_case_number`, `data_subject_requests`
+  (INSERT), `email_transport_settings_current` (siempre `null`: sin transporte configurado) y `email_outbox`
+  (INSERT). Con el transporte no configurado, el caso feliz ejercita `dispatchOrQueue` → ambos avisos se encolan en
+  `email_outbox` (REQ-21f), sin necesitar simular un envío real por Resend/SMTP para probar la capa HTTP — eso ya lo
+  cubre `handler_test.ts` con sus propios fakes de `email.send`.
+- **Pruebas añadidas (10, todas nuevas):** 201 feliz (fila insertada con `request_type`/`channel='app'`/`user_id`
+  correctos + 2 filas en `email_outbox`); 401 `missing_token` y 403 `anonymous_session` (mapeo de `AuthError`); 400
+  `invalid_input` por `request_type` fuera de `REQUEST_TYPES` y por tipo de dato equivocado (con aserción de que la
+  cuota NO se llega a tocar, SEC-08); 429 `rate_limited`; 503 `RATE_LIMIT_UNAVAILABLE` fail-closed; 400
+  `missing_client_ip`; 503 `settings_unavailable` (mapeo de `DsrError`); 405 fuera de `POST` + `OPTIONS` con CORS.
+- **Hallazgo de orden (encontrado al escribir la prueba de `missing_client_ip`, no un defecto):** `index.ts` llama a
+  `checkRateLimit` (que usa `extractClientIp`/`hashIp` de `_shared/security-events.ts`, sin validar formato de IP)
+  ANTES de `getClientIp` (`_shared/client-ip.ts`, que sí valida formato). Sin cabecera `X-Forwarded-For` en absoluto,
+  `extractClientIp` devuelve `null` → la cuota falla cerrada con 503 `RATE_LIMIT_UNAVAILABLE` antes de llegar al
+  chequeo de IP — ese camino ya quedaba cubierto por la prueba de 503, y probarlo así solo repetía el mismo
+  resultado en vez de llegar al 400. Para forzar el 400 `missing_client_ip` de verdad hace falta una cabecera
+  PRESENTE pero con un valor que no sea una IP (`'no-es-una-ip'`): `extractClientIp` la acepta en crudo para el HMAC
+  del bucket (la cuota pasa), pero `normalizeIp` la rechaza por formato y `getClientIp` devuelve `null`. Mismo orden
+  que ya usan, sin comentarlo, `update-my-consent`/`submit-consent` — queda anotado aquí para la próxima función que
+  necesite esta misma prueba.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only deno-test` (rojo con la cabecera `X-Forwarded-For`
+  ausente — fallaba con 503 en vez del 400 esperado, confirmando el hallazgo de orden de arriba — y verde tras el
+  ajuste); `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend [14 = línea
+  base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit — todas OK;
+  db-reset y e2e-local SKIP explícito (opt-in). Iteración 46, no múltiplo de 5: `GATES_FULL=1` no es obligatorio.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T13.c (integración real contra Postgres, cierra TEST-INT.c) y T13.d
+  (documentación de cierre) siguen pendientes. `e2e-local` sigue sin una corrida real en verde en esta máquina
+  (bloqueador de Docker Desktop, iteraciones 43-44, no relacionado con T13).
+- Porcentaje: estricto sin cambio, 14/28 (T13 sigue sin cerrarse como tarea completa; T13.a y T13.b de sus 4
+  subtareas están cerradas, T13.c-d quedan pendientes).
