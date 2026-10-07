@@ -848,3 +848,36 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   de la persona responsable, no de esta sesión; (3) el WIP de T13 sigue exactamente como quedó, sin tocar.
 - Porcentaje: sin cambio, 15/28 estricto, 1565/2800 ponderado (este endurecimiento es infraestructura de
   `gates.sh`, no una tarea numerada ni una subtarea de TEST-INT/T12).
+
+## Iteración 44 — 2026-10-07 — Sesión interactiva: unifica `gates.sh` a `npx supabase` en toda invocación del CLI; `e2e-local` sigue bloqueada por Docker, no por el código
+
+- **Punto de partida:** encargo explícito tras actualizar la CLI global de Supabase a la misma versión que
+  `npx` (2.120.0): revisar si `gates.sh` mezclaba `supabase` (CLI global) y `npx supabase` (versión fijada
+  del proyecto) en sus llamadas, y unificar a una sola si mezclaba.
+- **Hallazgo:** de las 5 invocaciones reales del CLI en el script, 4 ya usaban `npx supabase`
+  (`start_functions_serve_ready`, `e2e_local`: `functions serve`, `status -o env` ×2, `start`); solo
+  `db_reset_verify_baseline_diff()` (línea ~400) llamaba al `supabase` global sin `npx`.
+- **Cambio:** esa línea ahora usa `npx supabase db dump --local -s public -f "$dump"`. Una sola línea
+  tocada; nada más en el script.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` (completo, sin flags) → typecheck-frontend,
+  lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test,
+  sql-ciclo-de-vida, sql-guest-limit: todas OK; db-reset y e2e-local SKIP explícito (opt-in). Después, `bash
+  .claude/loops/consentimiento/gates.sh --e2e-local`: las mismas 9 puertas OK; db-reset SKIP; **e2e-local
+  FAIL**, con un error de Docker DISTINTO al de la Iteración 43 pero de la misma familia (edge runtime, no
+  del módulo): `{"_tag":"Error","error":{"code":"UnknownError","message":"failed to copy edge runtime main
+  service into container: destination \"supabase_edge_runtime_shield-ecuador-app:/\" must be a
+  directory"}}` — mismo mensaje que la 1ª corrida de la Iteración 43. Log completo en
+  `loop-consentimiento/logs/gate-e2e-local.log`.
+- **e2e-local sigue pendiente de entorno, no es un fallo del cambio de hoy:** el error ocurre dentro de
+  `functions serve` (Docker copiando el binario del edge runtime al contenedor), antes de que `e2e_local()`
+  llegue a ejecutar ningún script de prueba del módulo. No se añade a `BASELINE_FAIL` por la misma razón que
+  en la Iteración 43: no es reproducible por diseño ni es un fallo del módulo, es el mismo bloqueador de
+  Docker Desktop sin resolver.
+- **Cambios:** `.claude/loops/consentimiento/gates.sh` (1 línea, ver arriba). Este archivo. **No tocado:**
+  el WIP de T13 (`request-data-subject-right/*`, el cambio en `admin-consent/index.ts`).
+- **Pruebas:** ninguna nueva; verificación = las dos corridas completas de `gates.sh` descritas arriba.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: `e2e-local` sigue sin una corrida real en verde en esta máquina — el
+  bloqueador de Docker Desktop de la Iteración 43 no se resolvió entre sesiones. Antes de asumir que algún
+  cambio de código rompió `e2e-local`, confirmar primero que Docker Desktop está sano.
+- Porcentaje: sin cambio (cambio de infraestructura de `gates.sh`, no una tarea numerada).

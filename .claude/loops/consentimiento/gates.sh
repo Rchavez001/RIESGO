@@ -397,7 +397,7 @@ db_reset() {
 # cualquier otra diferencia (tabla, columna, función, política, trigger) hace fallar la puerta.
 db_reset_verify_baseline_diff() {
   local dump="$LOGS/db-reset-dump.sql"
-  supabase db dump --local -s public -f "$dump" >/dev/null 2>&1 || { echo "\`supabase db dump --local\` falló"; return 1; }
+  npx supabase db dump --local -s public -f "$dump" >/dev/null 2>&1 || { echo "\`supabase db dump --local\` falló"; return 1; }
   local strip='/^CREATE SCHEMA IF NOT EXISTS "public";$/d; /^ALTER SCHEMA "public" OWNER TO "postgres";$/d; /^GRANT USAGE ON SCHEMA "public" TO "postgres";$/d; /^REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;$/d'
   grep -v '^--' "$dump" | grep -v '^[[:space:]]*$' | sed -E "$strip" > "$LOGS/db-reset-dump.clean.sql"
   grep -v '^--' "$BASELINE" | grep -v '^[[:space:]]*$' | sed -E "$strip" > "$LOGS/db-reset-baseline.clean.sql"
