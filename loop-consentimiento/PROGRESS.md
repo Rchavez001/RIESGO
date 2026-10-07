@@ -934,3 +934,61 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   (bloqueador de Docker Desktop, iteraciones 43-44, no relacionado con T13).
 - Porcentaje: estricto sin cambio, 14/28 (T13 sigue sin cerrarse como tarea completa; T13.a y T13.b de sus 4
   subtareas están cerradas, T13.c-d quedan pendientes).
+
+## Iteración 47 — 2026-10-07 — T13.c (cierra TEST-INT.c): integración real de `request-data-subject-right` contra Postgres
+- **Punto de partida:** primera tarea ejecutable tras T13.b (iteración 46). `handler_test.ts` (7 pruebas) usa un fake
+  sin ningún CHECK: `dsr.insert` solo hace `rows.push(row)` y `email_outbox` es un array en memoria — ninguno de los
+  dos puede detectar un drift entre `REQUEST_TYPES` (handler.ts, 9 valores) y el `CHECK` real de `request_type`
+  (073), ni confirmar que el `SELECT` que usa `rebuildMessage` (admin-consent/index.ts) resuelve contra una fila real,
+  ni que `mark_email_outbox_sent()` marca cada referencia por separado. Mismo patrón de hueco que motivó TEST-INT
+  completo desde T14/080.
+- **Decisión de alcance antes de escribir (evita repetir el patrón `_local.cjs` sin que aplique):** el patrón de
+  TEST-INT.a/d (script `_e2e_local.cjs` contra `supabase functions serve` real) no sirve para el tercer criterio
+  pedido ("`rebuildMessage` reconstruye y marca enviado un pendiente... contra Postgres real"): probarlo de verdad
+  exige que `deps.email.send` tenga éxito, y `admin-consent/index.ts` solo sabe enviar con `ResendSender` (sin clave
+  real en local) o `SmtpSender` — cuyo guardia anti-SSRF (SEC-09, `ssrf-guard.ts`) rechaza a propósito cualquier host
+  loopback/privado, así que no hay forma de montar un SMTP de prueba en `127.0.0.1` sin desactivar esa protección.
+  Enviar de verdad por Resend violaría "nunca red externa real" en pruebas. Se optó por el mismo recurso que ya
+  cerró TEST-INT.b/e: una prueba SQL que reproduce, contra Postgres real, la forma exacta de lo que el código hace
+  (sin pasar por el envío de correo en sí, que es responsabilidad de otra capa ya probada con fakes de `email.send`
+  en `handler_test.ts` de ambas funciones).
+- **Cambios:** `supabase/tests/consent/dsr_request_types_and_outbox.sql` (nuevo; descubierto solo por
+  `consent_test_files()`, orden alfabético, sin tocar `gates.sh`); `TASKS.md` (T13.c y TEST-INT.c `[x]`, resumen de
+  T13 actualizado); este archivo.
+- **Pruebas añadidas (en el nuevo archivo SQL, contra Postgres real):**
+  1. Los 9 valores de `REQUEST_TYPES` insertan con `next_case_number()` real y la misma forma de fila que arma
+     `createDataSubjectRequest` (ciphertext con AAD, `ip_hmac`, `key_version`, `channel='app'`) — antes solo se
+     había probado `'acceso'` (T08, `data_subject_requests_lifecycle.sql`).
+  2. Un `request_type` fuera de la lista (drift hipotético TS→SQL) sigue rechazado por el `CHECK` real.
+  3. Las dos referencias que `dispatchOrQueue` encola (`dsr_delegate_notice`, `dsr_ack`) nacen `pending` en
+     `email_outbox` (079), apuntando a un `data_subject_requests.id` real.
+  4. El `SELECT` exacto que ejecuta `rebuildMessage` (`id, case_number, request_type, due_at, routed_to_email,
+     email_ciphertext`) resuelve sin NULL inesperado contra esa fila.
+  5. `mark_email_outbox_sent()` marca solo la referencia indicada (`dsr_delegate_notice`); `dsr_ack` sigue `pending`
+     — prueba que `resend_pending_emails` nunca junta las dos referencias de un mismo caso en una sola llamada.
+- **Verificado rojo→verde, dos veces, y un hallazgo real sobre mi propia prueba en el camino:**
+  - Primer intento: ancló las 9 filas con `email_hmac LIKE 'hmac-%'`. El "rojo" se probó cambiando el conteo
+    esperado de 9 a 10 — y pasó, porque el patrón `LIKE` también capturaba la fila fixture `hmac-caso1` /
+    `request_type='acceso'` que ya deja `data_subject_requests_lifecycle.sql` en la misma base `gates` (los archivos
+    de prueba corren en sesiones `psql` distintas pero sobre la base persistente del contenedor: no se resetea entre
+    archivos). O sea: el conteo real YA era 10, y mi "fallo esperado" coincidía con el bug por accidente — un falso
+    verde que no habría detectado nada. Corregido con un prefijo propio sin colisión (`hmac-t13c-…`); reverificado:
+    con el conteo correcto puesto en 9 y la colisión resuelta, `GATE sql-ciclo-de-vida` pasó; forzando de nuevo un
+    valor roto (10) contra los 9 reales correctos, falló por la razón correcta.
+  - Segunda verificación (aserción de "tipo fuera de la lista"): se cambió el fragmento de error esperado a un texto
+    que Postgres nunca produce — `GATE sql-ciclo-de-vida` falló con el error real de Postgres (violación del
+    `CHECK`) en la línea correcta; revertido, vuelve a pasar.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only sql-ciclo-de-vida` (las dos rondas rojo→verde de
+  arriba) y luego `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend [14 =
+  línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit —
+  todas OK; db-reset y e2e-local SKIP explícito (opt-in). Iteración 47, no múltiplo de 5: `GATES_FULL=1` no es
+  obligatorio esta vez.
+- Desviaciones de SPEC: ninguna. Desviación de alcance frente a la redacción original de T13.c/TEST-INT (documentada
+  arriba y en `TASKS.md`): prueba SQL en vez de `_e2e_local.cjs`, por la razón explicada (no hay forma honesta de
+  probar el envío real sin romper SEC-09 o usar red externa).
+- Riesgos / pendientes detectados: TEST-INT queda cerrada en sus 5 subtareas (a-e); ninguna pendiente. T13.d
+  (documentación de cierre de T13) sigue pendiente — es la última pieza antes de que T13 complete pase a `[x]`.
+  `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador de Docker Desktop, iteraciones 43-44,
+  no relacionado con T13).
+- Porcentaje: estricto sin cambio, 14/28 (T13 aún no cierra como tarea completa; T13.a-c de sus 4 subtareas ya están
+  cerradas, solo falta T13.d).
