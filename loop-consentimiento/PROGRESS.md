@@ -881,3 +881,17 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   bloqueador de Docker Desktop de la Iteración 43 no se resolvió entre sesiones. Antes de asumir que algún
   cambio de código rompió `e2e-local`, confirmar primero que Docker Desktop está sano.
 - Porcentaje: sin cambio (cambio de infraestructura de `gates.sh`, no una tarea numerada).
+
+## Iteración 45 — 2026-10-07 — T13.a: verifica y commitea el WIP de `request-data-subject-right`
+- **Punto de partida:** el WIP descrito en las iteraciones 43/44 (`supabase/functions/request-data-subject-right/{handler.ts,handler_test.ts,index.ts}` + el cambio de `rebuildMessage` en `admin-consent/index.ts`) seguía sin commitear. Antes de confiar en él, auditado contra el estado real del repo (no solo contra lo que decía el WIP):
+  - `data_subject_requests` (073): columnas, tipos y `CHECK` de `request_type` coinciden exactamente con `NewDsrRow`/`REQUEST_TYPES` del handler; `channel='app'` es un valor válido del `CHECK`; `ip_hmac`/`key_version` nullable coinciden con el camino sin IP.
+  - `next_case_number()` (078): sin parámetros, coincide con `db.rpc('next_case_number')` en `index.ts`.
+  - `buildDelegateNoticeEmail`/`buildSubjectAcknowledgementEmail` (`_shared/email/templates.ts`, T12.d.4): firmas coinciden con las llamadas de `handler.ts` y de `rebuildMessage`.
+  - `supabase/config.toml`: sin entrada para `request-data-subject-right` — correcto, usa el valor por defecto `verify_jwt=true` (H01), ninguna excepción necesaria (confirma el comentario del propio `index.ts`).
+  - No se encontró ninguna incompatibilidad: no hizo falta tocar ni una línea del WIP.
+- **Cambios:** ninguno de producto. Solo `TASKS.md` (T13.a `[x]`, T13 actualizada) y este archivo.
+- **Pruebas:** las 7 ya existentes en `handler_test.ts` (sin cambios); corren dentro de `GATE deno-test`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` (completo, sin flags) → typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit: todas OK; db-reset y e2e-local SKIP explícito (opt-in, no forzadas por tiempo).
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T13.b (pruebas HTTP de `index.ts`), T13.c (integración real contra Postgres, cierra TEST-INT.c) y T13.d (documentación de cierre) siguen pendientes. `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador de Docker Desktop, iteraciones 43-44, no relacionado con T13).
+- Porcentaje: estricto sin cambio, 14/28 (T13 sigue sin cerrarse como tarea completa; T13.a es solo una de sus 4 subtareas, T13.b-d quedan pendientes).

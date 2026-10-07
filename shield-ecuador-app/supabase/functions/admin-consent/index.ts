@@ -5,6 +5,8 @@ import { buildAad, decryptPii, encryptPii, getActiveKeyVersion, hmacLookup, type
 import { getResendApiKey, ResendSender } from '../_shared/email/resend-sender.ts'
 import { SmtpSender } from '../_shared/email/smtp-sender.ts'
 import { checkRateLimit } from '../_shared/rate-limit.ts'
+import { decryptDsrColumn } from '../_shared/consent-evidence.ts'
+import { buildDelegateNoticeEmail, buildSubjectAcknowledgementEmail, type DataSubjectRequestType } from '../_shared/email/templates.ts'
 import {
   ApiError,
   handle,
@@ -138,10 +140,10 @@ serve((req) =>
         if (error) throw new Error(`email_transport_tests insert: ${error.code ?? 'error'}`)
       },
     },
-    // T12.d.3 (REQ-21f): ningún llamador escribe en `email_outbox` todavía (T13, sin empezar); por eso
-    // `rebuildMessage` no tiene ninguna `reference_table` que reconocer y siempre devuelve `null` (la fila
-    // queda pendiente, nunca se marca enviada sin un envío real). Cuando T13/T12.d.4 registren sus
-    // plantillas, este resolutor es el único punto que hay que ampliar.
+    // T13: `request-data-subject-right` es el único llamador que escribe en `email_outbox` hoy, con dos
+    // `reference_table` posibles (`dsr_delegate_notice`/`dsr_ack`), ambas apuntando al mismo
+    // `data_subject_requests.id`. Cualquier otra `reference_table` futura (p. ej. la de T15) se añade aquí
+    // sin tocar nada más de este resolutor.
     emailOutbox: {
       listPending: async () => {
         const { data, error } = await db
@@ -152,7 +154,28 @@ serve((req) =>
         if (error) throw new Error(`email_outbox: ${error.code ?? 'error'}`)
         return (data ?? []) as EmailOutboxRow[]
       },
-      rebuildMessage: () => Promise.resolve(null),
+      rebuildMessage: async (row: EmailOutboxRow) => {
+        if (row.reference_table !== 'dsr_delegate_notice' && row.reference_table !== 'dsr_ack') return null
+        const { data, error } = await db
+          .from('data_subject_requests')
+          .select('id, case_number, request_type, due_at, routed_to_email, email_ciphertext')
+          .eq('id', row.reference_id)
+          .maybeSingle()
+        if (error) throw new Error(`data_subject_requests: ${error.code ?? 'error'}`)
+        if (!data) return null
+        const requestType = data.request_type as DataSubjectRequestType
+        if (row.reference_table === 'dsr_delegate_notice') {
+          return buildDelegateNoticeEmail({
+            to: data.routed_to_email, caseNumber: data.case_number, requestType, dueAt: data.due_at,
+            panelUrl: Deno.env.get('ADMIN_PANEL_URL') ?? '',
+          })
+        }
+        // dsr_ack: D-06 no aplica aquí (el destinatario ES el titular) — solo el aviso al delegado está
+        // obligado a no exponer su correo.
+        const email = await decryptDsrColumn(data, 'email_ciphertext')
+        if (!email) return null
+        return buildSubjectAcknowledgementEmail({ to: email, caseNumber: data.case_number, requestType, dueAt: data.due_at })
+      },
       markSent: async (id: string) => {
         const { error } = await db.rpc('mark_email_outbox_sent', { p_outbox_id: id })
         if (error) throw new Error(`mark_email_outbox_sent: ${error.code ?? 'error'}`)
