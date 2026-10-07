@@ -209,8 +209,19 @@ cleanup_pg_containers() {
   ids="$(docker ps -aq --filter "label=$GATES_RUN_LABEL" 2>/dev/null || true)"
   [[ -n "$ids" ]] && docker rm -f $ids >/dev/null 2>&1 || true
 }
-trap cleanup_pg_containers EXIT
-trap 'cleanup_pg_containers; exit 130' INT TERM
+# TEST-INT.a: si e2e_local() revocó INSERT en consent_records para forzar el fallo real de Postgres,
+# esta bandera queda en 1 hasta restaurarlo. Los traps de abajo la cubren aunque el script se interrumpa
+# (Ctrl-C) o falle a mitad: `psql_db`/`DB_URL` ya están definidos para cuando esto pueda dispararse (solo
+# se pone en 1 dentro de e2e_local(), que corre después de esa definición).
+CONSENT_RECORDS_INSERT_REVOKED=0
+restore_consent_records_insert() {
+  [[ "$CONSENT_RECORDS_INSERT_REVOKED" == "1" ]] || return 0
+  CONSENT_RECORDS_INSERT_REVOKED=0
+  psql_db -c "GRANT INSERT ON public.consent_records TO service_role;" \
+    || echo "ALERTA: no se pudo restaurar GRANT INSERT ON consent_records (revisar a mano: \\dp consent_records)" >&2
+}
+trap 'cleanup_pg_containers; restore_consent_records_insert' EXIT
+trap 'cleanup_pg_containers; restore_consent_records_insert; exit 130' INT TERM
 
 # with_pg <prefijo> <función>: arranca Postgres 16, espera a que esté listo, llama a <función> <contenedor> y lo elimina.
 with_pg() {
@@ -437,6 +448,44 @@ wait_for_http() {
   return 1
 }
 
+# Más estricto que wait_for_http para el edge runtime: un socket que acepta conexiones (!= "000") no
+# significa que la función ya puede ejecutarse — Kong puede responder 503 "name resolution failed" o 404
+# mientras el runtime todavía arranca (visto en la práctica en Windows/Docker Desktop, ver PROGRESS.md
+# iteración 42). Exige un 200 real de get-consent-notice (ya hay un aviso publicado en el esquema para
+# entonces: db_reset ya corrió antes de llamar a esto).
+wait_for_functions_ready() {
+  local tries="${1:-60}" i code
+  for ((i = 0; i < tries; i++)); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:54321/functions/v1/get-consent-notice" 2>/dev/null)"
+    [[ "$code" == "200" ]] && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Arranca `supabase functions serve` y espera a que esté realmente listo (wait_for_functions_ready). Si no
+# lo logra dentro de $1 intentos, mata ese proceso y reintenta UNA vez desde cero (arranque limpio) antes de
+# declarar fallo — la intermitencia observada es de arranque/timeout, no de los scripts de prueba en sí, así
+# que basta reintentar el arranque. El reintento queda registrado en el log de la puerta (stdout de esta
+# función, que `gate()` ya redirige a `$LOGS/gate-e2e-local.log`).
+start_functions_serve_ready() {
+  local fn_env="$1" tries="$2" attempt
+  for attempt in 1 2; do
+    npx supabase functions serve --env-file "$fn_env" --no-verify-jwt >"$E2E_TMPDIR/functions-serve.log" 2>&1 &
+    E2E_SERVE_PID=$!
+    if wait_for_functions_ready "$tries"; then
+      [[ "$attempt" -eq 2 ]] && echo "REINTENTO: 'supabase functions serve' respondió en el intento 2/2"
+      return 0
+    fi
+    echo "aviso: 'supabase functions serve' no respondió con un 200 real en el intento $attempt/2 (arranque/timeout)"
+    kill "$E2E_SERVE_PID" >/dev/null 2>&1; wait "$E2E_SERVE_PID" 2>/dev/null
+    E2E_SERVE_PID=""
+  done
+  echo "'supabase functions serve' no respondió a tiempo tras reintentar una vez"
+  cat "$E2E_TMPDIR/functions-serve.log" 2>/dev/null
+  return 1
+}
+
 e2e_local() {
   trap e2e_local_cleanup RETURN
   if ! npx supabase status -o env >/dev/null 2>&1; then
@@ -465,10 +514,7 @@ e2e_local() {
     console.log("PII_KEY_VERSION=1")
   ' > "$fn_env"
 
-  npx supabase functions serve --env-file "$fn_env" --no-verify-jwt >"$E2E_TMPDIR/functions-serve.log" 2>&1 &
-  E2E_SERVE_PID=$!
-  wait_for_http "http://127.0.0.1:54321/functions/v1/get-consent-notice" 60 \
-    || { echo "'supabase functions serve' no respondió a tiempo"; cat "$E2E_TMPDIR/functions-serve.log" 2>/dev/null; return 1; }
+  start_functions_serve_ready "$fn_env" 60 || return 1
 
   local published; published="$(psql_db -At -c "select count(*) from public.consent_documents where version = '1.0' and status = 'published'" 2>/dev/null || echo 0)"
   if [[ "$published" != "1" ]]; then
@@ -492,10 +538,12 @@ e2e_local() {
   local compensation_status=0
   psql_db -c "REVOKE INSERT ON public.consent_records FROM service_role;" \
     || { echo "no se pudo revocar INSERT en consent_records para TEST-INT.a"; return 1; }
+  CONSENT_RECORDS_INSERT_REVOKED=1
   ANON_KEY="$ANON_KEY" SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
     node "$TESTS/e2e_local_compensation.cjs" || compensation_status=$?
-  psql_db -c "GRANT INSERT ON public.consent_records TO service_role;" \
-    || { echo "no se pudo restaurar el GRANT de INSERT en consent_records tras TEST-INT.a"; return 1; }
+  # Camino normal (éxito o fallo del test): restaura ya mismo, sin esperar al trap de salida. Si el
+  # script se interrumpe ANTES de llegar aquí, el trap EXIT/INT/TERM de arriba (misma función) lo cubre.
+  restore_consent_records_insert
   [[ "$compensation_status" -eq 0 ]] || return 1
 
   # `publish_consent_document_e2e_local.cjs` siembra su PROPIA versión "vigente" para probar que publicar
@@ -537,8 +585,8 @@ if [[ "${GATES_SELFTEST:-0}" == "1" ]]; then
     for f in "${SELFTEST_CLEANUP[@]:-}"; do [[ -n "$f" ]] && rm -f "$f"; done
     [[ -n "$PANEL_UNIT_TEST_BACKUP" ]] && printf '%s\n' "$PANEL_UNIT_TEST_BACKUP" > "$PANEL_UNIT_TEST_FILE"
   }
-  trap 'selftest_cleanup; cleanup_pg_containers' EXIT
-  trap 'selftest_cleanup; cleanup_pg_containers; exit 130' INT TERM
+  trap 'selftest_cleanup; cleanup_pg_containers; restore_consent_records_insert' EXIT
+  trap 'selftest_cleanup; cleanup_pg_containers; restore_consent_records_insert; exit 130' INT TERM
 
   typecheck_frontend() {
     local f="frontend/src/__gates_selftest_broken.ts" rc

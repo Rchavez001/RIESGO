@@ -764,3 +764,87 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: **estricto 15 de 28 = 53,6 %** (antes 14/28 ≈ 50,0 %; corrección — T12 se cierra como tarea
   completa). **Ponderado: 1565/2800 ≈ 55,9 %** (antes ≈ 55,7 % registrado; corrección del olvido de la
   Iteración 41). TEST-INT.a no suma a ninguno de los dos contadores.
+
+---
+## Iteración 43 — 2026-10-06 — Endurece `gates.sh`: `e2e-local` espera de verdad + 1 reintento automático de arranque; restauración del `GRANT` en un trap; bloqueada por una falla de Docker, no del código
+- **Punto de partida:** encargo explícito de endurecer `gates.sh` en dos puntos de `e2e_local()` (commit
+  aparte de TEST-INT.a, Iteración 42): (1) antes de correr los scripts, esperar de verdad a que el edge
+  runtime responda, con tiempo máximo, y reintentar UNA vez el arranque si falla por eso, dejando constancia
+  en el log; (2) que la restauración del `GRANT INSERT` en `consent_records` (revocado para TEST-INT.a)
+  quede en un trap que corra siempre, aunque el script se interrumpa, y demostrarlo interrumpiendo a mitad.
+- **(1) Espera real + reintento:** `wait_for_http` (ya usada por el panel) solo confirma que el socket
+  acepta conexiones (`!= "000"`) — un 503 "name resolution failed" o un 404 de Kong pasan esa prueba sin que
+  la función pueda ejecutarse de verdad (causa real de los FALLA intermitentes de las Iteraciones 40-42).
+  Nueva `wait_for_functions_ready()`: exige un `200` real de `get-consent-notice` (el aviso ya está publicado
+  para entonces, `db_reset` corre antes). Nueva `start_functions_serve_ready()`: arranca `functions serve`,
+  espera con `wait_for_functions_ready`; si no responde a tiempo, mata el proceso y reintenta el arranque
+  UNA vez desde cero; si el segundo intento responde, imprime `REINTENTO: 'supabase functions serve'
+  respondió en el intento 2/2` (queda en `gate-e2e-local.log`, que es justo el log de la puerta); si el
+  segundo intento también falla, reporta FAIL con el log de `functions serve` adjunto. `e2e_local()` ahora
+  llama a `start_functions_serve_ready "$fn_env" 60` en vez de arrancar `functions serve` y esperar inline.
+- **(2) Trap de restauración:** nuevo estado global `CONSENT_RECORDS_INSERT_REVOKED` (0/1) y
+  `restore_consent_records_insert()` (restaura el `GRANT` solo si la bandera está en 1; si el `GRANT` mismo
+  falla, avisa por `stderr` en vez de ocultarlo). Los dos `trap ... EXIT` / `trap ... INT TERM` de nivel
+  superior (los que ya limpiaban los contenedores Postgres efímeros) ahora también llaman a
+  `restore_consent_records_insert`; igual en los traps que `GATES_SELFTEST` sustituye. Dentro de
+  `e2e_local()`, el bloque de TEST-INT.a pone la bandera en 1 justo tras el `REVOKE` real y llama a
+  `restore_consent_records_insert` en el camino normal (éxito o fallo del test) — el trap es la red de
+  seguridad para el camino ANORMAL (interrupción), no el único mecanismo.
+- **Demostración de la interrupción (fuera de `gates.sh`, mismo código copiado literal en un script aparte
+  en el scratchpad de la sesión, para no depender de `supabase start`/`functions serve`, lentos y ya
+  inestables en esta sesión):** privilegio `has_table_privilege('service_role','public.consent_records',
+  'INSERT')` ANTES = `t`; `REVOKE` real → `f`; proceso puesto en segundo plano, interrumpido con `SIGINT` a
+  los 4s de un `sleep 20` que simula el test en marcha (nunca llegó a imprimir el mensaje posterior al
+  sleep); proceso terminado; privilegio consultado DESDE FUERA, después de la interrupción = `t` — restaurado
+  únicamente por el trap, sin que el código normal llegara a ejecutarse.
+- **GATES_SELFTEST=1:** sigue en verde — `AUTOPRUEBA OK: las 11 puertas detectaron su fallo inyectado y
+  reportaron FAIL` (sin cambios en ninguno de los fallos inyectados; los dos puntos tocados hoy no están en
+  el camino de ningún fallo inyectado existente).
+- **Bloqueador real, de Docker, no del código:** `gate e2e-local` real (`GATES_E2E_LOCAL=1 bash
+  .claude/loops/consentimiento/gates.sh --e2e-local`) se corrió 4 veces hoy tras los cambios; `--only
+  e2e-local` reprodujo el mismo resultado en las 3 corridas siguientes. Las 4 fallaron en
+  `start_functions_serve_ready` **después de agotar los 2 intentos** (el reintento nuevo SÍ se ejecutó y
+  quedó registrado: `aviso: 'supabase functions serve' no respondió con un 200 real en el intento 1/2
+  (arranque/timeout)` seguido de la misma línea con `2/2`), con el log de `functions serve` mostrando un
+  error de Docker, no de la función:
+  - 1ª corrida: `{"_tag":"Error","error":{"code":"UnknownError","message":"failed to copy edge runtime main
+    service into container: destination \"supabase_edge_runtime_shield-ecuador-app:/\" must be a
+    directory"}}`.
+  - 2ª corrida (tras `npx supabase stop`/`start` desde `shield-ecuador-app/`, que sí recreó el contenedor
+    del edge runtime — confirmado con `docker ps`): `{"_tag":"Error","error":{"code":"UnknownError",
+    "message":"Error response from daemon: No such container: supabase_edge_runtime_shield-ecuador-app\n
+    failed to start containers: supabase_edge_runtime_shield-ecuador-app"}}`.
+  - 3ª corrida (tras otro `stop`/`start`): `{"_tag":"Error","error":{"code":"UnknownError","message":"failed
+    to copy edge runtime main service into container: Error response from daemon: RWLayer of container
+    867e618c39c562486c71a6584f7ba11a63cc26f1b2e64cbbf15d328cbde71e1d is unexpectedly nil"}}` — error de la
+    capa de almacenamiento (overlay2) de Docker Desktop, no de Supabase ni del módulo. `docker system df`
+    mostró 170 volúmenes locales, 96 % marcados como reclamables: posible relación con la corrupción de
+    capas, sin confirmar. **No se ejecutó ninguna limpieza de Docker (`system prune` ni similar): queda para
+    la persona responsable, fuera de esta sesión.**
+  - Ninguno de los tres errores menciona `consent_records`, `secure-register-user` ni ningún archivo de este
+    módulo: los tres ocurren ANTES de que `e2e_local()` llegue siquiera a intentar el `REVOKE` de TEST-INT.a.
+  - Para no perder la verificación de las dos piezas de hoy pese a este bloqueador, (1) se confirmó por
+    separado contra 3 corridas reales (el reintento se registró en el log las 4 veces) y (2) se demostró de
+    forma aislada (ver arriba) — ambas con evidencia real, no simulada.
+- **Cambios:** `.claude/loops/consentimiento/gates.sh` — `wait_for_functions_ready()` y
+  `start_functions_serve_ready()` (nuevas, sección 5b); `CONSENT_RECORDS_INSERT_REVOKED` +
+  `restore_consent_records_insert()` (nuevas, junto a `cleanup_pg_containers`); los 4 `trap` de nivel superior
+  y de `GATES_SELFTEST` extendidos para llamar a `restore_consent_records_insert`; el bloque de TEST-INT.a en
+  `e2e_local()` usa la bandera + la función en vez del `GRANT` inline. Este archivo. **No tocado:** el WIP de
+  T13 (`request-data-subject-right/*`, el cambio en `admin-consent/index.ts`).
+- **Pruebas:** ninguna automatizada nueva (es un endurecimiento de infraestructura de pruebas, no de
+  producto); verificación manual descrita arriba (demo de interrupción + 4 corridas reales + `GATES_SELFTEST`).
+- **Gates:** `GATES_SELFTEST=1 bash .claude/loops/consentimiento/gates.sh --selftest` → OK (11/11). `bash
+  .claude/loops/consentimiento/gates.sh --e2e-local` (completo) → typecheck-frontend, lint-frontend [14 =
+  línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit: todas OK; db-reset SKIP explícito; **e2e-local FAIL por el bloqueador de Docker descrito
+  arriba** (no es línea base: es nuevo y específico de esta máquina en esta sesión; no se añade a
+  `BASELINE_FAIL` porque no es un fallo del módulo ni reproducible por diseño).
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) `e2e-local` queda sin una corrida real en verde desde este cambio —
+  la próxima sesión que lo necesite debe primero confirmar Docker Desktop sano (`docker ps`, sin errores de
+  RWLayer) antes de asumir que el endurecimiento de hoy no sirvió; (2) si el bloqueador de Docker persiste,
+  considerar `docker system prune` (volúmenes/imágenes reclamables, 96 % según `docker system df`) — decisión
+  de la persona responsable, no de esta sesión; (3) el WIP de T13 sigue exactamente como quedó, sin tocar.
+- Porcentaje: sin cambio, 15/28 estricto, 1565/2800 ponderado (este endurecimiento es infraestructura de
+  `gates.sh`, no una tarea numerada ni una subtarea de TEST-INT/T12).
