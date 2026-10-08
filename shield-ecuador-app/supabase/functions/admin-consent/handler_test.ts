@@ -22,6 +22,7 @@ import {
   type EmailTransportRow,
   type NewConsentDocumentInput,
   type NewEmailTransportInput,
+  type NewPrivacySettingsInput,
   type RateLimitCheck,
   type SettingsDeps,
 } from './handler.ts'
@@ -177,8 +178,11 @@ function makeEmailOutboxStore(
   return { emailOutbox, statusOf: (id) => status.get(id) }
 }
 
+// A diferencia de `makeDocsStore`/`makeEmailTransportStore`, `current` es mutable aquí (sin un array de
+// filas expuesto): basta con que `insert` reemplace la vigente, igual que haría la vista
+// `privacy_settings_current` real tras un INSERT.
 function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): SettingsDeps {
-  const current: CurrentPrivacySettings = {
+  let current: CurrentPrivacySettings = {
     settings_version: 1,
     controller_name: 'CiberDojo', controller_address: 'Guayaquil', controller_phone: '000',
     privacy_email: 'privacidad@example.test', dpo_name: 'DPO', dpo_contact: 'dpo@example.test',
@@ -186,7 +190,13 @@ function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): Settings
     response_days: 15, ip_retention_days: 730, four_eyes_publish: false,
     ...overrides,
   }
-  return { getCurrent: () => Promise.resolve(current) }
+  return {
+    getCurrent: () => Promise.resolve(current),
+    insert: (row: NewPrivacySettingsInput) => {
+      current = { ...row }
+      return Promise.resolve(current)
+    },
+  }
 }
 
 const publishedDoc = (over: Partial<ConsentDocumentRow> = {}): ConsentDocumentRow => ({
@@ -586,6 +596,104 @@ Deno.test('si falla la bitácora al retirar, se revierte el UPDATE → 503 audit
   )
   assertEquals([res.status, (await res.json()).error], [503, 'audit_failed'])
   assertEquals(rows[0].status, 'draft')
+})
+
+// ── T15.b (REQ-14): GET/POST /settings ────────────────────────────────────────────────────────────────
+
+const VALID_SETTINGS_BODY = {
+  controller_name: 'CiberDojo — Club de Ciberseguridad ESPOL',
+  controller_address: 'Guayaquil, Ecuador',
+  controller_phone: '+593-4-000-0000',
+  dpo_name: 'Nombre del delegado',
+  dpo_contact: 'dpo@example.test',
+  privacy_policy_url: 'https://example.test/privacidad',
+  unsubscribe_subject: 'Baja y eliminación de datos',
+  response_days: 20,
+  ip_retention_days: 365,
+}
+
+Deno.test('GET /settings: cualquier rol del módulo ve la vigente', async () => {
+  for (const role of ['privacy_editor', 'privacy_admin', 'privacy_auditor']) {
+    const res = await handle(req(await sign(claims()), '/settings', 'GET'), fullDeps({ roles: [role] }))
+    assertEquals(res.status, 200)
+    assertEquals((await res.json()).settings_version, 1)
+  }
+})
+
+Deno.test('admin guarda la configuración: 200 con settings_version+1, bitácora before/after, resto de campos actualizados', async () => {
+  const audit: AuditEntry[] = []
+  const settings = settingsDeps()
+  const res = await handle(req(await sign(claims()), '/settings', 'POST', VALID_SETTINGS_BODY), fullDeps({ roles: ['privacy_admin'], audit, settings }))
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.settings_version, 2)
+  assertEquals(body.controller_name, VALID_SETTINGS_BODY.controller_name)
+  assertEquals(body.response_days, 20)
+  assertEquals(body.ip_retention_days, 365)
+  // Campos que esta ruta no toca: se conservan de la vigente anterior.
+  assertEquals(body.privacy_email, 'privacidad@example.test')
+  assertEquals(body.four_eyes_publish, false)
+  assertEquals(audit[0].action, 'privacy_settings.update')
+  assertEquals(audit[0].entity, 'privacy_settings')
+  assertEquals((audit[0].before as CurrentPrivacySettings).settings_version, 1)
+  assertEquals((audit[0].after as CurrentPrivacySettings).settings_version, 2)
+  // La vigente que ve un GET posterior ya es la nueva.
+  const resGet = await handle(req(await sign(claims()), '/settings', 'GET'), fullDeps({ roles: ['privacy_admin'], settings }))
+  assertEquals((await resGet.json()).settings_version, 2)
+})
+
+Deno.test('editor/auditor no pueden guardar la configuración → 403 forbidden, nada cambia', async () => {
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    const settings = settingsDeps()
+    const res = await handle(req(await sign(claims()), '/settings', 'POST', VALID_SETTINGS_BODY), fullDeps({ roles: [role], settings }))
+    assertEquals([res.status, (await res.json()).error], [403, 'forbidden'])
+    assertEquals((await settings.getCurrent())?.settings_version, 1)
+  }
+})
+
+Deno.test('response_days fuera de rango (0 y 91) → 400 invalid_input, nada cambia', async () => {
+  for (const response_days of [0, 91]) {
+    const settings = settingsDeps()
+    const res = await handle(
+      req(await sign(claims()), '/settings', 'POST', { ...VALID_SETTINGS_BODY, response_days }),
+      fullDeps({ roles: ['privacy_admin'], settings }),
+    )
+    assertEquals([res.status, (await res.json()).error], [400, 'invalid_input'])
+    assertEquals((await settings.getCurrent())?.settings_version, 1)
+  }
+})
+
+Deno.test('ip_retention_days negativo → 400 invalid_input, nada cambia', async () => {
+  const settings = settingsDeps()
+  const res = await handle(
+    req(await sign(claims()), '/settings', 'POST', { ...VALID_SETTINGS_BODY, ip_retention_days: -1 }),
+    fullDeps({ roles: ['privacy_admin'], settings }),
+  )
+  assertEquals([res.status, (await res.json()).error], [400, 'invalid_input'])
+  assertEquals((await settings.getCurrent())?.settings_version, 1)
+})
+
+Deno.test('intentar enviar privacy_email en el body se ignora: no cambia el correo por esta vía', async () => {
+  const settings = settingsDeps()
+  const res = await handle(
+    req(await sign(claims()), '/settings', 'POST', { ...VALID_SETTINGS_BODY, privacy_email: 'otro@example.test' }),
+    fullDeps({ roles: ['privacy_admin'], settings }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals((await res.json()).privacy_email, 'privacidad@example.test')
+})
+
+Deno.test('GET /settings sin ninguna configuración → 503 settings_unavailable', async () => {
+  const res = await handle(
+    req(await sign(claims()), '/settings', 'GET'),
+    fullDeps({ roles: ['privacy_admin'], settings: { getCurrent: () => Promise.resolve(null), insert: settingsDeps().insert } }),
+  )
+  assertEquals([res.status, (await res.json()).error], [503, 'settings_unavailable'])
+})
+
+Deno.test('PUT /settings → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/settings', 'PUT'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
 })
 
 // ── T12.d.1 (REQ-21, D-15): get_email_transport / update_email_transport ──────────────────────────────

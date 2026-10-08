@@ -94,8 +94,26 @@ export interface CurrentPrivacySettings extends PrivacySettingsForRender {
   four_eyes_publish: boolean
 }
 
+export interface NewPrivacySettingsInput {
+  settings_version: number
+  controller_name: string | null
+  controller_address: string | null
+  controller_phone: string | null
+  privacy_email: string
+  dpo_name: string | null
+  dpo_contact: string | null
+  privacy_policy_url: string | null
+  unsubscribe_subject: string
+  response_days: number
+  ip_retention_days: number
+  four_eyes_publish: boolean
+  created_by: string
+}
+
 export interface SettingsDeps {
   getCurrent: () => Promise<CurrentPrivacySettings | null>
+  /** INSERT de una sola tabla (sin problema de atomicidad, a diferencia de `documents.publish`). */
+  insert: (row: NewPrivacySettingsInput) => Promise<CurrentPrivacySettings>
 }
 
 export type EmailTransportMode = 'resend' | 'smtp'
@@ -233,6 +251,20 @@ const UpdateDraftSchema = z
   .refine((body) => Object.keys(body).length > 0, { message: 'empty_patch' })
 
 const ReasonSchema = z.object({ reason: z.string().trim().min(1).max(2000) })
+
+// REQ-14, sin `privacy_email` (esa solo cambia por T15.c/`request_email_change`+`confirm_email_verification`,
+// nunca por esta ruta). Si el body la incluye, zod la descarta en silencio (no forma parte del schema).
+const UpdateSettingsSchema = z.object({
+  controller_name: z.string().trim().min(1).max(300).nullable(),
+  controller_address: z.string().trim().min(1).max(500).nullable(),
+  controller_phone: z.string().trim().min(1).max(50).nullable(),
+  dpo_name: z.string().trim().min(1).max(300).nullable(),
+  dpo_contact: z.string().trim().min(1).max(300).nullable(),
+  privacy_policy_url: z.string().trim().url().max(500).nullable(),
+  unsubscribe_subject: z.string().trim().min(1).max(300),
+  response_days: z.number().int().min(1).max(90),
+  ip_retention_days: z.number().int().min(0),
+})
 
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
 const UpdateEmailTransportSchema = z.object({
@@ -439,6 +471,36 @@ async function retireDraft(admin: Admin, deps: AdminConsentDeps, id: string, bod
   return retired
 }
 
+async function updateSettings(admin: Admin, deps: AdminConsentDeps, body: unknown): Promise<CurrentPrivacySettings> {
+  const parsed = UpdateSettingsSchema.safeParse(body)
+  if (!parsed.success) throw new ApiError(400, 'invalid_input')
+  const input = parsed.data
+
+  const current = await deps.settings.getCurrent()
+  if (!current) throw new ApiError(503, 'settings_unavailable')
+
+  // `privacy_email` y `four_eyes_publish` no son campos de esta ruta (REQ-14 no los lista; el primero
+  // solo cambia por T15.c): se copian de la vigente para no resetearlos a su valor por defecto en cada
+  // guardado.
+  const created = await deps.settings.insert({
+    settings_version: current.settings_version + 1,
+    ...input,
+    privacy_email: current.privacy_email,
+    four_eyes_publish: current.four_eyes_publish,
+    created_by: admin.userId,
+  })
+
+  await auditLog(deps, admin, {
+    action: 'privacy_settings.update',
+    entity: 'privacy_settings',
+    entity_id: String(created.settings_version),
+    before: current,
+    after: created,
+  })
+
+  return created
+}
+
 function toPublicEmailTransport(row: EmailTransportRow): PublicEmailTransport {
   const { smtp_password_ciphertext, ...rest } = row
   return { ...rest, password_set: !!smtp_password_ciphertext }
@@ -608,6 +670,22 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
         return json(503, { error: 'audit_failed' })
       }
       return json(200, { user_id: admin.userId, roles: admin.roles })
+    }
+
+    if (path === '/settings') {
+      if (req.method === 'GET') {
+        await requireRole(req, PRIVACY_ROLES, deps.guard)
+        const current = await deps.settings.getCurrent()
+        if (!current) throw new ApiError(503, 'settings_unavailable')
+        return json(200, current)
+      }
+      if (req.method === 'POST') {
+        const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+        const body = await req.json().catch(() => ({}))
+        const updated = await updateSettings(admin, deps, body)
+        return json(200, updated)
+      }
+      return json(405, { error: 'method_not_allowed' })
     }
 
     if (path === '/email-transport/test') {

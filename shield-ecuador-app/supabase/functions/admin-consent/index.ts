@@ -12,9 +12,11 @@ import {
   handle,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
+  type CurrentPrivacySettings,
   type EmailOutboxRow,
   type EmailTransportRow,
   type NewEmailTransportInput,
+  type NewPrivacySettingsInput,
   type PublishInput,
 } from './handler.ts'
 
@@ -109,7 +111,12 @@ serve((req) =>
       getCurrent: async () => {
         const { data, error } = await db.from('privacy_settings_current').select(SETTINGS_COLUMNS).maybeSingle()
         if (error) throw new Error(`privacy_settings_current: ${error.code ?? 'error'}`)
-        return data
+        return data as CurrentPrivacySettings | null
+      },
+      insert: async (row: NewPrivacySettingsInput) => {
+        const { data, error } = await db.from('privacy_settings').insert(row).select(SETTINGS_COLUMNS).single()
+        if (error) throw new Error(`privacy_settings insert: ${error.code ?? 'error'}`)
+        return data as CurrentPrivacySettings
       },
     },
     emailTransport: {

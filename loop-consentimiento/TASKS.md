@@ -237,7 +237,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       `privacy_settings` fallara — p. ej. versión duplicada por una carrera — la confirmación también se
       revierte, igual que el test 9 de `settings_versioning.sql` ya prueba a mano); permisos (solo
       `service_role` ejecuta la función).
-  - [ ] **T15.b — `update_settings` (REQ-14)** (depende de T15.a solo para no pisarse el número de migración; en sí depende de T06)
+  - [x] **T15.b — `update_settings` (REQ-14)** (hecha 2026-10-08, iteración 50)
     - `GET /settings` (cualquier rol del módulo) y `POST /settings` (solo `privacy_admin`): valida con
       zod los campos de REQ-14 (excepto `privacy_email`, que esta ruta nunca cambia — ver T15.c),
       inserta la siguiente `settings_version` con `deps.settings.insert(...)` (INSERT de una sola tabla,
@@ -245,6 +245,17 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Tests:** editor/auditor → 403; campo fuera de rango (`response_days`, `ip_retention_days`) → 400;
       intentar enviar `privacy_email` en el body se ignora (no cambia el correo por esta vía); la
       respuesta y la bitácora traen la versión nueva con el resto de campos actualizados.
+    - **Nota:** `four_eyes_publish` tampoco es campo de esta ruta (no está en la lista de REQ-14; ninguna
+      tarea le da todavía una ruta propia): se copia de la vigente igual que `privacy_email`, para no
+      resetearlo a `false` en cada guardado. `evidence_retention_days`/`response_day_type` (NOT NULL con
+      default en la tabla, 073) se dejan en su valor por defecto de columna en cada INSERT nuevo — hoy no
+      hay ninguna ruta que los cambie a otra cosa, así que nunca pueden divergir de ese default; si T17
+      los vuelve configurables, esa tarea deberá empezar a copiarlos también. Cobertura contra Postgres
+      real: no hace falta un archivo SQL nuevo — `settings_versioning.sql` (test 2, desde la iteración de
+      075) ya ejercita exactamente esta forma de INSERT (copiar la vigente, subir `settings_version`,
+      cambiar algunos campos) contra el trigger `enforce_next_privacy_settings_version` y las reglas de
+      solo-inserción reales; lo que falta probar aquí es la capa HTTP/zod/bitácora, cubierta con los fakes
+      de `handler_test.ts`.
   - [ ] **T15.c — `request_email_change` + `confirm_email_verification` (REQ-15)** (depende de T15.a, T12 para `EmailDeps`)
     - `POST /settings/email-change` (solo `privacy_admin`): valida el correo nuevo, genera un código de
       6 dígitos (`crypto.getRandomValues`, no `Math.random`), lo hashea (`sha256Hex`, mismo helper que ya
@@ -442,5 +453,5 @@ Nombres fuera de la numeración original (`Tnn-extra`, según PROMPT.md). Ojo: *
 
 - [ ] **PANEL-ECHARTS-MOBILE — [P2, independiente del módulo] `echarts-gl` (bar3D de Reportes) lanza "Invalid expression." de forma intermitente en Chrome de Android** (añadida 2026-09-30, detectada al extender `gates.sh`/`panel-e2e` con un segundo perfil por defecto, `pixel-7-chrome`; preexistente, ya anotada como riesgo en PROGRESS.md iteración 17 — T05.b)
   - **Por qué:** `runReport()` inicializa el gráfico 3D de Reportes (`echarts-gl`) aunque ese panel no esté visible; en emulación Android de Playwright falla intermitentemente con `Invalid expression.` (2 de 5 corridas reproducidas).
-  - **Estado:** mitigación temporal aplicada en `shell.spec.ts:24` (descarta solo ese mensaje exacto en `pixel-7-chrome`; cualquier otro error sigue fallando la prueba).
+  - **Estado:** mitigación temporal aplicada en `shell.spec.ts:24` (descarta solo ese mensaje exacto en `pixel-7-chrome` y, desde la iteración 50 (2026-10-08, primera corrida real de `GATES_FULL=1` en la historia del loop), también en `galaxy-s9-chrome` — reprodujo el mismo mensaje exacto ahí, el otro perfil Android/Chrome de los 7; cualquier otro error, o este mismo mensaje en cualquier otro perfil, sigue fallando la prueba).
   - **Falta:** no iniciar el gráfico 3D hasta que el panel de Reportes sea visible (lazy init), o investigar el fallo con contenedor oculto en WebGL por software; luego revertir el filtro de `shell.spec.ts:24`.

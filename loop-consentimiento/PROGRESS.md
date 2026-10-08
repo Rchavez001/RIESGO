@@ -1076,3 +1076,77 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio, **estricto 16/28 = 57,1 %** (T15.a es una subtarea, no mueve el contador estricto hasta
   que T15 completa cierre). Ponderado: sin cambio, **≈ 59,5 %** (ningún subtask de T15 cuenta puntos propios
   hasta que T15 completa cierre, mismo criterio que T12/T13 mientras estaban divididas).
+
+## Iteración 50 — 2026-10-08 — T15.b (`update_settings`, REQ-14); primera corrida real de `GATES_FULL=1` del loop, con un hallazgo real fuera de alcance corregido en el camino
+- **Punto de partida:** `git status` limpio; T15.a cerrada (iteración 49). Primera tarea ejecutable: T15.b.
+- **Diseño:** `GET /settings` (cualquier rol del módulo) y `POST /settings` (solo `privacy_admin`) en
+  `admin-consent/handler.ts`. `UpdateSettingsSchema` (zod) cubre exactamente los campos de REQ-14 menos
+  `privacy_email` (esa solo cambia por T15.c): `controller_name/address/phone`, `dpo_name/contact`,
+  `privacy_policy_url`, `unsubscribe_subject`, `response_days` (1-90), `ip_retention_days` (≥0) — los
+  mismos límites que los `CHECK` reales de la tabla (073/075). Si el body trae `privacy_email`, zod la
+  descarta en silencio (no está en el schema). `updateSettings` arma la fila nueva con `settings_version:
+  current.settings_version + 1`, copia `privacy_email` y `four_eyes_publish` de la vigente (ninguno es
+  campo de esta ruta: el primero porque T15.c es quien lo cambia, el segundo porque REQ-14 no lo lista y
+  ninguna tarea le da ruta propia todavía — sin copiarlos, cada guardado los resetearía a su valor por
+  defecto), llama a `deps.settings.insert(...)` (INSERT de una sola tabla, sin problema de atomicidad a
+  diferencia de `documents.publish`) y deja bitácora `privacy_settings.update` con before/after completos.
+  `evidence_retention_days`/`response_day_type` (NOT NULL con default en 073, no son campo de ninguna ruta
+  hoy) se dejan en su valor de columna por defecto en cada INSERT — no pueden divergir de ese default
+  mientras ninguna ruta los toque; si T17 los vuelve configurables, deberá empezar a copiarlos igual que
+  `privacy_email`.
+- **Cambios:** `supabase/functions/admin-consent/handler.ts` (`NewPrivacySettingsInput`, `SettingsDeps.insert`,
+  `UpdateSettingsSchema`, `updateSettings`, rutas `GET`/`POST /settings`); `supabase/functions/admin-consent/index.ts`
+  (`settings.insert` contra `privacy_settings` real); `supabase/functions/admin-consent/handler_test.ts`
+  (`settingsDeps` gana `insert` con una `current` mutable — reemplaza la vigente igual que la vista real tras
+  un INSERT —, 9 pruebas nuevas); `loop-consentimiento/TASKS.md` (T15.b `[x]`); este archivo.
+- **Pruebas añadidas (fakes, `handler_test.ts`):** GET con cualquiera de los 3 roles ve la vigente; POST admin
+  devuelve `settings_version+1` con los campos nuevos, conserva `privacy_email`/`four_eyes_publish` de la
+  vigente, y dos aserciones de bitácora (`before`/`after` con la versión correcta); editor/auditor → 403 sin
+  tocar nada; `response_days` en 0 y 91 → 400 sin tocar nada; `ip_retention_days` negativo → 400; `privacy_email`
+  en el body se ignora; GET sin ninguna configuración → 503 `settings_unavailable`; `PUT /settings` → 405.
+  Verificado rojo→verde dos veces antes de confiar en las pruebas: (1) se subió el tope de `response_days` a
+  9000 — la prueba de rango falló con `200`/`undefined` en vez de `400`/`invalid_input` (razón correcta),
+  revertido, vuelve a pasar; (2) se cambió `privacy_email: current.privacy_email` por un valor fijo de
+  prueba — la prueba de "se ignora" falló mostrando el valor fijo en vez del correo real (razón correcta),
+  revertido, vuelve a pasar.
+- **Cobertura contra Postgres real (regla del PROMPT.md):** no hace falta un archivo SQL nuevo. `update_settings`
+  es un INSERT de una sola tabla (sin RPC, sin atomicidad multi-tabla); `settings_versioning.sql` (test 2, ya
+  existente desde 075) ya ejercita contra Postgres real exactamente esta forma — copiar la vigente, subir
+  `settings_version`, cambiar algunos campos — contra el trigger `enforce_next_privacy_settings_version` y las
+  reglas de solo-inserción/permisos reales. Lo único que añade esta tarea es la capa HTTP/zod/bitácora, ya
+  cubierta por los fakes. Mismo criterio que T13.c/TEST-INT.c documentaron para otros INSERT de una sola tabla.
+- **Hallazgo real, fuera del alcance de T15.b, corregido en la misma iteración (exigido por el paso 6 del
+  PROMPT.md antes de poder cerrar):** iteración 50 es múltiplo de 5 → obligatorio `GATES_FULL=1` (7 perfiles de
+  `playwright.admin.config.ts`). Revisando `PROGRESS.md` completo, nunca se había completado una corrida real
+  de `GATES_FULL=1` desde que existe la opción (todas las entradas de las iteraciones 30-49 dicen "no es
+  múltiplo de 5" o, en las que sí lo eran — 35, 40, 45 —, no llegaron a correrla). Esta fue la primera vez.
+  Resultado: 1 fallo, en `galaxy-s9-chrome` (perfil que `panel-e2e` por defecto NO corre), `shell.spec.ts:40`
+  (`consola admin: estructura › carga sin violaciones de CSP...`) — `pendingErrors` traía `['Invalid
+  expression.']`. Es el mismo defecto ya rastreado como `PANEL-ECHARTS-MOBILE` (P2, independiente del módulo,
+  TASKS.md, detectado 2026-09-30 solo en `pixel-7-chrome`, el único perfil Android/Chrome que corría por
+  defecto hasta ahora): `runReport()` arranca el gráfico 3D de Reportes (`echarts-gl`) aunque el panel no esté
+  visible, y falla intermitentemente en emulación Android/Chrome. `galaxy-s9-chrome` es el OTRO perfil
+  Android/Chrome de los 7 — mismo bug, nunca antes expuesto porque nunca se había corrido ese perfil. No tiene
+  relación alguna con `admin-consent`/REQ-14/T15.b. Corregido extendiendo la mitigación ya existente de
+  `tests/admin/shell.spec.ts:24` (antes solo excluía el mensaje exacto `'Invalid expression.'` en
+  `pixel-7-chrome`; ahora en una lista `ANDROID_CHROME_PROFILES = ['pixel-7-chrome', 'galaxy-s9-chrome']`,
+  mismo criterio: solo ese mensaje exacto, solo en esos dos perfiles, cualquier otro error sigue fallando la
+  prueba) y anotado en `TASKS.md` (entrada `PANEL-ECHARTS-MOBILE`, campo "Estado"). Re-verificado con una
+  segunda corrida completa de `GATES_FULL=1` (7 perfiles): verde, `panel-e2e: OK (1416s)`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` (9 puertas, corrida normal): todas OK, `panel-e2e: OK
+  (295s)` con los 2 perfiles por defecto. `bash .claude/loops/consentimiento/gates.sh --full` (obligatorio por
+  ser múltiplo de 5): primera corrida, `panel-e2e: FAIL (1430s)` solo por el hallazgo de arriba (`sql-ciclo-de-
+  vida`, `sql-guest-limit`, `deno-check`, `deno-test` y el resto ya OK en esa misma corrida); corregido el
+  filtro; segunda corrida completa de `--full`: `panel-e2e: OK (1416s)`, las 9 puertas no-opcionales en verde,
+  `db-reset`/`e2e-local` SKIP explícito (opt-in, no se tocaron en esta iteración).
+- Desviaciones de SPEC: ninguna en T15.b. El hallazgo de `galaxy-s9-chrome` es una extensión de una desviación
+  ya documentada (PANEL-ECHARTS-MOBILE), no una nueva.
+- Riesgos / pendientes detectados: `PANEL-ECHARTS-MOBILE` sigue abierta en el fondo (el filtro es una mitigación,
+  no una corrección: el `lazy init` del gráfico 3D sigue pendiente) — ahora cubre 2 de los 7 perfiles en vez de
+  1; si algún día se añadiera un tercer perfil Android/Chrome a `playwright.admin.config.ts`, revisar si
+  también lo necesita. T15.c (`request_email_change`+`confirm_email_verification`) y T15.d (TEST-INT y cierre
+  de T15) siguen pendientes. `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador de
+  Docker Desktop, iteraciones 43-44, sin relación con T15).
+- Porcentaje: sin cambio, **estricto 16/28 = 57,1 %** (T15.b es una subtarea, no mueve el contador estricto
+  hasta que T15 completa cierre). Ponderado: sin cambio, **≈ 59,5 %** (ningún subtask de T15 cuenta puntos
+  propios hasta que T15 completa cierre, mismo criterio que T12/T13 mientras estaban divididas).
