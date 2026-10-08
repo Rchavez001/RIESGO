@@ -9,7 +9,7 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   esperan el release único (`PLAN_PRODUCCION_RELEASE.md`, orden 074→075→076→077→078→079→080→081).
 - Fase 1 (aviso + registro) escrita y probada en local, **no desplegada**: falta publicar el aviso real
   y no hay ruta `/registro` en el `App.tsx` versionado (parche en `PLAN_RAMAS.md`).
-- Fases 2 (parcial: T04,T06,T07,T08,T09,T10,T11,T14 cerradas; T12 dividida a-d, a y b cerradas; T13,T15,T16
+- Fases 2 (parcial: T04,T06,T07,T08,T09,T10,T11,T12,T13,T14 cerradas; TEST-INT a-e cerrada; T15,T16
   sin empezar), 3, 4 y 5: sin desplegar.
 - `081 es la migración más urgente` del lote: sin ella, funciones con `search_path` acotado fallan al
   llamar a `digest()` (pgcrypto vive en `extensions`, no en `public`, en Supabase real).
@@ -894,7 +894,10 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - **Gates:** `bash .claude/loops/consentimiento/gates.sh` (completo, sin flags) → typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit: todas OK; db-reset y e2e-local SKIP explícito (opt-in, no forzadas por tiempo).
 - Desviaciones de SPEC: ninguna.
 - Riesgos / pendientes detectados: T13.b (pruebas HTTP de `index.ts`), T13.c (integración real contra Postgres, cierra TEST-INT.c) y T13.d (documentación de cierre) siguen pendientes. `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador de Docker Desktop, iteraciones 43-44, no relacionado con T13).
-- Porcentaje: estricto sin cambio, 14/28 (T13 sigue sin cerrarse como tarea completa; T13.a es solo una de sus 4 subtareas, T13.b-d quedan pendientes).
+- Porcentaje: estricto sin cambio, **15/28** (corrección 2026-10-07, iteración 48: esta entrada decía 14/28 por
+  error — T12 ya contaba como completa desde la iteración 42, así que el estricto a esta fecha era 15/28, no
+  14/28; T13 sigue sin cerrarse como tarea completa, T13.a es solo una de sus 4 subtareas, T13.b-d quedan
+  pendientes).
 
 ## Iteración 46 — 2026-10-07 — T13.b (`request-data-subject-right`): pruebas HTTP de `index.ts`
 - **Punto de partida:** primera tarea ejecutable de `TASKS.md` tras T13.a (iteración 45). `handler_test.ts` ya cubre
@@ -932,7 +935,8 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Riesgos / pendientes detectados: T13.c (integración real contra Postgres, cierra TEST-INT.c) y T13.d
   (documentación de cierre) siguen pendientes. `e2e-local` sigue sin una corrida real en verde en esta máquina
   (bloqueador de Docker Desktop, iteraciones 43-44, no relacionado con T13).
-- Porcentaje: estricto sin cambio, 14/28 (T13 sigue sin cerrarse como tarea completa; T13.a y T13.b de sus 4
+- Porcentaje: estricto sin cambio, **15/28** (corrección 2026-10-07, iteración 48: esta entrada decía 14/28 por
+  error, mismo motivo que la iteración 45; T13 sigue sin cerrarse como tarea completa, T13.a y T13.b de sus 4
   subtareas están cerradas, T13.c-d quedan pendientes).
 
 ## Iteración 47 — 2026-10-07 — T13.c (cierra TEST-INT.c): integración real de `request-data-subject-right` contra Postgres
@@ -990,5 +994,48 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   (documentación de cierre de T13) sigue pendiente — es la última pieza antes de que T13 complete pase a `[x]`.
   `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador de Docker Desktop, iteraciones 43-44,
   no relacionado con T13).
-- Porcentaje: estricto sin cambio, 14/28 (T13 aún no cierra como tarea completa; T13.a-c de sus 4 subtareas ya están
-  cerradas, solo falta T13.d).
+- Porcentaje: estricto sin cambio, **15/28** (corrección 2026-10-07, iteración 48: esta entrada decía 14/28 por
+  error, mismo motivo que las iteraciones 45-46; T13 aún no cierra como tarea completa, T13.a-c de sus 4
+  subtareas ya están cerradas, solo falta T13.d).
+
+---
+## Iteración 48 — 2026-10-07 — T13.d: documentación y cierre de T13 (REQ-10, REQ-11); corrige el contador estricto de las iteraciones 45-47
+- **Punto de partida:** `git status` limpio; T13.a-c cerradas y commiteadas (iteraciones 45-47). Única tarea
+  pendiente de T13: T13.d (documentación y cierre), cuya aceptación en `TASKS.md` es puramente documental —
+  no toca código de producto.
+- **Cierre de REQ-10/REQ-11:** `request-data-subject-right` queda completo con sus 4 subtareas: handler con
+  cifrado AAD y `dispatchOrQueue` (T13.a, WIP verificado y commiteado), capa HTTP con 10 pruebas (T13.b), e
+  integración real contra Postgres que cierra TEST-INT.c (T13.c, `dsr_request_types_and_outbox.sql`).
+- **Fecha límite en días calendario, caso que cruza fin de semana:** `dueAtIso(receivedAt, responseDays)`
+  (`handler.ts` línea 77) es una suma de milisegundos pura (`receivedAt.getTime() + responseDays * DAY_MS`),
+  sin ninguna rama para saltar sábados/domingos ni festivos — por diseño (D-03), no hace falta tratamiento
+  especial para un caso que cruce un fin de semana: el cálculo genérico ya lo cubre igual que cualquier otro
+  rango de días. Ejemplo real, ya presente en `handler_test.ts` (sin cambios hoy): `NOW='2026-10-06T12:00:00Z'`
+  (martes) + `response_days=15` → `due_at='2026-10-21T12:00:00Z'` (miércoles), un rango que atraviesa dos
+  fines de semana completos (10-11 y 17-18 de octubre de 2026) sin que el resultado se desvíe ni un milisegundo
+  de la suma simple — confirma que no hace falta ninguna prueba nueva para este caso, ya está cubierto.
+- **`response_day_type` (migración 073) confirmado sin uso:** `grep` sobre `supabase/functions/` no encuentra
+  ningún lector de esa columna (`calendario`/`habiles`, default `calendario`); `dueAtIso` nunca la consulta,
+  siempre calcula en calendario puro. Queda anotado en `TASKS.md` (T13, "Estado") para retirarla en una
+  migración nueva cuando toque — no se tocó la 073 en esta iteración, como exige la tarea.
+- **Corrección del contador — las iteraciones 45, 46 y 47 registraron "14/28" por error:** T12 ya contaba
+  como tarea completa desde la corrección de la iteración 42 (**15/28**, no 14/28); las tres entradas de esta
+  sesión de hoy (iteraciones 45-47) heredaron el valor viejo sin repetir el razonamiento de la iteración 42 y
+  nunca lo corrigieron. Corregidas las tres líneas "Porcentaje" (45, 46, 47) para decir 15/28 con una nota de
+  corrección, sin reescribir el resto de esas entradas (el error estaba solo en el número, no en la narración
+  de qué subtareas de T13 estaban cerradas en cada una). El "Estado de producción" (cabecera de este archivo)
+  también estaba desactualizado desde antes de T12.d.4 (seguía diciendo "T12 dividida a-d, a y b cerradas"):
+  corregido a "T04,T06,T07,T08,T09,T10,T11,T12,T13,T14 cerradas; TEST-INT a-e cerrada; T15,T16 sin empezar".
+- **Cambios:** `loop-consentimiento/TASKS.md` (T13.d `[x]`; T13 `[x]`); `loop-consentimiento/PROGRESS.md`
+  ("Estado de producción" corregido; "Porcentaje" de las iteraciones 45-47 corregido de 14/28 a 15/28; esta
+  entrada). Ningún archivo de `shield-ecuador-app/` tocado — tarea puramente documental.
+- **Pruebas:** ninguna nueva (tarea documental); no se repitió `gates.sh` porque no se tocó ningún archivo de
+  producto ni de prueba.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador
+  de Docker Desktop, iteraciones 43-44, sin relación con T13); próxima tarea ejecutable en orden de `TASKS.md`
+  tras cerrar T13: T15 (`admin-consent`: configuración y verificación del correo del delegado).
+- Porcentaje: **estricto 16 de 28 = 57,1 %** (antes 15/28 ≈ 53,6 %, una vez corregidas las iteraciones 45-47;
+  T13 se cierra como tarea completa, mismo criterio que T14/T12). **Ponderado: T13 pasa de 0 % a 100 % de sus
+  propios 100 puntos → 1565 (Iteración 42, tras la corrección de T12) + 100 = 1665/2800 ≈ 59,5 %** (antes
+  ≈ 55,9 %).
