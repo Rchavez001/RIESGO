@@ -1039,3 +1039,40 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   T13 se cierra como tarea completa, mismo criterio que T14/T12). **Ponderado: T13 pasa de 0 % a 100 % de sus
   propios 100 puntos → 1565 (Iteración 42, tras la corrección de T12) + 100 = 1665/2800 ≈ 59,5 %** (antes
   ≈ 55,9 %).
+
+## Iteración 49 — 2026-10-08 — T15.a (`confirm_privacy_email_change`): verifica y commitea el WIP de una iteración headless interrumpida
+- **Punto de partida:** `git status` mostraba `loop-consentimiento/TASKS.md` y `PLAN_PRODUCCION_RELEASE.md`
+  modificados (sin commitear) más dos archivos nuevos sin trackear:
+  `shield-ecuador-app/supabase/migrations/082_confirm_privacy_email_change_atomic.sql` y
+  `shield-ecuador-app/supabase/tests/consent/privacy_email_change_confirm.sql`. `git log` no mostraba ningún
+  commit posterior a la iteración 48 (T13.d). Mismo patrón que T13.a (iteración 45): una ejecución headless
+  anterior del loop dividió T15 en T15.a-d (ya reflejado en `TASKS.md`, fechado 2026-10-08), implementó T15.a
+  completo (migración 082 + prueba SQL + fila nueva en `PLAN_PRODUCCION_RELEASE.md`) y murió antes de
+  verificar/commitear.
+- **Auditoría del WIP antes de confiar en él (sin tocar código):** migración 082 revisada línea a línea contra
+  el esquema real: `privacy_email_verifications` (073: columnas `id`, `new_email`, `code_hash`, `expires_at`,
+  `confirmed_at`, `requested_by`, `created_at`, `CHECK (expires_at > created_at)`) y `privacy_settings`/
+  `privacy_settings_current`/`enforce_next_privacy_settings_version` (075) — la función usa exactamente esas
+  columnas y el mismo patrón de `SECURITY DEFINER` + verificación de rol/aal2 DENTRO de la función que ya usa
+  `publish_consent_document` (080): coincide sin ajustes. La prueba SQL (`privacy_email_change_confirm.sql`)
+  captura la versión vigente ANTES de empezar (`t15a_before`) en vez de asumir un número fijo — correcto, dado
+  que corre después de `settings_versioning.sql` en el orden alfabético de `consent_test_files()`.
+  Numeración de migración confirmada: 082 es el siguiente hueco libre tras 081 (`ls supabase/migrations/`).
+- **Cambios:** ninguno de código nuevo — se adoptó el WIP tal cual tras la auditoría. `loop-consentimiento/TASKS.md`
+  (T15.a `[x]`); este archivo.
+- **Pruebas:** las 10 aserciones ya escritas en `privacy_email_change_confirm.sql` (forbidden sin rol,
+  mfa_required sin aal2, not_found, code_expired sin mutar nada, invalid_code sin mutar nada, camino feliz
+  confirma + inserta versión nueva con el correo nuevo en una sola llamada, already_confirmed al reintentar sin
+  crear otra versión, bitácora con actor/before/after correctos, permisos por rol, `verify_audit_chain()` íntegra).
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend [14 = línea
+  base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit — todas
+  OK; db-reset y e2e-local SKIP explícito (opt-in). Iteración 49, no múltiplo de 5: `GATES_FULL=1` no es
+  obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T15.b (`update_settings`), T15.c (`request_email_change` +
+  `confirm_email_verification`) y T15.d (TEST-INT y cierre de T15) siguen pendientes. `PLAN_PRODUCCION_RELEASE.md`
+  ya incluye la fila de 082 (hecho en el mismo WIP adoptado aquí): nadie la llama todavía desde producción, ya
+  que T15.b/c (las rutas de `admin-consent` que la invocarían) no existen aún.
+- Porcentaje: sin cambio, **estricto 16/28 = 57,1 %** (T15.a es una subtarea, no mueve el contador estricto hasta
+  que T15 completa cierre). Ponderado: sin cambio, **≈ 59,5 %** (ningún subtask de T15 cuenta puntos propios
+  hasta que T15 completa cierre, mismo criterio que T12/T13 mientras estaban divididas).

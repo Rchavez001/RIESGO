@@ -208,6 +208,63 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     `confirm_email_verification` con código (hash, 30 min, 5 intentos).
   - **Tests:** correo no cambia sin código; código expirado/erróneo; intentos agotados;
     bitácora con before/after sin exponer el código.
+  - **División (2026-10-08, antes de codificar):** la tarea abarca una migración (RPC atómica), dos
+    familias de acciones en `handler.ts`/`index.ts` y su documentación de cierre; se parte en cuatro,
+    mismo patrón que T05/T12/T13/T14.
+  - [x] **T15.a — Migración: RPC `confirm_privacy_email_change()` (atómica)** (hecha 2026-10-08, iteración 49 — WIP de una iteración headless interrumpida, auditado contra el esquema real y commiteado sin cambios de código)
+    - **Por qué:** confirmar el cambio de correo exige marcar `privacy_email_verifications.confirmed_at`
+      Y a la vez insertar la nueva versión de `privacy_settings` con el correo nuevo, en una sola
+      transacción real (mismo defecto que arregló 080 para `publish_consent_document`: dos llamadas
+      PostgREST sueltas desde `admin-consent` no son atómicas entre sí). `settings_versioning.sql` ya
+      probó la mecánica de tablas a mano con un `DO $$ … $$` en una sola sesión `psql` (test 8); falta
+      el envoltorio `SECURITY DEFINER` que `admin-consent` pueda invocar con una sola llamada.
+    - El incremento de `attempts` por código incorrecto NO vive dentro de esta función (si viviera, un
+      `RAISE EXCEPTION` por código inválido revertiría también el UPDATE de `attempts` en la misma
+      transacción — justo el tipo de error de atomicidad que esta tarea existe para evitar). Eso lo hace
+      T15.c con un UPDATE de una sola fila/tabla desde `admin-consent`, atómico por sí solo.
+    - Firma: `confirm_privacy_email_change(p_verification_id uuid, p_code_hash text, p_actor_id uuid, p_actor_role text, p_actor_aal text, p_actor_email_hmac text) RETURNS public.privacy_settings`.
+      Comprueba `aal2` + rol `privacy_admin` (defensa en profundidad, igual que 080); bloquea la fila de
+      verificación (`FOR UPDATE`); si ya está confirmada, venció, o el hash no coincide (no debería pasar:
+      T15.c ya lo valida antes de llamar), revierte sin tocar nada; si es válida, marca `confirmed_at` e
+      inserta la versión siguiente de `privacy_settings` copiando el resto de columnas de la vigente y
+      cambiando solo `privacy_email`, más una fila de `admin_audit_log` — todo en la misma transacción
+      (el trigger `enforce_next_privacy_settings_version` de 075 ya sirve de candado de la versión).
+      `REVOKE ALL … FROM PUBLIC, anon, authenticated; GRANT EXECUTE … TO service_role` (mismo patrón).
+    - **Tests SQL** (archivo nuevo, `privacy_email_change_confirm.sql`, descubierto solo): sin rol → error;
+      sin aal2 → error; verificación inexistente → error; vencida → error; ya confirmada → error; hash
+      que no coincide → error, nada mutado; camino feliz → verificación confirmada + nueva versión con el
+      correo nuevo + bitácora con actor correcto, todo en una transacción (si la inserción en
+      `privacy_settings` fallara — p. ej. versión duplicada por una carrera — la confirmación también se
+      revierte, igual que el test 9 de `settings_versioning.sql` ya prueba a mano); permisos (solo
+      `service_role` ejecuta la función).
+  - [ ] **T15.b — `update_settings` (REQ-14)** (depende de T15.a solo para no pisarse el número de migración; en sí depende de T06)
+    - `GET /settings` (cualquier rol del módulo) y `POST /settings` (solo `privacy_admin`): valida con
+      zod los campos de REQ-14 (excepto `privacy_email`, que esta ruta nunca cambia — ver T15.c),
+      inserta la siguiente `settings_version` con `deps.settings.insert(...)` (INSERT de una sola tabla,
+      sin problema de atomicidad) y bitácora `privacy_settings.update` con before/after.
+    - **Tests:** editor/auditor → 403; campo fuera de rango (`response_days`, `ip_retention_days`) → 400;
+      intentar enviar `privacy_email` en el body se ignora (no cambia el correo por esta vía); la
+      respuesta y la bitácora traen la versión nueva con el resto de campos actualizados.
+  - [ ] **T15.c — `request_email_change` + `confirm_email_verification` (REQ-15)** (depende de T15.a, T12 para `EmailDeps`)
+    - `POST /settings/email-change` (solo `privacy_admin`): valida el correo nuevo, genera un código de
+      6 dígitos (`crypto.getRandomValues`, no `Math.random`), lo hashea (`sha256Hex`, mismo helper que ya
+      usa `consent-render.ts`) y lo guarda en `privacy_email_verifications` (`INSERT`, una sola tabla);
+      envía el código con `buildEmailVerificationCodeEmail` (T12.d.4, ya existe) vía `deps.email.send`
+      usando el transporte vigente; si el envío falla, responde error sin dejar el panel pensando que
+      se mandó (REQ-15 no permite encolar este correo en `email_outbox`, ya documentado en la plantilla).
+    - `POST /settings/email-change/confirm` (solo `privacy_admin`): recibe el código en claro, lo
+      hashea, busca la verificación `confirmed_at IS NULL` más reciente; si el hash no coincide,
+      incrementa `attempts` (UPDATE de una fila, atómico por sí solo) y responde 400 `invalid_code`; si
+      ya tiene 5 intentos o más, 429 `attempts_exhausted` sin tocar la fila; si venció, 410 `code_expired`;
+      si coincide, llama a `deps.settings.confirmEmailChange(...)` (RPC de T15.a) y devuelve la nueva
+      configuración vigente.
+    - **Tests:** correo no cambia sin llamar a confirm; código erróneo no cambia nada y sube `attempts`;
+      código vencido; 5 intentos agotados; código correcto confirma y la vigente pasa a tener el correo
+      nuevo; la bitácora de ambas rutas nunca lleva el código en claro ni su hash.
+  - [ ] **T15.d — TEST-INT y cierre de T15**
+    - Auditar `update_settings`/`request_email_change`/`confirm_email_verification` contra Postgres real
+      (si T15.a/b/c ya dejaron cobertura suficiente con pruebas SQL, documentar por qué no hace falta más,
+      mismo criterio que TEST-INT); actualizar `PROGRESS.md` y marcar T15 `[x]`.
 
 - [ ] **T16 — `admin-consent`: bitácora, evidencia, revelación de IP, solicitudes, cadenas** (REQ-16, REQ-17, REQ-18)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T04, T14 y T15 (todas comparten el archivo `admin-consent`). El modelo de datos que necesita (`admin_audit_log`, `consent_records`, `data_subject_requests`) ya existe (T07/T08).
