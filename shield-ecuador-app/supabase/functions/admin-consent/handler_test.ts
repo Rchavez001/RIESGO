@@ -6,7 +6,7 @@
 // SMTP nunca en la respuesta ni en la bitácora.
 // T15.c (REQ-15): `request_email_change`/`confirm_email_verification` — código de 6 dígitos, 30 min,
 // máximo 5 intentos; el código y su hash nunca aparecen en la bitácora ni en la respuesta.
-import { assertEquals, assertExists } from 'https://deno.land/std@0.168.0/testing/asserts.ts'
+import { assert, assertEquals, assertExists } from 'https://deno.land/std@0.168.0/testing/asserts.ts'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'https://deno.land/x/jose@v5.9.6/index.ts'
 import {
   ApiError,
@@ -1353,5 +1353,127 @@ Deno.test('GET /audit-log: parámetros inválidos → 400 invalid_input', async 
 
 Deno.test('POST /audit-log → 405', async () => {
   const res = await handle(req(await sign(claims()), '/audit-log', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
+})
+
+// ── T16.b: GET /audit-log/export.csv (REQ-16) ──────────────────────────────────────────────────────────
+
+Deno.test('GET /audit-log/export.csv: los tres roles del módulo pueden exportar (200, text/csv, con reason)', async () => {
+  for (const role of ['privacy_editor', 'privacy_admin', 'privacy_auditor']) {
+    const { auditTrail } = makeAuditTrailStore([auditRow()])
+    const res = await handle(req(await sign(claims()), '/audit-log/export.csv?reason=auditoria', 'GET'), fullDeps({ roles: [role], auditTrail }))
+    assertEquals(res.status, 200, role)
+    assertEquals(res.headers.get('Content-Type'), 'text/csv; charset=utf-8', role)
+    assertEquals(res.headers.get('Content-Disposition'), 'attachment; filename="audit-log-export.csv"', role)
+    const csv = await res.text()
+    const lines = csv.split('\r\n').filter(Boolean)
+    assertEquals(lines[0], 'id,actor_id,actor_email_hmac,actor_role,action,entity,entity_id,before,after,diff,reason,created_at', role)
+    assertEquals(lines.length, 2, role) // encabezado + 1 fila
+  }
+})
+
+Deno.test('GET /audit-log/export.csv: sin rol del módulo → 403', async () => {
+  const res = await handle(req(await sign(claims()), '/audit-log/export.csv?reason=motivo', 'GET'), fullDeps({ roles: [] }))
+  assertEquals(res.status, 403)
+})
+
+Deno.test('GET /audit-log/export.csv: sin reason (o en blanco) → 400 reason_required', async () => {
+  const token = await sign(claims())
+  for (const qs of ['', 'reason=', 'reason=%20%20']) {
+    const res = await handle(req(token, `/audit-log/export.csv?${qs}`, 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+    assertEquals(res.status, 400, qs)
+    assertEquals((await res.json()).error, 'reason_required', qs)
+  }
+})
+
+Deno.test('GET /audit-log/export.csv: filtros inválidos → 400 invalid_input (se exige antes del motivo)', async () => {
+  const token = await sign(claims())
+  for (const qs of ['reason=motivo&from=no-es-fecha', 'reason=motivo&actor_id=no-es-uuid', 'reason=motivo&action=']) {
+    const res = await handle(req(token, `/audit-log/export.csv?${qs}`, 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+    assertEquals(res.status, 400, qs)
+    assertEquals((await res.json()).error, 'invalid_input', qs)
+  }
+})
+
+Deno.test('GET /audit-log/export.csv: respeta los mismos filtros que /audit-log (sin paginar)', async () => {
+  const rows = [
+    auditRow({ id: 1, actor_id: ADMIN_ID, action: 'consent_document.publish' }),
+    auditRow({ id: 2, actor_id: EDITOR_ID, action: 'consent_document.update' }),
+  ]
+  const { auditTrail } = makeAuditTrailStore(rows)
+  const res = await handle(
+    req(await sign(claims()), `/audit-log/export.csv?reason=motivo&actor_id=${EDITOR_ID}`, 'GET'),
+    fullDeps({ roles: ['privacy_admin'], auditTrail }),
+  )
+  assertEquals(res.status, 200)
+  const dataLines = (await res.text()).split('\r\n').filter(Boolean).slice(1)
+  assertEquals(dataLines.length, 1)
+  assert(dataLines[0].startsWith('"2",'))
+})
+
+Deno.test('GET /audit-log/export.csv: escapa comillas/comas y neutraliza inyección de fórmulas CSV', async () => {
+  const row = auditRow({
+    id: 9,
+    reason: "=cmd|' /C calc'!A0",
+    entity_id: '+HYPERLINK("http://evil.test","clic")',
+    entity: 'doc,con"comilla',
+  })
+  const { auditTrail } = makeAuditTrailStore([row])
+  const res = await handle(req(await sign(claims()), '/audit-log/export.csv?reason=motivo', 'GET'), fullDeps({ roles: ['privacy_admin'], auditTrail }))
+  const dataLine = (await res.text()).split('\r\n')[1]
+  // El motivo (columna `reason`) y `entity_id`, ambos con `=`/`+` al inicio, llevan un apóstrofe antepuesto:
+  // así Excel/Sheets los trata como texto, nunca como fórmula a evaluar.
+  assert(dataLine.includes("\"'=cmd"))
+  assert(dataLine.includes("'+HYPERLINK"))
+  // La coma y la comilla de `entity` quedan escapadas (comilla doblada) dentro de un campo entre comillas.
+  assert(dataLine.includes('"doc,con""comilla"'))
+})
+
+Deno.test('GET /audit-log/export.csv: la propia exportación queda en la bitácora (motivo + recuento, nunca el CSV)', async () => {
+  const audit: AuditEntry[] = []
+  const rows = [auditRow({ id: 1, actor_id: ADMIN_ID }), auditRow({ id: 2, actor_id: EDITOR_ID })]
+  const { auditTrail } = makeAuditTrailStore(rows)
+  const res = await handle(
+    req(await sign(claims()), `/audit-log/export.csv?reason=para+legal&actor_id=${ADMIN_ID}`, 'GET'),
+    fullDeps({ roles: ['privacy_admin'], audit, auditTrail }),
+  )
+  assertEquals(res.status, 200)
+  await res.text()
+  assertEquals(audit.length, 1)
+  assertEquals(audit[0].action, 'audit.export')
+  assertEquals(audit[0].entity, 'admin_audit_log')
+  assertEquals(audit[0].entity_id, null)
+  assertEquals(audit[0].reason, 'para legal')
+  assertEquals((audit[0].after as { row_count: number }).row_count, 1)
+})
+
+Deno.test('GET /audit-log/export.csv: pide hasta el tope sin paginar (limit fijo, offset 0) y señala truncamiento', async () => {
+  let seenLimit: number | undefined
+  let seenOffset: number | undefined
+  const auditTrail: AuditTrailDeps = {
+    list: (filter) => {
+      seenLimit = filter.limit
+      seenOffset = filter.offset
+      return Promise.resolve({ items: [auditRow()], total: 7000 })
+    },
+  }
+  const res = await handle(req(await sign(claims()), '/audit-log/export.csv?reason=motivo', 'GET'), fullDeps({ roles: ['privacy_admin'], auditTrail }))
+  assertEquals(res.status, 200)
+  await res.text()
+  assertEquals(seenLimit, 5000)
+  assertEquals(seenOffset, 0)
+  assertEquals(res.headers.get('X-Row-Count'), '1')
+  assertEquals(res.headers.get('X-Export-Truncated'), 'true')
+})
+
+Deno.test('GET /audit-log/export.csv: sin truncar cuando el total cabe en el tope', async () => {
+  const { auditTrail } = makeAuditTrailStore([auditRow()])
+  const res = await handle(req(await sign(claims()), '/audit-log/export.csv?reason=motivo', 'GET'), fullDeps({ roles: ['privacy_admin'], auditTrail }))
+  assertEquals(res.headers.get('X-Export-Truncated'), 'false')
+  await res.text()
+})
+
+Deno.test('POST /audit-log/export.csv → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/audit-log/export.csv', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
   assertEquals(res.status, 405)
 })

@@ -310,7 +310,42 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Aceptación:** filtros `from`/`to`/`actor_id`/`action` combinables; paginación `limit`/`offset`
       (tope 200); parámetros inválidos → 400; los tres roles del módulo → 200; método distinto de
       `GET` → 405.
-  - [ ] **T16.b — `GET /audit-log/export.csv`: exportación CSV de la bitácora, registrada en la propia bitácora** (REQ-16)
+  - [x] **T16.b — `GET /audit-log/export.csv`: exportación CSV de la bitácora, registrada en la propia bitácora** (REQ-16) (hecha 2026-10-09, iteración 54)
+    - **Estado:** cerrada. Mismos filtros que `/audit-log` (`from`/`to`/`actor_id`/`action`, sin `limit`/`offset`:
+      la exportación no pagina, pide hasta `MAX_AUDIT_EXPORT_ROWS = 5000` de una sola vez reutilizando
+      `deps.auditTrail.list()` ya cableado en T16.a — no hizo falta ninguna dependencia nueva). `reason`
+      **obligatorio** en el query string (SPEC: "reason… obligatorio para… export"), porque el resultado sale
+      del sistema como archivo descargable. La propia exportación queda en `admin_audit_log` como `audit.export`
+      (entity `admin_audit_log`, `entity_id: null`, `after` con el filtro + `row_count`/`total_matching`, nunca
+      el CSV en sí — ya es idéntico a lo que `GET /audit-log` deja leer). Respuesta `text/csv; charset=utf-8` con
+      `Content-Disposition: attachment`; cabeceras `X-Row-Count`/`X-Export-Truncated` si el filtro supera el tope.
+      Mismos tres roles que `/audit-log` (REQ-17 solo exige `privacy_admin` para "Revelar IP", T16.d, no para
+      exportar la bitácora). 10 pruebas nuevas en `handler_test.ts` (incluye escape de comillas/comas y
+      neutralización de inyección de fórmulas CSV — OWASP — en el motivo y en campos de la fila).
+    - **Hallazgo real cerrado en el camino (no solo este endpoint):** el panel (`central-admin-app/server.js`)
+      reenvía `/api/privacy/fn/admin-consent/*` solo si la ruta cumple `PRIVACY_FN_RE`, cuyo patrón de segmento
+      (`[A-Za-z0-9_-]+`) no admite el punto literal de `export.csv` — el endpoint habría quedado construido pero
+      inalcanzable desde el panel real (403/404 del proxy antes de llegar a la función). Corregido con un patrón
+      de segmento que admite **un** punto interno, nunca al inicio (`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?`): sigue
+      bloqueando `.`/`..` como segmento (no reintroduce recorrido de ruta), y admite `export.csv`. Sin esta
+      corrección, no hacía falta ningún cambio en `index.ts` (reutiliza `deps.auditTrail.list`/`deps.audit` ya
+      reales desde T16.a).
+    - **Pendiente de entorno (no bloquea el cierre, mismo patrón que D-14 pero sobre `gates.sh`, no sobre
+      Postgres):** se añadió `tests/privacy-fn-route.test.cjs` (lee el literal de `PRIVACY_FN_RE` del código
+      fuente sin arrancar el servidor real, y prueba que admite `export.csv` y sigue bloqueando `.`/`..`), pero
+      esta sesión no pudo ni ejecutarlo directamente (`node tests/privacy-fn-route.test.cjs` sin pasar por
+      `gates.sh` pide aprobación que nadie concedió) ni cablearlo en `panel_unit()` de `gates.sh` (`Edit` denegado
+      por ser `.claude/`, igual que D-14 #1). Verificado a mano, trazando el regex contra cada caso del archivo,
+      pero una sesión sin esa restricción debe: (1) correr `node tests/privacy-fn-route.test.cjs` una vez para
+      confirmarlo con Node real, y (2) añadir `&& node tests/privacy-fn-route.test.cjs` al final de la línea de
+      `panel_unit()` en `gates.sh`.
+    - **Aceptación:** filtros combinables igual que T16.a; sin `reason` (o en blanco) → 400 `reason_required`;
+      filtro inválido → 400 `invalid_input` (antes de exigir el motivo); los tres roles → 200 con CSV; motivo
+      agresivo con `=`/`+` al inicio queda neutralizado con un apóstrofe antepuesto; comillas/comas del contenido
+      quedan escapadas; la exportación deja una fila de bitácora con el motivo y el recuento (nunca el CSV);
+      `POST`/otros métodos → 405; `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
+      no-opcionales OK, incluido `panel-unit`/`panel-e2e` con el cambio de `server.js`; `db-reset`/`e2e-local`
+      SKIP opt-in como siempre).
   - [ ] **T16.c — Evidencia: búsqueda por correo (HMAC)/ID de usuario + historial con IP enmascarada** (REQ-17)
   - [ ] **T16.d — `reveal_ip` (solo `privacy_admin`, motivo obligatorio, registrado en bitácora) + exportación de expediente de un titular (JSON/PDF simple)** (REQ-17)
   - [ ] **T16.e — Solicitudes: cambio de estado (envuelve `update_data_subject_request_status`, 078) + listado con semáforo** (REQ-11, REQ-16)

@@ -1332,3 +1332,84 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   que las divisiones de T05/T12/T13/T14/T15 — el contador estricto y el ponderado se mueven cuando la tarea
   padre completa, no por subtarea). **Estricto 17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto
   a la Iteración 52).
+
+## Iteración 54 — 2026-10-09 — T16.b (`GET /audit-log/export.csv`): exportación CSV, registrada en la propia bitácora, con un hallazgo real de proxy cerrado en el camino
+- **Punto de partida:** primera tarea ejecutable de TASKS.md en orden es T16.b (T16.a cerrada en la
+  Iteración 53; T16.c-f dependen de evidencia/solicitudes/cadenas, sin empezar — T16.b no depende de
+  ninguna). Leídos `handler.ts`/`index.ts`/`handler_test.ts` completos para reutilizar exactamente el
+  mismo patrón de T16.a (`AuditTrailDeps.list`, `auditLog()`) sin tocar `index.ts`.
+- **Diseño (antes de codificar):** SPEC.md (comentario de `admin_audit_log.action`, línea ~173-177) fija
+  dos cosas que TASKS.md no detallaba: el nombre de la acción es `audit.export` (no `export_audit`, que es
+  el nombre de la acción lógica en la tabla de rutas del panel) y `reason` es **obligatorio** para `export`
+  (misma lista que `publish`/`retire`/`reveal_ip`/`settings.update`) — a diferencia de `GET /audit-log`
+  (T16.a), que no exige motivo porque no saca nada del sistema como archivo. Mismos tres roles que T16.a
+  (REQ-17 solo acota "Revelar IP", T16.d, no la lectura/exportación de la bitácora).
+- **Cambios:**
+  - `supabase/functions/admin-consent/handler.ts`: `AuditLogExportFilterSchema` (mismos filtros que
+    `AuditLogQuerySchema`, sin `limit`/`offset` — la exportación no pagina); `MAX_AUDIT_EXPORT_ROWS = 5000`
+    (tope de filas por exportación, documentado); `csvCell()` (escapa comillas/comas para una celda CSV y
+    neutraliza inyección de fórmulas — OWASP — anteponiendo un apóstrofe si el valor empieza con
+    `=`/`+`/`-`/`@`, igual que hace Google Sheets al importar texto ajeno: `admin_audit_log.before`/`after`
+    pueden llevar texto que un editor escribió, p. ej. el título de un borrador, así que el riesgo es real,
+    no hipotético); `auditLogToCsv()`; `exportAuditLogCsv()` — valida filtros, exige `reason` (400
+    `reason_required` si falta o está en blanco, ANTES de tocar la BD), llama a `deps.auditTrail.list({…,
+    limit: MAX_AUDIT_EXPORT_ROWS, offset: 0})` (la misma función real de T16.a, sin ninguna dependencia
+    nueva), y deja la bitácora `audit.export` con el filtro + `row_count`/`total_matching` — nunca el CSV
+    en sí, que ya es idéntico a lo que `GET /audit-log` deja leer. Ruta nueva `GET /audit-log/export.csv`
+    en `handle()`: responde `text/csv; charset=utf-8` con `Content-Disposition: attachment` y cabeceras
+    `X-Row-Count`/`X-Export-Truncated` (si el filtro tenía más filas que el tope).
+  - `supabase/functions/admin-consent/handler_test.ts`: 10 pruebas nuevas — los tres roles exportan (200,
+    CSV, cabeceras correctas); sin rol → 403; sin `reason`/en blanco → 400 `reason_required`; filtro
+    inválido → 400 `invalid_input` (se valida antes del motivo); mismos filtros que T16.a (sin paginar);
+    escape de comillas/comas y neutralización de inyección de fórmulas (motivo y `entity_id` con `=`/`+`
+    al inicio quedan con apóstrofe antepuesto; coma/comilla de `entity` quedan escapadas dentro de un
+    campo entre comillas); la bitácora recibe exactamente 1 fila `audit.export` con el motivo y el
+    recuento filtrado; se pide `limit=5000, offset=0` sin paginar y `X-Export-Truncated: true` cuando el
+    total excede el tope; `X-Export-Truncated: false` cuando no; `POST` → 405.
+  - **Hallazgo real cerrado en el camino (no parte del diseño original, encontrado al revisar cómo llega
+    esta ruta al panel real):** `central-admin-app/server.js` solo reenvía `/api/privacy/fn/admin-consent/*`
+    si la ruta cumple `PRIVACY_FN_RE`, cuyo patrón de segmento (`[A-Za-z0-9_-]+`) no admite el punto literal
+    de `export.csv` — la función habría quedado construida y probada pero **inalcanzable desde el panel
+    real** (el proxy devuelve 404 antes de llegar a Supabase). Corregido con un patrón de segmento que
+    admite como máximo un punto interno, nunca al inicio (`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?`): sigue
+    rechazando `.`/`..` como segmento completo (no reintroduce recorrido de ruta hacia la URL real de
+    Supabase), y admite `export.csv`. `tests/privacy-fn-route.test.cjs` (nuevo, mismo patrón que
+    `tests/url-guard.test.cjs`: lee el literal del regex desde el código fuente sin arrancar el servidor
+    real —`require`-ar `server.js` directamente dispararía `server.listen()`) prueba 6 rutas permitidas y
+    6 bloqueadas, incluida `export.csv` y los intentos de recorrido de ruta.
+  - `TASKS.md`: T16.b `[x]`, con el detalle de diseño y del hallazgo del proxy.
+- **Pendiente de entorno (mismo patrón que D-14 #1, pero sobre `gates.sh`/Node, no sobre Postgres):** esta
+  sesión no pudo ejecutar `node tests/privacy-fn-route.test.cjs` directamente (pide aprobación que nadie
+  concedió, igual que cualquier comando fuera del patrón exacto `bash .claude/loops/consentimiento/gates.sh`)
+  ni cablearlo en `panel_unit()` de `gates.sh` (`Edit` denegado: "File is in a directory that is denied by
+  your permission settings", igual que D-14 #1 sobre `.claude/`). El regex se verificó a mano, trazando cada
+  caso de `ok`/`bad` del archivo de prueba contra el patrón exacto antes de confiar en él (documentado en el
+  propio archivo). Pendiente para una sesión sin esa restricción (igual que D-14 resolvió su bloqueo
+  equivalente): (1) correr `node tests/privacy-fn-route.test.cjs` una vez para confirmarlo con Node real,
+  y (2) añadir `&& node tests/privacy-fn-route.test.cjs` al final de la línea de `panel_unit()` en
+  `gates.sh`. Mientras tanto, el cambio de `server.js` SÍ quedó ejercitado indirectamente por `panel-unit`
+  (`npm test` de `central-admin-app` + `url-guard.test.cjs` + `shuffle-options.test.cjs`, ninguno tocando
+  `PRIVACY_FN_RE`) y por `panel-e2e` (arranca el `server.js` real; ninguna prueba Playwright llama todavía
+  a `/audit-log/export.csv` porque la UI del panel que lo consumirá es T24, sin empezar) — ambos en verde,
+  pero ninguno es la prueba dirigida que hace falta.
+- **Pruebas añadidas:** las 10 de `handler_test.ts` (T16.b) + las 12 de `tests/privacy-fn-route.test.cjs`
+  (sin ejecutar todavía por el bloqueo de entorno de arriba).
+- **Por qué no hizo falta ninguna prueba SQL ni cambio en `index.ts`:** `exportAuditLogCsv` reutiliza
+  `deps.auditTrail.list` (el mismo `SELECT` real contra `admin_audit_log` que ya prueba T16.a) y `deps.audit`
+  (el mismo `INSERT` real que usa cualquier otra acción del módulo, ya cubierto por los triggers de cadena
+  de T07/T08 contra Postgres real) — no hay ninguna restricción/trigger/RLS nueva que un fake pudiera
+  ocultar, mismo criterio que TEST-INT.d documentó para las rutas de solo lectura de `admin-consent`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only deno-check` y `--only deno-test` primero
+  (verde); corrida completa por defecto: typecheck-frontend, lint-frontend [14 = línea base],
+  unit-frontend, panel-unit, panel-e2e (334s, 2 perfiles por defecto, confirma que el cambio de
+  `server.js` no rompe el arranque real del panel), deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — todas OK; db-reset/e2e-local SKIP explícito (opt-in). Iteración 54, no múltiplo de 5:
+  `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna (se siguió el nombre de acción `audit.export` y el motivo obligatorio
+  tal como los fija el comentario de `admin_audit_log` en SPEC.md, no la tabla de acciones del panel).
+- Riesgos / pendientes detectados: `tests/privacy-fn-route.test.cjs` sin ejecutar ni cableado en
+  `gates.sh` (ver arriba); `AUDIT-IP-extra` (Iteración 53, sin cambios). Próxima tarea ejecutable en
+  orden: T16.c (evidencia: búsqueda por correo/ID + historial con IP enmascarada). T16.d-f sin empezar.
+- Porcentaje: sin cambio (T16 sigue con dos de sus seis subtareas cerradas; el contador estricto y el
+  ponderado se mueven cuando T16 completa, no por subtarea). **Estricto 17 de 28 = 60,7 %. Ponderado
+  ≈ 63,0 %** (sin cambio respecto a la Iteración 53).

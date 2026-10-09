@@ -371,6 +371,9 @@ const AuditLogQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 })
 
+// T16.b: mismos filtros que /audit-log, sin limit/offset (la exportación no pagina: ver MAX_AUDIT_EXPORT_ROWS).
+const AuditLogExportFilterSchema = AuditLogQuerySchema.omit({ limit: true, offset: true })
+
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
 const UpdateEmailTransportSchema = z.object({
   mode: z.enum(['resend', 'smtp']),
@@ -839,6 +842,69 @@ async function listAuditLog(deps: AdminConsentDeps, url: URL): Promise<{ items: 
   return await deps.auditTrail.list({ from, to, actorId: actor_id, action, limit, offset })
 }
 
+// T16.b (REQ-16): tope de filas por exportación — una exportación sin tope podría volcar toda la bitácora
+// histórica en una sola respuesta; si el filtro pide más, `exportAuditLogCsv` lo señala en `truncated`.
+const MAX_AUDIT_EXPORT_ROWS = 5000
+
+const AUDIT_LOG_CSV_COLUMNS = [
+  'id', 'actor_id', 'actor_email_hmac', 'actor_role', 'action', 'entity', 'entity_id', 'before', 'after', 'diff', 'reason', 'created_at',
+] as const
+
+/** Escapa un valor para una celda CSV y neutraliza inyección de fórmulas (OWASP): si el valor empieza con
+ *  `=`, `+`, `-` o `@`, Excel/Sheets podría interpretarlo como fórmula al abrir el archivo exportado — se
+ *  le antepone un apóstrofe, igual que hace Google Sheets al importar texto ajeno. */
+function csvCell(value: unknown): string {
+  let text = value === null || value === undefined ? '' : typeof value === 'string' ? value : JSON.stringify(value)
+  if (/^[=+\-@]/.test(text)) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function auditLogToCsv(rows: AuditLogRow[]): string {
+  const lines = [AUDIT_LOG_CSV_COLUMNS.join(',')]
+  for (const row of rows) {
+    lines.push(AUDIT_LOG_CSV_COLUMNS.map((key) => csvCell((row as unknown as Record<string, unknown>)[key])).join(','))
+  }
+  return lines.map((line) => `${line}\r\n`).join('')
+}
+
+/** T16.b (REQ-16): misma lectura que `listAuditLog`, sin paginar (hasta `MAX_AUDIT_EXPORT_ROWS`), con
+ *  `reason` obligatorio (SPEC: "reason… obligatorio para… export") porque el resultado sale del sistema
+ *  como archivo. La propia exportación queda en la bitácora (`audit.export`) con el filtro y el recuento
+ *  de filas — nunca el contenido exportado, que ya es idéntico a lo que `GET /audit-log` deja leer. */
+async function exportAuditLogCsv(
+  deps: AdminConsentDeps,
+  admin: Admin,
+  url: URL,
+): Promise<{ csv: string; rowCount: number; truncated: boolean }> {
+  const query: Record<string, string> = {}
+  for (const key of ['from', 'to', 'actor_id', 'action']) {
+    const value = url.searchParams.get(key)
+    if (value !== null) query[key] = value
+  }
+  const parsedFilter = AuditLogExportFilterSchema.safeParse(query)
+  if (!parsedFilter.success) throw new ApiError(400, 'invalid_input')
+
+  const parsedReason = ReasonSchema.safeParse({ reason: url.searchParams.get('reason') ?? '' })
+  if (!parsedReason.success) throw new ApiError(400, 'reason_required')
+
+  const { from, to, actor_id, action } = parsedFilter.data
+  const { items, total } = await deps.auditTrail.list({
+    from, to, actorId: actor_id, action, limit: MAX_AUDIT_EXPORT_ROWS, offset: 0,
+  })
+  const csv = auditLogToCsv(items)
+
+  await auditLog(deps, admin, {
+    action: 'audit.export',
+    entity: 'admin_audit_log',
+    entity_id: null,
+    before: null,
+    after: { from: from ?? null, to: to ?? null, actor_id: actor_id ?? null, action: action ?? null, row_count: items.length, total_matching: total },
+    reason: parsedReason.data.reason,
+  })
+
+  return { csv, rowCount: items.length, truncated: total > items.length }
+}
+
 const EDITOR_ROLES = ['privacy_editor', 'privacy_admin'] as const
 const ADMIN_ONLY = ['privacy_admin'] as const
 
@@ -939,6 +1005,22 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
       await requireRole(req, PRIVACY_ROLES, deps.guard)
       const result = await listAuditLog(deps, new URL(req.url))
       return json(200, result)
+    }
+
+    if (path === '/audit-log/export.csv') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, PRIVACY_ROLES, deps.guard)
+      const { csv, rowCount, truncated } = await exportAuditLogCsv(deps, admin, new URL(req.url))
+      return new Response(csv, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="audit-log-export.csv"',
+          'Cache-Control': 'no-store',
+          'X-Row-Count': String(rowCount),
+          'X-Export-Truncated': String(truncated),
+        },
+      })
     }
 
     if (path === '/documents') {

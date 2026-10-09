@@ -44,7 +44,9 @@ const PRIVACY_AUTH_ROUTES = [
   ['POST', /^\/factors$/],
   ['POST', /^\/factors\/[0-9a-f-]{36}\/(challenge|verify)$/],
 ];
-const PRIVACY_FN_RE = /^\/fn\/admin-consent(\/[A-Za-z0-9_-]+)*(\?[A-Za-z0-9_=&.-]*)?$/;
+// T16.b: cada segmento admite como máximo un punto interno (p. ej. "export.csv"), nunca al inicio — así
+// "." y ".." (que sí romperían la ruta reenviada a Supabase) nunca pasan como segmento válido.
+const PRIVACY_FN_RE = /^\/fn\/admin-consent(\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?)*(\?[A-Za-z0-9_=&.-]*)?$/;
 const JWT_SHAPE_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 // script-src has no 'unsafe-inline': inline event handlers were replaced by data-act delegation (a real XSS sink).
