@@ -16,6 +16,7 @@ import {
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
+  type DsrSummaryRow,
   type EmailOutboxRow,
   type EmailTransportRow,
   type EmailVerificationRow,
@@ -144,6 +145,18 @@ serve((req) =>
             ip: await decryptConsentColumn(row, 'ip_ciphertext'),
           })),
         )
+      },
+      // T16.d.2 (REQ-17): a diferencia de `consent_records` (buscado por `user_ref_hmac`), aquí
+      // `data_subject_requests.user_id` es una FK directa — sin HMAC de por medio. Solo metadatos del
+      // caso, nunca `email_ciphertext`/`details_ciphertext`/`resolution_note_ciphertext` ni su IP.
+      listDsrByUserId: async (userId) => {
+        const { data, error } = await db
+          .from('data_subject_requests')
+          .select('case_number, request_type, channel, status, received_at, due_at, resolved_at')
+          .eq('user_id', userId)
+          .order('received_at', { ascending: false })
+        if (error) throw new Error(`data_subject_requests: ${error.code ?? 'error'}`)
+        return (data ?? []) as DsrSummaryRow[]
       },
     },
     documents: {

@@ -398,14 +398,27 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       - **Aceptación:** solo `privacy_admin` (editor/auditor → 403); sin motivo → 400 `reason_required`;
         `user_id` inválido → 400 `invalid_input`; camino feliz devuelve IP real (no enmascarada) + bitácora con
         actor, motivo y `row_count`, nunca la IP; método distinto de `POST` → 405.
-    - [ ] **T16.d.2 — Exportación de expediente de un titular (JSON y PDF simple)** (REQ-17)
-      - Reutiliza `evidence.listByUserId` (IP enmascarada, sin exigir "Revelar IP" primero) + lectura de
-        `data_subject_requests` del mismo titular; genera un JSON descargable y un PDF simple (sin librería
-        pesada: texto plano maquetado, mismo nivel que el CSV de T16.b). Registrado en bitácora
-        (`evidence.export_dossier`) con motivo obligatorio, igual que T16.b.
-      - **Aceptación:** solo `privacy_admin` (mismo candado que revelar IP, no los tres roles del módulo);
-        sin motivo → 400; JSON y PDF con el mismo contenido; bitácora con actor, motivo y recuento; método
-        distinto → 405.
+    - [x] **T16.d.2 — Exportación de expediente de un titular (JSON y PDF simple)** (REQ-17) (hecha 2026-10-09, iteración 57)
+      - **Estado:** cerrada. `GET /evidence/export.json` y `GET /evidence/export.pdf` (solo `privacy_admin`, `user_id`
+        + `reason` por querystring, igual que T16.b): ambas construyen el mismo `EvidenceDossier` (`exportDossier`
+        en `handler.ts`) reutilizando `evidence.listByUserId` (IP enmascarada, sin exigir "Revelar IP") +
+        `evidence.listDsrByUserId` (nuevo en `EvidenceDeps`/`index.ts`: `data_subject_requests` por `user_id` —FK
+        directa, sin HMAC—, solo `case_number/request_type/channel/status/received_at/due_at/resolved_at`, nunca
+        ciphertext ni IP del solicitante). El JSON serializa el dossier tal cual; el PDF sale del mismo objeto vía
+        `dossierToPdfLines` + `_shared/pdf-simple.ts` (nuevo: generador de PDF mínimo hecho a mano —cabecera, 1
+        fuente Courier, texto plano paginado, xref/trailer— sin librería pesada, mismo nivel de esfuerzo que el CSV
+        de T16.b; transcribe tildes/eñes a ASCII, nunca corrompe el PDF con un carácter fuera de rango). Bitácora
+        `evidence.export_dossier` (entidad `consent_records`, `entity_id = user_id`) con `{consent_count, dsr_count}`,
+        nunca el contenido del expediente. 13 pruebas nuevas en `handler_test.ts` + 7 en `pdf-simple_test.ts`
+        (cabecera/trailer válidos, paginación con >LINES_PER_PAGE líneas, escape de paréntesis/barra invertida,
+        transliteración de acentos, offsets de xref correctos).
+      - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** mismo razonamiento que T16.c/
+        T16.d.1 — solo lectura (`SELECT` sobre `consent_records`/`data_subject_requests`, sin ningún
+        `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar); el único `INSERT` nuevo es la fila de
+        bitácora, ya cubierta por las pruebas append-only de T08.
+      - **Aceptación:** solo `privacy_admin` (editor/auditor → 403); sin motivo → 400 `reason_required`; `user_id`
+        ausente/inválido → 400 `invalid_input` (antes del motivo); JSON y PDF con el mismo contenido (mismos
+        identificadores presentes en ambos); bitácora con actor, motivo y recuento; método distinto de `GET` → 405.
   - [ ] **T16.e — Solicitudes: cambio de estado (envuelve `update_data_subject_request_status`, 078) + listado con semáforo** (REQ-11, REQ-16)
   - [ ] **T16.f — `verify_chains`: envuelve `verify_consent_chain()`/`verify_audit_chain()`** (REQ-18)
 

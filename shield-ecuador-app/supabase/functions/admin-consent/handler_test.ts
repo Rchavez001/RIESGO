@@ -20,6 +20,7 @@ import {
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
   type DocumentsDeps,
+  type DsrSummaryRow,
   type EmailDeps,
   type EmailOutboxDeps,
   type EmailOutboxRow,
@@ -217,6 +218,7 @@ function makeEvidenceStore(opts: {
   usersByEmailHmac?: Record<string, string>
   itemsByUserId?: Record<string, EvidenceRow[]>
   revealedByUserId?: Record<string, RevealedEvidenceRow[]>
+  dsrByUserId?: Record<string, DsrSummaryRow[]>
 } = {}): { evidence: EvidenceDeps } {
   const evidence: EvidenceDeps = {
     findUserIdByEmailHmac: (emailHmac) => Promise.resolve(opts.usersByEmailHmac?.[emailHmac] ?? null),
@@ -224,6 +226,8 @@ function makeEvidenceStore(opts: {
     // T16.d.1: mismo historial que `listByUserId`, pero con la IP real (sin `maskIp`) — ningún fake
     // descifra nada de verdad (ese paso vive en `index.ts`); aquí ya llega en forma de `RevealedEvidenceRow`.
     listByUserIdRevealed: (userId) => Promise.resolve(opts.revealedByUserId?.[userId] ?? []),
+    // T16.d.2: solicitudes de derechos del mismo titular, ya en forma de `DsrSummaryRow` (sin ciphertext).
+    listDsrByUserId: (userId) => Promise.resolve(opts.dsrByUserId?.[userId] ?? []),
   }
   return { evidence }
 }
@@ -1637,4 +1641,143 @@ Deno.test('POST /evidence/reveal-ip: privacy_editor/privacy_auditor → 403 (sol
 Deno.test('GET /evidence/reveal-ip → 405', async () => {
   const res = await handle(req(await sign(claims()), '/evidence/reveal-ip', 'GET'), fullDeps({ roles: ['privacy_admin'] }))
   assertEquals(res.status, 405)
+})
+
+// ── T16.d.2: GET /evidence/export.json y /evidence/export.pdf (REQ-17) ─────────────────────────────
+
+const dsrRow = (over: Partial<DsrSummaryRow> = {}): DsrSummaryRow => ({
+  case_number: 'CD-2026-000123', request_type: 'acceso', channel: 'app', status: 'recibida',
+  received_at: '2026-10-01T00:00:00Z', due_at: '2026-10-16T00:00:00Z', resolved_at: null,
+  ...over,
+})
+
+function exportDossierUrl(format: 'json' | 'pdf', query: string): string {
+  return `/evidence/export.${format}?${query}`
+}
+
+Deno.test('GET /evidence/export.json: privacy_admin con motivo → 200, JSON descargable con historial + solicitudes', async () => {
+  const { evidence } = makeEvidenceStore({
+    itemsByUserId: { [EDITOR_ID]: [evidenceRow()] },
+    dsrByUserId: { [EDITOR_ID]: [dsrRow()] },
+  })
+  const res = await handle(
+    req(await sign(claims()), exportDossierUrl('json', `user_id=${EDITOR_ID}&reason=Solicitud+de+acceso`), 'GET'),
+    fullDeps({ roles: ['privacy_admin'], evidence }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals(res.headers.get('Content-Type'), 'application/json; charset=utf-8')
+  assertEquals(res.headers.get('Content-Disposition'), 'attachment; filename="expediente-titular.json"')
+  const body = await res.json()
+  assertEquals(body.user_id, EDITOR_ID)
+  assertEquals(body.consent_history.length, 1)
+  assertEquals(body.consent_history[0].ip_masked, '192.0.2.xxx')
+  assertEquals(body.data_subject_requests.length, 1)
+  assertEquals(body.data_subject_requests[0].case_number, 'CD-2026-000123')
+  assertExists(body.generated_at)
+})
+
+Deno.test('GET /evidence/export.pdf: privacy_admin con motivo → 200, PDF con el mismo contenido que el JSON', async () => {
+  const { evidence } = makeEvidenceStore({
+    itemsByUserId: { [EDITOR_ID]: [evidenceRow()] },
+    dsrByUserId: { [EDITOR_ID]: [dsrRow()] },
+  })
+  const res = await handle(
+    req(await sign(claims()), exportDossierUrl('pdf', `user_id=${EDITOR_ID}&reason=Solicitud+de+acceso`), 'GET'),
+    fullDeps({ roles: ['privacy_admin'], evidence }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals(res.headers.get('Content-Type'), 'application/pdf')
+  assertEquals(res.headers.get('Content-Disposition'), 'attachment; filename="expediente-titular.pdf"')
+  const pdfText = new TextDecoder().decode(await res.arrayBuffer())
+  assert(pdfText.startsWith('%PDF-1.4'))
+  assert(pdfText.includes(EDITOR_ID))
+  assert(pdfText.includes('registro_aprendizaje'))
+  assert(pdfText.includes('192.0.2.xxx'))
+  assert(pdfText.includes('CD-2026-000123'))
+  assert(pdfText.includes('acceso'))
+})
+
+Deno.test('GET /evidence/export.json y export.pdf: los tres roles del módulo NO pueden exportar — solo privacy_admin', async () => {
+  for (const format of ['json', 'pdf'] as const) {
+    for (const role of ['privacy_editor', 'privacy_auditor']) {
+      const res = await handle(
+        req(await sign(claims()), exportDossierUrl(format, `user_id=${EDITOR_ID}&reason=motivo`), 'GET'),
+        fullDeps({ roles: [role] }),
+      )
+      assertEquals(res.status, 403, `${format}/${role}`)
+    }
+  }
+})
+
+Deno.test('GET /evidence/export.json y export.pdf: sin motivo (o en blanco) → 400 reason_required, sin bitácora', async () => {
+  for (const format of ['json', 'pdf'] as const) {
+    for (const qs of [`user_id=${EDITOR_ID}`, `user_id=${EDITOR_ID}&reason=%20%20`]) {
+      const audit: AuditEntry[] = []
+      const res = await handle(
+        req(await sign(claims()), exportDossierUrl(format, qs), 'GET'),
+        fullDeps({ roles: ['privacy_admin'], audit }),
+      )
+      assertEquals(res.status, 400, `${format}:${qs}`)
+      assertEquals((await res.json()).error, 'reason_required', `${format}:${qs}`)
+      assertEquals(audit.length, 0, `${format}:${qs}`)
+    }
+  }
+})
+
+Deno.test('GET /evidence/export.json y export.pdf: user_id ausente o inválido → 400 invalid_input (antes de exigir el motivo)', async () => {
+  for (const format of ['json', 'pdf'] as const) {
+    for (const qs of ['reason=motivo', 'user_id=no-es-un-uuid&reason=motivo']) {
+      const res = await handle(
+        req(await sign(claims()), exportDossierUrl(format, qs), 'GET'),
+        fullDeps({ roles: ['privacy_admin'] }),
+      )
+      assertEquals(res.status, 400, `${format}:${qs}`)
+      assertEquals((await res.json()).error, 'invalid_input', `${format}:${qs}`)
+    }
+  }
+})
+
+Deno.test('GET /evidence/export.json: sin coincidencias → 200 con listas vacías, pero igual deja bitácora (motivo consumido)', async () => {
+  const audit: AuditEntry[] = []
+  const res = await handle(
+    req(await sign(claims()), exportDossierUrl('json', `user_id=${EDITOR_ID}&reason=Verificacion+de+rutina`), 'GET'),
+    fullDeps({ roles: ['privacy_admin'], audit }),
+  )
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.consent_history, [])
+  assertEquals(body.data_subject_requests, [])
+  assertEquals(audit.length, 1)
+  assertEquals(audit[0].after, { consent_count: 0, dsr_count: 0 })
+})
+
+Deno.test('GET /evidence/export.json: la propia exportación queda en la bitácora (actor, motivo y recuento, nunca el contenido)', async () => {
+  const audit: AuditEntry[] = []
+  const { evidence } = makeEvidenceStore({
+    itemsByUserId: { [EDITOR_ID]: [evidenceRow(), evidenceRow({ purpose_code: 'novedades', decision: 'denied' })] },
+    dsrByUserId: { [EDITOR_ID]: [dsrRow()] },
+  })
+  const res = await handle(
+    req(await sign(claims()), exportDossierUrl('json', `user_id=${EDITOR_ID}&reason=Caso+2026-00099`), 'GET'),
+    fullDeps({ roles: ['privacy_admin'], evidence, audit }),
+  )
+  assertEquals(res.status, 200)
+  await res.json()
+  assertEquals(audit.length, 1)
+  assertEquals(audit[0].action, 'evidence.export_dossier')
+  assertEquals(audit[0].entity, 'consent_records')
+  assertEquals(audit[0].entity_id, EDITOR_ID)
+  assertEquals(audit[0].actor_id, ADMIN_ID)
+  assertEquals(audit[0].reason, 'Caso 2026-00099')
+  assertEquals(audit[0].after, { consent_count: 2, dsr_count: 1 })
+})
+
+Deno.test('POST /evidence/export.json y export.pdf → 405', async () => {
+  for (const format of ['json', 'pdf'] as const) {
+    const res = await handle(
+      req(await sign(claims()), exportDossierUrl(format, `user_id=${EDITOR_ID}&reason=motivo`), 'POST'),
+      fullDeps({ roles: ['privacy_admin'] }),
+    )
+    assertEquals(res.status, 405, format)
+  }
 })

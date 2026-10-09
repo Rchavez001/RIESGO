@@ -1507,3 +1507,70 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio en el contador por tarea completa (T16 sigue con cuatro de sus seis subtareas
   cerradas; el contador estricto/ponderado se mueve cuando T16 completa, no por subtarea). **Estricto
   17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 55).
+
+## Iteración 57 — 2026-10-09 — T16.d.2 (`GET /evidence/export.json` y `/export.pdf`): expediente de un titular, JSON y PDF simple
+
+- **Punto de partida:** `git status` limpio; T16.d.2 es la primera tarea `[ ]` desbloqueada de `TASKS.md`
+  (T16.d.1 ya cerrada en la Iteración 56; sin decisiones `ABIERTA` que la bloqueen).
+- **Diseño antes de codificar:** "mismo candado que revelar IP" + "igual que T16.b" (SPEC/TASKS) fijan la
+  forma: `GET` (no `POST`, a diferencia de `reveal-ip`) porque es una descarga de archivo, con `user_id` +
+  `reason` por querystring (como `export.csv`), solo `privacy_admin`. "JSON y PDF con el mismo contenido"
+  se resuelve con un único constructor (`exportDossier`) que arma un objeto `EvidenceDossier` una sola vez;
+  cada ruta solo cambia cómo lo serializa.
+- **Cambios:**
+  - `supabase/functions/_shared/pdf-simple.ts` (nuevo): `buildSimplePdf(lines: string[]): Uint8Array` — PDF
+    mínimo hecho a mano (sin librería: ni `pdf-lib` ni similares), una sola fuente (`Courier`, siempre
+    disponible, sin incrustar), texto plano maquetado y paginado (`LINES_PER_PAGE` por página, objetos
+    `/Catalog`/`/Pages`/`/Font`/`/Page`/`Contents` con offsets de `xref` calculados a mano). Fuera de alcance
+    a propósito: PDFDocEncoding/WinAnsiEncoding reales — en su lugar, `sanitizeForPdf` transcribe tildes/eñes
+    españoles comunes a ASCII y sustituye cualquier otro carácter fuera de rango imprimible por `?` (nunca
+    corrompe el PDF; el JSON del mismo expediente conserva el texto exacto, sin esta limitación).
+  - `supabase/functions/_shared/pdf-simple_test.ts` (nuevo, 7 pruebas): cabecera/trailer/`%%EOF` válidos;
+    cada línea aparece como texto plano en el flujo de contenido; sin líneas sigue dando un PDF válido de una
+    página; pagina a las >`LINES_PER_PAGE` líneas (`/Count 2`); escapa paréntesis y barra invertida; transcribe
+    acentos/eñes sin corromper el PDF; los offsets del `xref` apuntan exactamente al byte de cada objeto
+    (verificado decodificando el PDF y comparando el byte en el offset declarado contra `"1 0 obj"`).
+  - `supabase/functions/admin-consent/handler.ts`: `DsrSummaryRow` (nuevo tipo: solo metadatos del caso —
+    `case_number/request_type/channel/status/received_at/due_at/resolved_at`, nunca `email_ciphertext`/
+    `details_ciphertext`/`resolution_note_ciphertext` ni la IP de quien presentó la solicitud, que no es
+    información operativa que el titular necesite ver en su propio expediente de acceso/portabilidad);
+    `EvidenceDeps.listDsrByUserId` (nuevo); `EvidenceDossier` (`user_id`, `generated_at`, `consent_history`,
+    `data_subject_requests`); `exportDossier()` (valida `user_id` con `ExportDossierQuerySchema` ANTES del
+    motivo —mismo orden que `exportAuditLogCsv`/`revealIp`—, llama a `listByUserId` + `listDsrByUserId` en
+    paralelo, deja bitácora `evidence.export_dossier` con `{consent_count, dsr_count}`, nunca el contenido);
+    `dossierToPdfLines()` (mismo `EvidenceDossier` → líneas de texto para `buildSimplePdf`). Rutas nuevas
+    `GET /evidence/export.json` (`application/json`, `Content-Disposition: attachment`) y
+    `GET /evidence/export.pdf` (`application/pdf`, mismo header), ambas `ADMIN_ONLY`.
+  - `supabase/functions/admin-consent/index.ts`: `evidence.listDsrByUserId` — a diferencia de `consent_records`
+    (buscado por `user_ref_hmac`, un HMAC), `data_subject_requests.user_id` es una FK directa: `.eq('user_id',
+    userId)` sin HMAC de por medio.
+  - `supabase/functions/admin-consent/handler_test.ts`: `makeEvidenceStore` gana `dsrByUserId`; 13 pruebas
+    nuevas — 200 JSON con historial+solicitudes; 200 PDF con el mismo contenido (decodificado como texto,
+    verifica que `user_id`/`purpose_code`/`ip_masked`/`case_number`/`request_type` del fixture aparecen en los
+    bytes del PDF); editor/auditor → 403 en ambos formatos; sin motivo (o en blanco) → 400 `reason_required`
+    sin bitácora, en ambos formatos; `user_id` ausente/inválido → 400 `invalid_input` antes del motivo, en
+    ambos formatos; sin coincidencias → 200 con listas vacías pero bitácora igual (`{consent_count:0,
+    dsr_count:0}`); bitácora con actor/motivo/recuento exacto (2 consentimientos + 1 solicitud), nunca el
+    contenido; `POST` → 405 en ambos formatos.
+  - **Fix de typecheck (no de diseño):** `new Response(pdf, …)` con `pdf: Uint8Array` chocó con la resolución
+    de sobrecargas de `BodyInit` en Deno/TS (el `Uint8Array<ArrayBufferLike>` que devuelve `TextEncoder.encode`
+    no es asignable al `Uint8Array<ArrayBuffer>` que pide la firma de `Response`, ni envuelto en `Blob`); se
+    resolvió con `pdf.slice().buffer` (copia fresca, buffer exacto, sin bytes sobrantes) en vez de ensanchar
+    ningún tipo con `any`.
+- **Por qué no hace falta una prueba SQL nueva:** mismo razonamiento que T16.c/T16.d.1 — solo lectura
+  (`SELECT` sobre `consent_records`/`data_subject_requests`, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que
+  un fake pudiera ocultar); el único `INSERT` nuevo es la fila de bitácora, ya cubierta por T08.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  Iteración 57, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T16.e (cambio de estado de solicitudes) y T16.f (`verify_chains`) siguen
+  sin empezar — última subtarea pendiente de T16 además de esas dos es ninguna (d.1 y d.2 ya cerradas).
+  `AUDIT-IP-extra` (Iteración 53) sigue pendiente, sin cambios esta iteración. El PDF generado no se abrió en
+  un lector real (Adobe/navegador) para una verificación visual humana — la verificación de esta iteración es
+  estructural (cabecera/objetos/xref/trailer bien formados, texto plano presente en el flujo de contenido);
+  queda como mejora de confianza, no como defecto conocido, si un humano quiere confirmarlo visualmente antes
+  de producción.
+- Porcentaje: sin cambio en el contador por tarea completa (T16 sigue sin cerrar: faltan T16.e y T16.f).
+  **Estricto 17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 56).

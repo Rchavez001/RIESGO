@@ -10,6 +10,7 @@ import { AuthError, PRIVACY_ROLES, requireRole, type AuthGuardOptions, type Veri
 import { renderConsent, sha256Hex, type PrivacySettingsForRender } from '../_shared/consent-render.ts'
 import { buildEmailVerificationCodeEmail } from '../_shared/email/templates.ts'
 import type { EmailMessage, EmailSendResult } from '../_shared/email/types.ts'
+import { buildSimplePdf } from '../_shared/pdf-simple.ts'
 import { z } from 'https://esm.sh/zod@3.23.8'
 
 export interface AuditEntry {
@@ -285,6 +286,20 @@ export interface RevealedEvidenceRow extends Omit<EvidenceRow, 'ip_masked'> {
   ip: string | null
 }
 
+/** Fila de `data_subject_requests` tal como entra en el expediente de un titular (T16.d.2, REQ-17):
+ *  solo metadatos del caso — nunca `email_ciphertext`/`details_ciphertext`/`resolution_note_ciphertext`
+ *  ni la IP de quien la presentó (eso es información operativa interna, no parte de lo que se le
+ *  devuelve al titular en su propio expediente de acceso/portabilidad). */
+export interface DsrSummaryRow {
+  case_number: string
+  request_type: string
+  channel: string
+  status: string
+  received_at: string
+  due_at: string
+  resolved_at: string | null
+}
+
 export interface EvidenceDeps {
   /** HMAC con la misma clave de búsqueda que `users.email_lookup_hmac` (correo ya normalizado,
    *  LOOKUP_HMAC_KEY_B64) — nunca `ILIKE` sobre una columna cifrada (REQ-17). `null` si ningún
@@ -294,6 +309,8 @@ export interface EvidenceDeps {
   listByUserId: (userId: string) => Promise<EvidenceRow[]>
   /** T16.d.1 (REQ-17): mismo historial, con la IP real — solo la llama `revealIp`, nunca `searchEvidence`. */
   listByUserIdRevealed: (userId: string) => Promise<RevealedEvidenceRow[]>
+  /** T16.d.2 (REQ-17): solicitudes de derechos del mismo titular, más reciente primero. */
+  listDsrByUserId: (userId: string) => Promise<DsrSummaryRow[]>
 }
 
 export interface AdminConsentDeps {
@@ -418,6 +435,10 @@ const EvidenceSearchSchema = z
 // `GET /evidence`), nunca por correo — evita repetir la ambigüedad de `EvidenceSearchSchema` en una
 // acción que además exige motivo.
 const RevealIpUserSchema = z.object({ user_id: z.string().uuid() })
+
+// T16.d.2 (REQ-17): mismo identificador que "Revelar IP" (user_id directo, ya resuelto en el panel
+// desde `GET /evidence`), por querystring como T16.b (es una descarga, no una acción de panel en vivo).
+const ExportDossierQuerySchema = z.object({ user_id: z.string().uuid() })
 
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
 const UpdateEmailTransportSchema = z.object({
@@ -932,6 +953,66 @@ async function revealIp(admin: Admin, deps: AdminConsentDeps, body: unknown): Pr
   return { user_id: userId, items }
 }
 
+/** T16.d.2 (REQ-17): expediente de un titular — historial de consentimiento (IP enmascarada, igual que
+ *  `GET /evidence`, sin exigir "Revelar IP" primero) + sus solicitudes de derechos. Mismo contenido para
+ *  JSON (`exportDossierJson`) y PDF (`dossierToPdfLines`): ambos formatos salen de este mismo objeto. */
+export interface EvidenceDossier {
+  user_id: string
+  generated_at: string
+  consent_history: EvidenceRow[]
+  data_subject_requests: DsrSummaryRow[]
+}
+
+async function exportDossier(admin: Admin, deps: AdminConsentDeps, url: URL): Promise<EvidenceDossier> {
+  const query: Record<string, string> = {}
+  for (const key of ['user_id', 'reason']) {
+    const value = url.searchParams.get(key)
+    if (value !== null) query[key] = value
+  }
+  const parsedUser = ExportDossierQuerySchema.safeParse(query)
+  if (!parsedUser.success) throw new ApiError(400, 'invalid_input')
+  const parsedReason = ReasonSchema.safeParse({ reason: query.reason ?? '' })
+  if (!parsedReason.success) throw new ApiError(400, 'reason_required')
+
+  const { user_id: userId } = parsedUser.data
+  const [consentHistory, dataSubjectRequests] = await Promise.all([
+    deps.evidence.listByUserId(userId),
+    deps.evidence.listDsrByUserId(userId),
+  ])
+
+  await auditLog(deps, admin, {
+    action: 'evidence.export_dossier',
+    entity: 'consent_records',
+    entity_id: userId,
+    before: null,
+    after: { consent_count: consentHistory.length, dsr_count: dataSubjectRequests.length },
+    reason: parsedReason.data.reason,
+  })
+
+  return { user_id: userId, generated_at: new Date().toISOString(), consent_history: consentHistory, data_subject_requests: dataSubjectRequests }
+}
+
+/** Mismo contenido que el JSON de `exportDossier`, en líneas de texto plano maquetado para `buildSimplePdf`. */
+function dossierToPdfLines(dossier: EvidenceDossier): string[] {
+  const lines: string[] = [
+    'Expediente del titular (REQ-17)',
+    `user_id: ${dossier.user_id}`,
+    `generado: ${dossier.generated_at}`,
+    '',
+    'Historial de consentimiento:',
+  ]
+  if (dossier.consent_history.length === 0) lines.push('  (sin registros)')
+  for (const row of dossier.consent_history) {
+    lines.push(`  - ${row.server_ts} | ${row.purpose_code} | ${row.decision} | v${row.document_version} | ${row.channel} | IP ${row.ip_masked ?? 'n/d'}`)
+  }
+  lines.push('', 'Solicitudes de derechos:')
+  if (dossier.data_subject_requests.length === 0) lines.push('  (sin solicitudes)')
+  for (const r of dossier.data_subject_requests) {
+    lines.push(`  - ${r.case_number} | ${r.request_type} | ${r.status} | recibida ${r.received_at} | vence ${r.due_at} | resuelta ${r.resolved_at ?? 'n/d'}`)
+  }
+  return lines
+}
+
 // T16.b (REQ-16): tope de filas por exportación — una exportación sin tope podría volcar toda la bitácora
 // histórica en una sola respuesta; si el filtro pide más, `exportAuditLogCsv` lo señala en `truncated`.
 const MAX_AUDIT_EXPORT_ROWS = 5000
@@ -1126,6 +1207,35 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
       const body = await req.json().catch(() => ({}))
       const result = await revealIp(admin, deps, body)
       return json(200, result)
+    }
+
+    if (path === '/evidence/export.json') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+      const dossier = await exportDossier(admin, deps, new URL(req.url))
+      return new Response(JSON.stringify(dossier, null, 2), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="expediente-titular.json"',
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    if (path === '/evidence/export.pdf') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+      const dossier = await exportDossier(admin, deps, new URL(req.url))
+      const pdf = buildSimplePdf(dossierToPdfLines(dossier))
+      return new Response(pdf.slice().buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': 'attachment; filename="expediente-titular.pdf"',
+          'Cache-Control': 'no-store',
+        },
+      })
     }
 
     if (path === '/documents') {
