@@ -5,7 +5,8 @@ import { buildAad, decryptPii, encryptPii, getActiveKeyVersion, hmacLookup, type
 import { getResendApiKey, ResendSender } from '../_shared/email/resend-sender.ts'
 import { SmtpSender } from '../_shared/email/smtp-sender.ts'
 import { checkRateLimit } from '../_shared/rate-limit.ts'
-import { decryptDsrColumn } from '../_shared/consent-evidence.ts'
+import { decryptConsentColumn, decryptDsrColumn } from '../_shared/consent-evidence.ts'
+import { maskIp } from '../_shared/client-ip.ts'
 import { buildDelegateNoticeEmail, buildSubjectAcknowledgementEmail, type DataSubjectRequestType } from '../_shared/email/templates.ts'
 import {
   ApiError,
@@ -18,6 +19,7 @@ import {
   type EmailOutboxRow,
   type EmailTransportRow,
   type EmailVerificationRow,
+  type EvidenceRow,
   type NewEmailTransportInput,
   type NewEmailVerificationInput,
   type NewPrivacySettingsInput,
@@ -66,6 +68,49 @@ serve((req) =>
           .range(filter.offset, filter.offset + filter.limit - 1)
         if (error) throw new Error(`admin_audit_log: ${error.code ?? 'error'}`)
         return { items: (data ?? []) as AuditLogRow[], total: count ?? 0 }
+      },
+    },
+    // T16.c (REQ-17): el correo solo se compara por HMAC (nunca `ILIKE` sobre `email_encrypted`); la IP
+    // se descifra aquí mismo y se enmascara ANTES de salir de este resolutor — `handler.ts` nunca ve el
+    // texto cifrado ni la IP en claro. "Revelar IP" (T16.d) es una ruta distinta.
+    evidence: {
+      findUserIdByEmailHmac: async (emailHmac) => {
+        const { data, error } = await db.from('users').select('id').eq('email_lookup_hmac', emailHmac).maybeSingle()
+        if (error) throw new Error(`users: ${error.code ?? 'error'}`)
+        return data?.id ?? null
+      },
+      listByUserId: async (userId) => {
+        const userRefHmac = await hmacLookup(userId, 'LOOKUP_HMAC_KEY_B64')
+        const { data, error } = await db
+          .from('consent_records')
+          .select('document_version, purpose_code, decision, channel, server_ts, rendered_sha256, ip_ciphertext, user_ref_hmac')
+          .eq('user_ref_hmac', userRefHmac)
+          .order('server_ts', { ascending: false })
+        if (error) throw new Error(`consent_records: ${error.code ?? 'error'}`)
+        const rows = (data ?? []) as Array<{
+          document_version: string
+          purpose_code: string
+          decision: 'granted' | 'denied' | 'revoked'
+          channel: string
+          server_ts: string
+          rendered_sha256: string
+          ip_ciphertext: EncryptedPayload | null
+          user_ref_hmac: string
+        }>
+        return Promise.all(
+          rows.map(async (row): Promise<EvidenceRow> => {
+            const ip = await decryptConsentColumn(row, 'ip_ciphertext')
+            return {
+              document_version: row.document_version,
+              purpose_code: row.purpose_code,
+              decision: row.decision,
+              channel: row.channel,
+              server_ts: row.server_ts,
+              rendered_sha256: row.rendered_sha256,
+              ip_masked: ip ? maskIp(ip) : null,
+            }
+          }),
+        )
       },
     },
     documents: {

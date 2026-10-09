@@ -10,7 +10,7 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Fase 1 (aviso + registro) escrita y probada en local, **no desplegada**: falta publicar el aviso real
   y no hay ruta `/registro` en el `App.tsx` versionado (parche en `PLAN_RAMAS.md`).
 - Fases 2 (parcial: T04,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15 cerradas; TEST-INT a-e cerrada; T16
-  parcial: T16.a cerrada, T16.b-f sin empezar), 3, 4 y 5: sin desplegar.
+  parcial: T16.a-c cerradas, T16.d-f sin empezar), 3, 4 y 5: sin desplegar.
 - `081 es la migración más urgente` del lote: sin ella, funciones con `search_path` acotado fallan al
   llamar a `digest()` (pgcrypto vive en `extensions`, no en `public`, en Supabase real).
 
@@ -1413,3 +1413,59 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio (T16 sigue con dos de sus seis subtareas cerradas; el contador estricto y el
   ponderado se mueven cuando T16 completa, no por subtarea). **Estricto 17 de 28 = 60,7 %. Ponderado
   ≈ 63,0 %** (sin cambio respecto a la Iteración 53).
+
+## Iteración 55 — 2026-10-09 — T16.c (`GET /evidence`): búsqueda por correo (HMAC)/user_id + historial con IP enmascarada
+- **Punto de partida:** primera tarea ejecutable de TASKS.md es T16.c (T16.a/b cerradas; T16.d-f siguen sin
+  empezar, sin bloquear a esta). Antes de codificar: auditado el esquema real de `consent_records` (073:
+  `user_ref_hmac`, `ip_ciphertext`/`ip_hmac`/`key_version`, sin columna de correo propia) y `users`
+  (`email_lookup_hmac`, ya usado por `secure-register-user` con `hmacLookup(email, 'LOOKUP_HMAC_KEY_B64')`)
+  para confirmar con qué HMAC buscar: mismo esquema y misma clave que ya usa el resto del módulo, sin
+  ninguna migración nueva.
+- **Diseño (antes de codificar):** `maskIp` (`_shared/client-ip.ts`) y `decryptConsentColumn`
+  (`_shared/consent-evidence.ts`) ya existían — de T03/T07 — con comentarios que citaban exactamente este
+  uso ("vistas de evidencia admin antes de un reveal_ip explícito"); no hacía falta escribir ninguna lógica
+  de descifrado/máscara nueva, solo conectarlas. Seguido el mismo patrón que `emailTransport.decryptPassword`:
+  toda la criptografía real vive detrás de un `Deps` resuelto en `index.ts` — `handler.ts` nunca ve el
+  ciphertext ni la IP en claro, solo el `EvidenceRow` ya enmascarado, así los fakes de `handler_test.ts`
+  no necesitan ninguna clave de cifrado real.
+- **Cambios:**
+  - `supabase/functions/admin-consent/handler.ts`: `EvidenceRow` (document_version, purpose_code, decision,
+    channel, server_ts, rendered_sha256, `ip_masked`) y `EvidenceDeps` (`findUserIdByEmailHmac`,
+    `listByUserId`), añadido a `AdminConsentDeps`; `EvidenceSearchSchema` (zod `.refine` que exige
+    exactamente uno de `email`/`user_id`); `searchEvidence()` — con `email`, normaliza y pasa por
+    `deps.emailHmac` (mismo helper que ya usa la bitácora para el correo del admin) antes de
+    `findUserIdByEmailHmac`; con `user_id`, lo usa directo; sin coincidencia → `{user_id: null, items: []}`
+    (200, nunca 404: no hace visible si el correo existe o si el usuario simplemente no tiene historial).
+    Ruta nueva `GET /evidence` (los tres roles del módulo, igual candado que `/audit-log`: REQ-17 solo acota
+    "Revelar IP", T16.d, no esta lectura).
+  - `supabase/functions/admin-consent/index.ts`: `evidence.findUserIdByEmailHmac` (`SELECT id FROM users
+    WHERE email_lookup_hmac = …`); `evidence.listByUserId` — calcula `user_ref_hmac =
+    hmacLookup(userId, 'LOOKUP_HMAC_KEY_B64')` (misma clave con la que `consent-write.ts`/
+    `secure-register-user` ya escriben esa columna), consulta `consent_records` por esa columna, descifra
+    `ip_ciphertext` con `decryptConsentColumn` (ya existía) y la enmascara con `maskIp` (ya existía) antes
+    de devolver la fila — nunca el ciphertext ni la IP en claro salen de este resolutor.
+  - `supabase/functions/admin-consent/handler_test.ts`: `makeEvidenceStore` (fake con mapa
+    correo-HMAC→user_id e historial por user_id; no reproduce cifrado real, igual que `makeAuditTrailStore`
+    no reproduce PostgREST de verdad — ambos son de solo lectura); 8 pruebas nuevas: los tres roles
+    encuentran el historial por correo con `ip_masked` ya resuelto (y sin `ip_ciphertext` en la respuesta);
+    búsqueda directa por `user_id`; correo sin usuario → vacío sin 404; sin parámetros / con los dos a la
+    vez / `user_id` con formato inválido / correo demasiado corto → 400 `invalid_input`; sin rol → 403;
+    `POST` → 405.
+  - `TASKS.md`: T16.c `[x]`, con el detalle de diseño.
+- **Por qué no hizo falta ninguna prueba SQL nueva:** T16.c es de solo lectura (ningún `INSERT`/`UPDATE`/
+  `DELETE` nuevo); la regla de PROMPT.md sobre Postgres real cubre escrituras que dependan de una
+  restricción/trigger/RLS que un fake pudiera ocultar, no lecturas. El descifrado+máscara es lógica pura de
+  Deno/Web Crypto (sin Postgres de por medio) y ya está cubierta indirectamente por `crypto_test.ts` (ida y
+  vuelta de cifrado) y por las pruebas de T07 (la fila real que escribe `consent-write.ts`/
+  `secure-register-user` usa exactamente el mismo esquema de AAD que `decryptConsentColumn` espera leer).
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  Iteración 55, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. T16.d (`reveal_ip` + exportación de expediente),
+  T16.e (cambio de estado de solicitudes) y T16.f (`verify_chains`) siguen sin empezar. `AUDIT-IP-extra`
+  (Iteración 53) sigue pendiente, sin cambios esta iteración.
+- Porcentaje: sin cambio en el contador por tarea completa (T16 sigue con tres de sus seis subtareas
+  cerradas; el contador estricto/ponderado se mueve cuando T16 completa, no por subtarea). **Estricto
+  17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 54).

@@ -27,6 +27,8 @@ import {
   type EmailTransportRow,
   type EmailVerificationDeps,
   type EmailVerificationRow,
+  type EvidenceDeps,
+  type EvidenceRow,
   type NewConsentDocumentInput,
   type NewEmailTransportInput,
   type NewEmailVerificationInput,
@@ -206,6 +208,21 @@ function makeAuditTrailStore(rows: AuditLogRow[] = []): { auditTrail: AuditTrail
   return { auditTrail }
 }
 
+// Fake de `evidence` (T16.c): un mapa correo→user_id (ya en HMAC, igual que `users.email_lookup_hmac`
+// real) y un historial por user_id. El fake nunca descifra/enmascara nada de verdad (ese paso vive en
+// `index.ts`, con `decryptConsentColumn`/`maskIp` reales) — aquí las filas ya llegan con `ip_masked`
+// como las devolvería el resolutor real, igual que `makeAuditTrailStore` no reproduce PostgREST de verdad.
+function makeEvidenceStore(opts: {
+  usersByEmailHmac?: Record<string, string>
+  itemsByUserId?: Record<string, EvidenceRow[]>
+} = {}): { evidence: EvidenceDeps } {
+  const evidence: EvidenceDeps = {
+    findUserIdByEmailHmac: (emailHmac) => Promise.resolve(opts.usersByEmailHmac?.[emailHmac] ?? null),
+    listByUserId: (userId) => Promise.resolve(opts.itemsByUserId?.[userId] ?? []),
+  }
+  return { evidence }
+}
+
 // A diferencia de `makeDocsStore`/`makeEmailTransportStore`, `current` es mutable aquí (sin un array de
 // filas expuesto): basta con que `insert` reemplace la vigente, igual que haría la vista
 // `privacy_settings_current` real tras un INSERT.
@@ -302,6 +319,7 @@ function fullDeps(opts: {
   email?: EmailDeps
   emailOutbox?: EmailOutboxDeps
   auditTrail?: AuditTrailDeps
+  evidence?: EvidenceDeps
 }): AdminConsentDeps {
   const audit = opts.audit ?? []
   return {
@@ -315,6 +333,7 @@ function fullDeps(opts: {
     email: opts.email ?? makeEmailDeps().email,
     emailOutbox: opts.emailOutbox ?? makeEmailOutboxStore().emailOutbox,
     auditTrail: opts.auditTrail ?? makeAuditTrailStore().auditTrail,
+    evidence: opts.evidence ?? makeEvidenceStore().evidence,
   }
 }
 
@@ -1475,5 +1494,64 @@ Deno.test('GET /audit-log/export.csv: sin truncar cuando el total cabe en el top
 
 Deno.test('POST /audit-log/export.csv → 405', async () => {
   const res = await handle(req(await sign(claims()), '/audit-log/export.csv', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
+})
+
+// ── T16.c: GET /evidence (REQ-17) ───────────────────────────────────────────────────────────────────
+
+const evidenceRow = (over: Partial<EvidenceRow> = {}): EvidenceRow => ({
+  document_version: '1.0', purpose_code: 'registro_aprendizaje', decision: 'granted', channel: 'registro',
+  server_ts: '2026-10-01T00:00:00Z', rendered_sha256: 'sha-1', ip_masked: '192.0.2.xxx',
+  ...over,
+})
+
+Deno.test('GET /evidence?email=…: los tres roles del módulo encuentran el historial (correo vía HMAC, IP ya enmascarada)', async () => {
+  for (const role of ['privacy_editor', 'privacy_admin', 'privacy_auditor']) {
+    const { evidence } = makeEvidenceStore({
+      usersByEmailHmac: { 'hmac(titular@example.test)': 'user-1' },
+      itemsByUserId: { 'user-1': [evidenceRow()] },
+    })
+    const res = await handle(req(await sign(claims()), '/evidence?email=Titular@Example.test', 'GET'), fullDeps({ roles: [role], evidence }))
+    assertEquals(res.status, 200, role)
+    const body = await res.json()
+    assertEquals(body.user_id, 'user-1', role)
+    assertEquals(body.items.length, 1, role)
+    assertEquals(body.items[0].ip_masked, '192.0.2.xxx', role)
+    assertEquals(body.items[0].ip_ciphertext, undefined, role)
+  }
+})
+
+Deno.test('GET /evidence?user_id=…: busca directo por user_id, sin pasar por el correo', async () => {
+  const { evidence } = makeEvidenceStore({ itemsByUserId: { [EDITOR_ID]: [evidenceRow({ decision: 'revoked' })] } })
+  const res = await handle(req(await sign(claims()), `/evidence?user_id=${EDITOR_ID}`, 'GET'), fullDeps({ roles: ['privacy_admin'], evidence }))
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.user_id, EDITOR_ID)
+  assertEquals(body.items[0].decision, 'revoked')
+})
+
+Deno.test('GET /evidence?email=…: correo sin usuario asociado → 200 con user_id null y lista vacía (nunca 404)', async () => {
+  const res = await handle(req(await sign(claims()), '/evidence?email=nadie@example.test', 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.user_id, null)
+  assertEquals(body.items, [])
+})
+
+Deno.test('GET /evidence: sin email ni user_id, o con los dos a la vez, o user_id con formato inválido → 400 invalid_input', async () => {
+  for (const qs of ['', `email=a@example.test&user_id=${ADMIN_ID}`, 'user_id=no-es-un-uuid', 'email=a']) {
+    const res = await handle(req(await sign(claims()), `/evidence?${qs}`, 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+    assertEquals(res.status, 400, qs)
+    assertEquals((await res.json()).error, 'invalid_input', qs)
+  }
+})
+
+Deno.test('GET /evidence: sin rol del módulo → 403', async () => {
+  const res = await handle(req(await sign(claims()), '/evidence?email=a@example.test', 'GET'), fullDeps({ roles: [] }))
+  assertEquals(res.status, 403)
+})
+
+Deno.test('POST /evidence → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/evidence?email=a@example.test', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
   assertEquals(res.status, 405)
 })

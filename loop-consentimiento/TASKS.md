@@ -346,7 +346,39 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       `POST`/otros métodos → 405; `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
       no-opcionales OK, incluido `panel-unit`/`panel-e2e` con el cambio de `server.js`; `db-reset`/`e2e-local`
       SKIP opt-in como siempre).
-  - [ ] **T16.c — Evidencia: búsqueda por correo (HMAC)/ID de usuario + historial con IP enmascarada** (REQ-17)
+  - [x] **T16.c — Evidencia: búsqueda por correo (HMAC)/ID de usuario + historial con IP enmascarada** (REQ-17) (hecha 2026-10-09, iteración 55)
+    - **Estado:** cerrada. `GET /evidence?email=…|user_id=…` (los tres roles del módulo, mismo candado que
+      `/audit-log`: REQ-17 solo acota "Revelar IP", T16.d, no la lectura enmascarada). `EvidenceSearchSchema`
+      exige exactamente uno de los dos parámetros. Con `email`: se normaliza (`trim().toLowerCase()`) y se
+      hashea con `deps.emailHmac` (misma clave `LOOKUP_HMAC_KEY_B64` que `users.email_lookup_hmac` —
+      `secure-register-user` ya la usa así); `deps.evidence.findUserIdByEmailHmac` busca en `users` por esa
+      columna — nunca `ILIKE` sobre cifrado. Con `user_id`: se usa directo (valida uuid). Sin coincidencia
+      (correo sin usuario, o user_id sin historial) → 200 `{user_id: null, items: []}`, nunca 404 (no hace
+      visible la diferencia entre "no existe" y "no tiene historial"). `deps.evidence.listByUserId` (en
+      `index.ts`) calcula `user_ref_hmac = hmacLookup(userId, 'LOOKUP_HMAC_KEY_B64')` (misma clave con la
+      que `consent-write.ts`/`secure-register-user` ya escriben esa columna en `consent_records`), consulta
+      por esa columna, descifra `ip_ciphertext` con `decryptConsentColumn` (ya existía, de T07) y la
+      enmascara con `maskIp` (`_shared/client-ip.ts`, ya tenía el comentario "para vistas de evidencia
+      admin antes de un reveal_ip explícito", escrito en T07/T03 antes de que esta tarea existiera) — el
+      `EvidenceRow` que sale de `index.ts` nunca lleva el ciphertext ni la IP en claro; `handler.ts` no
+      descifra nada directamente (mismo patrón que `emailTransport.decryptPassword`: toda crypto real vive
+      detrás de un `Deps`, nunca en `handler.ts`, para que los fakes de `handler_test.ts` no necesiten
+      claves de cifrado reales). 8 pruebas nuevas en `handler_test.ts`: los tres roles encuentran el
+      historial por correo con IP ya enmascarada (y sin `ip_ciphertext` en la respuesta); búsqueda directa
+      por `user_id`; correo sin usuario → vacío sin 404; sin parámetros / con los dos a la vez / `user_id`
+      con formato inválido / correo demasiado corto → 400 `invalid_input`; sin rol → 403; `POST` → 405.
+    - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea es de solo
+      lectura (`SELECT` sobre `users`/`consent_records`, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo) — la
+      regla de PROMPT.md exige Postgres real para operaciones de ESCRITURA que dependan de una
+      restricción/trigger/RLS que un fake pudiera ocultar; aquí no hay ninguna escritura nueva que
+      verificar. El descifrado+enmascarado (`decryptConsentColumn`/`maskIp`) es lógica pura de Deno/Web
+      Crypto, sin Postgres de por medio (a diferencia de un `DEFERRABLE`/trigger, que solo Postgres puede
+      comprobar) — ya está cubierto indirectamente por `crypto_test.ts` (round-trip cifrado/descifrado) y
+      por las pruebas de T07 (la fila real que `consent-write.ts`/`secure-register-user` escriben en
+      `consent_records` usa exactamente el mismo esquema de AAD que `decryptConsentColumn` espera leer).
+    - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas no-opcionales
+      OK; `db-reset`/`e2e-local` SKIP opt-in como siempre; iteración 55, no múltiplo de 5, `GATES_FULL=1` no
+      obligatorio esta vez).
   - [ ] **T16.d — `reveal_ip` (solo `privacy_admin`, motivo obligatorio, registrado en bitácora) + exportación de expediente de un titular (JSON/PDF simple)** (REQ-17)
   - [ ] **T16.e — Solicitudes: cambio de estado (envuelve `update_data_subject_request_status`, 078) + listado con semáforo** (REQ-11, REQ-16)
   - [ ] **T16.f — `verify_chains`: envuelve `verify_consent_chain()`/`verify_audit_chain()`** (REQ-18)

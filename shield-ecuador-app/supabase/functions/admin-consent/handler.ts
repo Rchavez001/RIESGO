@@ -266,6 +266,28 @@ export interface AuditTrailDeps {
   list: (filter: AuditLogFilter) => Promise<{ items: AuditLogRow[]; total: number }>
 }
 
+/** Fila de `consent_records` (073) tal como la ve el panel (REQ-17): la IP ya llega descifrada y
+ *  ENMASCARADA — nunca el texto cifrado ni la IP en claro. "Revelar IP" es una ruta aparte (T16.d,
+ *  solo `privacy_admin`, con motivo y bitácora), no esta. */
+export interface EvidenceRow {
+  document_version: string
+  purpose_code: string
+  decision: 'granted' | 'denied' | 'revoked'
+  channel: string
+  server_ts: string
+  rendered_sha256: string
+  ip_masked: string | null
+}
+
+export interface EvidenceDeps {
+  /** HMAC con la misma clave de búsqueda que `users.email_lookup_hmac` (correo ya normalizado,
+   *  LOOKUP_HMAC_KEY_B64) — nunca `ILIKE` sobre una columna cifrada (REQ-17). `null` si ningún
+   *  usuario tiene ese correo: no inventa una coincidencia. */
+  findUserIdByEmailHmac: (emailHmac: string) => Promise<string | null>
+  /** Historial de `consent_records` de un usuario (más reciente primero). */
+  listByUserId: (userId: string) => Promise<EvidenceRow[]>
+}
+
 export interface AdminConsentDeps {
   guard?: AuthGuardOptions
   /** HMAC del correo normalizado (clave propia de búsqueda, H15): la bitácora no guarda el correo en claro. */
@@ -278,6 +300,7 @@ export interface AdminConsentDeps {
   email: EmailDeps
   emailOutbox: EmailOutboxDeps
   auditTrail: AuditTrailDeps
+  evidence: EvidenceDeps
 }
 
 /** Error de dominio con código de estado HTTP, para las acciones de /documents. Nunca lleva datos sensibles en `code`. */
@@ -373,6 +396,15 @@ const AuditLogQuerySchema = z.object({
 
 // T16.b: mismos filtros que /audit-log, sin limit/offset (la exportación no pagina: ver MAX_AUDIT_EXPORT_ROWS).
 const AuditLogExportFilterSchema = AuditLogQuerySchema.omit({ limit: true, offset: true })
+
+// T16.c (REQ-17): exactamente un identificador — correo (buscado por HMAC) o user_id directo, nunca los dos
+// ni ninguno (ambigüedad en qué titular se busca).
+const EvidenceSearchSchema = z
+  .object({
+    email: z.string().trim().min(3).max(254).optional(),
+    user_id: z.string().uuid().optional(),
+  })
+  .refine((v) => Boolean(v.email) !== Boolean(v.user_id), { message: 'exactly_one_of_email_or_user_id' })
 
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
 const UpdateEmailTransportSchema = z.object({
@@ -842,6 +874,27 @@ async function listAuditLog(deps: AdminConsentDeps, url: URL): Promise<{ items: 
   return await deps.auditTrail.list({ from, to, actorId: actor_id, action, limit, offset })
 }
 
+/** T16.c (REQ-17): el correo nunca se busca con `ILIKE` sobre una columna cifrada — se hashea con la
+ *  misma clave de búsqueda que `users.email_lookup_hmac` y se compara por HMAC. Si no hay ningún
+ *  usuario con ese correo (o el `user_id` no tiene evidencia todavía), la respuesta es una lista vacía,
+ *  nunca un 404: no distingue de forma visible "no existe" de "existe sin historial". */
+async function searchEvidence(deps: AdminConsentDeps, url: URL): Promise<{ user_id: string | null; items: EvidenceRow[] }> {
+  const query: Record<string, string> = {}
+  for (const key of ['email', 'user_id']) {
+    const value = url.searchParams.get(key)
+    if (value !== null) query[key] = value
+  }
+  const parsed = EvidenceSearchSchema.safeParse(query)
+  if (!parsed.success) throw new ApiError(400, 'invalid_input')
+
+  const userId = parsed.data.user_id
+    ? parsed.data.user_id
+    : await deps.evidence.findUserIdByEmailHmac(await deps.emailHmac(parsed.data.email!.trim().toLowerCase()))
+  if (!userId) return { user_id: null, items: [] }
+  const items = await deps.evidence.listByUserId(userId)
+  return { user_id: userId, items }
+}
+
 // T16.b (REQ-16): tope de filas por exportación — una exportación sin tope podría volcar toda la bitácora
 // histórica en una sola respuesta; si el filtro pide más, `exportAuditLogCsv` lo señala en `truncated`.
 const MAX_AUDIT_EXPORT_ROWS = 5000
@@ -1021,6 +1074,13 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
           'X-Export-Truncated': String(truncated),
         },
       })
+    }
+
+    if (path === '/evidence') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      await requireRole(req, PRIVACY_ROLES, deps.guard)
+      const result = await searchEvidence(deps, new URL(req.url))
+      return json(200, result)
     }
 
     if (path === '/documents') {
