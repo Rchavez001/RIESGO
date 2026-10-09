@@ -10,7 +10,7 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Fase 1 (aviso + registro) escrita y probada en local, **no desplegada**: falta publicar el aviso real
   y no hay ruta `/registro` en el `App.tsx` versionado (parche en `PLAN_RAMAS.md`).
 - Fases 2 (parcial: T04,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15 cerradas; TEST-INT a-e cerrada; T16
-  sin empezar), 3, 4 y 5: sin desplegar.
+  parcial: T16.a cerrada, T16.b-f sin empezar), 3, 4 y 5: sin desplegar.
 - `081 es la migración más urgente` del lote: sin ella, funciones con `search_path` acotado fallan al
   llamar a `digest()` (pgcrypto vive en `extensions`, no en `public`, en Supabase real).
 
@@ -1273,3 +1273,62 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: **estricto 17 de 28 = 60,7 %** (antes 16/28 ≈ 57,1 %; T15 se cierra como tarea completa, mismo
   criterio que T12/T13/T14). **Ponderado: T15 pasa de 0 % a 100 % de sus propios 100 puntos → 1665 (Iteración
   48) + 100 = 1765/2800 ≈ 63,0 %** (antes ≈ 59,5 %).
+
+## Iteración 53 — 2026-10-09 — T16.a (`GET /audit-log`): listado con filtros y paginación; T16 dividida en seis subtareas
+- **Punto de partida:** `git status` limpio; T15 cerrada (iteración 52). Primera tarea `[ ]` desbloqueada en
+  `TASKS.md`: T16 (depende de T04/T14/T15, las tres cerradas). T17 sigue `⛔ BLOQUEADA` (D-02). Leídos
+  `admin-consent/{handler.ts,index.ts,handler_test.ts}` completos y el esquema real de `admin_audit_log`/
+  `consent_records`/`data_subject_requests` (073) y `update_data_subject_request_status` (078) antes de
+  tocar nada.
+- **División (antes de codificar, mismo patrón que T05/T12/T13/T14/T15):** T16 cubre de golpe bitácora,
+  evidencia, revelación de IP, expediente, solicitudes y verificación de cadenas — demasiado para una
+  iteración. Partida en `TASKS.md` en seis: T16.a (bitácora: listado+filtros), T16.b (export CSV), T16.c
+  (evidencia: búsqueda+historial+IP enmascarada), T16.d (`reveal_ip`+expediente), T16.e (solicitudes:
+  cambio de estado+semáforo), T16.f (`verify_chains`). Esta iteración solo ejecuta T16.a.
+- **Cambios:**
+  - `supabase/functions/admin-consent/handler.ts`: `AuditLogRow` (fila de `admin_audit_log` tal como la
+    lee el panel, sin `ip_ciphertext`/`ip_hmac`/`key_version` — ver hallazgo abajo), `AuditLogFilter`,
+    `AuditTrailDeps.list()`, campo `auditTrail` en `AdminConsentDeps`; `AuditLogQuerySchema` (zod: `from`/
+    `to` cualquier fecha parseable, `actor_id` uuid, `action` string, `limit` 1-200 con tope, `offset` ≥0);
+    `listAuditLog()` (parsea `URLSearchParams`, delega en `deps.auditTrail.list`); ruta `GET /audit-log`
+    con `requireRole(req, PRIVACY_ROLES, …)` — los tres roles del módulo pueden verla, a diferencia de
+    `ADMIN_ONLY`: REQ-17 solo exige `privacy_admin` para "Revelar IP" (T16.d), no para ver la bitácora.
+  - `supabase/functions/admin-consent/index.ts`: `AUDIT_LOG_COLUMNS`; `auditTrail.list` real vía
+    `db.from('admin_audit_log').select(..., { count: 'exact' })` con `gte`/`lte`/`eq` condicionales y
+    `.order(...).range(offset, offset+limit-1)` — `count: 'exact'` da el total de filas que cumplen el
+    filtro (no solo el tamaño de la página) sin una segunda consulta.
+  - `supabase/functions/admin-consent/handler_test.ts`: `makeAuditTrailStore()` (fake en memoria que
+    reproduce `gte`/`lte`/`eq`/orden/`range` sobre un array — suficiente porque la ruta es de solo lectura,
+    sin ninguna restricción/trigger/RLS que un fake pudiera ocultar, a diferencia de una escritura: no hacía
+    falta ninguna prueba SQL nueva contra Postgres real, a diferencia de T10/T11/T13/T14/T15); wired en
+    `fullDeps`; 6 pruebas nuevas: los tres roles → 200; filtro por `actor_id` (2/3 filas, orden descendente
+    por fecha), por `action` (1 fila) y por rango `from` (2/3 filas); paginación `limit=1&offset=1` sobre 3
+    filas totales devuelve exactamente la fila intermedia; 5 variantes de parámetro inválido (`from` no
+    parseable, `actor_id` no uuid, `limit` fuera de 1-200 por ambos lados, `offset` negativo) → 400
+    `invalid_input`; `POST /audit-log` → 405.
+  - `loop-consentimiento/TASKS.md`: T16 dividida en T16.a-f; T16.a `[x]` con el detalle de cierre;
+    `AUDIT-IP-extra` nueva (ver hallazgo abajo); este archivo.
+- **Hallazgo (documentado, no corregido en esta iteración — ver `AUDIT-IP-extra` en `TASKS.md`):**
+  `admin_audit_log` tiene columnas `ip_ciphertext`/`ip_hmac`/`key_version` (073) para la IP del propio
+  admin (REQ-16: "antes de IP del admin cifrada + HMAC"), pero `AuditEntry` (`handler.ts`) nunca las
+  declaró y ningún llamador de `deps.audit` (T05.a/T14/T15/T12.d, todas cerradas antes de esta iteración)
+  las rellena — hoy siempre quedan `NULL` en cada fila insertada hasta ahora. No es un defecto de T16.a (la
+  lectura no puede mostrar un dato que nunca se escribió) ni se corrige aquí (cambiar `auditLog()` afecta a
+  todos los llamadores existentes, fuera del alcance quirúrgico de "listar la bitácora"); anotado como tarea
+  nueva para que se decida antes de T99 si se cierra el hueco.
+- **Pruebas añadidas:** las 6 descritas arriba en `handler_test.ts`. Ninguna prueba SQL nueva (ver
+  justificación arriba: ruta de solo lectura).
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only deno-check` y `--only deno-test` (rojo
+  antes de escribir el wiring final — un primer intento sin `auditTrail` en `fullDeps` fallaba el
+  typecheck por la razón correcta, campo faltante en el tipo — luego verde); corrida completa por defecto
+  (9 puertas no-opcionales): typecheck-frontend, lint-frontend [14 = línea base], unit-frontend,
+  panel-unit, panel-e2e (335s, 2 perfiles por defecto), deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — todas OK; db-reset/e2e-local SKIP explícito (opt-in). Iteración 53, no múltiplo de 5:
+  `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: `AUDIT-IP-extra` (arriba). Próxima tarea ejecutable en orden: T16.b
+  (`GET /audit-log/export.csv`). T16.c-f sin empezar.
+- Porcentaje: sin cambio (T16 es una de las 28 pero solo se cerró una de sus seis subtareas; mismo criterio
+  que las divisiones de T05/T12/T13/T14/T15 — el contador estricto y el ponderado se mueven cuando la tarea
+  padre completa, no por subtarea). **Estricto 17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto
+  a la Iteración 52).

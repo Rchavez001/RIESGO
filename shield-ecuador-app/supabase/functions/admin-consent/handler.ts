@@ -234,6 +234,38 @@ export interface EmailOutboxDeps {
   markSent: (id: string) => Promise<void>
 }
 
+/** Fila de `admin_audit_log` (073) tal como la lee el panel — sin ip_ciphertext/ip_hmac/key_version:
+ *  esos tres campos existen en la tabla para la IP del propio admin (REQ-16), pero ningún llamador de
+ *  `deps.audit` los rellena todavía (ver nota en PROGRESS.md, pendiente fuera del alcance de T16.a). */
+export interface AuditLogRow {
+  id: number
+  actor_id: string | null
+  actor_email_hmac: string
+  actor_role: string
+  action: string
+  entity: string
+  entity_id: string | null
+  before: unknown
+  after: unknown
+  diff: string | null
+  reason: string | null
+  created_at: string
+}
+
+export interface AuditLogFilter {
+  from?: string
+  to?: string
+  actorId?: string
+  action?: string
+  limit: number
+  offset: number
+}
+
+export interface AuditTrailDeps {
+  /** `total` es el número de filas que cumplen el filtro (sin paginar), no el tamaño de `items`. */
+  list: (filter: AuditLogFilter) => Promise<{ items: AuditLogRow[]; total: number }>
+}
+
 export interface AdminConsentDeps {
   guard?: AuthGuardOptions
   /** HMAC del correo normalizado (clave propia de búsqueda, H15): la bitácora no guarda el correo en claro. */
@@ -245,6 +277,7 @@ export interface AdminConsentDeps {
   emailTransport: EmailTransportDeps
   email: EmailDeps
   emailOutbox: EmailOutboxDeps
+  auditTrail: AuditTrailDeps
 }
 
 /** Error de dominio con código de estado HTTP, para las acciones de /documents. Nunca lleva datos sensibles en `code`. */
@@ -319,6 +352,23 @@ const RequestEmailChangeSchema = z.object({
 
 const ConfirmEmailChangeSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, 'invalid_code_format'),
+})
+
+// REQ-16: `from`/`to` aceptan cualquier string parseable como fecha (fecha sola o fecha-hora completa);
+// `limit` tope 200 para no permitir un volcado completo de la bitácora en una sola respuesta.
+const isoDateString = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => !Number.isNaN(Date.parse(v)), { message: 'invalid_date' })
+
+const AuditLogQuerySchema = z.object({
+  from: isoDateString.optional(),
+  to: isoDateString.optional(),
+  actor_id: z.string().uuid().optional(),
+  action: z.string().trim().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
 })
 
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
@@ -775,6 +825,20 @@ async function resendPendingEmails(
   return summary
 }
 
+/** T16.a (REQ-16): solo lectura, sin restricción de rol más allá de pertenecer al módulo — el candado de
+ *  REQ-17 ("Revelar IP") es de otra ruta (T16.d), no de ver la bitácora. */
+async function listAuditLog(deps: AdminConsentDeps, url: URL): Promise<{ items: AuditLogRow[]; total: number }> {
+  const query: Record<string, string> = {}
+  for (const key of ['from', 'to', 'actor_id', 'action', 'limit', 'offset']) {
+    const value = url.searchParams.get(key)
+    if (value !== null) query[key] = value
+  }
+  const parsed = AuditLogQuerySchema.safeParse(query)
+  if (!parsed.success) throw new ApiError(400, 'invalid_input')
+  const { from, to, actor_id, action, limit, offset } = parsed.data
+  return await deps.auditTrail.list({ from, to, actorId: actor_id, action, limit, offset })
+}
+
 const EDITOR_ROLES = ['privacy_editor', 'privacy_admin'] as const
 const ADMIN_ONLY = ['privacy_admin'] as const
 
@@ -868,6 +932,13 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
         return json(200, toPublicEmailTransport(updated))
       }
       return json(405, { error: 'method_not_allowed' })
+    }
+
+    if (path === '/audit-log') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      await requireRole(req, PRIVACY_ROLES, deps.guard)
+      const result = await listAuditLog(deps, new URL(req.url))
+      return json(200, result)
     }
 
     if (path === '/documents') {

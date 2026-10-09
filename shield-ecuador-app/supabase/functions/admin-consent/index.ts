@@ -10,6 +10,7 @@ import { buildDelegateNoticeEmail, buildSubjectAcknowledgementEmail, type DataSu
 import {
   ApiError,
   handle,
+  type AuditLogRow,
   type ConfirmEmailChangeInput,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
@@ -37,6 +38,7 @@ const EMAIL_TRANSPORT_COLUMNS =
   'transport_version, mode, from_name, from_email, smtp_host, smtp_port, smtp_username, smtp_password_ciphertext, created_by, created_at'
 const EMAIL_OUTBOX_COLUMNS = 'id, reference_table, reference_id, created_at'
 const EMAIL_VERIFICATION_COLUMNS = 'id, new_email, code_hash, expires_at, attempts, confirmed_at, requested_by, created_at'
+const AUDIT_LOG_COLUMNS = 'id, actor_id, actor_email_hmac, actor_role, action, entity, entity_id, before, after, diff, reason, created_at'
 
 // T12.d.1 (D-15): la contraseña SMTP se cifra con su propia AAD atada a `transport_version` — nunca la
 // misma clave que `crypto.ts` usa para la versión de clave de cifrado (esa la sigue dando `getActiveKeyVersion()`).
@@ -49,6 +51,22 @@ serve((req) =>
     audit: async (entry) => {
       const { error } = await db.from('admin_audit_log').insert(entry)
       if (error) throw new Error(`admin_audit_log: ${error.code ?? 'error'}`)
+    },
+    // T16.a (REQ-16): solo lectura, con el `count` exacto (sin paginar) para que el panel pueda mostrar
+    // el total de filas que cumplen el filtro, no solo el tamaño de la página.
+    auditTrail: {
+      list: async (filter) => {
+        let query = db.from('admin_audit_log').select(AUDIT_LOG_COLUMNS, { count: 'exact' })
+        if (filter.from) query = query.gte('created_at', filter.from)
+        if (filter.to) query = query.lte('created_at', filter.to)
+        if (filter.actorId) query = query.eq('actor_id', filter.actorId)
+        if (filter.action) query = query.eq('action', filter.action)
+        const { data, error, count } = await query
+          .order('created_at', { ascending: false })
+          .range(filter.offset, filter.offset + filter.limit - 1)
+        if (error) throw new Error(`admin_audit_log: ${error.code ?? 'error'}`)
+        return { items: (data ?? []) as AuditLogRow[], total: count ?? 0 }
+      },
     },
     documents: {
       getPublished: async () => {

@@ -13,6 +13,8 @@ import {
   handle,
   type AdminConsentDeps,
   type AuditEntry,
+  type AuditLogRow,
+  type AuditTrailDeps,
   type ConfirmEmailChangeInput,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
@@ -184,6 +186,26 @@ function makeEmailOutboxStore(
   return { emailOutbox, statusOf: (id) => status.get(id) }
 }
 
+// Fake de `auditTrail` (T16.a): reproduce el filtrado/paginación que en producción hace PostgREST
+// (`gte`/`lte`/`eq`/`range`) sobre un array en memoria — suficiente para esta ruta porque es de solo
+// lectura (ninguna restricción/trigger/RLS que un fake pudiera ocultar, a diferencia de una escritura).
+function makeAuditTrailStore(rows: AuditLogRow[] = []): { auditTrail: AuditTrailDeps } {
+  const auditTrail: AuditTrailDeps = {
+    list: (filter) => {
+      let result = rows
+      if (filter.from) result = result.filter((r) => r.created_at >= filter.from!)
+      if (filter.to) result = result.filter((r) => r.created_at <= filter.to!)
+      if (filter.actorId) result = result.filter((r) => r.actor_id === filter.actorId)
+      if (filter.action) result = result.filter((r) => r.action === filter.action)
+      result = [...result].sort((a, b) => b.created_at.localeCompare(a.created_at))
+      const total = result.length
+      const items = result.slice(filter.offset, filter.offset + filter.limit)
+      return Promise.resolve({ items, total })
+    },
+  }
+  return { auditTrail }
+}
+
 // A diferencia de `makeDocsStore`/`makeEmailTransportStore`, `current` es mutable aquí (sin un array de
 // filas expuesto): basta con que `insert` reemplace la vigente, igual que haría la vista
 // `privacy_settings_current` real tras un INSERT.
@@ -279,6 +301,7 @@ function fullDeps(opts: {
   emailTransport?: EmailTransportDeps
   email?: EmailDeps
   emailOutbox?: EmailOutboxDeps
+  auditTrail?: AuditTrailDeps
 }): AdminConsentDeps {
   const audit = opts.audit ?? []
   return {
@@ -291,6 +314,7 @@ function fullDeps(opts: {
     emailTransport: opts.emailTransport ?? makeEmailTransportStore().emailTransport,
     email: opts.email ?? makeEmailDeps().email,
     emailOutbox: opts.emailOutbox ?? makeEmailOutboxStore().emailOutbox,
+    auditTrail: opts.auditTrail ?? makeAuditTrailStore().auditTrail,
   }
 }
 
@@ -1268,4 +1292,66 @@ Deno.test('POST /email-outbox → 405; GET /email-outbox/resend → 405', async 
   const token = await sign(claims())
   assertEquals((await handle(req(token, '/email-outbox', 'POST'), fullDeps({ roles: ['privacy_admin'] }))).status, 405)
   assertEquals((await handle(req(token, '/email-outbox/resend', 'GET'), fullDeps({ roles: ['privacy_admin'] }))).status, 405)
+})
+
+// ── T16.a: GET /audit-log (REQ-16) ──────────────────────────────────────────────────────────────────
+
+const auditRow = (over: Partial<AuditLogRow> = {}): AuditLogRow => ({
+  id: 1, actor_id: ADMIN_ID, actor_email_hmac: 'hmac(admin.uno@example.test)', actor_role: 'privacy_admin',
+  action: 'consent_document.publish', entity: 'consent_documents', entity_id: 'doc-1',
+  before: null, after: null, diff: null, reason: 'motivo', created_at: '2026-10-01T00:00:00Z',
+  ...over,
+})
+
+Deno.test('GET /audit-log: los tres roles del módulo pueden listar (200), REQ-17 solo candado "Revelar IP"', async () => {
+  for (const role of ['privacy_editor', 'privacy_admin', 'privacy_auditor']) {
+    const { auditTrail } = makeAuditTrailStore([auditRow()])
+    const res = await handle(req(await sign(claims()), '/audit-log', 'GET'), fullDeps({ roles: [role], auditTrail }))
+    assertEquals(res.status, 200, role)
+    const body = await res.json()
+    assertEquals(body.total, 1)
+    assertEquals(body.items.length, 1)
+  }
+})
+
+Deno.test('GET /audit-log: filtra por actor_id, action y rango de fechas; pagina con limit/offset', async () => {
+  const rows = [
+    auditRow({ id: 1, actor_id: ADMIN_ID, action: 'consent_document.publish', created_at: '2026-10-01T00:00:00Z' }),
+    auditRow({ id: 2, actor_id: EDITOR_ID, action: 'consent_document.update', created_at: '2026-10-02T00:00:00Z' }),
+    auditRow({ id: 3, actor_id: ADMIN_ID, action: 'consent_document.retire', created_at: '2026-10-03T00:00:00Z' }),
+  ]
+  const { auditTrail } = makeAuditTrailStore(rows)
+  const depsObj = fullDeps({ roles: ['privacy_admin'], auditTrail })
+  const token = await sign(claims())
+
+  const byActor = await handle(req(token, `/audit-log?actor_id=${ADMIN_ID}`, 'GET'), depsObj)
+  const byActorBody = await byActor.json()
+  assertEquals(byActorBody.total, 2)
+  assertEquals(byActorBody.items.map((r: AuditLogRow) => r.id), [3, 1])
+
+  const byAction = await handle(req(token, '/audit-log?action=consent_document.update', 'GET'), depsObj)
+  assertEquals((await byAction.json()).total, 1)
+
+  const byRange = await handle(req(token, '/audit-log?from=2026-10-02', 'GET'), depsObj)
+  assertEquals((await byRange.json()).total, 2)
+
+  // Orden descendente por fecha (3, 2, 1): limit=1&offset=1 salta la 3 y devuelve la 2.
+  const page = await handle(req(token, '/audit-log?limit=1&offset=1', 'GET'), depsObj)
+  const pageBody = await page.json()
+  assertEquals(pageBody.total, 3)
+  assertEquals(pageBody.items.map((r: AuditLogRow) => r.id), [2])
+})
+
+Deno.test('GET /audit-log: parámetros inválidos → 400 invalid_input', async () => {
+  const token = await sign(claims())
+  for (const qs of ['from=no-es-fecha', 'actor_id=no-es-uuid', 'limit=201', 'limit=0', 'offset=-1']) {
+    const res = await handle(req(token, `/audit-log?${qs}`, 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+    assertEquals(res.status, 400, qs)
+    assertEquals((await res.json()).error, 'invalid_input', qs)
+  }
+})
+
+Deno.test('POST /audit-log → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/audit-log', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
 })

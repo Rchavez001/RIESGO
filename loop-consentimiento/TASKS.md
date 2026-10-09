@@ -290,6 +290,31 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests:** búsqueda por correo usa HMAC; IP enmascarada por defecto; `reveal_ip` exige
     `privacy_admin` + motivo y registra; auditor no puede revelar; export CSV registrado;
     cambio de estado de solicitud registrado; `verify_chains` devuelve OK.
+  - **División (2026-10-09, antes de codificar):** la tarea abarca lectura/exportación de bitácora,
+    búsqueda/revelación de evidencia + expediente, cambio de estado de solicitudes y verificación de
+    cadenas; se parte en seis, mismo patrón que T05/T12/T13/T14/T15.
+  - [x] **T16.a — `GET /audit-log`: listado con filtros (fecha, actor, acción) y paginación** (REQ-16) (hecha 2026-10-09, iteración 53)
+    - **Estado:** cerrada. `AuditTrailDeps.list()` (solo lectura de `admin_audit_log`, filtros `from`/
+      `to`/`actor_id`/`action` combinables vía `gte`/`lte`/`eq`, `range` para paginar); los tres roles del
+      módulo pueden verla (el candado de REQ-17 es solo sobre "Revelar IP", T16.d, no sobre ver la
+      bitácora). Zod valida `from`/`to` (cualquier fecha parseable), `actor_id` (uuid), `action`
+      (string), `limit` (1-200, tope para no volcar la bitácora completa) y `offset` (≥0). 6 pruebas
+      nuevas en `handler_test.ts` con un fake que reproduce el filtrado/paginación de PostgREST — no
+      hacía falta ninguna prueba SQL nueva (ruta de solo lectura, sin restricción/trigger/RLS que un
+      fake pudiera ocultar).
+    - **Pendiente detectado (fuera de este alcance, ver `AUDIT-IP-extra` al final de este archivo):**
+      `admin_audit_log.ip_ciphertext`/`ip_hmac`/`key_version` (073) existen para la IP del propio admin
+      (REQ-16) pero ningún llamador de `deps.audit` los rellena — siempre quedan `NULL`. No es un defecto
+      de T16.a (la lectura no puede inventar un dato que nunca se escribió); documentado para que una
+      tarea futura decida si se añade antes de producción.
+    - **Aceptación:** filtros `from`/`to`/`actor_id`/`action` combinables; paginación `limit`/`offset`
+      (tope 200); parámetros inválidos → 400; los tres roles del módulo → 200; método distinto de
+      `GET` → 405.
+  - [ ] **T16.b — `GET /audit-log/export.csv`: exportación CSV de la bitácora, registrada en la propia bitácora** (REQ-16)
+  - [ ] **T16.c — Evidencia: búsqueda por correo (HMAC)/ID de usuario + historial con IP enmascarada** (REQ-17)
+  - [ ] **T16.d — `reveal_ip` (solo `privacy_admin`, motivo obligatorio, registrado en bitácora) + exportación de expediente de un titular (JSON/PDF simple)** (REQ-17)
+  - [ ] **T16.e — Solicitudes: cambio de estado (envuelve `update_data_subject_request_status`, 078) + listado con semáforo** (REQ-11, REQ-16)
+  - [ ] **T16.f — `verify_chains`: envuelve `verify_consent_chain()`/`verify_audit_chain()`** (REQ-18)
 
 - [ ] **T17 — Job de retención** (REQ-19, REQ-20) ⛔ BLOQUEADA (D-02)
   - **Estado real (2026-09-28):** Sin iniciar. Existe el mecanismo en BD: bandera de sesión acotada a poner en NULL `user_id`/`ip_ciphertext`/`ua_ciphertext` y la cadena que no los cubre (074). Falta el job y la decisión D-02.
@@ -413,6 +438,18 @@ Nombres fuera de la numeración original (`Tnn-extra`, según PROMPT.md). Ojo: *
   - **Estado:** cerrada (propuesta). `supabase db reset` falla siempre en la migración 004 (`column "role" does not exist`: `is_admin()` referencia `role` antes de que la misma migración la cree) — en PG16 y PG17, no es específico de versión. Propuesta detallada en D-13 (baseline de esquema de producción como migración única). Ejecutada como `T00-extra-exec` (opción A'). Nada tocado en `supabase/migrations/` ni en `gates.sh` por esta tarea.
 - [x] **T-ruta-registro — [P0] La ruta `/registro` no existe en el código versionado** (hecha 2026-09-28)
   - **Estado:** cerrada. El `App.tsx` versionado no declaraba la ruta `/registro` (solo existía sin commitear). Aplicado `patches/registro-route.patch` (commit `005940a`) + 2 defectos de compilación encontrados y corregidos (commit `956f289`). Verificado: build OK, `register.spec.ts` 77/77 en 7 perfiles.
+
+- [ ] **AUDIT-IP-extra — [P2] `admin_audit_log.ip_ciphertext`/`ip_hmac`/`key_version` (073) nunca se rellenan** (añadida 2026-10-09, T16.a)
+  - **Por qué:** REQ-16 pide que la bitácora guarde "IP del admin cifrada + HMAC"; la tabla ya tiene las tres
+    columnas (073) pero `AuditEntry` (`handler.ts`) no las declara y ningún llamador de `deps.audit` (T05.a,
+    T14, T15, T12.d) las rellena — hoy siempre quedan `NULL`. `GET /audit-log` (T16.a) no puede mostrar un
+    dato que nunca se escribió.
+  - **Qué:** añadir `ip`/`userAgent` (o ya la IP cifrada+HMAC) a `AuditEntry`, obtenerlos con
+    `_shared/client-ip.ts` (mismo patrón que T10/T11/T13, IP solo del proxy de confianza) dentro de
+    `auditLog()` (`handler.ts`), y cifrar con `crypto.ts` (AAD propia, H15) antes de insertar.
+  - Depende de T04 (ya hecha). No bloquea T16.a/T16.b (ambas pueden listar/exportar los campos que sí
+    existen); si se cierra antes de T99, `GET /audit-log`/el CSV deberían empezar a mostrar la IP
+    enmascarada del admin como parte del mismo cambio.
 
 - [ ] **SEC-SSRF — [P0, independiente del módulo] Redesplegar `security-diagnose`, `security-easm-scan` y `security-kata-convert` con el `news-agent-core.ts` actual (con control de SSRF para URLs configuradas por admin)**
   - **Estado:** sin desplegar. `security-diagnose`, `security-easm-scan` y `security-kata-convert` corren una copia anterior de `_shared/news-agent-core.ts` (476 líneas, previa al arreglo de SSRF), sin `url-guard.ts`. Decisión tomada (iteración 8): desplegar la versión completa de `main` (540 líneas: SSRF + tope 512KB + `.csv`/`.json` + `shuffleOptions`), no un parche parcial, para no dejar 3 versiones distintas conviviendo en producción. Detalle de las 78 líneas de diferencia: `PROGRESS_ARCHIVO.md`, iteraciones 6-7.
