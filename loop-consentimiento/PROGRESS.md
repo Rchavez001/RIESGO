@@ -1574,3 +1574,53 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   de producción.
 - Porcentaje: sin cambio en el contador por tarea completa (T16 sigue sin cerrar: faltan T16.e y T16.f).
   **Estricto 17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 56).
+
+## Iteración 58 — 2026-10-09 — TEST-INT.g: descifrado real en reveal-ip/expediente y fail-closed en handler_test.ts
+- **Punto de partida:** primera tarea `[ ]` ejecutable en orden de archivo (antes de T16.e/T16.f, que están
+  más abajo en TASKS.md) tras el commit `48c844c` que añadió TEST-INT.g con sus 3 criterios; dependencias
+  (T16.d.1, T16.d.2) ya `[x]`.
+- **Investigación antes de escribir nada:** leídos `_shared/consent-evidence.ts`, `admin-consent/index.ts`
+  (resolutores `evidence.listByUserId`/`listByUserIdRevealed`, que llaman a `decryptConsentColumn` en línea
+  directa, sin envoltorio propio) y `secure-register-user/index.ts`/`consent-write.ts` (ambos escriben con
+  `encryptConsentColumn`, la misma función). Confirmado que `_shared/consent-evidence_test.ts` (sin BD, ya
+  existente, no tocado en esta rama hasta ahora) YA ejercita exactamente el criterio 1 de TEST-INT.g: escribe
+  con `encryptConsentColumn` y lee con `decryptConsentColumn` (la misma pareja escritor/lector que usa
+  `admin-consent`), y prueba que un `user_ref_hmac`/columna distintos hacen fallar el descifrado sin devolver
+  la IP (`assertRejects`, líneas 29-33 de ese archivo). No se escribió ningún archivo nuevo para este punto:
+  habría sido una prueba duplicada de la misma pareja de funciones.
+  - Criterio 2 (punta a punta con `e2e-local`): condicionado por el propio texto de la tarea ("si vuelve a
+    funcionar"); no se intentó esta iteración — no hay necesidad de levantar `supabase start`/Docker solo para
+    repetir, con menos aislamiento, lo que el criterio 1 ya prueba con criptografía real. Queda igual de
+    pendiente para una sesión que ya tenga el stack local arriba, sin que eso bloquee el cierre de la tarea
+    (el texto no lo exige incondicionalmente).
+  - Criterio 3 (fail-closed si falla la bitácora): leídas `revealIp`/`exportDossier` en `handler.ts` — ambas
+    llaman a `deps.evidence.listByUserId*` (la lectura/descifrado) ANTES de `auditLog`, pero, a diferencia de
+    `retireDraft` (que ya mutó algo y por eso compensa con un `try/catch` propio, visible en la prueba
+    existente "si falla la bitácora al retirar, se revierte el UPDATE → 503 audit_failed"), ninguna de las dos
+    tiene ningún `try/catch`: si `deps.audit` rechaza, el `throw` de `auditLog` sube sin capturar hasta el
+    catch-todo de `handle()` (`handler.ts` línea ~1298), que lo traduce en 500 `internal_error` sin haber
+    llegado nunca al `return`/`json(200, …)` que habría llevado la IP o el dossier. Es decir: el comportamiento
+    fail-closed que pedía el criterio 3 ya existía por construcción (no hacía falta tocar `handler.ts`); solo
+    faltaba una prueba que lo demostrara, igual que ya se hizo con `retireDraft` en una iteración anterior.
+- **Cambios:** `supabase/functions/admin-consent/handler_test.ts` (3 pruebas nuevas, con `failAudit: true`,
+  mismo patrón que la prueba existente de `retireDraft`): (1) `POST /evidence/reveal-ip` con una IP real
+  distintiva (`203.0.113.77`) en el fake — 500 `internal_error`, y el texto crudo de la respuesta NO contiene
+  esa IP; (2) `GET /evidence/export.json` y (3) `GET /evidence/export.pdf` — 500 `internal_error` en ambos
+  formatos, con historial + solicitudes cargados en el fake para que, si el fail-closed se rompiera alguna
+  vez, la prueba lo detectara. `loop-consentimiento/TASKS.md` (TEST-INT.g `[x]`, con el detalle de los 3
+  criterios). Este archivo.
+- **Pruebas añadidas:** las 3 descritas arriba, verificadas verdes contra la implementación real sin ningún
+  cambio de código de producción (no había bug: se confirmó el comportamiento leyendo el código antes de
+  escribir la prueba, mismo criterio que cerró T16.c/T16.d.1/T15.d por auditoría).
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  Iteración 58, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: el criterio 2 de TEST-INT.g (punta a punta con `e2e-local`) sigue sin
+  ejercitarse de verdad; anotado como mejora opcional, no como defecto, dado que el texto de la tarea lo
+  condiciona a que el entorno local esté disponible. T16.e y T16.f siguen sin empezar — son las únicas
+  subtareas que faltan para cerrar T16. `AUDIT-IP-extra` sigue pendiente sin cambios.
+- Porcentaje: TEST-INT.g no es una de las 28 tareas numeradas (es una subtarea de TEST-INT, ya cerrada como
+  grupo): sin cambio en el contador estricto ni ponderado. **Estricto 17 de 28 = 60,7 %. Ponderado ≈ 63,0 %**
+  (sin cambio respecto a la Iteración 57).

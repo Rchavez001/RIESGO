@@ -1643,6 +1643,21 @@ Deno.test('GET /evidence/reveal-ip → 405', async () => {
   assertEquals(res.status, 405)
 })
 
+// TEST-INT.g: fail-closed — si la bitácora no se puede escribir, `revealIp` nunca llega a construir la
+// respuesta con la IP real (la lectura ya ocurrió, pero `auditLog` lanza antes del `return`, sin ningún
+// `try/catch` propio en esta ruta a diferencia de `retireDraft`, así que no hace falta compensar nada).
+Deno.test('POST /evidence/reveal-ip: si falla la bitácora, no se devuelve ninguna IP (fail-closed)', async () => {
+  const { evidence } = makeEvidenceStore({ revealedByUserId: { [EDITOR_ID]: [revealedRow({ ip: '203.0.113.77' })] } })
+  const res = await handle(
+    req(await sign(claims()), '/evidence/reveal-ip', 'POST', { user_id: EDITOR_ID, reason: 'Solicitud de acceso' }),
+    fullDeps({ roles: ['privacy_admin'], evidence, failAudit: true }),
+  )
+  assertEquals(res.status, 500)
+  const text = await res.text()
+  assertEquals(JSON.parse(text).error, 'internal_error')
+  assertEquals(text.includes('203.0.113.77'), false)
+})
+
 // ── T16.d.2: GET /evidence/export.json y /evidence/export.pdf (REQ-17) ─────────────────────────────
 
 const dsrRow = (over: Partial<DsrSummaryRow> = {}): DsrSummaryRow => ({
@@ -1770,6 +1785,24 @@ Deno.test('GET /evidence/export.json: la propia exportación queda en la bitáco
   assertEquals(audit[0].actor_id, ADMIN_ID)
   assertEquals(audit[0].reason, 'Caso 2026-00099')
   assertEquals(audit[0].after, { consent_count: 2, dsr_count: 1 })
+})
+
+// TEST-INT.g: fail-closed — mismo razonamiento que reveal-ip: `exportDossier` ya construyó el dossier
+// (con historial e IP enmascarada) antes de llamar a `auditLog`; si la bitácora falla, el `throw` corta
+// antes de que `handle()` arme la respuesta JSON/PDF — nunca se envía un dossier parcial sin registrar.
+Deno.test('GET /evidence/export.json y export.pdf: si falla la bitácora, no se devuelve ningún expediente (fail-closed)', async () => {
+  for (const format of ['json', 'pdf'] as const) {
+    const { evidence } = makeEvidenceStore({
+      itemsByUserId: { [EDITOR_ID]: [evidenceRow()] },
+      dsrByUserId: { [EDITOR_ID]: [dsrRow()] },
+    })
+    const res = await handle(
+      req(await sign(claims()), exportDossierUrl(format, `user_id=${EDITOR_ID}&reason=Solicitud+de+acceso`), 'GET'),
+      fullDeps({ roles: ['privacy_admin'], evidence, failAudit: true }),
+    )
+    assertEquals(res.status, 500, format)
+    assertEquals((await res.json()).error, 'internal_error', format)
+  }
 })
 
 Deno.test('POST /evidence/export.json y export.pdf → 405', async () => {

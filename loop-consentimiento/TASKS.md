@@ -147,11 +147,27 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Estado:** cerrada. El propio fix de T14 (migración 080) ya se verificó contra Postgres real (`publish_consent_document_e2e_local.cjs`). Auditadas las demás acciones de `handler_test.ts` con escritura real: borrador editable/no editable y retire (`consent_documents_lifecycle.sql`, trigger `consent_documents_immutable` de 073), cuatro ojos + bitácora (`publish_consent_document.sql`); diff/preview son solo lectura, sin restricción que un fake pueda ocultar. Único hueco real encontrado: la traducción de la violación `UNIQUE(version)` (SQLSTATE 23505 → 409 `version_exists` en `index.ts`) solo estaba probada contra el chequeo en JS del fake, nunca contra Postgres real — cerrado con una aserción nueva en `consent_documents_lifecycle.sql`. Detalle en `PROGRESS.md`, iteración 33.
   - [x] **TEST-INT.e — Integración real: `send_test_email` (T12.d.2, D-15 condición 3)** (hecha 2026-10-05, iteración 39; sesión interactiva — pudo levantar Docker/`psql`, bloqueado en headless desde la Iteración 31)
     - **Estado:** cerrada. `supabase/tests/consent/email_transport_test_audit.sql` (nuevo): reproduce con un `INSERT` directo la forma exacta que `sendTestEmail()`/`auditLog()` (`index.ts`, sin RPC) escribe en `admin_audit_log` para la acción `email_transport.test` — camino smtp con fallo y con éxito (host + `resolved_ip` en `after`, nunca solo el feliz) y camino resend (`smtp_host`/`resolved_ip` en `null`, documentado como "no aplica"); confirma que ninguna fila expone la contraseña ni su ciphertext, y que `verify_audit_chain()` sigue íntegra tras las tres inserciones. Verificado rojo→verde: se cambió temporalmente el `resolved_ip` esperado a `'TEMP-DISABLED-FOR-VERIFICATION'`, `GATE sql-ciclo-de-vida` falló con el error exacto en la línea correcta, se revirtió y volvió a pasar. Cierra la condición (3) de D-15 que bloqueaba T99 desde la Iteración 37.
-  - [ ] **TEST-INT.g — T16.d: descifrado real de la IP en reveal-ip y en el expediente, y fail-closed** (REQ-17)
-    - Prueba Deno con criptografía real (sin BD): cifrar una IP con el mismo escritor que usa secure-register-user (consent-evidence.ts, AAD con user_ref_hmac) y comprobar que el lector que usa admin-consent/index.ts para reveal-ip y para la exportación del expediente la descifra igual; con otra AAD (otro titular, otra columna) debe fallar sin devolver la IP.
-    - Si e2e-local vuelve a funcionar, añadir además el caso de punta a punta: registrar → revelar → la IP coincide con la de la cabecera usada en el registro.
-    - Prueba en handler_test.ts: si la inserción en la bitácora falla, reveal-ip y la exportación del expediente responden error y NO devuelven ninguna IP (fail-closed).
-    - Verificar rojo→verde en cada prueba. Bloquea T99: es la operación más sensible del módulo.
+  - [x] **TEST-INT.g — T16.d: descifrado real de la IP en reveal-ip y en el expediente, y fail-closed** (REQ-17) (hecha 2026-10-09, iteración 58)
+    - **Estado:** cerrada. (1) El round-trip de cifrado real con AAD (mismo escritor que `secure-register-user`,
+      `encryptConsentColumn`/`decryptConsentColumn` de `consent-evidence.ts`) YA estaba cubierto antes de esta
+      iteración por `consent-evidence_test.ts` (sin BD): escribe con `encryptConsentColumn` y lee con
+      `decryptConsentColumn` — exactamente la misma función que `admin-consent/index.ts` llama para
+      `listByUserId`/`listByUserIdRevealed` (línea 104/145) — y prueba que otra AAD (otro `user_ref_hmac`,
+      otra columna) falla sin devolver la IP (`assertRejects`, líneas 29-33). No hacía falta ningún archivo
+      nuevo para este punto. (2) El caso punta a punta con `e2e-local` queda condicionado ("si vuelve a
+      funcionar") — no se intentó esta iteración (no hay necesidad de tocar Docker/Postgres para esto, ver
+      REGLAS DURAS sobre comandos prohibidos en headless); queda pendiente para una sesión que ya tenga el
+      stack local arriba. (3) Fail-closed nuevo en `handler_test.ts`: `revealIp`/`exportDossier` ya leían la
+      evidencia ANTES de llamar a `auditLog` pero, a diferencia de `retireDraft` (que compensa con un
+      `try/catch` porque ya mutó algo), no tenían ningún `try/catch` propio — si `deps.audit` falla, el
+      `throw` corta antes del `return`, sube sin capturar hasta el catch-todo de `handle()` (línea ~1298) y
+      se traduce en 500 `internal_error`, nunca en una respuesta con datos. Confirmado leyendo el código (no
+      había ningún bug que arreglar): 3 pruebas nuevas con `failAudit: true` — reveal-ip (verifica además que
+      el texto de la respuesta no contiene la IP real `203.0.113.77`) y export.json/export.pdf (ambos 500
+      `internal_error`). `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas no-opcionales
+      OK, incluido `panel-e2e`; `db-reset`/`e2e-local` SKIP opt-in; iteración 58, no múltiplo de 5,
+      `GATES_FULL=1` no obligatorio esta vez). Desbloquea T99 en la parte que esta tarea cubría ("es la
+      operación más sensible del módulo").
   - **Fuera de esta división (no crear más subtareas aquí):** `get-consent-notice` (T09) y las acciones que añadan T15/T16 se revisan dentro de sus propias tareas cuando les toque, según la regla de PROMPT.md ("toda operación que escriba en la BD necesita al menos una prueba contra Postgres real").
 
 - [x] **T12 — Correo saliente: transporte configurable y `EmailSender`** (REQ-21 backend, REQ-10, SEC-09) (hecha 2026-10-06, confirmada en iteración 42 — las 4 subtareas a/b/c/d.1-d.4 ya estaban `[x]` desde la iteración 41, pero el checkbox de esta línea y el contador de PROGRESS.md no se habían actualizado)
