@@ -10,12 +10,15 @@ import { buildDelegateNoticeEmail, buildSubjectAcknowledgementEmail, type DataSu
 import {
   ApiError,
   handle,
+  type ConfirmEmailChangeInput,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
   type EmailOutboxRow,
   type EmailTransportRow,
+  type EmailVerificationRow,
   type NewEmailTransportInput,
+  type NewEmailVerificationInput,
   type NewPrivacySettingsInput,
   type PublishInput,
 } from './handler.ts'
@@ -33,6 +36,7 @@ const SETTINGS_COLUMNS =
 const EMAIL_TRANSPORT_COLUMNS =
   'transport_version, mode, from_name, from_email, smtp_host, smtp_port, smtp_username, smtp_password_ciphertext, created_by, created_at'
 const EMAIL_OUTBOX_COLUMNS = 'id, reference_table, reference_id, created_at'
+const EMAIL_VERIFICATION_COLUMNS = 'id, new_email, code_hash, expires_at, attempts, confirmed_at, requested_by, created_at'
 
 // T12.d.1 (D-15): la contraseña SMTP se cifra con su propia AAD atada a `transport_version` — nunca la
 // misma clave que `crypto.ts` usa para la versión de clave de cifrado (esa la sigue dando `getActiveKeyVersion()`).
@@ -116,6 +120,57 @@ serve((req) =>
       insert: async (row: NewPrivacySettingsInput) => {
         const { data, error } = await db.from('privacy_settings').insert(row).select(SETTINGS_COLUMNS).single()
         if (error) throw new Error(`privacy_settings insert: ${error.code ?? 'error'}`)
+        return data as CurrentPrivacySettings
+      },
+    },
+    emailVerification: {
+      insert: async (row: NewEmailVerificationInput) => {
+        const { data, error } = await db.from('privacy_email_verifications').insert(row).select(EMAIL_VERIFICATION_COLUMNS).single()
+        if (error) throw new Error(`privacy_email_verifications insert: ${error.code ?? 'error'}`)
+        return data as EmailVerificationRow
+      },
+      getLatestPending: async () => {
+        const { data, error } = await db
+          .from('privacy_email_verifications')
+          .select(EMAIL_VERIFICATION_COLUMNS)
+          .is('confirmed_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (error) throw new Error(`privacy_email_verifications: ${error.code ?? 'error'}`)
+        return data as EmailVerificationRow | null
+      },
+      // Bloqueo optimista (WHERE id = … AND attempts = row.attempts): un UPDATE de una sola fila,
+      // atómico por sí solo (T15.a); si otra confirmación ya subió `attempts` entre medio, esta
+      // llamada no afecta ninguna fila en vez de perder el incremento ajeno.
+      incrementAttempts: async (row: EmailVerificationRow) => {
+        const { error } = await db
+          .from('privacy_email_verifications')
+          .update({ attempts: row.attempts + 1 })
+          .eq('id', row.id)
+          .eq('attempts', row.attempts)
+        if (error) throw new Error(`privacy_email_verifications update: ${error.code ?? 'error'}`)
+      },
+      confirm: async (input: ConfirmEmailChangeInput) => {
+        const { data, error } = await db.rpc('confirm_privacy_email_change', {
+          p_verification_id: input.verificationId,
+          p_code_hash: input.codeHash,
+          p_actor_id: input.actorId,
+          p_actor_role: input.actorRole,
+          p_actor_aal: input.actorAal ?? null,
+          p_actor_email_hmac: input.actorEmailHmac,
+        })
+        if (error) {
+          const msg = error.message ?? ''
+          if (msg.includes('mfa_required')) throw new ApiError(403, 'mfa_required')
+          if (msg.includes('forbidden')) throw new ApiError(403, 'forbidden')
+          if (msg.includes('not_found')) throw new ApiError(404, 'not_found')
+          if (msg.includes('already_confirmed')) throw new ApiError(409, 'already_confirmed')
+          if (msg.includes('code_expired')) throw new ApiError(410, 'code_expired')
+          if (msg.includes('invalid_code')) throw new ApiError(400, 'invalid_code')
+          if (msg.includes('settings_unavailable')) throw new ApiError(503, 'settings_unavailable')
+          throw new Error(`confirm_privacy_email_change: ${error.code ?? 'error'}`)
+        }
         return data as CurrentPrivacySettings
       },
     },

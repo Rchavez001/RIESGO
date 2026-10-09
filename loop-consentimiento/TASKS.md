@@ -256,7 +256,13 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       cambiar algunos campos) contra el trigger `enforce_next_privacy_settings_version` y las reglas de
       solo-inserción reales; lo que falta probar aquí es la capa HTTP/zod/bitácora, cubierta con los fakes
       de `handler_test.ts`.
-  - [ ] **T15.c — `request_email_change` + `confirm_email_verification` (REQ-15)** (depende de T15.a, T12 para `EmailDeps`)
+  - [x] **T15.c — `request_email_change` + `confirm_email_verification` (REQ-15)** (hecha 2026-10-08, iteración 51)
+    - **Estado:** cerrada. `POST /settings/email-change` y `/settings/email-change/confirm` en `handler.ts`;
+      el incremento de `attempts` usa un UPDATE de una sola fila con bloqueo optimista
+      (`WHERE id = … AND attempts = row.attempts`) desde `index.ts`, sin necesitar una RPC nueva para ese
+      paso — solo `confirm_privacy_email_change` (082, T15.a) seguía necesitando RPC, por cruzar dos tablas.
+      Exhausted/expired se comprueban ANTES del hash (nunca se incrementa `attempts` sobre una fila que de
+      todos modos ya no puede confirmarse). 13 pruebas nuevas en `handler_test.ts`.
     - `POST /settings/email-change` (solo `privacy_admin`): valida el correo nuevo, genera un código de
       6 dígitos (`crypto.getRandomValues`, no `Math.random`), lo hashea (`sha256Hex`, mismo helper que ya
       usa `consent-render.ts`) y lo guarda en `privacy_email_verifications` (`INSERT`, una sola tabla);

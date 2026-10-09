@@ -1150,3 +1150,78 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio, **estricto 16/28 = 57,1 %** (T15.b es una subtarea, no mueve el contador estricto
   hasta que T15 completa cierre). Ponderado: sin cambio, **≈ 59,5 %** (ningún subtask de T15 cuenta puntos
   propios hasta que T15 completa cierre, mismo criterio que T12/T13 mientras estaban divididas).
+
+## Iteración 51 — 2026-10-08 — T15.c (`request_email_change`/`confirm_email_verification`, REQ-15)
+- **Punto de partida:** `git status` limpio; T15.a/T15.b cerradas (iteraciones 49-50). Primera tarea
+  ejecutable: T15.c.
+- **Diseño:** `POST /settings/email-change` (solo `privacy_admin`): valida el correo nuevo (zod, tamaño —
+  el formato real lo exige el `CHECK` de `privacy_email_verifications.new_email`, 075), exige transporte
+  configurado (400 `email_transport_not_configured` si no), genera un código de 6 dígitos con
+  `crypto.getRandomValues` (nunca `Math.random`), lo envía con `buildEmailVerificationCodeEmail` (T12.d.4)
+  ANTES de insertar nada — si el envío falla, 502 `email_send_failed` y no queda ninguna fila huérfana con
+  un código que la persona nunca recibió (REQ-21f: este código nunca se encola en `email_outbox`). Solo si
+  el envío fue real (`result.ok`) se inserta en `privacy_email_verifications` (`INSERT` de una sola tabla,
+  `code_hash` vía `sha256Hex`, nunca el código en claro) y se deja bitácora `privacy_email_change.request`
+  con `{new_email, expires_at}` — nunca el código ni su hash.
+  `POST /settings/email-change/confirm`: busca la verificación `confirmed_at IS NULL` más reciente (404
+  `not_found` si no hay ninguna); comprueba `attempts >= 5` → 429 `attempts_exhausted` y vencimiento → 410
+  `code_expired` **ANTES** de tocar la fila o mirar el código — así nunca se incrementa `attempts` sobre
+  una fila que de todos modos ya no puede confirmarse (orden deliberadamente distinto al enunciado literal
+  de TASKS.md, que sugería comprobar el hash primero: hacerlo así habría permitido seguir subiendo
+  `attempts` más allá de 5 en una fila ya agotada). Si el hash no coincide, incrementa `attempts` y 400
+  `invalid_code`; si coincide, llama a `deps.emailVerification.confirm(...)` (la RPC `confirm_
+  privacy_email_change`, 082/T15.a) y devuelve la `privacy_settings` vigente nueva.
+  **Decisión de diseño no anticipada por TASKS.md:** el incremento de `attempts` NO necesita una RPC nueva.
+  TASKS.md ya advertía que no puede vivir dentro de `confirm_privacy_email_change` (revertiría con el
+  propio error), pero no decía cómo evitar la carrera de "leer `attempts` en TS, escribir `attempts+1`" si
+  se hiciera con un UPDATE de valor literal corriente. Solución sin migración nueva: UPDATE de una sola
+  fila con bloqueo optimista real (`WHERE id = … AND attempts = row.attempts`, `index.ts`) — si otra
+  confirmación ya subió `attempts` entre medio, esta llamada no afecta ninguna fila en vez de perder el
+  incremento ajeno; sigue siendo "una UPDATE de una sola fila/tabla, atómica por sí sola" como pedía la
+  tarea, sin necesitar envolverla en una función PL/pgSQL nueva.
+- **Cambios:** `supabase/functions/admin-consent/handler.ts` (`EmailVerificationRow`,
+  `NewEmailVerificationInput`, `ConfirmEmailChangeInput`, `EmailVerificationDeps`, campo `emailVerification`
+  en `AdminConsentDeps`, `RequestEmailChangeSchema`/`ConfirmEmailChangeSchema`, `generateVerificationCode`,
+  `requestEmailChange`, `confirmEmailChange`, rutas `POST /settings/email-change` y
+  `/settings/email-change/confirm`); `supabase/functions/admin-consent/index.ts` (`emailVerification` real
+  contra `privacy_email_verifications` + RPC `confirm_privacy_email_change`, mapeo de errores de la RPC a
+  `ApiError` tipados); `supabase/functions/admin-consent/handler_test.ts` (`makeEmailVerificationStore`,
+  `emailChangeDeps`, 13 pruebas nuevas); `loop-consentimiento/TASKS.md` (T15.c `[x]`); este archivo.
+- **Pruebas añadidas (fakes, `handler_test.ts`):** envía el código y lo guarda como hash (64 hex, nunca el
+  código en claro) sin exponerlo en la bitácora; sin transporte configurado → 400, nada insertado; envío
+  fallido → 502, nada insertado (nunca se encola); correo vacío → 400 `invalid_input`; editor/auditor → 403
+  en ambas rutas; sin ninguna verificación pendiente → 404; código erróneo → 400 `invalid_code` + `attempts`
+  sube a 1, nada más cambia; código vencido → 410 `code_expired` sin tocar la fila; 5 intentos agotados →
+  429 `attempts_exhausted` sin tocar la fila (ni con el código correcto); código correcto → 200, la vigente
+  pasa a tener el correo nuevo, la bitácora de TS queda vacía (la RPC real deja la suya propia dentro de su
+  propia transacción, no duplicada aquí); código erróneo/correcto nunca cambia nada sin pasar por `confirm`
+  (`GET /settings` sigue con el correo anterior); `GET /settings/email-change` → 405.
+- **Cobertura contra Postgres real (regla del PROMPT.md):** no hace falta un archivo SQL nuevo, mismo
+  criterio que T15.b. `settings_versioning.sql` (test 6, desde la migración 075) ya ejercita contra
+  Postgres real exactamente la operación que añade esta tarea — `INSERT` en `privacy_email_verifications` y
+  `UPDATE ... SET attempts = attempts + 1` — contra el trigger real que exige que solo suban `attempts`/
+  `confirmed_at` y el `CHECK (attempts BETWEEN 0 AND 10)` (test 6, intento de `attempts = 11` rechazado). El
+  bloqueo optimista (`WHERE … AND attempts = row.attempts`) es semántica estándar de `WHERE`, no algo que
+  dependa de un trigger o restricción propios de este módulo que un fake pudiera ocultar — no hay nada
+  nuevo que un Postgres real detecte aquí y un fake no. La RPC `confirm_privacy_email_change` (082) ya tiene
+  su propia prueba SQL (`privacy_email_change_confirm.sql`, T15.a); esta tarea no le añade ningún camino
+  nuevo. Lo único que añade T15.c es la capa HTTP/zod/orden-de-comprobaciones/bitácora, cubierta por los
+  fakes de `handler_test.ts`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` (9 puertas, corrida normal): typecheck-frontend,
+  lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e (273s, 2 perfiles por defecto),
+  deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit — todas OK; db-reset/e2e-local SKIP explícito
+  (opt-in). Iteración 51, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez. Antes de llegar al
+  verde: un primer intento de `deno-test` falló por un error de tipos real en mi propio test (spread de
+  `CurrentPrivacySettings` — con `unsubscribe_subject: string | null` — directo en `NewPrivacySettingsInput`
+  — que exige `string` — dentro del `onConfirm` de prueba); corregido construyendo el objeto campo por
+  campo, igual que ya hace `updateSettings` en producción (nunca spreadea `current` completo hacia
+  `insert`); reverificado en verde.
+- Desviaciones de SPEC: ninguna. Desviación frente al texto literal de TASKS.md (orden de comprobaciones en
+  `confirm`, documentada arriba): más segura que la lectura literal, sin perder ningún criterio de aceptación.
+- Riesgos / pendientes detectados: T15.d (TEST-INT y cierre de T15) sigue pendiente — con T15.a/b/c ya
+  documentadas sin necesidad de SQL nuevo, T15.d debería poder cerrarse solo con la auditoría y el cierre de
+  documentación, sin código nuevo. `e2e-local` sigue sin una corrida real en verde en esta máquina (bloqueador
+  de Docker Desktop, iteraciones 43-44), sin relación con T15.
+- Porcentaje: sin cambio, **estricto 16/28 = 57,1 %** (T15.c es una subtarea, no mueve el contador estricto
+  hasta que T15 completa cierre). Ponderado: sin cambio, **≈ 59,5 %** (ningún subtask de T15 cuenta puntos
+  propios hasta que T15 completa cierre, mismo criterio que T12/T13 mientras estaban divididas).

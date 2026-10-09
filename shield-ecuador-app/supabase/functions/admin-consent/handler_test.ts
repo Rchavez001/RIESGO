@@ -4,6 +4,8 @@
 // publicar — con "cuatro ojos" — y retirar un borrador), todas atribuidas y con bitácora before/after.
 // T12.d.1 (REQ-21, D-15): `get_email_transport`/`update_email_transport`, solo `privacy_admin`, contraseña
 // SMTP nunca en la respuesta ni en la bitácora.
+// T15.c (REQ-15): `request_email_change`/`confirm_email_verification` — código de 6 dígitos, 30 min,
+// máximo 5 intentos; el código y su hash nunca aparecen en la bitácora ni en la respuesta.
 import { assertEquals, assertExists } from 'https://deno.land/std@0.168.0/testing/asserts.ts'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'https://deno.land/x/jose@v5.9.6/index.ts'
 import {
@@ -11,6 +13,7 @@ import {
   handle,
   type AdminConsentDeps,
   type AuditEntry,
+  type ConfirmEmailChangeInput,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
@@ -20,8 +23,11 @@ import {
   type EmailOutboxRow,
   type EmailTransportDeps,
   type EmailTransportRow,
+  type EmailVerificationDeps,
+  type EmailVerificationRow,
   type NewConsentDocumentInput,
   type NewEmailTransportInput,
+  type NewEmailVerificationInput,
   type NewPrivacySettingsInput,
   type RateLimitCheck,
   type SettingsDeps,
@@ -199,6 +205,58 @@ function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): Settings
   }
 }
 
+// Fake de `emailVerification` (T15.c): un store en memoria. `incrementAttempts` reproduce el bloqueo
+// optimista real (solo sube si `attempts` sigue siendo el que vio el llamador); `confirm` reproduce lo
+// que hace la RPC real (082) — marca `confirmed_at` y, salvo que la prueba fuerce `failConfirm`, delega
+// en `onConfirm` para construir la `privacy_settings` nueva (así una prueba puede encadenarla con
+// `settingsDeps()` real sin duplicar esa lógica).
+function makeEmailVerificationStore(
+  initial: EmailVerificationRow[] = [],
+  opts: {
+    onConfirm?: (row: EmailVerificationRow, input: ConfirmEmailChangeInput) => Promise<CurrentPrivacySettings>
+    failConfirm?: string
+  } = {},
+): { emailVerification: EmailVerificationDeps; rows: EmailVerificationRow[] } {
+  const rows = [...initial]
+  let seq = rows.length
+  const emailVerification: EmailVerificationDeps = {
+    insert: (row: NewEmailVerificationInput) => {
+      seq += 1
+      const created: EmailVerificationRow = {
+        id: `ver-${seq}`,
+        attempts: 0,
+        confirmed_at: null,
+        created_at: `2026-10-08T00:0${seq}:00Z`,
+        ...row,
+      }
+      rows.push(created)
+      return Promise.resolve(created)
+    },
+    getLatestPending: () => {
+      const pending = rows.filter((r) => r.confirmed_at === null).sort((a, b) => b.created_at.localeCompare(a.created_at))
+      return Promise.resolve(pending[0] ?? null)
+    },
+    incrementAttempts: (row: EmailVerificationRow) => {
+      const idx = rows.findIndex((r) => r.id === row.id && r.attempts === row.attempts)
+      if (idx !== -1) rows[idx] = { ...rows[idx], attempts: rows[idx].attempts + 1 }
+      return Promise.resolve()
+    },
+    confirm: (input: ConfirmEmailChangeInput) => {
+      if (opts.failConfirm) return Promise.reject(new ApiError(409, opts.failConfirm))
+      const idx = rows.findIndex((r) => r.id === input.verificationId)
+      if (idx === -1) return Promise.reject(new ApiError(404, 'not_found'))
+      rows[idx] = { ...rows[idx], confirmed_at: '2026-10-08T00:30:00Z' }
+      if (opts.onConfirm) return opts.onConfirm(rows[idx], input)
+      return Promise.resolve({
+        settings_version: 99, controller_name: null, controller_address: null, controller_phone: null,
+        privacy_email: rows[idx].new_email, dpo_name: null, dpo_contact: null, privacy_policy_url: null,
+        unsubscribe_subject: 'Baja', response_days: 15, ip_retention_days: 730, four_eyes_publish: false,
+      })
+    },
+  }
+  return { emailVerification, rows }
+}
+
 const publishedDoc = (over: Partial<ConsentDocumentRow> = {}): ConsentDocumentRow => ({
   id: 'doc-pub-1', version: '1.0', title: 'Aviso v1.0',
   content_md: 'Versión {{version}} — {{correo_privacidad}}', content_sha256: 'sha-pub',
@@ -217,6 +275,7 @@ function fullDeps(opts: {
   failAudit?: boolean
   documents?: DocumentsDeps
   settings?: SettingsDeps
+  emailVerification?: EmailVerificationDeps
   emailTransport?: EmailTransportDeps
   email?: EmailDeps
   emailOutbox?: EmailOutboxDeps
@@ -228,6 +287,7 @@ function fullDeps(opts: {
     audit: (entry) => (opts.failAudit ? Promise.reject(new Error('db')) : (audit.push(entry), Promise.resolve())),
     documents: opts.documents ?? makeDocsStore().documents,
     settings: opts.settings ?? settingsDeps(),
+    emailVerification: opts.emailVerification ?? makeEmailVerificationStore().emailVerification,
     emailTransport: opts.emailTransport ?? makeEmailTransportStore().emailTransport,
     email: opts.email ?? makeEmailDeps().email,
     emailOutbox: opts.emailOutbox ?? makeEmailOutboxStore().emailOutbox,
@@ -693,6 +753,195 @@ Deno.test('GET /settings sin ninguna configuración → 503 settings_unavailable
 
 Deno.test('PUT /settings → 405', async () => {
   const res = await handle(req(await sign(claims()), '/settings', 'PUT'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
+})
+
+// ── T15.c (REQ-15): POST /settings/email-change y /settings/email-change/confirm ───────────────────────
+
+const EMAIL_CHANGE_CODE = '123456'
+
+function emailChangeDeps(opts: {
+  roles?: string[]
+  audit?: AuditEntry[]
+  verification?: EmailVerificationRow[]
+  onConfirm?: (row: EmailVerificationRow, input: ConfirmEmailChangeInput) => Promise<CurrentPrivacySettings>
+  failConfirm?: string
+  emailResult?: EmailSendResult
+  transport?: EmailTransportRow[]
+} = {}) {
+  const { emailVerification, rows } = makeEmailVerificationStore(opts.verification, { onConfirm: opts.onConfirm, failConfirm: opts.failConfirm })
+  const { email, sent } = makeEmailDeps({ result: opts.emailResult })
+  const { emailTransport } = makeEmailTransportStore(opts.transport ?? [{
+    transport_version: 1, mode: 'resend', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+    smtp_host: null, smtp_port: null, smtp_username: null, smtp_password_ciphertext: null,
+    created_by: ADMIN_ID, created_at: '2026-10-08T00:00:00Z',
+  }])
+  const deps = fullDeps({ roles: opts.roles ?? ['privacy_admin'], audit: opts.audit, emailVerification, emailTransport, email })
+  return { deps, rows, sent }
+}
+
+async function sha256HexOf(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+Deno.test('POST /settings/email-change: envía el código al correo nuevo y lo guarda cifrado (hash), nunca en la bitácora', async () => {
+  const audit: AuditEntry[] = []
+  const { deps, rows, sent } = emailChangeDeps({ audit })
+  const res = await handle(
+    req(await sign(claims()), '/settings/email-change', 'POST', { new_email: 'nuevo-privacidad@example.test' }),
+    deps,
+  )
+  assertEquals(res.status, 200)
+  assertExists((await res.json()).expires_at)
+  assertEquals(sent.length, 1)
+  assertEquals(sent[0].message.to, 'nuevo-privacidad@example.test')
+  assertEquals(rows.length, 1)
+  assertEquals(rows[0].new_email, 'nuevo-privacidad@example.test')
+  assertEquals(rows[0].confirmed_at, null)
+  assertEquals(rows[0].code_hash.length, 64) // sha256 hex, no el código en claro
+  assertEquals(JSON.stringify(audit).includes(rows[0].code_hash), false)
+  assertEquals(audit[0].action, 'privacy_email_change.request')
+  assertEquals(audit[0].entity, 'privacy_email_verifications')
+})
+
+Deno.test('POST /settings/email-change: sin transporte configurado → 400, nada insertado', async () => {
+  const { deps, rows, sent } = emailChangeDeps({ transport: [] })
+  const res = await handle(req(await sign(claims()), '/settings/email-change', 'POST', { new_email: 'x@example.test' }), deps)
+  assertEquals([res.status, (await res.json()).error], [400, 'email_transport_not_configured'])
+  assertEquals(rows.length, 0)
+  assertEquals(sent.length, 0)
+})
+
+Deno.test('POST /settings/email-change: si el envío falla → 502, nada insertado (nunca se encola este código)', async () => {
+  const { deps, rows } = emailChangeDeps({ emailResult: { ok: false, errorCode: 'smtp_error' } })
+  const res = await handle(req(await sign(claims()), '/settings/email-change', 'POST', { new_email: 'x@example.test' }), deps)
+  assertEquals([res.status, (await res.json()).error], [502, 'email_send_failed'])
+  assertEquals(rows.length, 0)
+})
+
+Deno.test('POST /settings/email-change: correo inválido en el body → 400 invalid_input', async () => {
+  const { deps, rows } = emailChangeDeps()
+  const res = await handle(req(await sign(claims()), '/settings/email-change', 'POST', { new_email: '' }), deps)
+  assertEquals([res.status, (await res.json()).error], [400, 'invalid_input'])
+  assertEquals(rows.length, 0)
+})
+
+Deno.test('editor/auditor no pueden pedir ni confirmar el cambio de correo → 403 forbidden', async () => {
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    const { deps: reqDeps } = emailChangeDeps({ roles: [role] })
+    const resReq = await handle(req(await sign(claims()), '/settings/email-change', 'POST', { new_email: 'x@example.test' }), reqDeps)
+    assertEquals([resReq.status, (await resReq.json()).error], [403, 'forbidden'])
+    const { deps: confirmDeps } = emailChangeDeps({ roles: [role] })
+    const resConfirm = await handle(req(await sign(claims()), '/settings/email-change/confirm', 'POST', { code: EMAIL_CHANGE_CODE }), confirmDeps)
+    assertEquals([resConfirm.status, (await resConfirm.json()).error], [403, 'forbidden'])
+  }
+})
+
+Deno.test('POST /settings/email-change/confirm: sin ninguna verificación pendiente → 404 not_found', async () => {
+  const { deps } = emailChangeDeps()
+  const res = await handle(req(await sign(claims()), '/settings/email-change/confirm', 'POST', { code: EMAIL_CHANGE_CODE }), deps)
+  assertEquals([res.status, (await res.json()).error], [404, 'not_found'])
+})
+
+Deno.test('código erróneo: 400 invalid_code, sube attempts, no cambia el correo', async () => {
+  const codeHash = await sha256HexOf(EMAIL_CHANGE_CODE)
+  const pending: EmailVerificationRow = {
+    id: 'ver-1', new_email: 'nuevo@example.test', code_hash: codeHash,
+    expires_at: '2099-01-01T00:00:00Z', attempts: 0, confirmed_at: null,
+    requested_by: ADMIN_ID, created_at: '2026-10-08T00:00:00Z',
+  }
+  const { deps, rows } = emailChangeDeps({ verification: [pending] })
+  const res = await handle(req(await sign(claims()), '/settings/email-change/confirm', 'POST', { code: '000000' }), deps)
+  assertEquals([res.status, (await res.json()).error], [400, 'invalid_code'])
+  assertEquals(rows[0].attempts, 1)
+  assertEquals(rows[0].confirmed_at, null)
+})
+
+Deno.test('código vencido → 410 code_expired, sin tocar la fila', async () => {
+  const codeHash = await sha256HexOf(EMAIL_CHANGE_CODE)
+  const pending: EmailVerificationRow = {
+    id: 'ver-1', new_email: 'nuevo@example.test', code_hash: codeHash,
+    expires_at: '2020-01-01T00:00:00Z', attempts: 0, confirmed_at: null,
+    requested_by: ADMIN_ID, created_at: '2026-10-08T00:00:00Z',
+  }
+  const { deps, rows } = emailChangeDeps({ verification: [pending] })
+  const res = await handle(req(await sign(claims()), '/settings/email-change/confirm', 'POST', { code: EMAIL_CHANGE_CODE }), deps)
+  assertEquals([res.status, (await res.json()).error], [410, 'code_expired'])
+  assertEquals(rows[0].attempts, 0)
+})
+
+Deno.test('5 intentos agotados → 429 attempts_exhausted, sin tocar la fila (ni con el código correcto)', async () => {
+  const codeHash = await sha256HexOf(EMAIL_CHANGE_CODE)
+  const pending: EmailVerificationRow = {
+    id: 'ver-1', new_email: 'nuevo@example.test', code_hash: codeHash,
+    expires_at: '2099-01-01T00:00:00Z', attempts: 5, confirmed_at: null,
+    requested_by: ADMIN_ID, created_at: '2026-10-08T00:00:00Z',
+  }
+  const { deps, rows } = emailChangeDeps({ verification: [pending] })
+  const res = await handle(req(await sign(claims()), '/settings/email-change/confirm', 'POST', { code: EMAIL_CHANGE_CODE }), deps)
+  assertEquals([res.status, (await res.json()).error], [429, 'attempts_exhausted'])
+  assertEquals(rows[0].attempts, 5)
+})
+
+Deno.test('código correcto: confirma, la vigente pasa a tener el correo nuevo, bitácora sin el código ni el hash', async () => {
+  const codeHash = await sha256HexOf(EMAIL_CHANGE_CODE)
+  const pending: EmailVerificationRow = {
+    id: 'ver-1', new_email: 'nuevo@example.test', code_hash: codeHash,
+    expires_at: '2099-01-01T00:00:00Z', attempts: 2, confirmed_at: null,
+    requested_by: ADMIN_ID, created_at: '2026-10-08T00:00:00Z',
+  }
+  const settings = settingsDeps()
+  const audit: AuditEntry[] = []
+  const { deps, rows } = emailChangeDeps({
+    verification: [pending],
+    audit,
+    onConfirm: async (row) => {
+      const current = (await settings.getCurrent())!
+      return settings.insert({
+        settings_version: current.settings_version + 1,
+        controller_name: current.controller_name,
+        controller_address: current.controller_address,
+        controller_phone: current.controller_phone,
+        dpo_name: current.dpo_name,
+        dpo_contact: current.dpo_contact,
+        privacy_policy_url: current.privacy_policy_url,
+        unsubscribe_subject: current.unsubscribe_subject ?? '',
+        response_days: current.response_days,
+        ip_retention_days: current.ip_retention_days,
+        four_eyes_publish: current.four_eyes_publish,
+        privacy_email: row.new_email,
+        created_by: ADMIN_ID,
+      })
+    },
+  })
+  const res = await handle(req(await sign(claims()), '/settings/email-change/confirm', 'POST', { code: EMAIL_CHANGE_CODE }), deps)
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.privacy_email, 'nuevo@example.test')
+  assertEquals(rows[0].confirmed_at, '2026-10-08T00:30:00Z')
+  // La RPC real (082) deja su propia fila de bitácora dentro de la transacción; el lado TS no debe
+  // añadir otra con el código ni el hash.
+  assertEquals(audit.length, 0)
+})
+
+Deno.test('código erróneo o correcto nunca cambia nada sin llamar a confirm: GET /settings sigue con el correo anterior', async () => {
+  const settings = settingsDeps()
+  const codeHash = await sha256HexOf(EMAIL_CHANGE_CODE)
+  const pending: EmailVerificationRow = {
+    id: 'ver-1', new_email: 'nuevo@example.test', code_hash: codeHash,
+    expires_at: '2099-01-01T00:00:00Z', attempts: 0, confirmed_at: null,
+    requested_by: ADMIN_ID, created_at: '2026-10-08T00:00:00Z',
+  }
+  const { deps } = emailChangeDeps({ verification: [pending] })
+  await handle(req(await sign(claims()), '/settings/email-change/confirm', 'POST', { code: '000000' }), deps)
+  const resGet = await handle(req(await sign(claims()), '/settings', 'GET'), fullDeps({ roles: ['privacy_admin'], settings }))
+  assertEquals((await resGet.json()).privacy_email, 'privacidad@example.test')
+})
+
+Deno.test('GET /settings/email-change → 405', async () => {
+  const { deps } = emailChangeDeps()
+  const res = await handle(req(await sign(claims()), '/settings/email-change', 'GET'), deps)
   assertEquals(res.status, 405)
 })
 

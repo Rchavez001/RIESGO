@@ -8,6 +8,7 @@
 // (se revierten los UPDATE ya aplicados: ver `publishDocument`/`retireDocument`).
 import { AuthError, PRIVACY_ROLES, requireRole, type AuthGuardOptions, type VerifiedUser } from '../_shared/auth-guard.ts'
 import { renderConsent, sha256Hex, type PrivacySettingsForRender } from '../_shared/consent-render.ts'
+import { buildEmailVerificationCodeEmail } from '../_shared/email/templates.ts'
 import type { EmailMessage, EmailSendResult } from '../_shared/email/types.ts'
 import { z } from 'https://esm.sh/zod@3.23.8'
 
@@ -116,6 +117,48 @@ export interface SettingsDeps {
   insert: (row: NewPrivacySettingsInput) => Promise<CurrentPrivacySettings>
 }
 
+export interface EmailVerificationRow {
+  id: string
+  new_email: string
+  code_hash: string
+  expires_at: string
+  attempts: number
+  confirmed_at: string | null
+  requested_by: string
+  created_at: string
+}
+
+export interface NewEmailVerificationInput {
+  new_email: string
+  code_hash: string
+  expires_at: string
+  requested_by: string
+}
+
+export interface ConfirmEmailChangeInput {
+  verificationId: string
+  codeHash: string
+  actorId: string
+  actorRole: string
+  /** Mismo motivo que `PublishInput.actorAal`: la función RPC (082) lo vuelve a exigir por su cuenta. */
+  actorAal: string | undefined
+  actorEmailHmac: string
+}
+
+export interface EmailVerificationDeps {
+  insert: (row: NewEmailVerificationInput) => Promise<EmailVerificationRow>
+  /** La más reciente con `confirmed_at IS NULL`; `null` si no hay ninguna pendiente. */
+  getLatestPending: () => Promise<EmailVerificationRow | null>
+  /** UPDATE de una sola fila con bloqueo optimista (`WHERE id = … AND attempts = row.attempts`): sube
+   *  `attempts` en uno sin una carrera de leer-en-TS-y-escribir-a-ciegas frente a dos confirmaciones
+   *  simultáneas. NO vive dentro de `confirm` (ver T15.a, migración 082): si viviera ahí, un error por
+   *  código inválido revertiría también este incremento en la misma transacción. */
+  incrementAttempts: (row: EmailVerificationRow) => Promise<void>
+  /** RPC `confirm_privacy_email_change` (082, T15.a): marca `confirmed_at` + inserta la siguiente
+   *  versión de `privacy_settings` con el correo nuevo, en UNA transacción real. */
+  confirm: (input: ConfirmEmailChangeInput) => Promise<CurrentPrivacySettings>
+}
+
 export type EmailTransportMode = 'resend' | 'smtp'
 
 export interface EmailTransportRow {
@@ -198,6 +241,7 @@ export interface AdminConsentDeps {
   audit: (entry: AuditEntry) => Promise<void>
   documents: DocumentsDeps
   settings: SettingsDeps
+  emailVerification: EmailVerificationDeps
   emailTransport: EmailTransportDeps
   email: EmailDeps
   emailOutbox: EmailOutboxDeps
@@ -264,6 +308,17 @@ const UpdateSettingsSchema = z.object({
   unsubscribe_subject: z.string().trim().min(1).max(300),
   response_days: z.number().int().min(1).max(90),
   ip_retention_days: z.number().int().min(0),
+})
+
+// REQ-15: el correo nuevo solo cambia de verdad en `confirm_privacy_email_change` (082); aquí solo se
+// valida el tamaño/forma básica — el CHECK real de `privacy_email_verifications.new_email` (075) es la
+// última palabra sobre el formato.
+const RequestEmailChangeSchema = z.object({
+  new_email: z.string().trim().min(1).max(254),
+})
+
+const ConfirmEmailChangeSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/, 'invalid_code_format'),
 })
 
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
@@ -501,6 +556,81 @@ async function updateSettings(admin: Admin, deps: AdminConsentDeps, body: unknow
   return created
 }
 
+// REQ-15: 6 dígitos, `crypto.getRandomValues` (nunca `Math.random`) — mismo estándar que el resto del
+// módulo exige para cualquier valor con función de seguridad.
+function generateVerificationCode(): string {
+  const bytes = new Uint32Array(1)
+  crypto.getRandomValues(bytes)
+  return String(bytes[0] % 1_000_000).padStart(6, '0')
+}
+
+const MAX_EMAIL_VERIFICATION_ATTEMPTS = 5
+
+async function requestEmailChange(admin: Admin, deps: AdminConsentDeps, body: unknown): Promise<{ expires_at: string }> {
+  const parsed = RequestEmailChangeSchema.safeParse(body)
+  if (!parsed.success) throw new ApiError(400, 'invalid_input')
+  const newEmail = parsed.data.new_email
+
+  const transport = await deps.emailTransport.getCurrent()
+  if (!transport) throw new ApiError(400, 'email_transport_not_configured')
+
+  const code = generateVerificationCode()
+  // REQ-15/REQ-21(f): el código de verificación NUNCA se encola en `email_outbox` — si el envío falla,
+  // se informa al instante en vez de reintentar después con un código que la persona nunca recibió.
+  const result = await deps.email.send(transport, buildEmailVerificationCodeEmail({ to: newEmail, code }))
+  if (!result.ok) throw new ApiError(502, 'email_send_failed')
+
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+  const created = await deps.emailVerification.insert({
+    new_email: newEmail,
+    code_hash: await sha256Hex(code),
+    expires_at: expiresAt,
+    requested_by: admin.userId,
+  })
+
+  // Nunca el código ni su hash en la bitácora.
+  await auditLog(deps, admin, {
+    action: 'privacy_email_change.request',
+    entity: 'privacy_email_verifications',
+    entity_id: created.id,
+    before: null,
+    after: { new_email: created.new_email, expires_at: created.expires_at },
+  })
+
+  return { expires_at: created.expires_at }
+}
+
+async function confirmEmailChange(admin: Admin, deps: AdminConsentDeps, body: unknown): Promise<CurrentPrivacySettings> {
+  const parsed = ConfirmEmailChangeSchema.safeParse(body)
+  if (!parsed.success) throw new ApiError(400, 'invalid_input')
+
+  const pending = await deps.emailVerification.getLatestPending()
+  if (!pending) throw new ApiError(404, 'not_found')
+  // Agotados/vencidos se comprueban ANTES del hash y sin tocar la fila: así nunca se incrementa
+  // `attempts` por encima de MAX_EMAIL_VERIFICATION_ATTEMPTS ni se sigue adivinando sobre un código
+  // que ya no puede confirmarse de todos modos.
+  if (pending.attempts >= MAX_EMAIL_VERIFICATION_ATTEMPTS) throw new ApiError(429, 'attempts_exhausted')
+  if (new Date(pending.expires_at).getTime() <= Date.now()) throw new ApiError(410, 'code_expired')
+
+  const codeHash = await sha256Hex(parsed.data.code)
+  if (codeHash !== pending.code_hash) {
+    await deps.emailVerification.incrementAttempts(pending)
+    throw new ApiError(400, 'invalid_code')
+  }
+
+  if (!admin.email) throw new AuthError(403, 'forbidden')
+  // La bitácora de esta confirmación la deja la propia RPC (082), en la misma transacción que marca
+  // `confirmed_at` e inserta la versión nueva de `privacy_settings` — no hace falta otro `auditLog` aquí.
+  return await deps.emailVerification.confirm({
+    verificationId: pending.id,
+    codeHash,
+    actorId: admin.userId,
+    actorRole: admin.roles.join(','),
+    actorAal: typeof admin.claims.aal === 'string' ? admin.claims.aal : undefined,
+    actorEmailHmac: await deps.emailHmac(admin.email.trim().toLowerCase()),
+  })
+}
+
 function toPublicEmailTransport(row: EmailTransportRow): PublicEmailTransport {
   const { smtp_password_ciphertext, ...rest } = row
   return { ...rest, password_set: !!smtp_password_ciphertext }
@@ -686,6 +816,22 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
         return json(200, updated)
       }
       return json(405, { error: 'method_not_allowed' })
+    }
+
+    if (path === '/settings/email-change') {
+      if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+      const body = await req.json().catch(() => ({}))
+      const result = await requestEmailChange(admin, deps, body)
+      return json(200, result)
+    }
+
+    if (path === '/settings/email-change/confirm') {
+      if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+      const body = await req.json().catch(() => ({}))
+      const result = await confirmEmailChange(admin, deps, body)
+      return json(200, result)
     }
 
     if (path === '/email-transport/test') {
