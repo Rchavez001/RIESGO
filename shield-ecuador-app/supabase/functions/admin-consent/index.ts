@@ -20,6 +20,7 @@ import {
   type EmailTransportRow,
   type EmailVerificationRow,
   type EvidenceRow,
+  type RevealedEvidenceRow,
   type NewEmailTransportInput,
   type NewEmailVerificationInput,
   type NewPrivacySettingsInput,
@@ -110,6 +111,38 @@ serve((req) =>
               ip_masked: ip ? maskIp(ip) : null,
             }
           }),
+        )
+      },
+      // T16.d.1 (REQ-17): mismo historial que `listByUserId`, sin `maskIp` — solo la llama `revealIp`
+      // (handler.ts), que exige `privacy_admin` + motivo y deja bitácora antes de devolver esto.
+      listByUserIdRevealed: async (userId) => {
+        const userRefHmac = await hmacLookup(userId, 'LOOKUP_HMAC_KEY_B64')
+        const { data, error } = await db
+          .from('consent_records')
+          .select('document_version, purpose_code, decision, channel, server_ts, rendered_sha256, ip_ciphertext, user_ref_hmac')
+          .eq('user_ref_hmac', userRefHmac)
+          .order('server_ts', { ascending: false })
+        if (error) throw new Error(`consent_records: ${error.code ?? 'error'}`)
+        const rows = (data ?? []) as Array<{
+          document_version: string
+          purpose_code: string
+          decision: 'granted' | 'denied' | 'revoked'
+          channel: string
+          server_ts: string
+          rendered_sha256: string
+          ip_ciphertext: EncryptedPayload | null
+          user_ref_hmac: string
+        }>
+        return Promise.all(
+          rows.map(async (row): Promise<RevealedEvidenceRow> => ({
+            document_version: row.document_version,
+            purpose_code: row.purpose_code,
+            decision: row.decision,
+            channel: row.channel,
+            server_ts: row.server_ts,
+            rendered_sha256: row.rendered_sha256,
+            ip: await decryptConsentColumn(row, 'ip_ciphertext'),
+          })),
         )
       },
     },

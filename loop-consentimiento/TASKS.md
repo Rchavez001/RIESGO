@@ -379,7 +379,33 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas no-opcionales
       OK; `db-reset`/`e2e-local` SKIP opt-in como siempre; iteración 55, no múltiplo de 5, `GATES_FULL=1` no
       obligatorio esta vez).
-  - [ ] **T16.d — `reveal_ip` (solo `privacy_admin`, motivo obligatorio, registrado en bitácora) + exportación de expediente de un titular (JSON/PDF simple)** (REQ-17)
+  - **T16.d — `reveal_ip` + exportación de expediente de un titular (REQ-17)** (división 2026-10-09, antes de codificar: la tarea mezcla una acción corta — revelar IP con motivo y bitácora — con una pieza más grande — generar JSON y PDF de un expediente completo, con su propia plantilla; se parte en dos, mismo patrón que T12.d/T15/T16)
+    - [x] **T16.d.1 — `POST /evidence/reveal-ip`: IP real (sin enmascarar), solo `privacy_admin`, motivo obligatorio, registrado en bitácora** (REQ-17) (hecha 2026-10-09, iteración 56 — retoma el WIP de `handler.ts`/`handler_test.ts` de una iteración headless interrumpida, auditado y completo; faltaba el cableado real en `index.ts`)
+      - **Estado:** cerrada. `EvidenceDeps.listByUserIdRevealed` (nuevo en `index.ts`, mismo patrón que
+        `listByUserId` pero sin `maskIp`: descifra `ip_ciphertext` con `decryptConsentColumn` y devuelve la
+        IP real) + `revealIp`/`RevealIpUserSchema` en `handler.ts` (`POST /evidence/reveal-ip`, solo
+        `privacy_admin` vía `ADMIN_ONLY`, valida `user_id` antes que `reason` para que un UUID inválido dé
+        `invalid_input` incluso sin motivo). La bitácora (`evidence.reveal_ip`, entidad `consent_records`,
+        `entity_id = user_id`) nunca guarda la IP revelada en claro, solo `{row_count}`. El proxy del panel
+        ya admite la ruta sin cambios (`PRIVACY_FN_RE` acepta varios segmentos `[A-Za-z0-9_-]+`, T16.b solo
+        tuvo que ampliarlo para el punto de `export.csv`). 6 pruebas en `handler_test.ts` (ya estaban
+        escritas en el WIP, confirmadas contra la implementación real: camino feliz con 2 filas incluyendo
+        una IP `null`, sin coincidencias → 200 vacío con bitácora igual, sin motivo/motivo en blanco → 400
+        sin bitácora, `user_id` ausente/no-uuid → 400 antes de pedir motivo, editor/auditor → 403, `GET` →
+        405). No hace falta prueba SQL nueva (mismo razonamiento que T16.c: solo lectura + descifrado puro,
+        sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar — el único `INSERT` nuevo es
+        la fila de bitácora, ya cubierta por las pruebas append-only de T08).
+      - **Aceptación:** solo `privacy_admin` (editor/auditor → 403); sin motivo → 400 `reason_required`;
+        `user_id` inválido → 400 `invalid_input`; camino feliz devuelve IP real (no enmascarada) + bitácora con
+        actor, motivo y `row_count`, nunca la IP; método distinto de `POST` → 405.
+    - [ ] **T16.d.2 — Exportación de expediente de un titular (JSON y PDF simple)** (REQ-17)
+      - Reutiliza `evidence.listByUserId` (IP enmascarada, sin exigir "Revelar IP" primero) + lectura de
+        `data_subject_requests` del mismo titular; genera un JSON descargable y un PDF simple (sin librería
+        pesada: texto plano maquetado, mismo nivel que el CSV de T16.b). Registrado en bitácora
+        (`evidence.export_dossier`) con motivo obligatorio, igual que T16.b.
+      - **Aceptación:** solo `privacy_admin` (mismo candado que revelar IP, no los tres roles del módulo);
+        sin motivo → 400; JSON y PDF con el mismo contenido; bitácora con actor, motivo y recuento; método
+        distinto → 405.
   - [ ] **T16.e — Solicitudes: cambio de estado (envuelve `update_data_subject_request_status`, 078) + listado con semáforo** (REQ-11, REQ-16)
   - [ ] **T16.f — `verify_chains`: envuelve `verify_consent_chain()`/`verify_audit_chain()`** (REQ-18)
 

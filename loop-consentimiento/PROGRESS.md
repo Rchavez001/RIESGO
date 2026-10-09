@@ -1469,3 +1469,41 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio en el contador por tarea completa (T16 sigue con tres de sus seis subtareas
   cerradas; el contador estricto/ponderado se mueve cuando T16 completa, no por subtarea). **Estricto
   17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 54).
+
+## Iteración 56 — 2026-10-09 — T16.d.1 (`POST /evidence/reveal-ip`): IP real sin enmascarar, solo `privacy_admin`, motivo obligatorio
+
+- **Punto de partida:** `git status` mostraba cambios sin commit en `handler.ts`, `handler_test.ts`,
+  `index.ts` y `TASKS.md` (sin tocar `.claude/`) — WIP de una iteración headless interrumpida. Revisado
+  contra el patrón de la nota del protocolo (confusión con "otra sesión" de iteraciones pasadas): el diff
+  era coherente con T16.d.1 (división ya anotada en `TASKS.md` el 2026-10-09, antes de T16.c), sin rastro
+  de ningún otro cambio ajeno. `handler.ts` y `handler_test.ts` ya estaban completos (tipo
+  `RevealedEvidenceRow`, `RevealIpUserSchema`, función `revealIp`, ruta `POST /evidence/reveal-ip` con
+  `ADMIN_ONLY`, 6 pruebas); `index.ts` solo tenía el import del tipo nuevo — faltaba la pieza real que
+  toca Postgres: `EvidenceDeps.listByUserIdRevealed`.
+- **Cambios:**
+  - `supabase/functions/admin-consent/index.ts`: `evidence.listByUserIdRevealed` — mismo `SELECT` que
+    `listByUserId` sobre `consent_records` filtrado por `user_ref_hmac`, pero sin `maskIp`: descifra
+    `ip_ciphertext` con `decryptConsentColumn` (ya existía, T07) y devuelve la IP real en el campo `ip`.
+    `handler.ts` nunca descifra nada directamente (mismo patrón que el resto del módulo).
+  - `supabase/functions/admin-consent/handler.ts` / `handler_test.ts`: sin cambios de código esta
+    iteración (ya venían completos en el WIP); confirmados contra la implementación real.
+  - `TASKS.md`: T16.d.1 `[x]`, con el detalle de diseño.
+- **Proxy del panel:** no hizo falta ningún cambio en `PRIVACY_FN_RE` (`central-admin-app/server.js`) —
+  a diferencia de T16.b (`export.csv`, con punto literal), `/evidence/reveal-ip` son dos segmentos
+  `[A-Za-z0-9_-]+` normales, ya admitidos por el patrón existente (`(\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?)*`).
+- **Por qué no hizo falta ninguna prueba SQL nueva:** mismo razonamiento que T16.c — es una lectura
+  (`SELECT` + descifrado puro de Deno/Web Crypto, sin restricción/trigger/RLS nueva que un fake pudiera
+  ocultar); el único `INSERT` nuevo es la fila de `admin_audit_log` (`evidence.reveal_ip`), cubierta por
+  las pruebas append-only de T08. El descifrado ya está cubierto indirectamente por `crypto_test.ts` y
+  por T07.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  Iteración 56, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. T16.d.2 (exportación de expediente JSON/PDF), T16.e
+  (cambio de estado de solicitudes) y T16.f (`verify_chains`) siguen sin empezar. `AUDIT-IP-extra`
+  (Iteración 53) sigue pendiente, sin cambios esta iteración.
+- Porcentaje: sin cambio en el contador por tarea completa (T16 sigue con cuatro de sus seis subtareas
+  cerradas; el contador estricto/ponderado se mueve cuando T16 completa, no por subtarea). **Estricto
+  17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 55).

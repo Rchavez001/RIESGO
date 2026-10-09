@@ -29,6 +29,7 @@ import {
   type EmailVerificationRow,
   type EvidenceDeps,
   type EvidenceRow,
+  type RevealedEvidenceRow,
   type NewConsentDocumentInput,
   type NewEmailTransportInput,
   type NewEmailVerificationInput,
@@ -215,10 +216,14 @@ function makeAuditTrailStore(rows: AuditLogRow[] = []): { auditTrail: AuditTrail
 function makeEvidenceStore(opts: {
   usersByEmailHmac?: Record<string, string>
   itemsByUserId?: Record<string, EvidenceRow[]>
+  revealedByUserId?: Record<string, RevealedEvidenceRow[]>
 } = {}): { evidence: EvidenceDeps } {
   const evidence: EvidenceDeps = {
     findUserIdByEmailHmac: (emailHmac) => Promise.resolve(opts.usersByEmailHmac?.[emailHmac] ?? null),
     listByUserId: (userId) => Promise.resolve(opts.itemsByUserId?.[userId] ?? []),
+    // T16.d.1: mismo historial que `listByUserId`, pero con la IP real (sin `maskIp`) — ningún fake
+    // descifra nada de verdad (ese paso vive en `index.ts`); aquí ya llega en forma de `RevealedEvidenceRow`.
+    listByUserIdRevealed: (userId) => Promise.resolve(opts.revealedByUserId?.[userId] ?? []),
   }
   return { evidence }
 }
@@ -1553,5 +1558,83 @@ Deno.test('GET /evidence: sin rol del módulo → 403', async () => {
 
 Deno.test('POST /evidence → 405', async () => {
   const res = await handle(req(await sign(claims()), '/evidence?email=a@example.test', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
+})
+
+// ── T16.d.1: POST /evidence/reveal-ip (REQ-17) ──────────────────────────────────────────────────────
+
+const revealedRow = (over: Partial<RevealedEvidenceRow> = {}): RevealedEvidenceRow => ({
+  document_version: '1.0', purpose_code: 'registro_aprendizaje', decision: 'granted', channel: 'registro',
+  server_ts: '2026-10-01T00:00:00Z', rendered_sha256: 'sha-1', ip: '192.0.2.42',
+  ...over,
+})
+
+Deno.test('POST /evidence/reveal-ip: privacy_admin con motivo → IP real (sin enmascarar) + bitácora con actor/motivo/row_count, nunca la IP', async () => {
+  const audit: AuditEntry[] = []
+  const { evidence } = makeEvidenceStore({ revealedByUserId: { [EDITOR_ID]: [revealedRow(), revealedRow({ decision: 'revoked', ip: null })] } })
+  const res = await handle(
+    req(await sign(claims()), '/evidence/reveal-ip', 'POST', { user_id: EDITOR_ID, reason: 'Solicitud de acceso, caso 2026-00042' }),
+    fullDeps({ roles: ['privacy_admin'], evidence, audit }),
+  )
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.user_id, EDITOR_ID)
+  assertEquals(body.items.length, 2)
+  assertEquals(body.items[0].ip, '192.0.2.42')
+  assertEquals(body.items[0].ip_masked, undefined)
+  assertEquals(body.items[1].ip, null)
+
+  assertEquals(audit.length, 1)
+  assertEquals(audit[0].action, 'evidence.reveal_ip')
+  assertEquals(audit[0].entity, 'consent_records')
+  assertEquals(audit[0].entity_id, EDITOR_ID)
+  assertEquals(audit[0].actor_id, ADMIN_ID)
+  assertEquals(audit[0].reason, 'Solicitud de acceso, caso 2026-00042')
+  assertEquals(audit[0].after, { row_count: 2 })
+  assertEquals(JSON.stringify(audit[0]).includes('192.0.2.42'), false)
+})
+
+Deno.test('POST /evidence/reveal-ip: sin coincidencias → 200 con lista vacía, pero igual deja bitácora (motivo consumido)', async () => {
+  const audit: AuditEntry[] = []
+  const res = await handle(
+    req(await sign(claims()), '/evidence/reveal-ip', 'POST', { user_id: EDITOR_ID, reason: 'Verificación de rutina' }),
+    fullDeps({ roles: ['privacy_admin'], audit }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals((await res.json()).items, [])
+  assertEquals(audit.length, 1)
+  assertEquals(audit[0].after, { row_count: 0 })
+})
+
+Deno.test('POST /evidence/reveal-ip: sin motivo (o en blanco) → 400 reason_required, sin bitácora', async () => {
+  for (const body of [{ user_id: EDITOR_ID }, { user_id: EDITOR_ID, reason: '  ' }]) {
+    const audit: AuditEntry[] = []
+    const res = await handle(req(await sign(claims()), '/evidence/reveal-ip', 'POST', body), fullDeps({ roles: ['privacy_admin'], audit }))
+    assertEquals(res.status, 400, JSON.stringify(body))
+    assertEquals((await res.json()).error, 'reason_required', JSON.stringify(body))
+    assertEquals(audit.length, 0, JSON.stringify(body))
+  }
+})
+
+Deno.test('POST /evidence/reveal-ip: user_id ausente o con formato inválido → 400 invalid_input (antes de exigir el motivo)', async () => {
+  for (const body of [{ reason: 'motivo' }, { user_id: 'no-es-un-uuid', reason: 'motivo' }]) {
+    const res = await handle(req(await sign(claims()), '/evidence/reveal-ip', 'POST', body), fullDeps({ roles: ['privacy_admin'] }))
+    assertEquals(res.status, 400, JSON.stringify(body))
+    assertEquals((await res.json()).error, 'invalid_input', JSON.stringify(body))
+  }
+})
+
+Deno.test('POST /evidence/reveal-ip: privacy_editor/privacy_auditor → 403 (solo privacy_admin)', async () => {
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    const res = await handle(
+      req(await sign(claims()), '/evidence/reveal-ip', 'POST', { user_id: EDITOR_ID, reason: 'motivo' }),
+      fullDeps({ roles: [role] }),
+    )
+    assertEquals(res.status, 403, role)
+  }
+})
+
+Deno.test('GET /evidence/reveal-ip → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/evidence/reveal-ip', 'GET'), fullDeps({ roles: ['privacy_admin'] }))
   assertEquals(res.status, 405)
 })

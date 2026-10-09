@@ -279,13 +279,21 @@ export interface EvidenceRow {
   ip_masked: string | null
 }
 
+/** Fila de `consent_records` con la IP REAL (sin enmascarar) — solo para "Revelar IP" (T16.d.1,
+ *  REQ-17, solo `privacy_admin`, motivo obligatorio). Nunca se usa en `GET /evidence` (T16.c). */
+export interface RevealedEvidenceRow extends Omit<EvidenceRow, 'ip_masked'> {
+  ip: string | null
+}
+
 export interface EvidenceDeps {
   /** HMAC con la misma clave de búsqueda que `users.email_lookup_hmac` (correo ya normalizado,
    *  LOOKUP_HMAC_KEY_B64) — nunca `ILIKE` sobre una columna cifrada (REQ-17). `null` si ningún
    *  usuario tiene ese correo: no inventa una coincidencia. */
   findUserIdByEmailHmac: (emailHmac: string) => Promise<string | null>
-  /** Historial de `consent_records` de un usuario (más reciente primero). */
+  /** Historial de `consent_records` de un usuario (más reciente primero), con IP enmascarada. */
   listByUserId: (userId: string) => Promise<EvidenceRow[]>
+  /** T16.d.1 (REQ-17): mismo historial, con la IP real — solo la llama `revealIp`, nunca `searchEvidence`. */
+  listByUserIdRevealed: (userId: string) => Promise<RevealedEvidenceRow[]>
 }
 
 export interface AdminConsentDeps {
@@ -405,6 +413,11 @@ const EvidenceSearchSchema = z
     user_id: z.string().uuid().optional(),
   })
   .refine((v) => Boolean(v.email) !== Boolean(v.user_id), { message: 'exactly_one_of_email_or_user_id' })
+
+// T16.d.1 (REQ-17): "Revelar IP" siempre busca por user_id directo (ya resuelto en el panel desde
+// `GET /evidence`), nunca por correo — evita repetir la ambigüedad de `EvidenceSearchSchema` en una
+// acción que además exige motivo.
+const RevealIpUserSchema = z.object({ user_id: z.string().uuid() })
 
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
 const UpdateEmailTransportSchema = z.object({
@@ -895,6 +908,30 @@ async function searchEvidence(deps: AdminConsentDeps, url: URL): Promise<{ user_
   return { user_id: userId, items }
 }
 
+/** T16.d.1 (REQ-17): "Revelar IP" — solo `privacy_admin`, motivo obligatorio, registrado en bitácora.
+ *  La IP real nunca entra en la bitácora (solo `row_count`): ya vive cifrada+HMAC en `consent_records`
+ *  (T07) y duplicarla en claro en `admin_audit_log` sería un nuevo lugar donde protegerla (H15). */
+async function revealIp(admin: Admin, deps: AdminConsentDeps, body: unknown): Promise<{ user_id: string; items: RevealedEvidenceRow[] }> {
+  const parsedUser = RevealIpUserSchema.safeParse(body)
+  if (!parsedUser.success) throw new ApiError(400, 'invalid_input')
+  const parsedReason = ReasonSchema.safeParse(body)
+  if (!parsedReason.success) throw new ApiError(400, 'reason_required')
+
+  const { user_id: userId } = parsedUser.data
+  const items = await deps.evidence.listByUserIdRevealed(userId)
+
+  await auditLog(deps, admin, {
+    action: 'evidence.reveal_ip',
+    entity: 'consent_records',
+    entity_id: userId,
+    before: null,
+    after: { row_count: items.length },
+    reason: parsedReason.data.reason,
+  })
+
+  return { user_id: userId, items }
+}
+
 // T16.b (REQ-16): tope de filas por exportación — una exportación sin tope podría volcar toda la bitácora
 // histórica en una sola respuesta; si el filtro pide más, `exportAuditLogCsv` lo señala en `truncated`.
 const MAX_AUDIT_EXPORT_ROWS = 5000
@@ -1080,6 +1117,14 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
       if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
       await requireRole(req, PRIVACY_ROLES, deps.guard)
       const result = await searchEvidence(deps, new URL(req.url))
+      return json(200, result)
+    }
+
+    if (path === '/evidence/reveal-ip') {
+      if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, ADMIN_ONLY, deps.guard)
+      const body = await req.json().catch(() => ({}))
+      const result = await revealIp(admin, deps, body)
       return json(200, result)
     }
 
