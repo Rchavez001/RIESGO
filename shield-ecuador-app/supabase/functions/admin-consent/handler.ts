@@ -313,6 +313,66 @@ export interface EvidenceDeps {
   listDsrByUserId: (userId: string) => Promise<DsrSummaryRow[]>
 }
 
+// T16.e (REQ-11, REQ-16): mismos cinco valores que el CHECK de `data_subject_requests.status` (073) —
+// la función RPC (078) confía en ese CHECK y no los vuelve a validar, así que esta lista es la única
+// fuente de verdad del lado de TypeScript.
+export const DSR_STATUSES = ['recibida', 'requiere_aclaracion', 'en_proceso', 'atendida', 'rechazada_con_motivo'] as const
+export type DsrStatus = (typeof DSR_STATUSES)[number]
+const DSR_TERMINAL_STATUSES: readonly DsrStatus[] = ['atendida', 'rechazada_con_motivo']
+
+/** Fila de `data_subject_requests` para el listado administrativo (T16.e): mismos campos que
+ *  `DsrSummaryRow` (nunca ciphertext ni IP del solicitante) más `id` y `user_id` — a diferencia del
+ *  expediente de un titular (T16.d.2), donde el `user_id` ya es el parámetro de entrada, aquí el panel
+ *  necesita el `id` real de la fila para `POST /requests/{id}/status` (la RPC 078 busca por `id`, nunca
+ *  por `case_number`) y el `user_id` para saltar a `GET /evidence?user_id=…`. */
+export interface DsrCaseRow {
+  id: string
+  case_number: string
+  user_id: string | null
+  request_type: string
+  channel: string
+  status: string
+  received_at: string
+  due_at: string
+  resolved_at: string | null
+}
+
+/** `null` para los estados terminales (REQ-11 solo exige semáforo para casos abiertos: un caso ya
+ *  atendido o rechazado no tiene presión de plazo). */
+export type DsrSemaphore = 'vigente' | 'por_vencer' | 'vencida' | null
+
+export type DsrListRow = DsrCaseRow & { semaphore: DsrSemaphore }
+
+export interface DsrListFilter {
+  status?: DsrStatus
+  limit: number
+  offset: number
+}
+
+export interface UpdateDsrStatusInput {
+  requestId: string
+  actorId: string
+  actorRole: string
+  actorEmailHmac: string
+  newStatus: DsrStatus
+  /** Ya cifrada (AAD atada al propio `requestId`, T16.e) o `null` si el admin no escribió una nota. */
+  resolutionNoteCiphertext: unknown | null
+  reason: string | null
+}
+
+export interface DsrRequestsDeps {
+  /** `total` es el número de filas que cumplen el filtro (sin paginar), igual que `AuditTrailDeps.list`. */
+  list: (filter: DsrListFilter) => Promise<{ items: DsrCaseRow[]; total: number }>
+  /** Cifra la nota de resolución bajo la AAD de ESTE caso (`dsrAad('resolution_note_ciphertext', requestId)`,
+   *  `_shared/consent-evidence.ts`) — nunca la misma AAD que `email_ciphertext`/`details_ciphertext` del
+   *  mismo caso, aunque compartan fila (H15, cada columna cifrada con su propia AAD). */
+  encryptResolutionNote: (requestId: string, note: string) => Promise<unknown>
+  /** RPC `update_data_subject_request_status` (078): cambia `status`/`resolved_at`/`resolution_note_ciphertext`
+   *  y deja bitácora en UNA transacción real — igual que `documents.publish`, esta ruta no vuelve a llamar
+   *  a `deps.audit` (la haría doble). Lanza `ApiError(404, 'not_found')` si el caso no existe. */
+  updateStatus: (input: UpdateDsrStatusInput) => Promise<DsrCaseRow>
+}
+
 export interface AdminConsentDeps {
   guard?: AuthGuardOptions
   /** HMAC del correo normalizado (clave propia de búsqueda, H15): la bitácora no guarda el correo en claro. */
@@ -326,6 +386,7 @@ export interface AdminConsentDeps {
   emailOutbox: EmailOutboxDeps
   auditTrail: AuditTrailDeps
   evidence: EvidenceDeps
+  requests: DsrRequestsDeps
 }
 
 /** Error de dominio con código de estado HTTP, para las acciones de /documents. Nunca lleva datos sensibles en `code`. */
@@ -439,6 +500,25 @@ const RevealIpUserSchema = z.object({ user_id: z.string().uuid() })
 // T16.d.2 (REQ-17): mismo identificador que "Revelar IP" (user_id directo, ya resuelto en el panel
 // desde `GET /evidence`), por querystring como T16.b (es una descarga, no una acción de panel en vivo).
 const ExportDossierQuerySchema = z.object({ user_id: z.string().uuid() })
+
+// T16.e (REQ-11, REQ-16): mismo patrón de paginación que AuditLogQuerySchema; `status` opcional (sin
+// filtro, lista todos los casos, abiertos y cerrados).
+const DsrListQuerySchema = z.object({
+  status: z.enum(DSR_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+})
+
+const RequestIdParamSchema = z.string().uuid()
+
+// La nota de resolución es un campo interno (nunca sale en el expediente del titular, T16.d.2): se cifra
+// solo si el admin escribió algo. `reason` es el motivo de la bitácora (REQ-16) — distinto de la nota, y
+// solo obligatorio al RECHAZAR un caso: es el único estado cuyo propio nombre ("…_con_motivo") lo exige.
+const UpdateDsrStatusBodySchema = z.object({
+  new_status: z.enum(DSR_STATUSES),
+  resolution_note: z.string().trim().min(1).max(5000).optional(),
+  reason: z.string().trim().min(1).max(2000).optional(),
+})
 
 // Mismo tope de puerto que el anti-SSRF de T12.c y el CHECK de la 079: 465/2525 únicos, nunca 25/587.
 const UpdateEmailTransportSchema = z.object({
@@ -1013,6 +1093,69 @@ function dossierToPdfLines(dossier: EvidenceDossier): string[] {
   return lines
 }
 
+// ── T16.e (REQ-11, REQ-16): listado con semáforo + cambio de estado de solicitudes ───────────────────
+
+const DSR_DUE_SOON_MS = 3 * 24 * 60 * 60 * 1000 // REQ-11: "casos por vencer (≤3 días)"
+
+/** `null` para los estados terminales (atendida/rechazada_con_motivo): un caso ya cerrado no tiene
+ *  presión de plazo, así que no le corresponde ningún color. Para el resto, compara `due_at` contra
+ *  `now` sin mockear el reloj (mismo criterio que `confirmEmailChange` ya usa para `code_expired`). */
+function computeSemaphore(status: string, dueAt: string, now: Date): DsrSemaphore {
+  if (DSR_TERMINAL_STATUSES.includes(status as DsrStatus)) return null
+  const remaining = new Date(dueAt).getTime() - now.getTime()
+  if (remaining < 0) return 'vencida'
+  if (remaining <= DSR_DUE_SOON_MS) return 'por_vencer'
+  return 'vigente'
+}
+
+const toDsrListRow = (row: DsrCaseRow, now: Date): DsrListRow => ({ ...row, semaphore: computeSemaphore(row.status, row.due_at, now) })
+
+/** T16.e (REQ-11): los tres roles del módulo pueden ver el listado — mismo candado que `/audit-log` y
+ *  `/evidence` (REQ-17 solo acota "Revelar IP", no la visibilidad general de casos). */
+async function listDsrCases(deps: AdminConsentDeps, url: URL): Promise<{ items: DsrListRow[]; total: number }> {
+  const query: Record<string, string> = {}
+  for (const key of ['status', 'limit', 'offset']) {
+    const value = url.searchParams.get(key)
+    if (value !== null) query[key] = value
+  }
+  const parsed = DsrListQuerySchema.safeParse(query)
+  if (!parsed.success) throw new ApiError(400, 'invalid_input')
+  const { status, limit, offset } = parsed.data
+  const { items, total } = await deps.requests.list({ status, limit, offset })
+  const now = new Date()
+  return { items: items.map((row) => toDsrListRow(row, now)), total }
+}
+
+/** T16.e (REQ-11, REQ-16): cambio de estado — mismo nivel de permiso que editar un borrador (`EDITOR_ROLES`):
+ *  no es tan sensible como "Revelar IP" (no expone PII), pero sí más que la simple lectura de `/requests`.
+ *  La bitácora la deja la propia RPC (078) dentro de la misma transacción que el UPDATE — igual que
+ *  `confirm_privacy_email_change` (082), esta ruta NO vuelve a llamar a `auditLog` (sería doble). */
+async function updateDsrStatus(admin: Admin, deps: AdminConsentDeps, requestId: string, body: unknown): Promise<DsrListRow> {
+  const parsedId = RequestIdParamSchema.safeParse(requestId)
+  if (!parsedId.success) throw new ApiError(400, 'invalid_input')
+
+  const parsedBody = UpdateDsrStatusBodySchema.safeParse(body)
+  if (!parsedBody.success) throw new ApiError(400, 'invalid_input')
+  const { new_status, resolution_note, reason } = parsedBody.data
+  if (new_status === 'rechazada_con_motivo' && !reason) throw new ApiError(400, 'reason_required_for_rejection')
+
+  if (!admin.email) throw new AuthError(403, 'forbidden')
+
+  const resolutionNoteCiphertext = resolution_note ? await deps.requests.encryptResolutionNote(parsedId.data, resolution_note) : null
+
+  const updated = await deps.requests.updateStatus({
+    requestId: parsedId.data,
+    actorId: admin.userId,
+    actorRole: admin.roles.join(','),
+    actorEmailHmac: await deps.emailHmac(admin.email.trim().toLowerCase()),
+    newStatus: new_status,
+    resolutionNoteCiphertext,
+    reason: reason ?? null,
+  })
+
+  return toDsrListRow(updated, new Date())
+}
+
 // T16.b (REQ-16): tope de filas por exportación — una exportación sin tope podría volcar toda la bitácora
 // histórica en una sola respuesta; si el filtro pide más, `exportAuditLogCsv` lo señala en `truncated`.
 const MAX_AUDIT_EXPORT_ROWS = 5000
@@ -1236,6 +1379,22 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
           'Cache-Control': 'no-store',
         },
       })
+    }
+
+    if (path === '/requests') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      await requireRole(req, PRIVACY_ROLES, deps.guard)
+      const result = await listDsrCases(deps, new URL(req.url))
+      return json(200, result)
+    }
+
+    const dsrStatusMatch = /^\/requests\/([^/]+)\/status$/.exec(path)
+    if (dsrStatusMatch) {
+      if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
+      const admin = await requireRole(req, EDITOR_ROLES, deps.guard)
+      const body = await req.json().catch(() => ({}))
+      const updated = await updateDsrStatus(admin, deps, dsrStatusMatch[1], body)
+      return json(200, updated)
     }
 
     if (path === '/documents') {

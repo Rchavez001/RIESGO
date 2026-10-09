@@ -440,7 +440,49 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       - **Aceptación:** solo `privacy_admin` (editor/auditor → 403); sin motivo → 400 `reason_required`; `user_id`
         ausente/inválido → 400 `invalid_input` (antes del motivo); JSON y PDF con el mismo contenido (mismos
         identificadores presentes en ambos); bitácora con actor, motivo y recuento; método distinto de `GET` → 405.
-  - [ ] **T16.e — Solicitudes: cambio de estado (envuelve `update_data_subject_request_status`, 078) + listado con semáforo** (REQ-11, REQ-16)
+  - [x] **T16.e — Solicitudes: cambio de estado (envuelve `update_data_subject_request_status`, 078) + listado con semáforo** (REQ-11, REQ-16) (hecha 2026-10-09, iteración 59)
+    - **Estado:** cerrada. `GET /requests?status=…&limit=&offset=` (los tres roles del módulo, mismo candado
+      que `/audit-log`/`/evidence`): lista `data_subject_requests` (`DsrCaseRow` — mismos campos que
+      `DsrSummaryRow` más `id` y `user_id`; nunca ciphertext ni IP del solicitante) ordenada por `due_at`
+      ascendente (lo más urgente primero), con `count` exacto sin paginar (igual que `auditTrail.list`).
+      Cada fila lleva `semaphore` (`'vigente' | 'por_vencer' | 'vencida' | null`), calculado en `handler.ts`
+      (`computeSemaphore`, nunca en `index.ts`): `null` para los dos estados terminales (`atendida`,
+      `rechazada_con_motivo` — un caso cerrado no tiene presión de plazo); si no, `'vencida'` si `due_at` ya
+      pasó, `'por_vencer'` si quedan ≤3 días (REQ-11), si no `'vigente'`. `POST /requests/{id}/status`
+      (`EDITOR_ROLES`: privacy_editor + privacy_admin, no auditor — mismo nivel que editar un borrador, más
+      que la simple lectura pero menos que "Revelar IP") envuelve la RPC `update_data_subject_request_status`
+      (078): `new_status` debe ser uno de los cinco del `CHECK`; `resolution_note` opcional, se cifra con
+      `encryptDsrResolutionNote` (AAD atada al `id` del caso, ya existía en `_shared/consent-evidence.ts`,
+      sin usar hasta ahora) solo si el admin escribió algo — nunca sale en el expediente del titular
+      (T16.d.2 ya la excluye de `DsrSummaryRow`); `reason` solo es obligatorio al pasar a
+      `rechazada_con_motivo` (400 `reason_required_for_rejection`), porque es el único estado cuyo propio
+      nombre lo exige — el resto de transiciones no fuerza un motivo (mismo criterio que `updateSettings`,
+      que tampoco lo exige). La bitácora la deja la propia RPC dentro de la misma transacción que el
+      `UPDATE` (igual que `confirm_privacy_email_change`/`publish_consent_document`): esta ruta NO vuelve a
+      llamar a `auditLog` (sería doble). `id` inexistente → 404 `not_found` (mapeado en `index.ts` desde el
+      mensaje `"no existe"` de la RPC, igual que el resto de RPCs envueltas). 17 pruebas nuevas en
+      `handler_test.ts` (semáforo por estado/plazo, filtro+paginación, los tres roles leen pero solo editor
+      y admin cambian estado, `rechazada_con_motivo` exige motivo, nota cifrada, 404, 405).
+    - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** la propia RPC
+      `update_data_subject_request_status` YA se verifica contra Postgres real en
+      `supabase/tests/consent/data_subject_requests_lifecycle.sql` (T08): caso inexistente sin bitácora
+      huérfana, estado fuera del `CHECK` rechazado, permisos (`service_role` únicamente), trigger
+      append-only, y `verify_audit_chain()` íntegra tras los cambios. El resolutor de `index.ts` añadido
+      aquí solo traduce esa RPC ya probada a `ApiError` tipados (mismo patrón que `documents.publish`) —
+      no hay ninguna escritura nueva sin cobertura real que un fake pudiera estar ocultando.
+    - **Hallazgo de diseño (antes de codificar):** `DsrSummaryRow` (T16.d.2) no lleva `id`, solo
+      `case_number` — insuficiente para `POST /requests/{id}/status`, porque la RPC busca por `id` (UUID),
+      nunca por `case_number`. Se definió `DsrCaseRow` como un tipo nuevo (no una extensión de
+      `DsrSummaryRow`) con `id` + `user_id` añadidos, en vez de agregar `id` a `DsrSummaryRow`: el
+      expediente de un titular (T16.d.2) no necesita expone el `id` interno de cada solicitud, y mezclar
+      ambos usos en un solo tipo habría hecho ambiguo cuál es opcional para quién.
+    - **Aceptación:** los tres roles → 200 en `GET /requests`; filtro `status` + `limit`/`offset` (tope 200)
+      combinables; parámetro inválido → 400 `invalid_input`; semáforo correcto por estado/plazo; solo
+      `privacy_editor`/`privacy_admin` → 200 en `POST /requests/{id}/status` (auditor → 403); `new_status`
+      inválido o `id` no-uuid → 400 `invalid_input`; `rechazada_con_motivo` sin `reason` → 400
+      `reason_required_for_rejection`; caso inexistente → 404 `not_found`; métodos distintos → 405;
+      `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas no-opcionales OK;
+      `db-reset`/`e2e-local` SKIP opt-in; iteración 59, no múltiplo de 5, `GATES_FULL=1` no obligatorio).
   - [ ] **T16.f — `verify_chains`: envuelve `verify_consent_chain()`/`verify_audit_chain()`** (REQ-18)
 
 - [ ] **T17 — Job de retención** (REQ-19, REQ-20) ⛔ BLOQUEADA (D-02)

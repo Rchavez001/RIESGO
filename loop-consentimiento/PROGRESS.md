@@ -1624,3 +1624,70 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: TEST-INT.g no es una de las 28 tareas numeradas (es una subtarea de TEST-INT, ya cerrada como
   grupo): sin cambio en el contador estricto ni ponderado. **Estricto 17 de 28 = 60,7 %. Ponderado ≈ 63,0 %**
   (sin cambio respecto a la Iteración 57).
+
+## Iteración 59 — 2026-10-09 — T16.e: `GET /requests` (listado con semáforo) y `POST /requests/{id}/status`
+
+- **Punto de partida:** `git status` limpio; T16.e es la primera tarea `[ ]` desbloqueada de `TASKS.md`
+  (T16.d.1/d.2 ya `[x]`; T16.f queda para después). Sin "Aceptación" redactada todavía (a diferencia de
+  T16.a-d, que ya la tenían de una división previa) — diseño hecho en esta misma iteración, antes de
+  codificar, leyendo primero la migración 078 (`update_data_subject_request_status`) y la prueba SQL que
+  ya la cubre (`data_subject_requests_lifecycle.sql`, de T08).
+- **Diseño antes de codificar:**
+  - La migración 078 YA prueba la RPC contra Postgres real (caso inexistente, `CHECK` de estado,
+    permisos, trigger append-only, cadena de bitácora íntegra) — no hacía falta ninguna prueba SQL nueva
+    (regla de TEST-INT/PROMPT.md: la regla exige Postgres real para escrituras sin cobertura, no que cada
+    tarea repita una prueba que ya existe). El trabajo de esta iteración es solo la capa HTTP encima.
+  - **Hallazgo real antes de escribir código:** `DsrSummaryRow` (T16.d.2) no lleva `id`, solo `case_number`
+    — insuficiente para `POST /requests/{id}/status`, porque la RPC busca por `id` (UUID), nunca por
+    `case_number`. Se definió `DsrCaseRow` como tipo nuevo (no una extensión de `DsrSummaryRow`) con `id` +
+    `user_id` añadidos: el expediente de un titular no necesita exponer el `id` interno de cada solicitud,
+    así que mezclar ambos usos en un tipo habría sido confuso.
+  - Semáforo (REQ-11: "casos por vencer ≤3 días y vencidos"): `null` para los dos estados terminales
+    (`atendida`, `rechazada_con_motivo` — sin presión de plazo); si no, `'vencida'`/`'por_vencer'`/`'vigente'`
+    según `due_at` contra `new Date()` (sin mockear el reloj — mismo criterio que `confirmEmailChange` ya
+    usa para `code_expired`). Calculado en `handler.ts` (`computeSemaphore`), nunca en `index.ts` (es lógica
+    de negocio pura, no acceso a datos, mismo criterio que `renderConsent`/`sha256Hex`).
+  - `reason` solo obligatorio al pasar a `rechazada_con_motivo` (400 `reason_required_for_rejection`): es
+    el único de los cinco estados cuyo propio nombre exige un motivo; el resto de transiciones no lo fuerza
+    (mismo criterio que `updateSettings`, que tampoco exige `reason`, a diferencia de publicar/retirar/
+    revelar IP/exportar). `resolution_note` es un campo interno distinto del `reason` de bitácora: se cifra
+    con `encryptDsrResolutionNote` (ya existía en `_shared/consent-evidence.ts`, sin usar hasta ahora) solo
+    si el admin escribió algo.
+  - Rol: `EDITOR_ROLES` (privacy_editor + privacy_admin) para cambiar estado — ni tan abierto como la
+    lectura (`PRIVACY_ROLES`, los tres) ni tan cerrado como "Revelar IP" (`ADMIN_ONLY`); mismo nivel que
+    editar un borrador de `consent_documents`.
+- **Cambios:**
+  - `supabase/functions/admin-consent/handler.ts`: `DSR_STATUSES`/`DsrStatus` (lista única de los cinco
+    valores del `CHECK`, fuente de verdad del lado TS), `DsrCaseRow`, `DsrSemaphore`, `DsrListRow`,
+    `DsrListFilter`, `UpdateDsrStatusInput`, `DsrRequestsDeps` (nuevo en `AdminConsentDeps`);
+    `DsrListQuerySchema`, `RequestIdParamSchema`, `UpdateDsrStatusBodySchema`; `computeSemaphore`,
+    `toDsrListRow`, `listDsrCases`, `updateDsrStatus`; rutas `GET /requests` (`PRIVACY_ROLES`) y
+    `POST /requests/{id}/status` (`EDITOR_ROLES`).
+  - `supabase/functions/admin-consent/index.ts`: import de `encryptDsrResolutionNote`
+    (`_shared/consent-evidence.ts`); `DSR_LIST_COLUMNS`; resolutor `requests.list` (filtra por `status`,
+    ordena por `due_at` ascendente, `count: 'exact'`), `requests.encryptResolutionNote`, `requests.updateStatus`
+    (llama a la RPC 078, mapea su mensaje `"no existe"` a `ApiError(404, 'not_found')`, minimiza la fila
+    completa que devuelve la RPC a los campos de `DsrCaseRow` — nunca confía en `data as X` cuando la
+    consulta real trae más columnas, mismo criterio que el resto de este archivo).
+  - `supabase/functions/admin-consent/handler_test.ts`: `makeDsrRequestsStore` (fake que reproduce
+    no-encontrado, `resolved_at` solo en los dos estados terminales, y una fila de bitácora por cambio con
+    `entity_id = case_number`, igual que la RPC real); `fullDeps`/`deps` ganan `requests`; 17 pruebas nuevas
+    (semáforo por los cuatro casos, filtro+paginación con orden por `due_at`, parámetros inválidos, los tres
+    roles leen pero solo editor/admin cambian estado, `rechazada_con_motivo` exige motivo, nota cifrada
+    (verificada con un wrapper que registra los argumentos reales de `encryptResolutionNote`), `id` inválido,
+    404, 405 en ambas rutas).
+  - `loop-consentimiento/TASKS.md`: T16.e `[x]`, con el detalle de diseño y aceptación.
+- **Proxy del panel:** sin cambios en `PRIVACY_FN_RE` (`central-admin-app/server.js`) — `/requests` y
+  `/requests/{uuid}/status` son segmentos `[A-Za-z0-9_-]+` normales (el UUID solo usa hex+guiones), ya
+  admitidos por el patrón existente; no hace falta el punto literal que T16.b sí necesitó para `export.csv`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  Iteración 59, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T16.f (`verify_chains`) es la única subtarea que falta para cerrar T16.
+  `AUDIT-IP-extra` (Iteración 53) sigue pendiente, sin cambios esta iteración. El panel (T24) todavía no
+  existe — nada de esta iteración se ha probado desde una UI real, solo contra la API vía `handler_test.ts`.
+- Porcentaje: sin cambio en el contador por tarea completa (T16 sigue con cinco de sus seis subtareas
+  cerradas; el contador estricto/ponderado se mueve cuando T16 completa, no por subtarea). **Estricto
+  17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 58).

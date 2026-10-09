@@ -5,7 +5,7 @@ import { buildAad, decryptPii, encryptPii, getActiveKeyVersion, hmacLookup, type
 import { getResendApiKey, ResendSender } from '../_shared/email/resend-sender.ts'
 import { SmtpSender } from '../_shared/email/smtp-sender.ts'
 import { checkRateLimit } from '../_shared/rate-limit.ts'
-import { decryptConsentColumn, decryptDsrColumn } from '../_shared/consent-evidence.ts'
+import { decryptConsentColumn, decryptDsrColumn, encryptDsrResolutionNote } from '../_shared/consent-evidence.ts'
 import { maskIp } from '../_shared/client-ip.ts'
 import { buildDelegateNoticeEmail, buildSubjectAcknowledgementEmail, type DataSubjectRequestType } from '../_shared/email/templates.ts'
 import {
@@ -16,6 +16,7 @@ import {
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
+  type DsrCaseRow,
   type DsrSummaryRow,
   type EmailOutboxRow,
   type EmailTransportRow,
@@ -43,6 +44,10 @@ const EMAIL_TRANSPORT_COLUMNS =
 const EMAIL_OUTBOX_COLUMNS = 'id, reference_table, reference_id, created_at'
 const EMAIL_VERIFICATION_COLUMNS = 'id, new_email, code_hash, expires_at, attempts, confirmed_at, requested_by, created_at'
 const AUDIT_LOG_COLUMNS = 'id, actor_id, actor_email_hmac, actor_role, action, entity, entity_id, before, after, diff, reason, created_at'
+// T16.e: nunca email_ciphertext/details_ciphertext/resolution_note_ciphertext/ip_ciphertext/ip_hmac —
+// mismo criterio de minimización que DsrSummaryRow (T16.d.2), más `user_id` (aquí sí hace falta, ver
+// comentario de `DsrCaseRow` en handler.ts).
+const DSR_LIST_COLUMNS = 'id, case_number, user_id, request_type, channel, status, received_at, due_at, resolved_at'
 
 // T12.d.1 (D-15): la contraseña SMTP se cifra con su propia AAD atada a `transport_version` — nunca la
 // misma clave que `crypto.ts` usa para la versión de clave de cifrado (esa la sigue dando `getActiveKeyVersion()`).
@@ -157,6 +162,50 @@ serve((req) =>
           .order('received_at', { ascending: false })
         if (error) throw new Error(`data_subject_requests: ${error.code ?? 'error'}`)
         return (data ?? []) as DsrSummaryRow[]
+      },
+    },
+    // T16.e (REQ-11, REQ-16): listado administrativo (con `count` exacto, igual que `auditTrail.list`) +
+    // envoltura de la RPC `update_data_subject_request_status` (078, ya probada contra Postgres real en
+    // `data_subject_requests_lifecycle.sql`) — este resolutor no repite esa prueba, solo traduce sus
+    // errores a `ApiError` tipados, igual que `documents.publish`/`emailVerification.confirm`.
+    requests: {
+      list: async (filter) => {
+        let query = db.from('data_subject_requests').select(DSR_LIST_COLUMNS, { count: 'exact' })
+        if (filter.status) query = query.eq('status', filter.status)
+        const { data, error, count } = await query
+          .order('due_at', { ascending: true })
+          .range(filter.offset, filter.offset + filter.limit - 1)
+        if (error) throw new Error(`data_subject_requests: ${error.code ?? 'error'}`)
+        return { items: (data ?? []) as DsrCaseRow[], total: count ?? 0 }
+      },
+      encryptResolutionNote: (requestId, note) => encryptDsrResolutionNote(requestId, note, getActiveKeyVersion()),
+      updateStatus: async (input) => {
+        const { data, error } = await db.rpc('update_data_subject_request_status', {
+          p_request_id: input.requestId,
+          p_actor_id: input.actorId,
+          p_actor_email_hmac: input.actorEmailHmac,
+          p_actor_role: input.actorRole,
+          p_new_status: input.newStatus,
+          p_resolution_note_ciphertext: input.resolutionNoteCiphertext,
+          p_reason: input.reason,
+        })
+        if (error) {
+          const msg = error.message ?? ''
+          if (msg.includes('no existe')) throw new ApiError(404, 'not_found')
+          throw new Error(`update_data_subject_request_status: ${error.code ?? 'error'}`)
+        }
+        // La RPC devuelve la fila completa (incluye ciphertext/ip_hmac/routed_to_email/etc.): se
+        // minimiza explícitamente, igual que el resto de resolutores de este módulo nunca confían en
+        // `data as X` cuando la consulta real trae más columnas de las que el tipo declara.
+        const row = data as {
+          id: string; case_number: string; user_id: string | null; request_type: string; channel: string
+          status: string; received_at: string; due_at: string; resolved_at: string | null
+        }
+        return {
+          id: row.id, case_number: row.case_number, user_id: row.user_id, request_type: row.request_type,
+          channel: row.channel, status: row.status, received_at: row.received_at,
+          due_at: row.due_at, resolved_at: row.resolved_at,
+        }
       },
     },
     documents: {

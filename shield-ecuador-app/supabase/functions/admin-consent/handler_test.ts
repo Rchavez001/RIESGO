@@ -20,6 +20,9 @@ import {
   type ConsentDocumentStatus,
   type CurrentPrivacySettings,
   type DocumentsDeps,
+  type DsrCaseRow,
+  type DsrListRow,
+  type DsrRequestsDeps,
   type DsrSummaryRow,
   type EmailDeps,
   type EmailOutboxDeps,
@@ -232,6 +235,51 @@ function makeEvidenceStore(opts: {
   return { evidence }
 }
 
+// Fake de `requests` (T16.e): reproduce la semántica de `update_data_subject_request_status` (078, ya
+// probada contra Postgres real en `data_subject_requests_lifecycle.sql`) — no-encontrado, `resolved_at`
+// solo en los dos estados terminales, y una fila de bitácora por cada cambio con `entity_id = case_number`
+// (igual que la RPC real). `encryptResolutionNote` nunca cifra de verdad (eso vive en `index.ts`): aquí
+// basta con un marcador reconocible para que una prueba confirme que SE LLAMÓ, sin que el fake necesite
+// claves de cifrado reales (mismo patrón que `makeEmailTransportStore.encryptPassword`).
+function makeDsrRequestsStore(
+  initial: DsrCaseRow[] = [],
+  opts: { audit?: AuditEntry[]; failUpdate?: boolean } = {},
+): { requests: DsrRequestsDeps; rows: DsrCaseRow[] } {
+  const rows = [...initial]
+  const requests: DsrRequestsDeps = {
+    list: (filter) => {
+      let result = rows
+      if (filter.status) result = result.filter((r) => r.status === filter.status)
+      result = [...result].sort((a, b) => a.due_at.localeCompare(b.due_at))
+      const total = result.length
+      const items = result.slice(filter.offset, filter.offset + filter.limit)
+      return Promise.resolve({ items, total })
+    },
+    encryptResolutionNote: (requestId, note) => Promise.resolve(`enc:${requestId}:${note}`),
+    updateStatus: (input) => {
+      if (opts.failUpdate) return Promise.reject(new Error('db'))
+      const idx = rows.findIndex((r) => r.id === input.requestId)
+      if (idx === -1) return Promise.reject(new ApiError(404, 'not_found'))
+      const beforeStatus = rows[idx].status
+      const resolvedAt = ['atendida', 'rechazada_con_motivo'].includes(input.newStatus) ? '2026-10-09T12:00:00Z' : rows[idx].resolved_at
+      rows[idx] = { ...rows[idx], status: input.newStatus, resolved_at: resolvedAt }
+      opts.audit?.push({
+        actor_id: input.actorId,
+        actor_email_hmac: input.actorEmailHmac,
+        actor_role: input.actorRole,
+        action: 'data_subject_request.status_changed',
+        entity: 'data_subject_requests',
+        entity_id: rows[idx].case_number,
+        before: { status: beforeStatus },
+        after: { status: rows[idx].status, resolved_at: rows[idx].resolved_at },
+        reason: input.reason,
+      })
+      return Promise.resolve(rows[idx])
+    },
+  }
+  return { requests, rows }
+}
+
 // A diferencia de `makeDocsStore`/`makeEmailTransportStore`, `current` es mutable aquí (sin un array de
 // filas expuesto): basta con que `insert` reemplace la vigente, igual que haría la vista
 // `privacy_settings_current` real tras un INSERT.
@@ -329,6 +377,7 @@ function fullDeps(opts: {
   emailOutbox?: EmailOutboxDeps
   auditTrail?: AuditTrailDeps
   evidence?: EvidenceDeps
+  requests?: DsrRequestsDeps
 }): AdminConsentDeps {
   const audit = opts.audit ?? []
   return {
@@ -343,6 +392,7 @@ function fullDeps(opts: {
     emailOutbox: opts.emailOutbox ?? makeEmailOutboxStore().emailOutbox,
     auditTrail: opts.auditTrail ?? makeAuditTrailStore().auditTrail,
     evidence: opts.evidence ?? makeEvidenceStore().evidence,
+    requests: opts.requests ?? makeDsrRequestsStore().requests,
   }
 }
 
@@ -1813,4 +1863,187 @@ Deno.test('POST /evidence/export.json y export.pdf → 405', async () => {
     )
     assertEquals(res.status, 405, format)
   }
+})
+
+// ── T16.e: GET /requests y POST /requests/{id}/status (REQ-11, REQ-16) ────────────────────────────────
+// Sin prueba SQL nueva: `update_data_subject_request_status` (078) ya se verifica contra Postgres real
+// en `data_subject_requests_lifecycle.sql` (no-encontrado, CHECK de estado, permisos, cadena de bitácora
+// íntegra) — este resolutor de `index.ts` solo traduce esa RPC ya probada a `ApiError` tipados, mismo
+// criterio que `documents.publish`/`emailVerification.confirm`. Las pruebas de aquí cubren la capa HTTP
+// (roles, validación, semáforo), con un fake que reproduce la semántica de la RPC sin repetirla.
+
+const CASE_ID = '2b1e4d3c-1111-4222-8333-444455556666'
+const DAY_MS = 24 * 60 * 60 * 1000
+const dueInDays = (days: number) => new Date(Date.now() + days * DAY_MS).toISOString()
+
+const dsrCaseRow = (over: Partial<DsrCaseRow> = {}): DsrCaseRow => ({
+  id: CASE_ID, case_number: 'CD-2026-000123', user_id: EDITOR_ID, request_type: 'acceso', channel: 'app',
+  status: 'recibida', received_at: '2026-10-01T00:00:00Z', due_at: '2026-10-16T00:00:00Z', resolved_at: null,
+  ...over,
+})
+
+Deno.test('GET /requests: los tres roles del módulo pueden listar (200), semáforo vigente/por_vencer/vencida/null', async () => {
+  const rows = [
+    dsrCaseRow({ id: '2b1e4d3c-1111-4222-8333-444455556001', case_number: 'CD-2026-000001', status: 'recibida', due_at: dueInDays(10) }),
+    dsrCaseRow({ id: '2b1e4d3c-1111-4222-8333-444455556002', case_number: 'CD-2026-000002', status: 'en_proceso', due_at: dueInDays(1) }),
+    dsrCaseRow({ id: '2b1e4d3c-1111-4222-8333-444455556003', case_number: 'CD-2026-000003', status: 'recibida', due_at: dueInDays(-1) }),
+    dsrCaseRow({ id: '2b1e4d3c-1111-4222-8333-444455556004', case_number: 'CD-2026-000004', status: 'atendida', due_at: dueInDays(-30) }),
+  ]
+  for (const role of ['privacy_editor', 'privacy_admin', 'privacy_auditor']) {
+    const { requests } = makeDsrRequestsStore(rows)
+    const res = await handle(req(await sign(claims()), '/requests', 'GET'), fullDeps({ roles: [role], requests }))
+    assertEquals(res.status, 200, role)
+    const body = await res.json()
+    assertEquals(body.total, 4, role)
+    const byCase = Object.fromEntries(body.items.map((r: DsrListRow) => [r.case_number, r.semaphore]))
+    assertEquals(byCase['CD-2026-000001'], 'vigente', role)
+    assertEquals(byCase['CD-2026-000002'], 'por_vencer', role)
+    assertEquals(byCase['CD-2026-000003'], 'vencida', role)
+    assertEquals(byCase['CD-2026-000004'], null, role)
+  }
+})
+
+Deno.test('GET /requests: filtra por status y pagina con limit/offset (orden por due_at ascendente)', async () => {
+  const rows = [
+    dsrCaseRow({ id: '2b1e4d3c-1111-4222-8333-444455557001', case_number: 'CD-2026-000001', status: 'recibida', due_at: '2026-10-20T00:00:00Z' }),
+    dsrCaseRow({ id: '2b1e4d3c-1111-4222-8333-444455557002', case_number: 'CD-2026-000002', status: 'en_proceso', due_at: '2026-10-10T00:00:00Z' }),
+    dsrCaseRow({ id: '2b1e4d3c-1111-4222-8333-444455557003', case_number: 'CD-2026-000003', status: 'recibida', due_at: '2026-10-05T00:00:00Z' }),
+  ]
+  const { requests } = makeDsrRequestsStore(rows)
+  const depsObj = fullDeps({ roles: ['privacy_admin'], requests })
+  const token = await sign(claims())
+
+  const byStatus = await handle(req(token, '/requests?status=recibida', 'GET'), depsObj)
+  const byStatusBody = await byStatus.json()
+  assertEquals(byStatusBody.total, 2)
+  assertEquals(byStatusBody.items.map((r: DsrListRow) => r.case_number), ['CD-2026-000003', 'CD-2026-000001'])
+
+  const page = await handle(req(token, '/requests?limit=1&offset=1', 'GET'), depsObj)
+  const pageBody = await page.json()
+  assertEquals(pageBody.total, 3)
+  assertEquals(pageBody.items.map((r: DsrListRow) => r.case_number), ['CD-2026-000002'])
+})
+
+Deno.test('GET /requests: parámetros inválidos → 400 invalid_input', async () => {
+  const token = await sign(claims())
+  for (const qs of ['status=no-es-un-estado', 'limit=201', 'limit=0', 'offset=-1']) {
+    const res = await handle(req(token, `/requests?${qs}`, 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+    assertEquals(res.status, 400, qs)
+    assertEquals((await res.json()).error, 'invalid_input', qs)
+  }
+})
+
+Deno.test('GET /requests: sin rol del módulo → 403', async () => {
+  const res = await handle(req(await sign(claims()), '/requests', 'GET'), fullDeps({ roles: [] }))
+  assertEquals(res.status, 403)
+})
+
+Deno.test('POST /requests → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/requests', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
+})
+
+Deno.test('POST /requests/{id}/status: editor cambia a en_proceso — 200, bitácora con actor y case_number (la deja la propia RPC, no un auditLog aparte)', async () => {
+  const audit: AuditEntry[] = []
+  const row = dsrCaseRow({ status: 'recibida' })
+  const { requests } = makeDsrRequestsStore([row], { audit })
+  const res = await handle(
+    req(await sign(claims()), `/requests/${CASE_ID}/status`, 'POST', { new_status: 'en_proceso' }),
+    fullDeps({ roles: ['privacy_editor'], requests }),
+  )
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.status, 'en_proceso')
+  assertEquals(body.resolved_at, null)
+  assertExists(body.semaphore)
+
+  assertEquals(audit.length, 1)
+  assertEquals(audit[0].action, 'data_subject_request.status_changed')
+  assertEquals(audit[0].entity, 'data_subject_requests')
+  assertEquals(audit[0].entity_id, row.case_number)
+  assertEquals(audit[0].actor_id, ADMIN_ID)
+  assertEquals(audit[0].reason, null)
+})
+
+Deno.test('POST /requests/{id}/status: privacy_editor y privacy_admin pueden cambiar estado; privacy_auditor no (403)', async () => {
+  for (const [role, expected] of [['privacy_editor', 200], ['privacy_admin', 200], ['privacy_auditor', 403]] as const) {
+    const { requests } = makeDsrRequestsStore([dsrCaseRow()])
+    const res = await handle(
+      req(await sign(claims()), `/requests/${CASE_ID}/status`, 'POST', { new_status: 'en_proceso' }),
+      fullDeps({ roles: [role], requests }),
+    )
+    assertEquals(res.status, expected, role)
+  }
+})
+
+Deno.test('POST /requests/{id}/status: atendida resuelve el caso (resolved_at), semáforo null, y cifra la nota si se envía', async () => {
+  let encryptedArgs: [string, string] | null = null
+  const { requests } = makeDsrRequestsStore([dsrCaseRow({ status: 'en_proceso' })])
+  const wrapped: DsrRequestsDeps = {
+    ...requests,
+    encryptResolutionNote: (requestId, note) => {
+      encryptedArgs = [requestId, note]
+      return requests.encryptResolutionNote(requestId, note)
+    },
+  }
+  const res = await handle(
+    req(await sign(claims()), `/requests/${CASE_ID}/status`, 'POST', { new_status: 'atendida', resolution_note: 'Se envió copia de los datos' }),
+    fullDeps({ roles: ['privacy_admin'], requests: wrapped }),
+  )
+  assertEquals(res.status, 200)
+  const body = await res.json()
+  assertEquals(body.status, 'atendida')
+  assertExists(body.resolved_at)
+  assertEquals(body.semaphore, null)
+  assertEquals(encryptedArgs, [CASE_ID, 'Se envió copia de los datos'])
+})
+
+Deno.test('POST /requests/{id}/status: rechazar sin reason → 400 reason_required_for_rejection; con reason → 200', async () => {
+  const { requests: r1 } = makeDsrRequestsStore([dsrCaseRow()])
+  const resNoReason = await handle(
+    req(await sign(claims()), `/requests/${CASE_ID}/status`, 'POST', { new_status: 'rechazada_con_motivo' }),
+    fullDeps({ roles: ['privacy_admin'], requests: r1 }),
+  )
+  assertEquals(resNoReason.status, 400)
+  assertEquals((await resNoReason.json()).error, 'reason_required_for_rejection')
+
+  const { requests: r2 } = makeDsrRequestsStore([dsrCaseRow()])
+  const resWithReason = await handle(
+    req(await sign(claims()), `/requests/${CASE_ID}/status`, 'POST', { new_status: 'rechazada_con_motivo', reason: 'no corresponde a este titular' }),
+    fullDeps({ roles: ['privacy_admin'], requests: r2 }),
+  )
+  assertEquals(resWithReason.status, 200)
+  assertEquals((await resWithReason.json()).status, 'rechazada_con_motivo')
+})
+
+Deno.test('POST /requests/{id}/status: new_status fuera del CHECK, o id con formato inválido → 400 invalid_input', async () => {
+  const token = await sign(claims())
+  const badStatus = await handle(
+    req(token, `/requests/${CASE_ID}/status`, 'POST', { new_status: 'estado_inventado' }),
+    fullDeps({ roles: ['privacy_admin'] }),
+  )
+  assertEquals(badStatus.status, 400)
+  assertEquals((await badStatus.json()).error, 'invalid_input')
+
+  const badId = await handle(
+    req(token, '/requests/no-es-un-uuid/status', 'POST', { new_status: 'en_proceso' }),
+    fullDeps({ roles: ['privacy_admin'] }),
+  )
+  assertEquals(badId.status, 400)
+  assertEquals((await badId.json()).error, 'invalid_input')
+})
+
+Deno.test('POST /requests/{id}/status: caso inexistente → 404 not_found', async () => {
+  const { requests } = makeDsrRequestsStore([])
+  const res = await handle(
+    req(await sign(claims()), `/requests/${CASE_ID}/status`, 'POST', { new_status: 'en_proceso' }),
+    fullDeps({ roles: ['privacy_admin'], requests }),
+  )
+  assertEquals(res.status, 404)
+  assertEquals((await res.json()).error, 'not_found')
+})
+
+Deno.test('GET /requests/{id}/status → 405', async () => {
+  const res = await handle(req(await sign(claims()), `/requests/${CASE_ID}/status`, 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
 })
