@@ -202,7 +202,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests:** editor no publica; admin publica; con cuatro ojos el autor no publica su borrador;
     cada acción deja 1 fila de bitácora con actor correcto.
 
-- [ ] **T15 — `admin-consent`: configuración y verificación del correo del delegado** (REQ-14, REQ-15)
+- [x] **T15 — `admin-consent`: configuración y verificación del correo del delegado** (REQ-14, REQ-15) (hecha 2026-10-08, iteración 52 — T15.a-c iteraciones 49-51, T15.d iteración 52)
   - **Estado real (2026-09-28):** Sin iniciar. Existe la tabla `privacy_email_verifications` (075) con guardas; falta la función `admin-consent`.
   - `update_settings` crea nueva `settings_version`; cambio de `privacy_email` pasa a pendiente;
     `confirm_email_verification` con código (hash, 30 min, 5 intentos).
@@ -278,10 +278,12 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Tests:** correo no cambia sin llamar a confirm; código erróneo no cambia nada y sube `attempts`;
       código vencido; 5 intentos agotados; código correcto confirma y la vigente pasa a tener el correo
       nuevo; la bitácora de ambas rutas nunca lleva el código en claro ni su hash.
-  - [ ] **T15.d — TEST-INT y cierre de T15**
-    - Auditar `update_settings`/`request_email_change`/`confirm_email_verification` contra Postgres real
-      (si T15.a/b/c ya dejaron cobertura suficiente con pruebas SQL, documentar por qué no hace falta más,
-      mismo criterio que TEST-INT); actualizar `PROGRESS.md` y marcar T15 `[x]`.
+  - [x] **T15.d — TEST-INT y cierre de T15** (hecha 2026-10-08, iteración 52)
+    - **Estado:** cerrada, sin código nuevo. Auditoría confirmó que `settings_versioning.sql` (test 2 para
+      `update_settings`; test 6 para `request_email_change`/`confirm_email_verification`) y
+      `privacy_email_change_confirm.sql` (para la RPC `confirm_privacy_email_change`, T15.a) ya cubren
+      contra Postgres real cada operación de escritura de las tres rutas — ningún archivo SQL nuevo hacía
+      falta. Ver PROGRESS.md, iteración 52.
 
 - [ ] **T16 — `admin-consent`: bitácora, evidencia, revelación de IP, solicitudes, cadenas** (REQ-16, REQ-17, REQ-18)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T04, T14 y T15 (todas comparten el archivo `admin-consent`). El modelo de datos que necesita (`admin_audit_log`, `consent_records`, `data_subject_requests`) ya existe (T07/T08).

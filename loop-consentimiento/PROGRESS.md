@@ -9,7 +9,7 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   esperan el release único (`PLAN_PRODUCCION_RELEASE.md`, orden 074→075→076→077→078→079→080→081).
 - Fase 1 (aviso + registro) escrita y probada en local, **no desplegada**: falta publicar el aviso real
   y no hay ruta `/registro` en el `App.tsx` versionado (parche en `PLAN_RAMAS.md`).
-- Fases 2 (parcial: T04,T06,T07,T08,T09,T10,T11,T12,T13,T14 cerradas; TEST-INT a-e cerrada; T15,T16
+- Fases 2 (parcial: T04,T06,T07,T08,T09,T10,T11,T12,T13,T14,T15 cerradas; TEST-INT a-e cerrada; T16
   sin empezar), 3, 4 y 5: sin desplegar.
 - `081 es la migración más urgente` del lote: sin ella, funciones con `search_path` acotado fallan al
   llamar a `digest()` (pgcrypto vive en `extensions`, no en `public`, en Supabase real).
@@ -1225,3 +1225,51 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio, **estricto 16/28 = 57,1 %** (T15.c es una subtarea, no mueve el contador estricto
   hasta que T15 completa cierre). Ponderado: sin cambio, **≈ 59,5 %** (ningún subtask de T15 cuenta puntos
   propios hasta que T15 completa cierre, mismo criterio que T12/T13 mientras estaban divididas).
+
+## Iteración 52 — 2026-10-08 — T15.d: cierra T15 (`admin-consent` — configuración y verificación del correo del delegado, REQ-14, REQ-15), sin código nuevo
+- **Punto de partida:** `git status` limpio; T15.a/b/c cerradas (iteraciones 49-51). Única tarea pendiente de
+  T15: T15.d, cuya aceptación es auditar `update_settings`/`request_email_change`/`confirm_email_verification`
+  contra Postgres real y, si T15.a/b/c ya dejaron cobertura suficiente, documentarlo en vez de añadir SQL
+  nuevo — la propia iteración 51 ya anticipaba que así sería.
+- **Auditoría (sin tocar código):** releídos los tres archivos de prueba SQL citados por T15.a/b/c y
+  comparados campo a campo contra las llamadas reales de `admin-consent/index.ts`:
+  - `update_settings` → `settings.insert` (`index.ts:120-124`) es un `INSERT` de una sola fila en
+    `privacy_settings`. `settings_versioning.sql` test 2 (líneas 26-31) ejecuta exactamente esa forma
+    (copiar la vigente, subir `settings_version`, cambiar un campo) contra el trigger real
+    `enforce_next_privacy_settings_version` y confirma que la v1 queda intacta (historial completo).
+  - `request_email_change` → `emailVerification.insert` (`index.ts:127-131`), un `INSERT` en
+    `privacy_email_verifications`. `settings_versioning.sql` test 6 (líneas 52-62) inserta con la misma
+    forma de columnas y confirma el `CHECK` real de `new_email` (rechaza `'no-es-un-correo'`).
+  - `confirm_email_verification` → dos caminos reales: (a) `emailVerification.incrementAttempts`
+    (`index.ts:146-152`), `UPDATE` de una fila con bloqueo optimista (`WHERE id=… AND attempts=…`) —
+    `settings_versioning.sql` test 6 (líneas 55-61) ejercita el mismo `UPDATE SET attempts = attempts + 1`
+    contra el trigger que solo permite subir `attempts`/`confirmed_at` y el `CHECK (attempts BETWEEN 0 AND
+    10)` (intento de `attempts = 11` rechazado); (b) `emailVerification.confirm` (`index.ts:154-174`), la
+    RPC `confirm_privacy_email_change` (082, T15.a) — ya tiene su propia prueba dedicada,
+    `privacy_email_change_confirm.sql` (10 aserciones: forbidden, mfa_required, not_found, code_expired sin
+    mutar, invalid_code sin mutar, camino feliz con versión nueva en una transacción, already_confirmed sin
+    crear otra versión, bitácora con actor/before/after, permisos por rol, `verify_audit_chain()` íntegra).
+  - No queda ninguna escritura de las tres rutas sin un equivalente contra Postgres real: el bloqueo
+    optimista del `UPDATE` de intentos es semántica estándar de `WHERE`, no depende de ningún trigger o
+    restricción propia del módulo que un fake pudiera ocultar (mismo razonamiento ya dado en la iteración 51).
+    Conclusión: **no hace falta ningún archivo SQL nuevo** para T15.d — la cobertura ya existe, repartida
+    entre `settings_versioning.sql` (075, previa a T15) y `privacy_email_change_confirm.sql` (082, T15.a).
+- **Cambios:** `loop-consentimiento/TASKS.md` (T15.d `[x]` con el detalle de la auditoría; T15 `[x]`);
+  `loop-consentimiento/PROGRESS.md` ("Estado de producción" actualizado: T15 pasa a la lista de cerradas,
+  T16 queda como la única pendiente de la Fase 2; esta entrada). Ningún archivo de `shield-ecuador-app/`
+  tocado — tarea puramente de auditoría y documentación.
+- **Pruebas:** ninguna nueva (no hacía falta, ver auditoría arriba). Se corrió `gates.sh` igualmente para
+  confirmar que el estado base sigue verde antes de cerrar la tarea (no hay precedente de omitirlo cuando el
+  cambio es solo documental y el conjunto de pruebas existentes es el que sostiene el cierre).
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` (9 puertas): typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e (245s, 2 perfiles por defecto), deno-check,
+  deno-test, sql-ciclo-de-vida, sql-guest-limit — todas OK; db-reset/e2e-local SKIP explícito (opt-in).
+  Iteración 52, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: próxima tarea ejecutable en orden de `TASKS.md`: T16 (`admin-consent`:
+  bitácora, evidencia, revelación de IP, solicitudes, cadenas — REQ-16, REQ-17, REQ-18). `e2e-local` sigue
+  sin una corrida real en verde en esta máquina (bloqueador de Docker Desktop, iteraciones 43-44), sin
+  relación con T15.
+- Porcentaje: **estricto 17 de 28 = 60,7 %** (antes 16/28 ≈ 57,1 %; T15 se cierra como tarea completa, mismo
+  criterio que T12/T13/T14). **Ponderado: T15 pasa de 0 % a 100 % de sus propios 100 puntos → 1665 (Iteración
+  48) + 100 = 1765/2800 ≈ 63,0 %** (antes ≈ 59,5 %).
