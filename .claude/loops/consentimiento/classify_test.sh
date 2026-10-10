@@ -57,6 +57,19 @@ check_classify "12:39 — interrumpida, sin cierre limpio" \
 check_classify "límite de sesión real (texto plano, sin JSON)" \
   "$LOGS_DIR/iter-002-20261001-000211.log" "LIMITE You've hit your session limit"
 
+# 4-7) Límite de sesión real como evento "result" JSON normal (is_error:true, api_error_status:429),
+#    no como línea de texto plano — las 14:00 (reset 4pm) y las dos últimas de hoy (reset 10pm). Antes
+#    de este fix, classify_iteration entraba en la rama `line_type == "result"` y, al no encontrar
+#    ninguna <promise>, devolvía SIN_CIERRE en vez de LIMITE.
+check_classify "14:00 — límite de sesión (JSON, reset 4pm)" \
+  "$LOGS_DIR/iter-002-20261009-140035.log" "LIMITE You've hit your session limit"
+check_classify "14:00 — límite de sesión (JSON, reset 4pm, iter siguiente)" \
+  "$LOGS_DIR/iter-003-20261009-140047.log" "LIMITE You've hit your session limit"
+check_classify "21:54 — límite de sesión (JSON, reset 10pm)" \
+  "$LOGS_DIR/iter-001-20261009-215439.log" "LIMITE You've hit your session limit"
+check_classify "21:58 — límite de sesión (JSON, reset 10pm, última)" \
+  "$LOGS_DIR/iter-002-20261009-215811.log" "LIMITE You've hit your session limit"
+
 echo "== decide_usage_limit() con mensajes sintéticos =="
 now="$(date +%s)"
 future_label="$(date -d '+2 minutes' '+%-I:%M %p')"

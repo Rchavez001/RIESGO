@@ -25,7 +25,19 @@ classify_iteration() {
       const j = JSON.parse(require("fs").readFileSync(0, "utf8"));
       process.stdout.write(String(j.result ?? ""));
     ' 2>/dev/null)"
-    if   [[ "$msg" == *"<promise>LOOP_COMPLETO</promise>"* ]]; then echo "LOOP_COMPLETO"
+    # Límite de uso/sesión también puede llegar como evento "result" normal (no una línea de texto
+    # plano sin JSON): {"type":"result","is_error":true,"api_error_status":429,"result":"You've hit
+    # your session limit · resets 10pm (America/Guayaquil)"}. api_error_status 429 por sí solo ya es
+    # límite; si no viene ese campo, is_error true + "session limit"/"usage limit"/"rate limit" en el
+    # mensaje también cuenta — sin depender del carácter "·" (puede no estar, o venir en otro idioma).
+    is_limit="$(printf '%s' "$line" | node -e '
+      const j = JSON.parse(require("fs").readFileSync(0, "utf8"));
+      const msg = String(j.result ?? "");
+      const limitText = /session limit|usage limit|rate limit/i.test(msg);
+      process.stdout.write((j.api_error_status === 429 || (j.is_error === true && limitText)) ? "1" : "0");
+    ' 2>/dev/null)"
+    if   [[ "$is_limit" == "1" ]]; then echo "LIMITE $msg"
+    elif [[ "$msg" == *"<promise>LOOP_COMPLETO</promise>"* ]]; then echo "LOOP_COMPLETO"
     elif [[ "$msg" == *"<promise>BLOQUEADO</promise>"* ]];     then echo "BLOQUEADO"
     elif [[ "$msg" == *"<promise>ITERACION_OK</promise>"* ]];  then echo "ITERACION_OK"
     else echo "SIN_CIERRE"
