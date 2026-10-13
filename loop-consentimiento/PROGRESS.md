@@ -1691,3 +1691,49 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio en el contador por tarea completa (T16 sigue con cinco de sus seis subtareas
   cerradas; el contador estricto/ponderado se mueve cuando T16 completa, no por subtarea). **Estricto
   17 de 28 = 60,7 %. Ponderado ≈ 63,0 %** (sin cambio respecto a la Iteración 58).
+
+## Iteración 60 — 2026-10-13 — T16.f: `GET /verify-chains` (REQ-18) — cierra T16 completa
+- **Punto de partida:** `git status` mostraba `admin-consent/{handler.ts,handler_test.ts,index.ts}` sin
+  commitear (112 líneas añadidas, 0 eliminadas) de una iteración anterior interrumpida. Investigación antes
+  de tocar nada: el diff implementa íntegramente T16.f (la primera tarea `[ ]` desbloqueada tras T16.e) —
+  `ChainVerification`/`ChainsDeps`/`verifyChains()` en `handler.ts`, ruta `GET /verify-chains` con
+  `PRIVACY_ROLES`, resolutor real en `index.ts` sobre `db.rpc('verify_consent_chain'|'verify_audit_chain')`,
+  y 5 pruebas nuevas en `handler_test.ts` (ambas cadenas íntegras con los tres roles, cadena de
+  `consent_records` rota, cadena de `admin_audit_log` rota, sin rol → 403, `POST` → 405). No había ningún
+  `.sql`/`.cjs` suelto en el árbol ni rastro de otra tarea mezclada.
+- **Auditoría del WIP antes de aceptarlo (sin asumir que estaba bien):**
+  - `verify_consent_chain()`/`verify_audit_chain()` (073, corregidas por 081 para calificar
+    `extensions.digest`) devuelven `TABLE(first_broken_id BIGINT, detail TEXT)` con a lo sumo una fila (el
+    bucle de ambas funciones hace `RETURN QUERY ...; RETURN;` en el primer eslabón roto y encontrado) —
+    confirmado leyendo las dos migraciones completas, no solo el nombre. El mapeo en `index.ts`
+    (`rows.length > 0 ? {broken:true,...} : {broken:false,null,null}`) es correcto para esa forma de
+    retorno.
+  - No hay `GRANT`/`REVOKE` específico sobre estas dos funciones en ninguna migración (confirmado con
+    `grep` sobre `supabase/migrations/*.sql`): quedan con el privilegio `EXECUTE` por defecto de Postgres
+    a `PUBLIC`, igual que desde que existen en 073 — no es una exposición nueva de esta tarea, y la función
+    no devuelve ningún dato personal (solo `id`/`detail` de texto fijo), así que no amerita una migración
+    de permisos solo para esto.
+  - Proxy del panel (`central-admin-app/server.js`, `PRIVACY_FN_RE`): `/verify-chains` es un segmento
+    `[A-Za-z0-9_-]+` simple, ya admitido por el patrón existente desde T16.a — confirmado, sin cambios
+    necesarios (mismo caso que T16.e con `/requests`).
+  - Razón por la que no hace falta prueba SQL nueva (regla de TEST-INT/PROMPT.md): es una acción de solo
+    lectura pura (dos `SELECT`-RPC sin ningún `INSERT`/`UPDATE`/`DELETE`); las propias funciones ya están
+    verificadas contra Postgres real indirectamente por cada prueba de `*_lifecycle.sql` que depende de que
+    la cadena se mantenga íntegra (si `verify_consent_chain`/`verify_audit_chain` estuvieran mal, esas
+    pruebas fallarían al verificar la cadena al final de cada bloque).
+- **Cambios:** ninguno de código nuevo — el WIP ya estaba completo y correcto; solo `loop-consentimiento/TASKS.md`
+  (T16.f `[x]` con el detalle de diseño auditado; T16 padre `[x]`, las seis subtareas cerradas) y este
+  archivo.
+- **Pruebas añadidas:** las 5 ya presentes en el WIP (ver arriba), verificadas en verde sin cambios.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  **Iteración 60, múltiplo de 5:** se corrió además `bash .claude/loops/consentimiento/gates.sh --full`
+  (los 7 perfiles de `playwright.admin.config.ts`) — ver resultado al cierre de esta entrada.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T16 queda completa (sus seis subtareas cerradas); `AUDIT-IP-extra`
+  (Iteración 53) sigue pendiente sin cambios. El panel (T24) todavía no existe — `/verify-chains`, igual
+  que el resto de T16, solo se ha probado contra la API vía `handler_test.ts`, nunca desde una UI real.
+- Porcentaje: T16 se cierra como tarea completa. **Estricto 18 de 28 = 64,3 %** (antes 60,7 %). Ponderado:
+  T16 pasa de 0 % a 100 % de sus propios 100 puntos → 1765 (Iteración 48, tras T15) + 100 =
+  **1865/2800 ≈ 66,6 %** (antes ≈ 63,0 %).

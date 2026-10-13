@@ -208,6 +208,27 @@ serve((req) =>
         }
       },
     },
+    // T16.f (REQ-18): envuelve `verify_consent_chain()`/`verify_audit_chain()` (073/081, ya probadas
+    // contra Postgres real en `lifecycle.sql`/`consent_write_endpoints.sql`/etc. — reportan la fila exacta
+    // del primer eslabón roto). Ambas devuelven a lo sumo una fila; sin filas, la cadena está íntegra.
+    chains: {
+      verifyConsentChain: async () => {
+        const { data, error } = await db.rpc('verify_consent_chain')
+        if (error) throw new Error(`verify_consent_chain: ${error.code ?? 'error'}`)
+        const rows = (data ?? []) as Array<{ first_broken_id: number; detail: string }>
+        return rows.length > 0
+          ? { broken: true, first_broken_id: rows[0].first_broken_id, detail: rows[0].detail }
+          : { broken: false, first_broken_id: null, detail: null }
+      },
+      verifyAuditChain: async () => {
+        const { data, error } = await db.rpc('verify_audit_chain')
+        if (error) throw new Error(`verify_audit_chain: ${error.code ?? 'error'}`)
+        const rows = (data ?? []) as Array<{ first_broken_id: number; detail: string }>
+        return rows.length > 0
+          ? { broken: true, first_broken_id: rows[0].first_broken_id, detail: rows[0].detail }
+          : { broken: false, first_broken_id: null, detail: null }
+      },
+    },
     documents: {
       getPublished: async () => {
         const { data, error } = await db.from('consent_documents').select(DOC_COLUMNS).eq('status', 'published').maybeSingle()

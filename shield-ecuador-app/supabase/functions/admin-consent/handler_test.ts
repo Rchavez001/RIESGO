@@ -15,6 +15,8 @@ import {
   type AuditEntry,
   type AuditLogRow,
   type AuditTrailDeps,
+  type ChainsDeps,
+  type ChainVerification,
   type ConfirmEmailChangeInput,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
@@ -280,6 +282,18 @@ function makeDsrRequestsStore(
   return { requests, rows }
 }
 
+// Fake de `chains` (T16.f): el resultado real de `verify_consent_chain()`/`verify_audit_chain()` (073/081,
+// ya probadas contra Postgres real en `lifecycle.sql` y otros) — una prueba solo necesita indicar si cada
+// cadena está íntegra o rota, sin tocar Postgres para eso.
+function makeChainsStore(opts: { consent?: ChainVerification; audit?: ChainVerification } = {}): { chains: ChainsDeps } {
+  const ok: ChainVerification = { broken: false, first_broken_id: null, detail: null }
+  const chains: ChainsDeps = {
+    verifyConsentChain: () => Promise.resolve(opts.consent ?? ok),
+    verifyAuditChain: () => Promise.resolve(opts.audit ?? ok),
+  }
+  return { chains }
+}
+
 // A diferencia de `makeDocsStore`/`makeEmailTransportStore`, `current` es mutable aquí (sin un array de
 // filas expuesto): basta con que `insert` reemplace la vigente, igual que haría la vista
 // `privacy_settings_current` real tras un INSERT.
@@ -378,6 +392,7 @@ function fullDeps(opts: {
   auditTrail?: AuditTrailDeps
   evidence?: EvidenceDeps
   requests?: DsrRequestsDeps
+  chains?: ChainsDeps
 }): AdminConsentDeps {
   const audit = opts.audit ?? []
   return {
@@ -393,6 +408,7 @@ function fullDeps(opts: {
     auditTrail: opts.auditTrail ?? makeAuditTrailStore().auditTrail,
     evidence: opts.evidence ?? makeEvidenceStore().evidence,
     requests: opts.requests ?? makeDsrRequestsStore().requests,
+    chains: opts.chains ?? makeChainsStore().chains,
   }
 }
 
@@ -2045,5 +2061,49 @@ Deno.test('POST /requests/{id}/status: caso inexistente → 404 not_found', asyn
 
 Deno.test('GET /requests/{id}/status → 405', async () => {
   const res = await handle(req(await sign(claims()), `/requests/${CASE_ID}/status`, 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 405)
+})
+
+// ── T16.f: GET /verify-chains (REQ-18) ─────────────────────────────────────────────────────────────────
+
+Deno.test('GET /verify-chains: los tres roles del módulo pueden verificar (200), ambas cadenas íntegras', async () => {
+  for (const role of ['privacy_editor', 'privacy_admin', 'privacy_auditor']) {
+    const { chains } = makeChainsStore()
+    const res = await handle(req(await sign(claims()), '/verify-chains', 'GET'), fullDeps({ roles: [role], chains }))
+    assertEquals(res.status, 200, role)
+    assertEquals(await res.json(), {
+      consent: { broken: false, first_broken_id: null, detail: null },
+      audit: { broken: false, first_broken_id: null, detail: null },
+    }, role)
+  }
+})
+
+Deno.test('GET /verify-chains: cadena de consent_records rota → se señala el primer eslabón, sin afectar la de la bitácora', async () => {
+  const { chains } = makeChainsStore({ consent: { broken: true, first_broken_id: 3, detail: 'row_hash no coincide con el contenido de la fila' } })
+  const res = await handle(req(await sign(claims()), '/verify-chains', 'GET'), fullDeps({ roles: ['privacy_auditor'], chains }))
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), {
+    consent: { broken: true, first_broken_id: 3, detail: 'row_hash no coincide con el contenido de la fila' },
+    audit: { broken: false, first_broken_id: null, detail: null },
+  })
+})
+
+Deno.test('GET /verify-chains: cadena de admin_audit_log rota → se señala el primer eslabón', async () => {
+  const { chains } = makeChainsStore({ audit: { broken: true, first_broken_id: 7, detail: 'prev_hash no coincide con el row_hash anterior' } })
+  const res = await handle(req(await sign(claims()), '/verify-chains', 'GET'), fullDeps({ roles: ['privacy_editor'], chains }))
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), {
+    consent: { broken: false, first_broken_id: null, detail: null },
+    audit: { broken: true, first_broken_id: 7, detail: 'prev_hash no coincide con el row_hash anterior' },
+  })
+})
+
+Deno.test('GET /verify-chains: sin rol del módulo → 403', async () => {
+  const res = await handle(req(await sign(claims()), '/verify-chains', 'GET'), fullDeps({ roles: [] }))
+  assertEquals(res.status, 403)
+})
+
+Deno.test('POST /verify-chains → 405', async () => {
+  const res = await handle(req(await sign(claims()), '/verify-chains', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
   assertEquals(res.status, 405)
 })

@@ -373,6 +373,20 @@ export interface DsrRequestsDeps {
   updateStatus: (input: UpdateDsrStatusInput) => Promise<DsrCaseRow>
 }
 
+// T16.f (REQ-18): resultado de `verify_consent_chain()`/`verify_audit_chain()` (073/081) — ambas
+// funciones devuelven a lo sumo una fila (el PRIMER eslabón roto, nunca la lista completa); sin filas,
+// la cadena está íntegra.
+export interface ChainVerification {
+  broken: boolean
+  first_broken_id: number | null
+  detail: string | null
+}
+
+export interface ChainsDeps {
+  verifyConsentChain: () => Promise<ChainVerification>
+  verifyAuditChain: () => Promise<ChainVerification>
+}
+
 export interface AdminConsentDeps {
   guard?: AuthGuardOptions
   /** HMAC del correo normalizado (clave propia de búsqueda, H15): la bitácora no guarda el correo en claro. */
@@ -387,6 +401,7 @@ export interface AdminConsentDeps {
   auditTrail: AuditTrailDeps
   evidence: EvidenceDeps
   requests: DsrRequestsDeps
+  chains: ChainsDeps
 }
 
 /** Error de dominio con código de estado HTTP, para las acciones de /documents. Nunca lleva datos sensibles en `code`. */
@@ -1156,6 +1171,15 @@ async function updateDsrStatus(admin: Admin, deps: AdminConsentDeps, requestId: 
   return toDsrListRow(updated, new Date())
 }
 
+// T16.f (REQ-18): solo lectura, mismo candado que `/audit-log`/`/evidence`/`/requests` (los tres roles
+// del módulo) — verificar la cadena no expone ningún dato personal, solo si hay o no un eslabón roto y
+// cuál es el primero. No deja bitácora (REQ-16 no la lista entre las acciones que la exigen, a diferencia
+// de "Revelar IP"/exportar/cambiar estado).
+async function verifyChains(deps: AdminConsentDeps): Promise<{ consent: ChainVerification; audit: ChainVerification }> {
+  const [consent, auditChain] = await Promise.all([deps.chains.verifyConsentChain(), deps.chains.verifyAuditChain()])
+  return { consent, audit: auditChain }
+}
+
 // T16.b (REQ-16): tope de filas por exportación — una exportación sin tope podría volcar toda la bitácora
 // histórica en una sola respuesta; si el filtro pide más, `exportAuditLogCsv` lo señala en `truncated`.
 const MAX_AUDIT_EXPORT_ROWS = 5000
@@ -1385,6 +1409,13 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
       if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
       await requireRole(req, PRIVACY_ROLES, deps.guard)
       const result = await listDsrCases(deps, new URL(req.url))
+      return json(200, result)
+    }
+
+    if (path === '/verify-chains') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      await requireRole(req, PRIVACY_ROLES, deps.guard)
+      const result = await verifyChains(deps)
       return json(200, result)
     }
 

@@ -306,7 +306,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       contra Postgres real cada operación de escritura de las tres rutas — ningún archivo SQL nuevo hacía
       falta. Ver PROGRESS.md, iteración 52.
 
-- [ ] **T16 — `admin-consent`: bitácora, evidencia, revelación de IP, solicitudes, cadenas** (REQ-16, REQ-17, REQ-18)
+- [x] **T16 — `admin-consent`: bitácora, evidencia, revelación de IP, solicitudes, cadenas** (REQ-16, REQ-17, REQ-18) (hecha 2026-10-13, iteración 60 — cierra con T16.f, última subtarea de seis)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T04, T14 y T15 (todas comparten el archivo `admin-consent`). El modelo de datos que necesita (`admin_audit_log`, `consent_records`, `data_subject_requests`) ya existe (T07/T08).
   - **Tests:** búsqueda por correo usa HMAC; IP enmascarada por defecto; `reveal_ip` exige
     `privacy_admin` + motivo y registra; auditor no puede revelar; export CSV registrado;
@@ -483,7 +483,10 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       `reason_required_for_rejection`; caso inexistente → 404 `not_found`; métodos distintos → 405;
       `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas no-opcionales OK;
       `db-reset`/`e2e-local` SKIP opt-in; iteración 59, no múltiplo de 5, `GATES_FULL=1` no obligatorio).
-  - [ ] **T16.f — `verify_chains`: envuelve `verify_consent_chain()`/`verify_audit_chain()`** (REQ-18)
+  - [x] **T16.f — `verify_chains`: envuelve `verify_consent_chain()`/`verify_audit_chain()`** (REQ-18) (hecha 2026-10-13, iteración 60 — retoma WIP sin commitear de una iteración anterior interrumpida, auditado completo antes de cerrar)
+    - **Diseño (auditado del WIP, sin tocar código):** `GET /verify-chains` envuelve las RPC `verify_consent_chain()`/`verify_audit_chain()` (073, corregidas en 081 por `extensions.digest`), ya probadas contra Postgres real en `consent_documents_lifecycle.sql`/otros — no hace falta prueba SQL nueva (solo lectura, sin escritura nueva que un fake pudiera ocultar). Ambas RPC devuelven `TABLE(first_broken_id BIGINT, detail TEXT)` con a lo sumo una fila (el primer eslabón roto); `ChainVerification` normaliza eso a `{broken, first_broken_id, detail}`. Rol: `PRIVACY_ROLES` (los tres) — verificar la cadena no expone dato personal alguno, solo si hay o no un eslabón roto y cuál es el primero (mismo candado que `/audit-log`/`/evidence`/`/requests`). Sin bitácora (REQ-16 no la exige para esta acción de solo lectura, a diferencia de "Revelar IP"/exportar/cambiar estado).
+    - **Cambios:** `handler.ts` (`ChainVerification`, `ChainsDeps`, `verifyChains`, ruta `GET /verify-chains`); `index.ts` (resolutor `chains.verifyConsentChain`/`verifyAuditChain` sobre `db.rpc(...)`); `handler_test.ts` (`makeChainsStore`, 5 pruebas: ambas íntegras con los tres roles, cadena de `consent_records` rota, cadena de `admin_audit_log` rota, sin rol → 403, `POST` → 405).
+    - **Proxy del panel:** sin cambios en `PRIVACY_FN_RE` — `/verify-chains` es un segmento simple, ya admitido.
 
 - [ ] **T17 — Job de retención** (REQ-19, REQ-20) ⛔ BLOQUEADA (D-02)
   - **Estado real (2026-09-28):** Sin iniciar. Existe el mecanismo en BD: bandera de sesión acotada a poner en NULL `user_id`/`ip_ciphertext`/`ua_ciphertext` y la cadena que no los cubre (074). Falta el job y la decisión D-02.
