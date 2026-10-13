@@ -496,15 +496,47 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 4 · Frontend de usuario
 
-- [ ] **T18 — Pantalla de registro con aviso dinámico** (REQ-06, REQ-12)
-  - **Estado real (2026-09-28):** PARCIAL. Hecho: pantalla de registro con el aviso como primera pantalla, casillas desmarcadas, "No acepto" → portada, puerta de edad con bloqueo (D-04 opción A propuesta), 409 → recarga del aviso, 503 con mensaje; `register.spec.ts` 11/11 en 3 perfiles. Falta: Markdown sanitizado (hoy texto plano: `##` y `**` se ven en crudo), botón deshabilitado hasta marcar la obligatoria, enlace a la política antes del formulario, `aria-live`, pruebas unitarias del componente.
-  - Consumir `get-consent-notice`; renderizar Markdown sanitizado; casillas desmarcadas;
-    «Aceptar y continuar» deshabilitado hasta marcar la obligatoria; «No aceptar y salir»;
-    enlace a política antes del formulario; puerta de edad según D-04; manejo de 409 (recargar aviso).
-  - Accesibilidad: casillas con `label` asociado, navegación por teclado, foco visible,
-    mensajes de error anunciados (`aria-live`).
-  - **Tests** (unitarios + Playwright): casillas desmarcadas al cargar; no se envía sin la
-    obligatoria; payload incluye huella; no incluye IP.
+- [x] **T18 — Pantalla de registro con aviso dinámico** (REQ-06, REQ-12)
+  - **Cierre (2026-10-13, iteración 61):** punto de partida: `RegisterScreen.tsx`/`index.css`/`register.spec.ts`
+    modificados y `consentMarkdown.{tsx,test.tsx}`/`RegisterScreen.test.tsx` nuevos, sin commitear, de una
+    iteración anterior interrumpida. Auditado antes de aceptar el WIP: `renderConsentMarkdown`
+    (`frontend/src/lib/consentMarkdown.tsx`) renderiza a elementos React reales (nunca `dangerouslySetInnerHTML`,
+    así que no hay string HTML que sanear — solo se filtra el destino del enlace con `safeHttpUrl` ya
+    existente) el subconjunto de Markdown que el aviso semilla usa: `#`..`######`, `**bold**`, listas `- `,
+    `---` y `[texto](url)`; `RegisterScreen.tsx` lo usa en vez de `renderPlainParagraphs` (texto plano
+    anterior) y además: el botón «Acepto y continuar» queda `disabled` mientras falte una finalidad
+    obligatoria (ya no hace falta un `error` de estado separado: la condición se recalcula en cada render,
+    mismo criterio que `missingPurpose`), el motivo se anuncia en un `<p role="status" aria-live="polite">`
+    siempre montado (un live region solo anuncia *cambios* de un nodo que ya estaba en el DOM, no la
+    aparición del nodo), y el enlace a la Política de Privacidad ya se mostraba antes del formulario desde
+    una iteración previa.
+  - **Defecto encontrado y corregido en el WIP:** el `<p>` del motivo llevaba `role="status"` pero NO el
+    atributo `aria-live` literal — la prueba que ya traía el WIP comprobaba `toHaveAttribute('aria-live',
+    'polite')`, que jest-dom evalúa contra el atributo DOM real, no contra el mapeo ARIA implícito de un
+    rol; con solo `role="status"` esa prueba fallaba. Se añadió `aria-live="polite"` explícito en
+    `RegisterScreen.tsx` (más robusto además: no depende de que el lector de pantalla mapee bien el rol).
+  - **Lint roto por los dos archivos de prueba nuevos (28 errores nuevos sobre la línea base de 14 de
+    `gates.sh`, todos `testing-library/*`):** `consentMarkdown.test.tsx` desestructuraba `container`/
+    `getByRole`/`queryByText`/`queryByRole` de `render()` y encadenaba `container.querySelector(...)`
+    (`testing-library/prefer-screen-queries`, `no-container`, `no-node-access`); `RegisterScreen.test.tsx`
+    usaba `document.querySelector('#reg-name')`/`document.getElementById(...)` y tenía un `import` después
+    de los `jest.mock(...)` (rompía `import/first`) más un `waitFor` sin usar. Reescritos ambos archivos
+    para seguir la convención ya establecida en el repo (`LearningFlow.test.tsx`, `AuthContext.test.tsx`):
+    solo `screen.getByRole`/`getByText`/`getByLabelText` (nunca `container`/`document.*`; `role="status"` del
+    propio hint sustituye a `getElementById` para localizarlo), y el import del componente ANTES de los
+    `jest.mock` (Jest los hoiza igual, así que mockean lo mismo; evita el error de `import/first` sin tocar
+    ningún `.eslintrc`). `gates.sh` sin modificar: lint vuelve a reportar 14 problemas (línea base).
+  - **Tests:** `consentMarkdown.test.tsx` (7): heading real sin `#` en crudo, título del documento no se
+    duplica, `**bold**` → `<strong>` sin `**` en crudo, `- ` → `<li>` real, `---` → `<hr>` (rol `separator`),
+    enlace `http(s)` real y foco `_blank`, enlace `javascript:` nunca se renderiza como `<a>` (solo el texto).
+    `RegisterScreen.test.tsx` (5): aviso sanitizado sin duplicar título; enlace a la política visible antes
+    del formulario; botón deshabilitado + motivo anunciado con `aria-live="polite"` hasta marcar la
+    obligatoria, habilitado al marcarla; «No acepto» vuelve a la portada sin llamar a `signUp`; sin aviso
+    publicado se muestra `role="alert"` en vez de un formulario roto. `register.spec.ts`: el caso Playwright
+    de la obligatoria sin marcar ahora verifica que el botón queda `disabled` (antes: que aparecía un
+    `role="alert"` al pulsarlo) y que se habilita al marcarla.
+  - Accesibilidad (REQ-06/REQ-12): casillas con `label` asociado (ya existía), navegación por teclado y foco
+    visible (ya existía), mensajes de estado anunciados con `aria-live="polite"` (nuevo en esta iteración).
 
 - [ ] **T19 — "Mi privacidad" en la cuenta** (REQ-08, REQ-10)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T11 (`update-my-consent`) y T13 (`request-data-subject-right`), ninguna hecha todavía.

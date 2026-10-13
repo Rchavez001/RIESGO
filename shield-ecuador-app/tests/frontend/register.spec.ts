@@ -55,13 +55,18 @@ test.describe('registro', () => {
     await expect(page.locator('#reg-name')).toHaveCount(0) // el formulario no existe todavía
   })
 
-  test('no se puede continuar sin aceptar la finalidad obligatoria', async ({ page }) => {
+  test('no se puede continuar sin aceptar la finalidad obligatoria: el botón queda deshabilitado', async ({ page }) => {
     await setup(page)
     await settle(page, '.consent-step')
     await page.getByRole('checkbox', { name: /tengo 15 años o más/i }).check()
-    await page.getByRole('button', { name: /acepto y continuar/i }).click()
-    await expect(page.getByRole('alert')).toContainText(/registro y aprendizaje/i)
+    const accept = page.getByRole('button', { name: /acepto y continuar/i })
+    await expect(accept).toBeDisabled()
+    await expect(page.getByText(/debes aceptar "registro y aprendizaje" para continuar/i)).toBeVisible()
     await expect(page.locator('#reg-name')).toHaveCount(0)
+
+    await page.getByRole('checkbox', { name: /registro y aprendizaje/i }).check()
+    await expect(accept).toBeEnabled()
+    await expect(page.getByText(/debes aceptar/i)).toHaveCount(0)
   })
 
   test('rechazar opcionales no impide continuar', async ({ page }) => {

@@ -1737,3 +1737,62 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: T16 se cierra como tarea completa. **Estricto 18 de 28 = 64,3 %** (antes 60,7 %). Ponderado:
   T16 pasa de 0 % a 100 % de sus propios 100 puntos → 1765 (Iteración 48, tras T15) + 100 =
   **1865/2800 ≈ 66,6 %** (antes ≈ 63,0 %).
+
+## Iteración 61 — 2026-10-13 — T18: Markdown sanitizado, botón deshabilitado, `aria-live` en el registro
+- **Punto de partida:** `git status` mostraba `index.css`/`RegisterScreen.tsx`/`register.spec.ts`
+  modificados y `frontend/src/lib/consentMarkdown.{tsx,test.tsx}`/`screens/RegisterScreen.test.tsx` nuevos,
+  sin commitear, de una iteración anterior interrumpida. T18 es la primera tarea `[ ]` desbloqueada de
+  `TASKS.md` (T17 sigue `⛔ BLOQUEADA` por D-02) y el diff coincide exactamente con lo que a T18 le faltaba
+  (ver su "Estado real" anterior): Markdown sanitizado, botón deshabilitado hasta marcar la obligatoria,
+  `aria-live`, pruebas unitarias del componente.
+- **Auditoría del WIP antes de aceptarlo:** `consentMarkdown.tsx` renderiza a elementos React reales
+  (nunca `dangerouslySetInnerHTML`: no hay string HTML que sanear, solo se filtra el destino del enlace con
+  `safeHttpUrl` ya existente) el subconjunto de Markdown que el aviso semilla usa. `RegisterScreen.tsx`
+  calcula `missingPurpose` en cada render (sin estado de error separado) para deshabilitar el botón y
+  mostrar el motivo en un `<p role="status">` siempre montado.
+- **Defecto encontrado y corregido en el WIP (no de diseño, de implementación):** ese `<p>` llevaba
+  `role="status"` pero SIN el atributo `aria-live` literal. La prueba que ya traía el WIP
+  (`RegisterScreen.test.tsx`) comprueba `toHaveAttribute('aria-live', 'polite')`, y jest-dom evalúa eso
+  contra el atributo DOM real, no contra el mapeo ARIA implícito de un rol — con solo `role="status"` la
+  prueba fallaba. Se añadió `aria-live="polite"` explícito (además más robusto: no depende de que el
+  lector de pantalla mapee bien el rol a su nivel de urgencia).
+- **Lint roto por los dos archivos de prueba nuevos:** `bash .claude/loops/consentimiento/gates.sh --only
+  "unit-frontend typecheck-frontend lint-frontend"` dio 35 problemas de lint contra una línea base de 14,
+  los 21 nuevos todos `testing-library/*`. `consentMarkdown.test.tsx` desestructuraba
+  `container`/`getByRole`/`queryByText`/`queryByRole` de `render()` y encadenaba
+  `container.querySelector(...)` (`prefer-screen-queries`, `no-container`, `no-node-access`, confirmado
+  leyendo el código fuente de las tres reglas en `node_modules/eslint-plugin-testing-library`: NO flaguean
+  `.textContent`/`.tagName`, solo métodos/propiedades que devuelven nodos como `querySelector`/
+  `getElementById`/`closest`). `RegisterScreen.test.tsx` usaba `document.querySelector('#reg-name')`/
+  `document.getElementById(...)` y tenía el `import { RegisterScreen }` DESPUÉS de los `jest.mock(...)`
+  (rompía `import/first`; confirmado comparando con `LearningFlow.test.tsx`/`AuthContext.test.tsx`, que ya
+  importan el componente ANTES de sus `jest.mock` — Jest los hoiza igual, así que el orden textual no
+  cambia qué se mockea) más un `waitFor` importado sin usar. Reescritos ambos archivos para seguir esa
+  misma convención (`screen.getByRole`/`getByText`/`getByLabelText`; `role="status"` del propio hint
+  sustituye a `getElementById` para localizarlo). `gates.sh` sin modificar: lint vuelve a reportar 14
+  problemas (línea base intacta, no se tocó `LINT_BASELINE_PROBLEMS`).
+- **Cambios:** `frontend/src/screens/RegisterScreen.tsx` (usa `renderConsentMarkdown` en vez de
+  `renderPlainParagraphs`; botón `disabled`/`describedBy` según `missingPurpose`; hint con
+  `aria-live="polite"` explícito); `frontend/src/index.css` (estilos para `h3`-`h6`/`ul`/`li`/`hr`/`a`
+  dentro de `.consent-body` y `.consent-requirement-hint`); `frontend/src/lib/consentMarkdown.tsx` (nuevo,
+  sin cambios sobre el WIP); `frontend/src/lib/consentMarkdown.test.tsx` y
+  `frontend/src/screens/RegisterScreen.test.tsx` (reescritos para pasar lint, mismas aserciones de fondo);
+  `tests/frontend/register.spec.ts` (el caso de la obligatoria sin marcar ahora verifica `disabled` en vez
+  de un `role="alert"` al pulsar, y que se habilita al marcarla).
+- **Pruebas añadidas:** `consentMarkdown.test.tsx` (7, nuevo): heading real sin `#` en crudo, título no se
+  duplica, `**bold**` → `<strong>`, `- ` → `<li>`, `---` → `<hr>` (rol `separator`), enlace `http(s)` real,
+  enlace `javascript:` nunca se renderiza como `<a>`. `RegisterScreen.test.tsx` (5, nuevo): aviso
+  sanitizado sin duplicar título; enlace a la política visible antes del formulario; botón deshabilitado +
+  motivo anunciado con `aria-live="polite"` hasta marcar la obligatoria, habilitado al marcarla; «No
+  acepto» vuelve a la portada sin llamar a `signUp`; sin aviso publicado se muestra `role="alert"`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  Iteración 61, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna en los criterios de T18. El defecto del `aria-live` faltante y los errores
+  de lint eran del WIP sin terminar, no una desviación de diseño.
+- Riesgos / pendientes detectados: ninguno nuevo. T19 ("Mi privacidad" en la cuenta) es la siguiente tarea
+  desbloqueada.
+- Porcentaje: T18 se cierra como tarea completa. **Estricto 19 de 28 = 67,9 %** (antes 64,3 %). Ponderado:
+  T18 pasa de 0 % a 100 % de sus propios 100 puntos → 1865 (Iteración 60, tras T16) + 100 =
+  **1965/2800 ≈ 70,2 %** (antes ≈ 66,6 %).

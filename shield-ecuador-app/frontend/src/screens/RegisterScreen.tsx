@@ -7,6 +7,7 @@ import type { ConsentSubmission } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { safeLocalPath } from '../lib/safeRedirect'
 import { friendlyAuthError } from '../lib/authErrors'
+import { renderConsentMarkdown } from '../lib/consentMarkdown'
 
 const FALLBACK_BUSINESS_SECTORS = [
   { code: 'comerciante', label: 'Comerciante', industry: 'Comercio y Ventas' },
@@ -48,7 +49,6 @@ export function RegisterScreen() {
   const [notice, setNotice] = useState<ConsentNotice | null>(null)
   const [decisions, setDecisions] = useState<Record<string, boolean>>({})
   const [ageConfirmed, setAgeConfirmed] = useState(false)
-  const [consentError, setConsentError] = useState('')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -107,13 +107,9 @@ export function RegisterScreen() {
   }
 
   function handleConsentContinue() {
+    // The "Acepto y continuar" button is disabled while a required purpose is unchecked
+    // (ConsentStep computes the same condition), so this can only run once it's satisfied.
     if (!notice) return
-    setConsentError('')
-    const missingRequired = notice.purposes.find((purpose) => purpose.required && !decisions[purpose.code])
-    if (missingRequired) {
-      setConsentError(`Debes aceptar "${missingRequired.label}" para continuar.`)
-      return
-    }
     if (!ageConfirmed) {
       setStep('minor_blocked')
       return
@@ -200,7 +196,6 @@ export function RegisterScreen() {
               notice={notice}
               decisions={decisions}
               ageConfirmed={ageConfirmed}
-              error={consentError}
               onToggleDecision={toggleDecision}
               onToggleAge={() => setAgeConfirmed((value) => !value)}
               onAccept={handleConsentContinue}
@@ -299,23 +294,24 @@ export function RegisterScreen() {
 }
 
 function ConsentStep({
-  notice, decisions, ageConfirmed, error, onToggleDecision, onToggleAge, onAccept, onReject,
+  notice, decisions, ageConfirmed, onToggleDecision, onToggleAge, onAccept, onReject,
 }: {
   notice: ConsentNotice
   decisions: Record<string, boolean>
   ageConfirmed: boolean
-  error: string
   onToggleDecision: (code: string) => void
   onToggleAge: () => void
   onAccept: () => void
   onReject: () => void
 }) {
+  const missingPurpose = notice.purposes.find((purpose) => purpose.required && !decisions[purpose.code])
+
   return (
     <div className="consent-step">
       <div className="mono-label">AVISO DE PRIVACIDAD · v{notice.version}</div>
       <h2>{notice.title}</h2>
       <div className="consent-body">
-        {renderPlainParagraphs(notice.rendered_md)}
+        {renderConsentMarkdown(notice.rendered_md, notice.title)}
       </div>
       {notice.privacy_policy_url && (
         <p><a href={notice.privacy_policy_url} target="_blank" rel="noreferrer">Leer la Política de Privacidad completa ↗</a></p>
@@ -343,31 +339,23 @@ function ConsentStep({
         <span>Declaro que tengo 15 años o más.</span>
       </label>
 
-      {error && <div className="form-error" role="alert">{error}</div>}
+      {/* Siempre montado (no solo cuando hay mensaje): un live region solo anuncia cambios de un nodo
+          que ya estaba en el DOM, no la aparición del nodo mismo. aria-live explícito (no solo el que
+          implica role="status") para no depender de que el lector de pantalla mapee el rol. */}
+      <p id="consent-requirement-hint" className="consent-requirement-hint" role="status" aria-live="polite">
+        {missingPurpose ? `Debes aceptar "${missingPurpose.label}" para continuar.` : ''}
+      </p>
 
       <div className="consent-actions">
         <NeonButton color="cyan" variant="outline" onClick={onReject}>
           No acepto
         </NeonButton>
-        <NeonButton color="gold" variant="outline" onClick={onAccept}>
+        <NeonButton color="gold" variant="outline" onClick={onAccept} disabled={!!missingPurpose} describedBy="consent-requirement-hint">
           Acepto y continuar
         </NeonButton>
       </div>
     </div>
   )
-}
-
-function renderPlainParagraphs(text: string) {
-  return text.split(/\n\s*\n/).map((paragraph, index) => (
-    <p key={index}>
-      {paragraph.split('\n').map((line, lineIndex, lines) => (
-        <React.Fragment key={lineIndex}>
-          {line}
-          {lineIndex < lines.length - 1 && <br />}
-        </React.Fragment>
-      ))}
-    </p>
-  ))
 }
 
 function groupBusinessSectorsByIndustry<T extends { industry?: string | null }>(items: T[]): [string | null, T[]][] {
