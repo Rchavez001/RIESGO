@@ -48,9 +48,22 @@ check_classify "09:58 — cierre limpio ITERACION_OK" \
 #    terminó interrumpida): el evento final real es {"type":"system","subtype":"task_notification",...},
 #    SIN veredicto — aunque el log, más arriba, contiene ambas cadenas "<promise>LOOP_COMPLETO</promise>"
 #    y "usage limit" como texto de un diff/lectura de run-loop.sh, no como veredicto. Si esto da
-#    LOOP_COMPLETO o LIMITE, la regresión (grep sobre el log completo) volvió.
+#    LOOP_COMPLETO o LIMITE, la regresión (grep sobre el log completo) volvió. Antes de este fix esto
+#    daba SIN_CIERRE; sin evento final "result", es INTERRUMPIDA (la iteración se cortó a medias).
 check_classify "12:39 — interrumpida, sin cierre limpio" \
-  "$LOGS_DIR/iter-001-20261003-123942.log" "SIN_CIERRE"
+  "$LOGS_DIR/iter-001-20261003-123942.log" "INTERRUMPIDA"
+
+# 2.a-c) Las tres corridas del 13-10 (gates.sh/`--full` corriendo en segundo plano cuando el proceso
+#    terminó): cada una se cortó con el mismo patrón, evento final {"type":"system",
+#    "subtype":"task_notification",...} anunciando que las puertas seguían corriendo, nunca un
+#    {"type":"result",...}. La de las 08:49 es la que dejó el WIP de admin-consent (T16.f) sin
+#    commitear que se retomó en la Iteración 60 (ver PROGRESS.md).
+check_classify "08:09 — interrumpida (gates.sh en segundo plano)" \
+  "$LOGS_DIR/iter-001-20261013-080918.log" "INTERRUMPIDA"
+check_classify "08:27 — interrumpida (gates.sh --full en segundo plano, iteración 60)" \
+  "$LOGS_DIR/iter-002-20261013-082756.log" "INTERRUMPIDA"
+check_classify "08:49 — interrumpida (gates.sh en segundo plano; dejó el WIP de T16.f)" \
+  "$LOGS_DIR/iter-003-20261013-084910.log" "INTERRUMPIDA"
 
 # 3) Límite de sesión real (proceso murió antes de emitir ningún JSON; el log es solo la línea de
 #    texto plano que imprime `claude` en ese caso).

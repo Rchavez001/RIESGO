@@ -42,10 +42,13 @@ classify_iteration() {
     elif [[ "$msg" == *"<promise>ITERACION_OK</promise>"* ]];  then echo "ITERACION_OK"
     else echo "SIN_CIERRE"
     fi
-  elif echo "$line" | grep -qiE "hit your session limit|usage limit"; then
+  elif echo "$line" | grep -qiE "hit your session limit|usage limit|rate limit"; then
     echo "LIMITE $line"
   else
-    echo "SIN_CIERRE"
+    # El evento final no es "result" (p. ej. "system"/"task_notification", como cuando `run-loop.sh`
+    # mata el proceso con gates.sh todavía corriendo en segundo plano): no hubo veredicto, la iteración
+    # se cortó a medias. Distinto de SIN_CIERRE (sí hubo un "result" final, pero sin <promise> conocida).
+    echo "INTERRUMPIDA $line"
   fi
 }
 
