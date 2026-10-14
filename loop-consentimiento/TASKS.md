@@ -643,7 +643,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         (`panel-e2e` incluido, 353 casos; `db-reset`/`e2e-local` SKIP opt-in). Iteración 66, no múltiplo de
         5: `GATES_FULL=1` no obligatorio esta vez.
 
-- **T22 — Comparar y Publicar** (REQ-13 c, d)
+- [x] **T22 — Comparar y Publicar** (REQ-13 c, d) (hecha 2026-10-14, iteración 69 — cierra con T22.c, última subtarea de tres)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.
   - Diff lado a lado; modal de publicación con motivo, casilla `requires_reconsent`,
     confirmación escribiendo la versión; resumen de impacto (nº de usuarios que verán re-consentimiento).
@@ -674,10 +674,15 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         del POST .../publish; si ese PATCH falla, no se intenta publicar; error real del backend (cuatro
         ojos, etc.) deja el modal abierto con mensaje legible; éxito cierra el modal y recarga la lista;
         cerrar limpia los campos; pruebas Playwright (`consent-publish.spec.ts`, 11 casos).
-    - [ ] **T22.c — Panel: acción "Retirar borrador"** (REQ-13 d)
+    - [x] **T22.c — Panel: acción "Retirar borrador"** (REQ-13 d) (hecha 2026-10-14, iteración 69 — retoma y cierra el WIP de una iteración headless interrumpida por límite de sesión, confirmado contra el backend real antes de cerrarla)
       - Motivo obligatorio + confirmación escribiendo la versión (mismo patrón que Publicar) para
         descartar un borrador sin publicarlo (`POST /documents/:id/retire`, T14, sin cambios de
         backend).
+      - **Aceptación:** "Retirar" solo visible en borradores y solo para `privacy_admin` (ADMIN_ONLY,
+        mismo candado que "Publicar"; nunca en la fila publicada); motivo vacío o versión de confirmación
+        incorrecta no llaman al backend; éxito cierra el modal y recarga la lista; error real del backend
+        (`not_draft`, etc.) deja el modal abierto con mensaje legible; cerrar limpia los campos; pruebas
+        Playwright (`consent-retire.spec.ts`, 7 casos).
 
 - [ ] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05.

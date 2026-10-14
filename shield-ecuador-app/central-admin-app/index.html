@@ -1344,6 +1344,32 @@
                 </div>
               </form>
             </div>
+
+            <!-- T22.c (REQ-13 d): "Retirar borrador" sin publicarlo (POST …/retire, T14; exige
+                 `privacy_admin`, ADMIN_ONLY — mismo candado que "Publicar"). Motivo obligatorio,
+                 confirmación escribiendo la versión exacta; sin casilla de reconsentimiento ni resumen
+                 de impacto (un borrador retirado nunca tuvo aceptaciones, a diferencia de la vigente
+                 que "Publicar" sí retira). -->
+            <div id="consentRetireView" class="card" hidden>
+              <div class="section-toolbar compact">
+                <h3>Retirar borrador</h3>
+                <button id="consentRetireClose" class="btn secondary small" type="button">Cerrar</button>
+              </div>
+              <p id="consentRetireMessage" class="privacy-message" role="alert"></p>
+              <form id="consentRetireForm" class="form-grid compact" novalidate>
+                <label>
+                  Motivo
+                  <textarea id="consentRetireReason" rows="3" maxlength="2000" required></textarea>
+                </label>
+                <label>
+                  Escribe la versión exacta para confirmar
+                  <input id="consentRetireConfirmVersion" type="text" maxlength="50" required />
+                </label>
+                <div class="modal-actions">
+                  <button class="btn danger" type="submit">Retirar</button>
+                </div>
+              </form>
+            </div>
           </article>
         </section>
       </main>

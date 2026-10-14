@@ -4758,9 +4758,10 @@ let consentDocs = [];
 // T21.c.1: solo editor/admin ven "Editar" (mismo candado que "Crear borrador desde vigente"); se recalcula
 // en `privacyVerify` junto con `#consentDraftForm.hidden`, nunca se infiere del DOM.
 let consentDocsCanEdit = false;
-// T22.b: "Publicar" exige `privacy_admin` (ADMIN_ONLY, admin-consent/handler.ts) — más restrictivo que
-// "Editar"/"Comparar" (EDITOR_ROLES, que también aceptan `privacy_editor`). Se recalcula en `privacyVerify`,
-// igual que `consentDocsCanEdit`.
+// T22.b/T22.c: "Publicar" y "Retirar borrador" exigen `privacy_admin` (ADMIN_ONLY, admin-consent/
+// handler.ts) — más restrictivo que "Editar"/"Comparar" (EDITOR_ROLES, que también aceptan
+// `privacy_editor`). Mismo candado para ambas acciones: no hace falta una bandera separada. Se
+// recalcula en `privacyVerify`, igual que `consentDocsCanEdit`.
 let consentDocsCanPublish = false;
 
 const CONSENT_DOC_ERRORS = {
@@ -4794,6 +4795,19 @@ function consentPublishErrorMessage(code) {
   return CONSENT_PUBLISH_ERRORS[code] || consentDocErrorMessage(code);
 }
 
+// T22.c: códigos propios de "Retirar borrador" cuyo significado en `CONSENT_DOC_ERRORS` no aplica
+// aquí (`reason_required`, igual que en Publicar) o cuyo texto por defecto conviene ser más específico
+// (`not_draft`: aquí dice "no se puede retirar", no "no se puede editar"). Sin "cuatro ojos" ni
+// `notice_invalid`: `retireDraft` (admin-consent/handler.ts) no los comprueba.
+const CONSENT_RETIRE_ERRORS = {
+  reason_required: "El motivo es obligatorio.",
+  not_draft: "Esa versión ya no es un borrador; no se puede retirar. Actualiza la lista.",
+};
+
+function consentRetireErrorMessage(code) {
+  return CONSENT_RETIRE_ERRORS[code] || consentDocErrorMessage(code);
+}
+
 const CONSENT_DOC_STATUS_LABEL = { draft: "Borrador", published: "Publicada", retired: "Retirada" };
 
 function renderConsentDocuments() {
@@ -4810,7 +4824,7 @@ function renderConsentDocuments() {
       <td>${Number(doc.acceptance_count || 0).toLocaleString("es-EC")}</td>
       <td>${doc.published_at ? esc(new Date(doc.published_at).toLocaleString("es-EC")) : "—"}</td>
       <td>${esc(new Date(doc.created_at).toLocaleString("es-EC"))}</td>
-      <td>${doc.status === "draft" && consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-edit-id="${esc(doc.id)}">Editar</button> <button type="button" class="btn secondary small" data-diff-id="${esc(doc.id)}">Comparar</button>` : ""}${doc.status === "draft" && consentDocsCanPublish ? ` <button type="button" class="btn secondary small" data-publish-id="${esc(doc.id)}">Publicar</button>` : ""}</td>
+      <td>${doc.status === "draft" && consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-edit-id="${esc(doc.id)}">Editar</button> <button type="button" class="btn secondary small" data-diff-id="${esc(doc.id)}">Comparar</button>` : ""}${doc.status === "draft" && consentDocsCanPublish ? ` <button type="button" class="btn secondary small" data-publish-id="${esc(doc.id)}">Publicar</button> <button type="button" class="btn secondary small" data-retire-id="${esc(doc.id)}">Retirar</button>` : ""}</td>
     </tr>
   `).join("");
 }
@@ -5254,6 +5268,49 @@ async function submitConsentPublish(event) {
   await loadConsentDocuments();
 }
 
+// T22.c (REQ-13 d): "Retirar borrador" sin publicarlo (POST …/retire, T14, exige `privacy_admin`).
+// Mismo patrón que Publicar (motivo obligatorio + confirmación escribiendo la versión exacta), sin
+// casilla de reconsentimiento ni resumen de impacto: un borrador retirado nunca tuvo aceptaciones.
+let consentRetireDoc = null;
+
+function openConsentRetireView(doc) {
+  consentRetireDoc = doc;
+  $("#consentRetireMessage").textContent = "";
+  $("#consentRetireReason").value = "";
+  $("#consentRetireConfirmVersion").value = "";
+  $("#consentRetireView").hidden = false;
+}
+
+function closeConsentRetireView() {
+  consentRetireDoc = null;
+  $("#consentRetireView").hidden = true;
+  $("#consentRetireMessage").textContent = "";
+  $("#consentRetireReason").value = "";
+  $("#consentRetireConfirmVersion").value = "";
+}
+
+async function submitConsentRetire(event) {
+  event.preventDefault();
+  const doc = consentRetireDoc;
+  if (!doc) return;
+  const reason = $("#consentRetireReason").value.trim();
+  if (!reason) { $("#consentRetireMessage").textContent = "El motivo es obligatorio."; return; }
+  const confirmVersion = $("#consentRetireConfirmVersion").value.trim();
+  if (confirmVersion !== doc.version) { $("#consentRetireMessage").textContent = `Escribe exactamente "${doc.version}" para confirmar.`; return; }
+
+  $("#consentRetireMessage").textContent = "";
+  const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(doc.id)}/retire`, {
+    session: privacyFlow.token,
+    body: { reason },
+  });
+  if (res.status !== 200) {
+    $("#consentRetireMessage").textContent = consentRetireErrorMessage(res.data?.error);
+    return;
+  }
+  closeConsentRetireView();
+  await loadConsentDocuments();
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5299,6 +5356,7 @@ function privacyReset(message = "") {
   closeConsentDraftEditor();
   closeConsentDiffView();
   closeConsentPublishView();
+  closeConsentRetireView();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5421,6 +5479,13 @@ function bindPrivacy() {
       const doc = consentDocs.find((d) => d.id === publishButton.dataset.publishId);
       if (!doc) return;
       openConsentPublishView(doc);
+      return;
+    }
+    const retireButton = event.target.closest("[data-retire-id]");
+    if (retireButton) {
+      const doc = consentDocs.find((d) => d.id === retireButton.dataset.retireId);
+      if (!doc) return;
+      openConsentRetireView(doc);
     }
   });
   $("#consentEditorForm").addEventListener("submit", saveConsentDraft);
@@ -5428,6 +5493,8 @@ function bindPrivacy() {
   $("#consentDiffClose").addEventListener("click", closeConsentDiffView);
   $("#consentPublishForm").addEventListener("submit", submitConsentPublish);
   $("#consentPublishClose").addEventListener("click", closeConsentPublishView);
+  $("#consentRetireForm").addEventListener("submit", submitConsentRetire);
+  $("#consentRetireClose").addEventListener("click", closeConsentRetireView);
   $("#consentEditorTitle").addEventListener("input", scheduleConsentAutosave);
   $("#consentEditorContent").addEventListener("input", scheduleConsentAutosave);
   $("#consentPurposeAdd").addEventListener("click", () => {

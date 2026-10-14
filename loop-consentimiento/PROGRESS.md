@@ -2142,3 +2142,59 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   la siguiente tarea desbloqueada de la división de T22.
 - Porcentaje: T22 no se cierra todavía (T22.c sigue `[ ]`); no mueve el contador estricto de 28.
   tareas. Ponderado: sin cambio aplicable (mismo criterio que las subtareas de T21 antes de cerrarse).
+
+## Iteración 69 — 2026-10-14 — T22.c: acción "Retirar borrador" — cierra T22, retoma el WIP de una iteración headless interrumpida por límite de sesión
+
+- **Punto de partida:** `git status` mostraba cambios sin commit (`central-admin-app/app.js`,
+  `central-admin-app/index.html` modificados; `tests/admin/consent-retire.spec.ts` sin versionar) sin
+  entrada todavía en este archivo. Antes de asumir "otra sesión" (regla del paso 1 del PROMPT.md):
+  revisados los logs de `loop-consentimiento/logs/` por marca de tiempo — `iter-002-20261014-180453.log`
+  (18:04-18:26) coincide con la hora de modificación de los tres archivos (18:07-18:08) y con los logs de
+  gates (`gate-panel-e2e.log` a las 18:26:29); termina con `"type":"result"` normal seguido de
+  `task_updated`→`status:"killed"` sobre la tarea en segundo plano `Run full gates suite` — la sesión
+  esperaba el resultado de una corrida completa de `gates.sh` lanzada en segundo plano y se quedó sin turnos
+  antes de que terminara, sin alcanzar el paso 6/7 del loop. Mismo patrón que las Iteraciones 30/68
+  (headless, interrumpida por límite, no un proceso concurrente). Confirmado: es la propia iteración
+  headless anterior de este mismo loop implementando T22.c (siguiente tarea desbloqueada tras T22.b,
+  Iteración 68), con el código y las pruebas ya escritos pero sin la verificación cerrada.
+- **Revisión del trabajo encontrado (sin descartarlo, sin asumir que estaba completo):** leído el diff
+  completo de `app.js`/`index.html` y `consent-retire.spec.ts` entero antes de ejecutar nada. Contrastado
+  contra el backend real (`admin-consent/handler.ts`): `retireDraft`/`POST /documents/:id/retire` (línea
+  1491-1499) exige `ADMIN_ONLY` (igual que "Publicar", más restrictivo que "Editar"/"Comparar") y su body
+  solo admite `reason` (`ReasonSchema`); los códigos de error que puede devolver (`reason_required`,
+  `not_draft` si ya no es borrador, `concurrent_modification`, `audit_failed`, `not_found`) coinciden
+  exactamente con lo que el panel ya mapeaba en `CONSENT_RETIRE_ERRORS`/`consentRetireErrorMessage`.
+  Confirmado también que `server.js` no necesita ningún cambio: `PRIVACY_FN_RE` (línea 49) ya acepta
+  cualquier número de segmentos de ruta bajo `/fn/admin-consent/...`, igual que ya permitía `/publish` y
+  `/diff` sin tocarlo. No hizo falta cambiar nada del código encontrado.
+- **Cambios (ya escritos por la iteración interrumpida; confirmados y cerrados en esta):**
+  - `central-admin-app/index.html`: card `#consentRetireView` (motivo `#consentRetireReason`, confirmación
+    `#consentRetireConfirmVersion`) después de `#consentPublishView`, sin casilla de reconsentimiento ni
+    resumen de impacto (un borrador retirado nunca tuvo aceptaciones, a diferencia de la vigente que
+    "Publicar" sí retira).
+  - `central-admin-app/app.js`: botón `data-retire-id` junto a "Publicar" en `renderConsentDocuments` (mismo
+    candado `consentDocsCanPublish`, sin bandera nueva: "Publicar" y "Retirar" comparten rol `ADMIN_ONLY`);
+    `CONSENT_RETIRE_ERRORS`/`consentRetireErrorMessage` (mensajes propios para `reason_required`/`not_draft`,
+    cuyo texto por defecto en `CONSENT_DOC_ERRORS` no encaja con esta acción); `openConsentRetireView`/
+    `closeConsentRetireView`/`submitConsentRetire` (mismo patrón que Publicar: motivo obligatorio,
+    confirmación exacta de versión, `POST .../retire` con `{reason}`, cierra el modal y recarga la lista en
+    éxito); `privacyReset` cierra también el panel de retiro al cerrar sesión.
+  - `tests/admin/consent-retire.spec.ts` (nuevo, 7 casos): "Retirar" visible solo para `privacy_admin` y
+    nunca en la fila publicada; rol solo editor sin botón "Retirar" (aunque sí "Editar"/"Comparar"); rol
+    solo auditor sin botón; motivo vacío y versión incorrecta no llaman al backend; retirar con éxito (body
+    exacto `{reason}`, cierra el modal, recarga la lista); error real del backend (`not_draft`) deja el
+    modal abierto con mensaje legible; cerrar limpia los campos.
+- **Por qué no hace falta ninguna prueba nueva de integración (regla TEST-INT/PROMPT.md):** esta subtarea no
+  añade ninguna operación de escritura nueva en el backend — reutiliza `POST /documents/:id/retire` (T14),
+  que ya tiene su propia cobertura (`handler_test.ts` con fakes, más la vigilancia de `consent_documents_immutable`,
+  073, sobre cualquier UPDATE de una fila `draft`/`retired`); solo el modal del panel que lo invoca.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo (sin flags): typecheck-frontend,
+  lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e (con los 7 casos nuevos), deno-check,
+  deno-test, sql-ciclo-de-vida, sql-guest-limit — las 9 puertas no-opcionales OK; db-reset/e2e-local SKIP
+  opt-in como siempre (sin cambios de backend/migraciones en esta tarea). Iteración 69, no múltiplo de 5:
+  `GATES_FULL=1` no obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. T22 queda completo (T22.a, T22.b, T22.c). Siguiente tarea
+  desbloqueada en TASKS.md: T23 (Configuración del responsable y delegado, REQ-14/REQ-15).
+- Porcentaje: T22 se cierra como tarea completa (antes contaba 0/28 estricto por no estar `[x]` la línea
+  padre; con T22.c ya no quedan subtareas abiertas bajo T22, así que el contador estricto sube en 1).
