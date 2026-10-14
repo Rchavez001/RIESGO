@@ -48,6 +48,13 @@ export interface ConsentDocumentRow {
   retired_at: string | null
 }
 
+/** Fila de `consent_documents` para la pestaña "Versiones" (REQ-13 a): `acceptance_count` es el número
+ *  de titulares distintos con al menos una decisión `granted` en `consent_records` para esa versión
+ *  (indicador informativo del panel, no una cifra legal). */
+export interface ConsentDocumentSummary extends ConsentDocumentRow {
+  acceptance_count: number
+}
+
 export interface NewConsentDocumentInput {
   version: string
   title: string
@@ -74,6 +81,8 @@ export interface PublishInput {
 }
 
 export interface DocumentsDeps {
+  /** Todas las versiones (cualquier estado), más recientes primero (REQ-13 a). */
+  list: () => Promise<ConsentDocumentSummary[]>
   getPublished: () => Promise<ConsentDocumentRow | null>
   getById: (id: string) => Promise<ConsentDocumentRow | null>
   insert: (row: NewConsentDocumentInput) => Promise<ConsentDocumentRow>
@@ -1429,6 +1438,11 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
     }
 
     if (path === '/documents') {
+      if (req.method === 'GET') {
+        await requireRole(req, PRIVACY_ROLES, deps.guard)
+        const result = await deps.documents.list()
+        return json(200, result)
+      }
       if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' })
       const admin = await requireRole(req, EDITOR_ROLES, deps.guard)
       const body = await req.json().catch(() => ({}))

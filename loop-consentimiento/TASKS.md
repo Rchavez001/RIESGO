@@ -502,6 +502,35 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     Markdown con vista previa en vivo (marcadores resueltos y resaltados si faltan);
     editor de finalidades (código inmutable para las existentes); guardado con autosave del
     borrador y aviso de cambios sin guardar.
+  - **División (2026-10-14, antes de seguir codificando — tarea demasiado grande para una iteración,
+    mismo patrón que T05/T12/T13/T14/T15/T16):** backend de listado, luego navegación+lista en el panel,
+    luego editor/autosave; en ese orden de dependencia.
+  - [x] **T21.a — Backend: `GET /documents` con lista de versiones y nº de aceptaciones** (REQ-13 a) (hecha 2026-10-14, iteración 62 — WIP de una iteración anterior interrumpida, auditado y verificado antes de aceptarlo)
+    - **Estado:** cerrada. `handler.ts`: nuevo tipo `ConsentDocumentSummary extends ConsentDocumentRow` con
+      `acceptance_count`; `DocumentsDeps.list()` (todas las versiones, cualquier estado, más recientes
+      primero); ruta `GET /documents` (los tres roles del módulo, igual que `GET /audit-log`) antes del
+      `POST /documents` ya existente (T14). `index.ts`: `documents.list` hace `SELECT` de `consent_documents`
+      ordenado por `created_at DESC` y, por cada documento, cuenta titulares distintos (`Set` sobre
+      `user_ref_hmac`, nunca el HMAC en claro fuera de esa cuenta) con `decision='granted'` en
+      `consent_records` para ese `document_id` — una consulta por fila (el número de versiones es pequeño;
+      documentado en el propio código por qué no se agregó en una sola consulta PostgREST). Sin exponer
+      ningún dato de titular individual: `acceptance_count` es solo un entero agregado.
+    - **Tests (`handler_test.ts`):** los tres roles (`privacy_editor`/`privacy_admin`/`privacy_auditor`) ven
+      la lista ordenada `created_at DESC` con el `acceptance_count` correcto por documento; sin rol → 403;
+      método distinto de GET/POST → 405.
+    - **Verificación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
+      (`panel-e2e` incluido; `db-reset`/`e2e-local` SKIP opt-in). Iteración 62, no múltiplo de 5:
+      `GATES_FULL=1` no obligatorio esta vez.
+    - **Nota de alcance:** esta subtarea es solo el backend que consume la pantalla; T21.b (navegación +
+      pestaña Versiones en `central-admin-app`, con su `GET /documents` ya listo para usarse) y T21.c
+      (editor Markdown + vista previa + editor de finalidades + autosave) siguen `[ ]`, sin empezar.
+  - [ ] **T21.b — Panel: menú "Consentimiento informado" + pestaña Versiones (listado, crear borrador)**
+    - Menú nuevo en `central-admin-app`; pestaña Versiones que consume `GET /documents` (T21.a); botón
+      "Crear borrador desde vigente" (`POST /documents`, T14, ya existe).
+  - [ ] **T21.c — Panel: editor Markdown con vista previa en vivo + editor de finalidades + autosave**
+    - Editor Markdown con vista previa (marcadores resueltos y resaltados si faltan, reutilizando
+      `getPreview`/`diffDraft` de T14 donde aplique); editor de finalidades (código inmutable para las
+      existentes); autosave del borrador y aviso de cambios sin guardar.
 
 - [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.

@@ -230,6 +230,26 @@ serve((req) =>
       },
     },
     documents: {
+      list: async () => {
+        const { data, error } = await db.from('consent_documents').select(DOC_COLUMNS).order('created_at', { ascending: false })
+        if (error) throw new Error(`consent_documents list: ${error.code ?? 'error'}`)
+        const docs = (data ?? []) as ConsentDocumentRow[]
+        // nº de titulares distintos con al menos una decisión `granted` para esa versión (REQ-13 a). Por
+        // documento (no agregable en una sola consulta PostgREST sin una vista/RPC nueva): el número de
+        // versiones es pequeño (altas poco frecuentes), así que el costo de una consulta por fila es aceptable.
+        const counts = await Promise.all(
+          docs.map(async (doc) => {
+            const { data: rows, error: countErr } = await db
+              .from('consent_records')
+              .select('user_ref_hmac')
+              .eq('document_id', doc.id)
+              .eq('decision', 'granted')
+            if (countErr) throw new Error(`consent_records count: ${countErr.code ?? 'error'}`)
+            return new Set((rows ?? []).map((r: { user_ref_hmac: string }) => r.user_ref_hmac)).size
+          }),
+        )
+        return docs.map((doc, i) => ({ ...doc, acceptance_count: counts[i] }))
+      },
       getPublished: async () => {
         const { data, error } = await db.from('consent_documents').select(DOC_COLUMNS).eq('status', 'published').maybeSingle()
         if (error) throw new Error(`consent_documents: ${error.code ?? 'error'}`)

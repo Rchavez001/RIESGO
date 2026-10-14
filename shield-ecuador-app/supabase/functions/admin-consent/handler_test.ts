@@ -20,6 +20,7 @@ import {
   type ConfirmEmailChangeInput,
   type ConsentDocumentRow,
   type ConsentDocumentStatus,
+  type ConsentDocumentSummary,
   type CurrentPrivacySettings,
   type DocumentsDeps,
   type DsrCaseRow,
@@ -63,11 +64,18 @@ const sign = (c: JWTPayload) =>
 // optimista de `updateIfStatus`, choque de `version` única en `insert`) sin tocar Postgres. ──────────────
 function makeDocsStore(
   initial: ConsentDocumentRow[] = [],
-  opts: { audit?: AuditEntry[]; failPublish?: boolean } = {},
+  opts: { audit?: AuditEntry[]; failPublish?: boolean; acceptanceCounts?: Record<string, number> } = {},
 ): { documents: DocumentsDeps; rows: ConsentDocumentRow[] } {
   const rows = [...initial]
   let seq = rows.length
   const documents: DocumentsDeps = {
+    // Más recientes primero, igual que `ORDER BY created_at DESC` en `index.ts` real.
+    list: () =>
+      Promise.resolve(
+        [...rows]
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map((r): ConsentDocumentSummary => ({ ...r, acceptance_count: opts.acceptanceCounts?.[r.id] ?? 0 })),
+      ),
     getPublished: () => Promise.resolve(rows.find((r) => r.status === 'published') ?? null),
     getById: (id) => Promise.resolve(rows.find((r) => r.id === id) ?? null),
     insert: (row: NewConsentDocumentInput) => {
@@ -499,6 +507,31 @@ Deno.test('las respuestas de error no llevan el token ni detalles internos', asy
 })
 
 const claimsFor = (sub: string, over: JWTPayload = {}) => claims({ sub, ...over })
+
+// ── GET /documents (T21.a: lista de versiones, REQ-13 a) ───────────────────────────────────────────
+Deno.test('GET /documents: los tres roles del módulo ven la lista, más reciente primero, con nº de aceptaciones', async () => {
+  const draft = publishedDoc({
+    id: 'doc-draft-9', version: '1.1', status: 'draft', created_at: '2026-02-01T00:00:00Z',
+    published_by: null, published_at: null,
+  })
+  const published = publishedDoc({ created_at: '2026-01-01T00:00:00Z' })
+  const { documents } = makeDocsStore([published, draft], { acceptanceCounts: { [published.id]: 3, [draft.id]: 0 } })
+  for (const roles of [['privacy_editor'], ['privacy_admin'], ['privacy_auditor']]) {
+    const res = await handle(req(await sign(claims()), '/documents', 'GET'), fullDeps({ roles, documents }))
+    assertEquals(res.status, 200)
+    const body = await res.json()
+    assertEquals(body.map((d: ConsentDocumentSummary) => d.id), [draft.id, published.id]) // created_at DESC
+    assertEquals(body.find((d: ConsentDocumentSummary) => d.id === published.id).acceptance_count, 3)
+    assertEquals(body.find((d: ConsentDocumentSummary) => d.id === draft.id).acceptance_count, 0)
+  }
+})
+
+Deno.test('GET /documents: sin rol del módulo → 403, y ningún método distinto de GET/POST', async () => {
+  const resNoRole = await handle(req(await sign(claims()), '/documents', 'GET'), fullDeps({ roles: [] }))
+  assertEquals(resNoRole.status, 403)
+  const resPut = await handle(req(await sign(claims()), '/documents', 'PUT'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(resPut.status, 405)
+})
 
 // ── POST /documents (T14: crear borrador) ───────────────────────────────────────────────────────────
 Deno.test('editor crea un borrador clonado de la vigente (sin tocar la publicada) y queda en bitácora', async () => {

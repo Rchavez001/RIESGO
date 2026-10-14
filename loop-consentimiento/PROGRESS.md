@@ -1796,3 +1796,43 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: T18 se cierra como tarea completa. **Estricto 19 de 28 = 67,9 %** (antes 64,3 %). Ponderado:
   T18 pasa de 0 % a 100 % de sus propios 100 puntos → 1865 (Iteración 60, tras T16) + 100 =
   **1965/2800 ≈ 70,2 %** (antes ≈ 66,6 %).
+
+## Iteración 62 — 2026-10-14 — T21.a: backend `GET /documents` (lista de versiones + nº de aceptaciones, REQ-13 a)
+- **Punto de partida:** `admin-consent/{handler.ts,handler_test.ts,index.ts}` llevaban sin commitear desde
+  una iteración anterior interrumpida (ni archivo de stash ni entrada de `PROGRESS.md` que lo mencionara;
+  consistente con la misma clase de restos ya documentada varias veces en este loop — una ejecución previa
+  de `run-loop.sh` que no llegó al paso 7). Primera tarea `[ ]` desbloqueada en orden de `TASKS.md` es T21
+  (depende de T05 y T14, ambas `[x]`); el WIP sin commitear implementa exactamente su primer sub-requisito
+  (REQ-13 a, "lista de versiones"), así que se evaluó como arranque de esa tarea en vez de descartarlo.
+- **Auditoría del WIP antes de aceptarlo:** `handler.ts` añade `ConsentDocumentSummary` (extiende
+  `ConsentDocumentRow` con `acceptance_count`) y `DocumentsDeps.list()`; la ruta `GET /documents` exige
+  `requireRole(req, PRIVACY_ROLES, …)` — mismo guard que `GET /audit-log` (T16.a), los tres roles del
+  módulo pueden ver la lista. `index.ts` implementa `documents.list` con un `SELECT` de `consent_documents`
+  ordenado por `created_at DESC` y, por cada fila, una cuenta de titulares distintos (`Set` sobre
+  `user_ref_hmac`, nunca en claro) con `decision='granted'` en `consent_records` para ese `document_id` —
+  no agrega en una sola consulta PostgREST (dejado como comentario en el propio código: el número de
+  versiones es pequeño, altas poco frecuentes); no expone ningún dato de titular individual, solo un
+  entero agregado por documento. No hay bug encontrado: la auditoría confirmó que el WIP era correcto y
+  completo para el alcance que cubre (no intenta nada de T21.b/T21.c).
+- **Cambios:** `shield-ecuador-app/supabase/functions/admin-consent/handler.ts` (tipo `ConsentDocumentSummary`,
+  `DocumentsDeps.list`, ruta `GET /documents`); `index.ts` (`documents.list`); `handler_test.ts` (fake
+  `makeDocsStore` gana `list()` con `opts.acceptanceCounts`, 2 pruebas nuevas); `TASKS.md` (T21 dividida en
+  T21.a/b/c antes de seguir; T21.a `[x]`); este archivo.
+- **Pruebas añadidas:** `GET /documents: los tres roles del módulo ven la lista, más reciente primero, con
+  nº de aceptaciones` (editor/admin/auditor, orden `created_at DESC`, `acceptance_count` correcto por
+  documento); `GET /documents: sin rol del módulo → 403, y ningún método distinto de GET/POST` (403 sin rol,
+  405 en `PUT`). Ya existían en el WIP; no se añadió ninguna nueva en esta iteración, solo se verificaron.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida,
+  sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre.
+  Iteración 62, no múltiplo de 5: `GATES_FULL=1` no es obligatorio esta vez.
+- Desviaciones de SPEC: ninguna. Esta subtarea no toca ningún campo nuevo de la SPEC: `acceptance_count`
+  es un indicador informativo del panel (documentado como tal en el comentario de `ConsentDocumentSummary`),
+  no una cifra legal.
+- Riesgos / pendientes detectados: T21.b (menú + pestaña Versiones en `central-admin-app`) y T21.c (editor
+  Markdown + vista previa + editor de finalidades + autosave) siguen `[ ]`, sin empezar; son las siguientes
+  tareas desbloqueadas en orden. Ninguna requiere Docker/Postgres real (son UI de panel sobre endpoints ya
+  probados), así que no deberían tropezar con las limitaciones de entorno que sí afectaron a TEST-INT.a.
+- Porcentaje: T21 no se cierra (solo T21.a de tres subtareas); no mueve el contador estricto de 28 tareas
+  (T21 sigue `[ ]` como unidad). Ponderado: sin cambio aplicable (T21.a no tiene peso propio asignado en
+  esa cuenta, igual que las subtareas de TEST-INT).
