@@ -1879,3 +1879,50 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   autosave) es la siguiente tarea desbloqueada.
 - Porcentaje: T21 no se cierra todavía (T21.c sigue `[ ]`); no mueve el contador estricto de 28 tareas.
   Ponderado: sin cambio aplicable (igual que T21.a, T21.b no tiene peso propio asignado en esa cuenta).
+
+## Iteración 64 — 2026-10-14 — T21.c.1: editor de título/contenido de un borrador + vista previa (REQ-13 b)
+- **Punto de partida:** T21.c (editor Markdown + vista previa + finalidades + autosave) mezclaba tres
+  piezas independientes; antes de codificar se dividió en `TASKS.md` en T21.c.1 (editor + vista previa),
+  T21.c.2 (autosave + aviso de cambios sin guardar) y T21.c.3 (editor de finalidades), mismo patrón que
+  T05/T12.d/T15/T16/T21. Esta iteración cierra solo T21.c.1.
+- **Backend:** sin cambios — `PATCH /documents/:id` (`updateDraft`) y `GET /documents/:id/preview`
+  (`previewDraft`) ya existían desde T14; el renderer (`_shared/consent-render.ts`, T09) ya deja los
+  marcadores sin resolver/desconocidos literalmente como `{{nombre}}` en `rendered_md` — no hace falta
+  recalcularlos en el cliente, solo resaltarlos.
+- **Cambios (panel):** `central-admin-app/index.html` (columna "Acciones" en la tabla de versiones,
+  colspan del mensaje "Sin versiones todavía" de 6→7; `#consentDraftEditor` nuevo: título, textarea de
+  contenido, "Guardar cambios"/"Cerrar", `#consentPreviewWarning` y `#consentPreview`);
+  `central-admin-app/styles.css` (`.consent-preview`/`.consent-preview mark`/`.consent-preview-warning`);
+  `central-admin-app/app.js` (`consentDocsCanEdit` — mismo candado que "Crear borrador", calculado en
+  `privacyVerify`; botón "Editar" solo en filas `status='draft'`; `openConsentDraftEditor`/
+  `closeConsentDraftEditor`/`saveConsentDraft`/`loadConsentPreview`/`renderConsentPreviewText` —
+  `renderConsentPreviewText` escapa con `esc()` y luego envuelve en `<mark>` los `{{...}}` que sobrevivan
+  en el texto escapado, sin volver a calcular qué marcador falta; `saveConsentDraft` hace `PATCH` con
+  `{title, content_md}` — nunca `purposes`, eso es T21.c.3 — y si sale bien pide la vista previa y
+  actualiza la fila de la tabla en memoria sin recargar toda la lista; `privacyReset` cierra el editor).
+  `tests/admin/consent-editor.spec.ts` (nuevo, 9 casos).
+- **Pruebas añadidas (`consent-editor.spec.ts`):** "Editar" solo en la fila del borrador, nunca en la
+  publicada; rol solo auditor sin el botón en ninguna fila; abrir el editor rellena título/contenido;
+  guardar cambios manda el PATCH correcto, actualiza la fila y pide la vista previa (marcador resaltado +
+  aviso con el nombre pendiente); sin marcadores pendientes no se muestra el aviso; guardar sin
+  título/contenido no llama al backend; error 409 `concurrent_modification` deja el mensaje legible sin
+  perder lo escrito en el textarea; si la vista previa falla (503 `settings_unavailable`) el guardado ya
+  hecho se mantiene visible en la tabla con un mensaje aparte; cerrar el editor limpia el panel.
+- **Hallazgo de la propia prueba (no del código):** el primer intento de la prueba "guardar cambios…"
+  comprobaba `seen.find(...)` (PATCH y preview) ANTES de esperar a que el DOM reflejara el resultado —
+  `seen` es un array que el código de producción llena de forma asíncrona; sin una espera previa que
+  reintente (`expect(locator).toContainText(...)`), la aserción corría antes de que la llamada a
+  `/preview` hubiera salido siquiera, y `seen.find(...)` daba `undefined` (`TypeError: Cannot read
+  properties of undefined (reading 'session')`). Corregido reordenando: primero las aserciones sobre el
+  DOM (que Playwright reintenta hasta que se cumplen), luego las aserciones sobre `seen`.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e (incluye los 9 casos nuevos), deno-check,
+  deno-test, sql-ciclo-de-vida, sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local`
+  SKIP opt-in como siempre. Iteración 64, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta vez.
+- Desviaciones de SPEC: ninguna. El alcance de esta subtarea excluye deliberadamente autosave en cada
+  tecla, el aviso de "cambios sin guardar" y el editor de finalidades — remitidos a T21.c.2/T21.c.3, ya
+  anotados así en el propio `TASKS.md` antes de codificar.
+- Riesgos / pendientes detectados: ninguno nuevo. T21.c.2 (autosave + aviso de cambios sin guardar) es la
+  siguiente tarea desbloqueada.
+- Porcentaje: T21 no se cierra todavía (T21.c.2/T21.c.3 siguen `[ ]`); no mueve el contador estricto de 28
+  tareas. Ponderado: sin cambio aplicable (igual que T21.a/T21.b).

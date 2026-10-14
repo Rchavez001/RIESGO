@@ -4755,11 +4755,19 @@ const PRIVACY_ERRORS = {
 // T21.b: pestaña "Versiones" (REQ-13 a, b). `consentDocs` vive solo en memoria de esta pestaña, igual que
 // `privacyFlow`: no es secreto, pero no hace falta persistirlo en `state`/localStorage.
 let consentDocs = [];
+// T21.c.1: solo editor/admin ven "Editar" (mismo candado que "Crear borrador desde vigente"); se recalcula
+// en `privacyVerify` junto con `#consentDraftForm.hidden`, nunca se infiere del DOM.
+let consentDocsCanEdit = false;
 
 const CONSENT_DOC_ERRORS = {
   ...PRIVACY_ERRORS,
   invalid_input: "Revisa los datos del formulario: la versión es obligatoria.",
-  bootstrap_requires_title_content_purposes: "Todavía no hay ninguna versión publicada: la primera versión necesita el editor Markdown (pendiente, T21.c).",
+  bootstrap_requires_title_content_purposes: "Todavía no hay ninguna versión publicada: la primera versión necesita el editor Markdown (pendiente, T21.c.3).",
+  not_found: "El borrador ya no existe. Actualiza la lista.",
+  not_draft: "Esa versión ya no es un borrador; no se puede editar.",
+  concurrent_modification: "Alguien más editó este borrador mientras tanto. Cierra y vuelve a abrirlo para ver la versión actual.",
+  empty_patch: "No hay cambios que guardar.",
+  settings_unavailable: "No se pudo generar la vista previa (configuración no disponible). El guardado sí se hizo.",
 };
 
 function consentDocErrorMessage(code) {
@@ -4771,7 +4779,7 @@ const CONSENT_DOC_STATUS_LABEL = { draft: "Borrador", published: "Publicada", re
 function renderConsentDocuments() {
   const rows = $("#consentDocsRows");
   if (consentDocs.length === 0) {
-    rows.innerHTML = `<tr><td colspan="6" class="muted">Sin versiones todavía.</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="7" class="muted">Sin versiones todavía.</td></tr>`;
     return;
   }
   rows.innerHTML = consentDocs.map((doc) => `
@@ -4782,6 +4790,7 @@ function renderConsentDocuments() {
       <td>${Number(doc.acceptance_count || 0).toLocaleString("es-EC")}</td>
       <td>${doc.published_at ? esc(new Date(doc.published_at).toLocaleString("es-EC")) : "—"}</td>
       <td>${esc(new Date(doc.created_at).toLocaleString("es-EC"))}</td>
+      <td>${doc.status === "draft" && consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-edit-id="${esc(doc.id)}">Editar</button>` : ""}</td>
     </tr>
   `).join("");
 }
@@ -4821,6 +4830,81 @@ async function createConsentDraft(event) {
   await loadConsentDocuments();
 }
 
+// T21.c.1 (REQ-13 b): editor de título/contenido de un borrador, con vista previa vía
+// `GET /documents/:id/preview` (T14, reutiliza `renderConsent`). `consentEditorDocId` vive solo en memoria
+// de esta pestaña, igual que `consentDocs`/`privacyFlow`.
+let consentEditorDocId = null;
+
+function openConsentDraftEditor(doc) {
+  consentEditorDocId = doc.id;
+  $("#consentEditorTitle").value = doc.title;
+  $("#consentEditorContent").value = doc.content_md;
+  $("#consentEditorMessage").textContent = "";
+  $("#consentPreview").textContent = "";
+  $("#consentPreviewWarning").hidden = true;
+  $("#consentPreviewWarning").textContent = "";
+  $("#consentDraftEditor").hidden = false;
+}
+
+function closeConsentDraftEditor() {
+  consentEditorDocId = null;
+  $("#consentDraftEditor").hidden = true;
+  $("#consentEditorTitle").value = "";
+  $("#consentEditorContent").value = "";
+  $("#consentEditorMessage").textContent = "";
+  $("#consentPreview").textContent = "";
+  $("#consentPreviewWarning").hidden = true;
+  $("#consentPreviewWarning").textContent = "";
+}
+
+// El texto que devuelve `renderConsent` deja los marcadores sin resolver/desconocidos literalmente como
+// `{{nombre}}` (_shared/consent-render.ts): no hace falta volver a calcularlos aquí, solo resaltarlos.
+function renderConsentPreviewText(renderedMd) {
+  return esc(renderedMd).replace(/\{\{[^{}]*\}\}/g, (match) => `<mark>${match}</mark>`);
+}
+
+async function loadConsentPreview(docId) {
+  const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(docId)}/preview`, { session: privacyFlow.token, method: "GET" });
+  if (res.status !== 200) {
+    $("#consentPreview").textContent = "";
+    $("#consentPreviewWarning").hidden = true;
+    $("#consentEditorMessage").textContent = consentDocErrorMessage(res.data?.error);
+    return;
+  }
+  $("#consentPreview").innerHTML = renderConsentPreviewText(res.data.rendered_md);
+  const pending = [...(res.data.unknown || []), ...(res.data.unresolved || [])];
+  if (pending.length > 0) {
+    $("#consentPreviewWarning").hidden = false;
+    $("#consentPreviewWarning").textContent = `Marcadores sin resolver o desconocidos: ${pending.join(", ")}.`;
+  } else {
+    $("#consentPreviewWarning").hidden = true;
+    $("#consentPreviewWarning").textContent = "";
+  }
+}
+
+async function saveConsentDraft(event) {
+  event.preventDefault();
+  if (!consentEditorDocId) return;
+  const title = $("#consentEditorTitle").value.trim();
+  const contentMd = $("#consentEditorContent").value;
+  if (!title || !contentMd.trim()) { $("#consentEditorMessage").textContent = "El título y el contenido son obligatorios."; return; }
+
+  const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(consentEditorDocId)}`, {
+    session: privacyFlow.token,
+    method: "PATCH",
+    body: { title, content_md: contentMd },
+  });
+  if (res.status !== 200) {
+    $("#consentEditorMessage").textContent = consentDocErrorMessage(res.data?.error);
+    return;
+  }
+  $("#consentEditorMessage").textContent = "";
+  const index = consentDocs.findIndex((doc) => doc.id === consentEditorDocId);
+  if (index !== -1) consentDocs[index] = res.data;
+  renderConsentDocuments();
+  await loadConsentPreview(consentEditorDocId);
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -4857,10 +4941,12 @@ function privacyReset(message = "") {
   $("#privacyRoles").textContent = "";
   $("#privacyCode").value = "";
   consentDocs = [];
+  consentDocsCanEdit = false;
   $("#consentDocsRows").innerHTML = "";
   $("#consentDocsMessage").textContent = "";
   $("#consentDraftVersion").value = "";
   $("#consentDraftSummary").value = "";
+  closeConsentDraftEditor();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -4941,7 +5027,8 @@ async function privacyVerify(event) {
   $("#privacyWho").textContent = privacyFlow.email;
   privacyFlow.roles = session.data.roles || [];
   $("#privacyRoles").textContent = privacyFlow.roles.join(", ");
-  $("#consentDraftForm").hidden = !privacyFlow.roles.some((role) => role === "privacy_editor" || role === "privacy_admin");
+  consentDocsCanEdit = privacyFlow.roles.some((role) => role === "privacy_editor" || role === "privacy_admin");
+  $("#consentDraftForm").hidden = !consentDocsCanEdit;
   privacyMessage("");
   privacyShow("identity");
   void loadConsentDocuments();
@@ -4960,6 +5047,14 @@ function bindPrivacy() {
   $("#privacyLogout").addEventListener("click", () => void privacyLogout());
   $("#consentDraftForm").addEventListener("submit", createConsentDraft);
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
+  $("#consentDocsRows").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-edit-id]");
+    if (!button) return;
+    const doc = consentDocs.find((d) => d.id === button.dataset.editId);
+    if (doc) openConsentDraftEditor(doc);
+  });
+  $("#consentEditorForm").addEventListener("submit", saveConsentDraft);
+  $("#consentEditorClose").addEventListener("click", closeConsentDraftEditor);
 }
 
 init();

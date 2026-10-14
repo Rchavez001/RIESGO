@@ -1254,9 +1254,35 @@
             <div class="table-scroll">
               <table class="data-table">
                 <caption class="sr-only">Versiones del aviso de consentimiento</caption>
-                <thead><tr><th>Versión</th><th>Estado</th><th>Título</th><th>Aceptaciones</th><th>Publicado</th><th>Creado</th></tr></thead>
+                <thead><tr><th>Versión</th><th>Estado</th><th>Título</th><th>Aceptaciones</th><th>Publicado</th><th>Creado</th><th>Acciones</th></tr></thead>
                 <tbody id="consentDocsRows"></tbody>
               </table>
+            </div>
+
+            <!-- T21.c.1 (REQ-13 b): editor de título/contenido de un borrador + vista previa (GET …/preview,
+                 T14). Autosave/aviso de cambios sin guardar (T21.c.2) y editor de finalidades (T21.c.3)
+                 quedan fuera de esta subtarea. -->
+            <div id="consentDraftEditor" class="card" hidden>
+              <div class="section-toolbar compact">
+                <h3>Editar borrador</h3>
+                <button id="consentEditorClose" class="btn secondary small" type="button">Cerrar</button>
+              </div>
+              <p id="consentEditorMessage" class="privacy-message" role="alert"></p>
+              <form id="consentEditorForm" class="form-grid compact" novalidate>
+                <label>
+                  Título
+                  <input id="consentEditorTitle" type="text" maxlength="300" required />
+                </label>
+                <label>
+                  Contenido Markdown
+                  <textarea id="consentEditorContent" rows="14" maxlength="100000" required></textarea>
+                </label>
+                <div class="modal-actions">
+                  <button class="btn primary" type="submit">Guardar cambios</button>
+                </div>
+              </form>
+              <div id="consentPreviewWarning" class="consent-preview-warning" hidden></div>
+              <pre id="consentPreview" class="consent-preview"></pre>
             </div>
           </article>
         </section>

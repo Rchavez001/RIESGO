@@ -556,10 +556,28 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       placeholder de "sin versiones"); al cerrar sesión, la pestaña desaparece y no deja la tabla con datos.
     - **Verificación:** `bash .claude/loops/consentimiento/gates.sh --only panel-e2e` en verde (incluye los 9
       casos nuevos); corrida completa de `gates.sh` (9 puertas no-opcionales) — ver PROGRESS.md.
-  - [ ] **T21.c — Panel: editor Markdown con vista previa en vivo + editor de finalidades + autosave**
-    - Editor Markdown con vista previa (marcadores resueltos y resaltados si faltan, reutilizando
-      `getPreview`/`diffDraft` de T14 donde aplique); editor de finalidades (código inmutable para las
-      existentes); autosave del borrador y aviso de cambios sin guardar.
+  - **T21.c — Panel: editor Markdown con vista previa en vivo + editor de finalidades + autosave**
+    - **División (2026-10-14, antes de seguir codificando — mezcla tres piezas independientes, mismo
+      patrón que T21/T12.d/T15/T16):** editor de título/contenido con vista previa, luego autosave +
+      aviso de cambios sin guardar, luego editor de finalidades; en ese orden.
+    - [x] **T21.c.1 — Editor de título/contenido Markdown de un borrador + vista previa (`GET …/preview`, T14)** (hecha 2026-10-14, iteración 64)
+      - "Editar" en cada fila `status='draft'` (solo `privacy_editor`/`privacy_admin`, mismo candado que
+        "Crear borrador"); abre un panel bajo la tabla con el título y el contenido Markdown del borrador.
+        "Guardar cambios" hace `PATCH /documents/:id` con `{title, content_md}` y, si sale bien, pide
+        `GET /documents/:id/preview` (T14) y muestra el texto renderizado (marcadores ya resueltos) con
+        los marcadores sin resolver/desconocidos resaltados (siguen literalmente como `{{nombre}}` en el
+        texto que devuelve `renderConsent` — no hace falta recalcularlos en el cliente) y una lista aparte
+        con esos nombres. "Cerrar" descarta el panel sin pedir confirmación (eso es `T21.c.2`).
+      - **Fuera de esta subtarea:** autosave en cada tecla, aviso de "cambios sin guardar", editor de
+        finalidades (`purposes`) — el PATCH de esta subtarea nunca manda `purposes` en el body.
+      - **Aceptación:** "Editar" solo visible en borradores y solo para editor/admin; abrir el editor
+        rellena título/contenido; guardar manda el PATCH correcto y actualiza la fila de la tabla; tras
+        guardar, la vista previa muestra el texto con los marcadores resueltos y resalta los que falten;
+        error del PATCH (p. ej. `concurrent_modification`, `invalid_input`) muestra un mensaje legible sin
+        perder lo escrito; error de la vista previa (`settings_unavailable`) no rompe el guardado ya hecho;
+        cerrar el editor limpia el panel; pruebas Playwright (mismo patrón que `consent-documents.spec.ts`).
+    - [ ] **T21.c.2 — Autosave del borrador + aviso de cambios sin guardar**
+    - [ ] **T21.c.3 — Editor de finalidades (`purposes`), código inmutable para las existentes**
 
 - [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.

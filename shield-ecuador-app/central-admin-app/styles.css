@@ -2134,3 +2134,9 @@ ol.decision-list { padding-left: 20px; display: grid; gap: 8px; }
 .privacy-identity p { margin: 0 0 8px; }
 #privacyCode { letter-spacing: 0.3em; font-variant-numeric: tabular-nums; max-width: 12ch; }
 @media (max-width: 720px) { #consent .modal-actions { display: grid; gap: 8px; } #consent .modal-actions .btn { width: 100%; } }
+
+/* T21.c.1: editor de borrador + vista previa (marcadores resueltos y resaltados si faltan). */
+.consent-preview { white-space: pre-wrap; word-break: break-word; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 12px; font-family: ui-monospace, monospace; max-height: 480px; overflow: auto; }
+.consent-preview:empty { display: none; }
+.consent-preview mark { background: #E6A700; color: #1a1a1a; border-radius: 2px; }
+.consent-preview-warning { margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid #E6A700; background: rgba(230, 167, 0, 0.12); color: #EEF2F7; }
