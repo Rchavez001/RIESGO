@@ -4790,7 +4790,7 @@ function renderConsentDocuments() {
       <td>${Number(doc.acceptance_count || 0).toLocaleString("es-EC")}</td>
       <td>${doc.published_at ? esc(new Date(doc.published_at).toLocaleString("es-EC")) : "—"}</td>
       <td>${esc(new Date(doc.created_at).toLocaleString("es-EC"))}</td>
-      <td>${doc.status === "draft" && consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-edit-id="${esc(doc.id)}">Editar</button>` : ""}</td>
+      <td>${doc.status === "draft" && consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-edit-id="${esc(doc.id)}">Editar</button> <button type="button" class="btn secondary small" data-diff-id="${esc(doc.id)}">Comparar</button>` : ""}</td>
     </tr>
   `).join("");
 }
@@ -5072,6 +5072,96 @@ async function autosaveConsentDraft() {
   $("#consentEditorAutosaveStatus").textContent = `Guardado automáticamente a las ${new Date().toLocaleTimeString("es-EC")}.`;
 }
 
+// T22.a (REQ-13 c): "Comparar" un borrador contra la versión vigente, reutilizando
+// `GET /documents/:id/diff` (T14) sin cambios de backend. `diffLines` es un diff línea a línea clásico por
+// LCS (subsecuencia común más larga): recorre las líneas comunes en orden y, entre dos puntos de anclaje,
+// decide quitar primero y añadir después (mismo criterio en ambas ramas de la decisión, para que el
+// resultado sea determinista) — suficiente para el tamaño de un aviso de consentimiento (REQ-13: máx. 100000
+// caracteres), sin necesitar ninguna librería de diff.
+function diffLines(beforeText, afterText) {
+  const a = beforeText.split("\n");
+  const b = afterText.split("\n");
+  const n = a.length, m = b.length;
+  const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ type: "equal", before: a[i], after: b[j] }); i++; j++; }
+    else if (lcs[i + 1][j] >= lcs[i][j + 1]) { ops.push({ type: "remove", before: a[i] }); i++; }
+    else { ops.push({ type: "add", after: b[j] }); j++; }
+  }
+  while (i < n) { ops.push({ type: "remove", before: a[i] }); i++; }
+  while (j < m) { ops.push({ type: "add", after: b[j] }); j++; }
+  return ops;
+}
+
+// `content_md`/`title` ya son texto; `purposes`/`requires_reconsent` se vuelven texto legible para poder
+// pasar por el mismo `diffLines` (una sola línea cada uno, salvo `purposes`, que sí puede abarcar varias).
+function consentDiffFieldText(value) {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2);
+}
+
+const CONSENT_DIFF_FIELD_ORDER = ["title", "content_md", "purposes", "requires_reconsent"];
+const CONSENT_DIFF_FIELD_LABELS = { title: "Título", content_md: "Contenido", purposes: "Finalidades", requires_reconsent: "Requiere reconsentimiento" };
+
+function renderConsentDiffField(field, before, after) {
+  const ops = diffLines(consentDiffFieldText(before), consentDiffFieldText(after));
+  const rows = ops.map((op) => {
+    if (op.type === "equal") return `<tr><td>${esc(op.before)}</td><td>${esc(op.after)}</td></tr>`;
+    if (op.type === "remove") return `<tr><td class="diff-removed">${esc(op.before)}</td><td></td></tr>`;
+    return `<tr><td></td><td class="diff-added">${esc(op.after)}</td></tr>`;
+  }).join("");
+  return `
+    <div class="consent-diff-field">
+      <h4>${esc(CONSENT_DIFF_FIELD_LABELS[field] || field)}</h4>
+      <table class="data-table consent-diff-table">
+        <caption class="sr-only">Diferencias de ${esc(CONSENT_DIFF_FIELD_LABELS[field] || field)}</caption>
+        <thead><tr><th>Vigente</th><th>Borrador</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderConsentDiff(diffData) {
+  const container = $("#consentDiffFields");
+  if (!diffData.base) {
+    container.innerHTML = `<p class="muted">No hay ninguna versión publicada todavía: no hay nada con qué comparar.</p>`;
+    return;
+  }
+  const fields = CONSENT_DIFF_FIELD_ORDER.filter((field) => diffData.changes && diffData.changes[field]);
+  if (fields.length === 0) {
+    container.innerHTML = `<p class="muted">Sin diferencias con la versión vigente.</p>`;
+    return;
+  }
+  container.innerHTML = fields.map((field) => renderConsentDiffField(field, diffData.changes[field].before, diffData.changes[field].after)).join("");
+}
+
+async function openConsentDiffView(doc) {
+  $("#consentDiffMessage").textContent = "";
+  $("#consentDiffFields").innerHTML = "";
+  $("#consentDiffView").hidden = false;
+  const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(doc.id)}/diff`, { session: privacyFlow.token, method: "GET" });
+  if (res.status !== 200) {
+    $("#consentDiffMessage").textContent = consentDocErrorMessage(res.data?.error);
+    return;
+  }
+  renderConsentDiff(res.data);
+}
+
+function closeConsentDiffView() {
+  $("#consentDiffView").hidden = true;
+  $("#consentDiffMessage").textContent = "";
+  $("#consentDiffFields").innerHTML = "";
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5114,6 +5204,7 @@ function privacyReset(message = "") {
   $("#consentDraftVersion").value = "";
   $("#consentDraftSummary").value = "";
   closeConsentDraftEditor();
+  closeConsentDiffView();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5215,15 +5306,24 @@ function bindPrivacy() {
   $("#consentDraftForm").addEventListener("submit", createConsentDraft);
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
   $("#consentDocsRows").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-edit-id]");
-    if (!button) return;
-    const doc = consentDocs.find((d) => d.id === button.dataset.editId);
-    if (!doc || doc.id === consentEditorDocId) return;
-    if (consentEditorIsDirty() && !window.confirm("Hay cambios sin guardar que se perderán si abres otro borrador. ¿Continuar?")) return;
-    openConsentDraftEditor(doc);
+    const editButton = event.target.closest("[data-edit-id]");
+    if (editButton) {
+      const doc = consentDocs.find((d) => d.id === editButton.dataset.editId);
+      if (!doc || doc.id === consentEditorDocId) return;
+      if (consentEditorIsDirty() && !window.confirm("Hay cambios sin guardar que se perderán si abres otro borrador. ¿Continuar?")) return;
+      openConsentDraftEditor(doc);
+      return;
+    }
+    const diffButton = event.target.closest("[data-diff-id]");
+    if (diffButton) {
+      const doc = consentDocs.find((d) => d.id === diffButton.dataset.diffId);
+      if (!doc) return;
+      void openConsentDiffView(doc);
+    }
   });
   $("#consentEditorForm").addEventListener("submit", saveConsentDraft);
   $("#consentEditorClose").addEventListener("click", closeConsentDraftEditorWithConfirm);
+  $("#consentDiffClose").addEventListener("click", closeConsentDiffView);
   $("#consentEditorTitle").addEventListener("input", scheduleConsentAutosave);
   $("#consentEditorContent").addEventListener("input", scheduleConsentAutosave);
   $("#consentPurposeAdd").addEventListener("click", () => {

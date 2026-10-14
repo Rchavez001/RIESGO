@@ -2140,3 +2140,11 @@ ol.decision-list { padding-left: 20px; display: grid; gap: 8px; }
 .consent-preview:empty { display: none; }
 .consent-preview mark { background: #E6A700; color: #1a1a1a; border-radius: 2px; }
 .consent-preview-warning { margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid #E6A700; background: rgba(230, 167, 0, 0.12); color: #EEF2F7; }
+
+/* T22.a: diff lado a lado (vigente | borrador) de un campo cambiado. `consent-diff-table` reutiliza
+   `.data-table`; solo añade el resaltado de línea quitada/añadida. */
+.consent-diff-field { margin: 0 0 20px; }
+.consent-diff-field h4 { margin: 0 0 8px; }
+.consent-diff-table td { font-family: ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; vertical-align: top; }
+.consent-diff-table td.diff-removed { background: rgba(198, 40, 40, 0.16); text-decoration: line-through; }
+.consent-diff-table td.diff-added { background: rgba(52, 211, 153, 0.16); }

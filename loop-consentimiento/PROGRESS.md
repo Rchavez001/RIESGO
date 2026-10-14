@@ -2023,3 +2023,68 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   tarea desbloqueada en TASKS.md: T22 (Comparar y Publicar).
 - Porcentaje: T21 se cierra como tarea completa (antes contaba 0/28 estricto por no estar `[x]` la línea
   padre; con T21.c.3 ya no quedan subtareas abiertas bajo T21, así que el contador estricto sube en 1).
+
+## Iteración 67 — 2026-10-14 — T22.a: acción "Comparar" (diff lado a lado) de un borrador contra la vigente
+
+- **Punto de partida:** primera tarea `[ ]` desbloqueada de `TASKS.md` tras cerrar T21 (iteración 66):
+  T22 ("Comparar y Publicar", REQ-13 c, d) solo tenía una descripción de alto nivel sin criterios de
+  aceptación — mezclaba una vista de solo lectura (diff), un modal de publicación con varias piezas
+  independientes (motivo, casilla `requires_reconsent`, confirmación escribiendo la versión, resumen de
+  impacto) y una acción de retiro de borrador. Antes de codificar, dividida en `TASKS.md` en T22.a
+  (Comparar), T22.b (Publicar) y T22.c (Retirar borrador), en ese orden de dependencia — mismo patrón que
+  T05/T12.d/T15/T16/T21. Esta iteración cierra solo T22.a.
+- **Backend:** sin cambios. `GET /documents/:id/diff` (T14) ya exige `EDITOR_ROLES` (mismo candado que
+  "Editar"/la vista previa) y ya devuelve `{base: {id,version}|null, draft: {id,version,status}, changes:
+  {campo: {before,after}}}` para los campos `title`/`content_md`/`purposes`/`requires_reconsent`
+  (`DIFF_FIELDS`, `handler.ts`). El proxy del panel (`PRIVACY_FN_RE`) ya admite la ruta sin cambios (mismo
+  razonamiento que T16.d.1 para `/evidence/reveal-ip`: varios segmentos `[A-Za-z0-9_-]+`, sin punto).
+- **Cambios (panel):**
+  - `central-admin-app/index.html`: botón "Comparar" junto a "Editar" (añadido en `app.js`, ver abajo) y
+    panel nuevo `#consentDiffView` (card con "Cerrar", `#consentDiffMessage` para errores reales del
+    backend y `#consentDiffFields` para el contenido o los mensajes neutros de "sin diferencias"/"sin
+    versión vigente") después de `#consentDraftEditor`, dentro de la misma `<article id="consentDocuments">`.
+  - `central-admin-app/app.js`: `diffLines(beforeText, afterText)` — diff línea a línea clásico por LCS
+    (subsecuencia común más larga: tabla `lcs[i][j]` de abajo hacia arriba, luego se recorre de inicio a
+    fin decidiendo línea común / quitar / añadir); determinista (mismo criterio de desempate en cualquier
+    punto de ambigüedad) y sin ninguna librería de diff — razonable para el tamaño de un aviso (máx. 100000
+    caracteres, REQ-13). `consentDiffFieldText(value)` vuelve texto diffable cualquier valor: las cadenas
+    quedan igual, el resto (`purposes`, `requires_reconsent`) se vuelve `JSON.stringify(value, null, 2)`
+    para poder pasar por el mismo `diffLines` sin un camino de renderizado aparte. `renderConsentDiffField`
+    (una tabla de 2 columnas "Vigente"/"Borrador" por campo cambiado, con `td.diff-removed`/`td.diff-added`
+    en las líneas que no coinciden) y `renderConsentDiff` (sin `base` → "No hay ninguna versión publicada
+    todavía…"; sin campos en `changes` → "Sin diferencias con la versión vigente."; si no, una
+    `.consent-diff-field` por campo, en el orden fijo `title`/`content_md`/`purposes`/`requires_reconsent`).
+    `openConsentDiffView`/`closeConsentDiffView` (mismo patrón que el editor: `GET .../diff` con la sesión
+    aal2, error real del backend en `#consentDiffMessage`, nunca en `#consentDiffFields`). `renderConsentDocuments`
+    gana el botón `data-diff-id` (mismo candado que `data-edit-id`: solo filas `status='draft'` y solo
+    `consentDocsCanEdit`, porque el endpoint exige el mismo rol). `privacyReset` cierra también el panel de
+    diff al cerrar sesión.
+  - `central-admin-app/styles.css`: `.consent-diff-field`/`.consent-diff-table` (reutiliza `.data-table`;
+    `td.diff-removed` en rojo con tachado, `td.diff-added` en verde — mismos tonos que ya usa el resto del
+    panel para error/éxito).
+  - `tests/admin/consent-diff.spec.ts` (nuevo, 9 casos): "Comparar" solo en borradores y solo editor/admin
+    (igual que "Editar"); abrir pide el diff con la sesión aal2 y muestra los 3 campos cambiados del
+    fixture (título, contenido, `requires_reconsent`); una línea añadida al contenido queda resaltada sin
+    tocar las líneas sin cambios ni marcar nada como quitado (inserción pura); el título cambiado muestra
+    quitado (vigente) y añadido (borrador); sin diferencias → mensaje explícito sin ninguna
+    `.consent-diff-field`; sin versión vigente (`base: null`) → mensaje distinto ("no hay ninguna versión
+    publicada"), nunca el de "sin diferencias" (afirmaría que sí hay algo con qué comparar); error real del
+    backend (403) → mensaje legible en `#consentDiffMessage`; cerrar oculta el panel y limpia
+    `#consentDiffFields`.
+- **Por qué no hace falta ninguna prueba nueva de integración (regla de TEST-INT/PROMPT.md):** esta
+  subtarea no toca el backend — reutiliza `GET /documents/:id/diff` tal cual, que ya es de solo lectura
+  (sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar) y no tiene ninguna prueba de
+  integración pendiente de T14.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only panel-e2e` primero (en verde, con los 9
+  casos nuevos), luego la corrida completa por defecto: typecheck-frontend, lint-frontend [14 = línea
+  base], unit-frontend, panel-unit, panel-e2e, deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit —
+  las 9 puertas no-opcionales OK; `db-reset`/`e2e-local` SKIP opt-in como siempre (sin cambios de
+  backend/migraciones en esta tarea). Iteración 67, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta
+  vez.
+- Desviaciones de SPEC: ninguna. La división de T22 (arriba) no estaba en `TASKS.md` antes de esta
+  iteración; se documenta aquí para que T22.b/T22.c partan del mismo diseño.
+- Riesgos / pendientes detectados: ninguno nuevo. T22.b (modal de "Publicar": motivo, casilla
+  `requires_reconsent`, confirmación escribiendo la versión, resumen de impacto reutilizando
+  `acceptance_count` de T21.a sin endpoint nuevo) es la siguiente tarea desbloqueada de la división de T22.
+- Porcentaje: T22 no se cierra todavía (T22.b/T22.c siguen `[ ]`); no mueve el contador estricto de 28
+  tareas. Ponderado: sin cambio aplicable (mismo criterio que las subtareas de T21 antes de cerrarse).

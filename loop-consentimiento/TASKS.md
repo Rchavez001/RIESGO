@@ -643,10 +643,34 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         (`panel-e2e` incluido, 353 casos; `db-reset`/`e2e-local` SKIP opt-in). Iteración 66, no múltiplo de
         5: `GATES_FULL=1` no obligatorio esta vez.
 
-- [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)
+- **T22 — Comparar y Publicar** (REQ-13 c, d)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.
   - Diff lado a lado; modal de publicación con motivo, casilla `requires_reconsent`,
     confirmación escribiendo la versión; resumen de impacto (nº de usuarios que verán re-consentimiento).
+  - **División (2026-10-14, antes de codificar — mezcla una vista de solo lectura, un modal de
+    publicación con varias piezas independientes y una acción de retiro de borrador; mismo patrón que
+    T05/T12.d/T15/T16/T21):** comparar, luego publicar, luego retirar, en ese orden de dependencia.
+    - [x] **T22.a — Panel: acción "Comparar" (diff lado a lado)** (REQ-13 c) (hecha 2026-10-14, iteración 67)
+      - Botón "Comparar" junto a "Editar" en cada fila `status='draft'` (mismo candado que "Editar":
+        solo `privacy_editor`/`privacy_admin` — es el mismo rol que ya exige `GET /documents/:id/diff`,
+        T14 — sin cambios de backend). Diff línea a línea del contenido Markdown (`content_md`);
+        antes/después para el resto de campos que cambien (`title`, `purposes`, `requires_reconsent`).
+        Sin versión publicada vigente (`base: null`) o sin diferencias → mensaje explícito, nunca una
+        tabla vacía que sugiera "sin cambios" cuando en realidad no hay con qué comparar.
+      - **Aceptación:** "Comparar" solo visible en borradores y solo para editor/admin; abrir muestra el
+        diff línea a línea del contenido con líneas añadidas/quitadas resaltadas y el resto de campos
+        cambiados en antes/después; sin cambios respecto a la vigente → mensaje "Sin diferencias…"; sin
+        versión vigente → mensaje explícito; cerrar limpia el panel; pruebas Playwright (mismo patrón
+        que `consent-editor.spec.ts`).
+    - [ ] **T22.b — Panel: modal de "Publicar"** (REQ-13 d)
+      - Motivo obligatorio, casilla `requires_reconsent` (editable antes de publicar, viaja en el mismo
+        PATCH que ya acepta T21.c.1/T14), confirmación escribiendo la versión exacta del borrador,
+        resumen de impacto (nº de aceptaciones de la versión vigente que se retira — ya disponible como
+        `acceptance_count` en el listado de T21.a, sin necesitar un endpoint nuevo).
+    - [ ] **T22.c — Panel: acción "Retirar borrador"** (REQ-13 d)
+      - Motivo obligatorio + confirmación escribiendo la versión (mismo patrón que Publicar) para
+        descartar un borrador sin publicarlo (`POST /documents/:id/retire`, T14, sin cambios de
+        backend).
 
 - [ ] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05.

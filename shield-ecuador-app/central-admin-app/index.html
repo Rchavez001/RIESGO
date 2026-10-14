@@ -1299,6 +1299,19 @@
               <div id="consentPreviewWarning" class="consent-preview-warning" hidden></div>
               <pre id="consentPreview" class="consent-preview"></pre>
             </div>
+
+            <!-- T22.a (REQ-13 c): "Comparar" un borrador contra la versión vigente (GET …/diff, T14).
+                 Diff línea a línea del contenido Markdown; antes/después para el resto de campos que
+                 cambien. Sin versión vigente o sin diferencias: mensaje explícito dentro de
+                 `#consentDiffFields`, nunca una tabla vacía. -->
+            <div id="consentDiffView" class="card" hidden>
+              <div class="section-toolbar compact">
+                <h3>Comparar con la versión vigente</h3>
+                <button id="consentDiffClose" class="btn secondary small" type="button">Cerrar</button>
+              </div>
+              <p id="consentDiffMessage" class="privacy-message" role="alert"></p>
+              <div id="consentDiffFields"></div>
+            </div>
           </article>
         </section>
       </main>
