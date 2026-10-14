@@ -1260,8 +1260,11 @@
             </div>
 
             <!-- T21.c.1 (REQ-13 b): editor de título/contenido de un borrador + vista previa (GET …/preview,
-                 T14). T21.c.2 añade autoguardado con debounce y el aviso "Cambios sin guardar". Editor de
-                 finalidades (T21.c.3) sigue fuera de esta subtarea. -->
+                 T14). T21.c.2 añade autoguardado con debounce y el aviso "Cambios sin guardar". T21.c.3
+                 añade el editor de finalidades (`#consentPurposesRows`, fuera del <form> para no forzar el
+                 `.form-grid` de dos columnas, pero igual de alcance para el guardado/autoguardado): el
+                 código de una finalidad ya existente en el borrador es inmutable (campo deshabilitado);
+                 "Agregar finalidad" crea una fila con código editable hasta el primer guardado exitoso. -->
             <div id="consentDraftEditor" class="card" hidden>
               <div class="section-toolbar compact">
                 <h3>Editar borrador</h3>
@@ -1282,6 +1285,17 @@
                   <button class="btn primary" type="submit">Guardar cambios</button>
                 </div>
               </form>
+              <div class="consent-purposes">
+                <div class="section-toolbar compact">
+                  <h4>Finalidades</h4>
+                  <button id="consentPurposeAdd" class="btn secondary small" type="button">Agregar finalidad</button>
+                </div>
+                <table class="data-table">
+                  <caption class="sr-only">Finalidades del borrador</caption>
+                  <thead><tr><th>Código</th><th>Etiqueta</th><th>Descripción</th><th>Obligatoria</th><th>Orden</th><th></th></tr></thead>
+                  <tbody id="consentPurposesRows"></tbody>
+                </table>
+              </div>
               <div id="consentPreviewWarning" class="consent-preview-warning" hidden></div>
               <pre id="consentPreview" class="consent-preview"></pre>
             </div>

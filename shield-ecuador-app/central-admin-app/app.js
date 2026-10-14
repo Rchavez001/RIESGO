@@ -4834,22 +4834,112 @@ async function createConsentDraft(event) {
 // `GET /documents/:id/preview` (T14, reutiliza `renderConsent`). `consentEditorDocId` vive solo en memoria
 // de esta pestaña, igual que `consentDocs`/`privacyFlow`.
 let consentEditorDocId = null;
-// T21.c.2: `consentEditorSavedSnapshot` guarda el último title/content_md confirmado por el backend (o los
-// valores iniciales del borrador al abrir el editor); el campo difiere de ese snapshot → hay cambios sin
-// guardar. `consentEditorAutosaveTimer` vive solo en memoria de esta pestaña, igual que el resto.
+// T21.c.2: `consentEditorSavedSnapshot` guarda el último title/content_md/purposes confirmado por el
+// backend (o los valores iniciales del borrador al abrir el editor); el campo difiere de ese snapshot →
+// hay cambios sin guardar. `consentEditorAutosaveTimer` vive solo en memoria de esta pestaña, igual que el
+// resto. `purposes` ya normalizado por `normalizeConsentPurpose` (T21.c.3), mismo orden de claves que
+// `collectConsentPurposes()` para que la comparación por `JSON.stringify` sea estable.
 let consentEditorSavedSnapshot = null;
 let consentEditorAutosaveTimer = null;
 const CONSENT_AUTOSAVE_DEBOUNCE_MS = 1500;
 
+// T21.c.3 (REQ-03): forma estable de una finalidad para comparar snapshot vs. DOM y para poblar una fila
+// nueva. `description` nunca queda `undefined` (rompería la comparación `JSON.stringify` entre una
+// finalidad recién creada en memoria y la misma finalidad ya guardada y vuelta a leer del backend).
+// `order` SÍ se deja `undefined` cuando no hay valor: `PurposeSchema.order` es `z.number().optional()`
+// (admin-consent/handler.ts) y rechaza `null` — mandarlo solo cuando el admin escribió un número evita un
+// 400 `invalid_input` al guardar una finalidad nueva sin orden.
+function normalizeConsentPurpose(purpose) {
+  return {
+    code: purpose.code,
+    label: purpose.label,
+    description: purpose.description || "",
+    required: Boolean(purpose.required),
+    order: purpose.order === null || purpose.order === undefined ? undefined : purpose.order,
+  }
+}
+
 function consentEditorIsDirty() {
   if (!consentEditorSavedSnapshot) return false;
   return $("#consentEditorTitle").value.trim() !== consentEditorSavedSnapshot.title
-    || $("#consentEditorContent").value !== consentEditorSavedSnapshot.content_md;
+    || $("#consentEditorContent").value !== consentEditorSavedSnapshot.content_md
+    || JSON.stringify(collectConsentPurposes()) !== JSON.stringify(consentEditorSavedSnapshot.purposes);
+}
+
+// T21.c.3: una fila por finalidad. `existing` deshabilita el campo "Código" (inmutable para las
+// finalidades que ya existían en el borrador al abrirlo, o que ya se guardaron con éxito en esta misma
+// sesión — ver `lockConsentPurposeCodes`); las filas nuevas (botón "Agregar finalidad") lo dejan editable
+// hasta el primer guardado. El resto de campos siempre es editable, exista o no la finalidad todavía.
+function createConsentPurposeRow(purpose, existing) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input type="text" class="purpose-code" maxlength="100" /></td>
+    <td><input type="text" class="purpose-label" maxlength="300" /></td>
+    <td><input type="text" class="purpose-description" maxlength="2000" /></td>
+    <td><input type="checkbox" class="purpose-required" /></td>
+    <td><input type="number" class="purpose-order" /></td>
+    <td><button type="button" class="btn secondary small purpose-remove">Quitar</button></td>
+  `;
+  tr.querySelector(".purpose-code").value = purpose.code;
+  tr.querySelector(".purpose-code").disabled = existing;
+  tr.querySelector(".purpose-label").value = purpose.label;
+  tr.querySelector(".purpose-description").value = purpose.description || "";
+  tr.querySelector(".purpose-required").checked = Boolean(purpose.required);
+  tr.querySelector(".purpose-order").value = purpose.order ?? "";
+  return tr;
+}
+
+function renderConsentPurposeRows(purposes) {
+  const tbody = $("#consentPurposesRows");
+  tbody.innerHTML = "";
+  for (const purpose of purposes) tbody.appendChild(createConsentPurposeRow(purpose, true));
+}
+
+// Lee el estado actual del editor de finalidades directamente del DOM (igual que `saveConsentDraft`/
+// `autosaveConsentDraft` leen título/contenido en el momento de guardar, nunca de una copia capturada
+// antes): una fila añadida o quitada mientras un guardado anterior seguía en vuelo no se pierde.
+function collectConsentPurposes() {
+  return [...$("#consentPurposesRows").querySelectorAll("tr")].map((row) => normalizeConsentPurpose({
+    code: row.querySelector(".purpose-code").value.trim(),
+    label: row.querySelector(".purpose-label").value.trim(),
+    description: row.querySelector(".purpose-description").value.trim(),
+    required: row.querySelector(".purpose-required").checked,
+    order: row.querySelector(".purpose-order").value === "" ? undefined : Number(row.querySelector(".purpose-order").value),
+  }))
+}
+
+// Mismo criterio de validación que el backend (`PurposeSchema`/`UpdateDraftSchema`, admin-consent/
+// handler.ts): al menos una finalidad, código y etiqueta no vacíos, códigos sin repetir. Se comprueba en
+// el cliente para no gastar un PATCH en un 400 previsible y para que el autoguardado sepa cuándo callarse
+// (igual que ya hace con título/contenido vacíos).
+function consentPurposesValidationError(purposes) {
+  if (purposes.length === 0) return "Debe existir al menos una finalidad.";
+  const seen = new Set();
+  for (const purpose of purposes) {
+    if (!purpose.code) return "Cada finalidad necesita un código.";
+    if (!purpose.label) return "Cada finalidad necesita una etiqueta.";
+    if (seen.has(purpose.code)) return `El código "${purpose.code}" está repetido.`;
+    seen.add(purpose.code);
+  }
+  return null;
+}
+
+// Tras un guardado con éxito, cualquier finalidad ya persistida queda con el código bloqueado "in situ"
+// (sin reconstruir la tabla): reconstruirla desde la respuesta del backend perdería una fila añadida por
+// el admin mientras ese guardado seguía en vuelo (mismo motivo que `collectConsentPurposes` lee el DOM en
+// el momento de guardar, no una copia).
+function lockConsentPurposeCodes(codes) {
+  const codeSet = new Set(codes);
+  $("#consentPurposesRows").querySelectorAll("tr").forEach((row) => {
+    const codeInput = row.querySelector(".purpose-code");
+    if (codeSet.has(codeInput.value.trim())) codeInput.disabled = true;
+  });
 }
 
 function openConsentDraftEditor(doc) {
   consentEditorDocId = doc.id;
-  consentEditorSavedSnapshot = { title: doc.title, content_md: doc.content_md };
+  const purposes = (doc.purposes || []).map(normalizeConsentPurpose);
+  consentEditorSavedSnapshot = { title: doc.title, content_md: doc.content_md, purposes };
   window.clearTimeout(consentEditorAutosaveTimer);
   $("#consentEditorTitle").value = doc.title;
   $("#consentEditorContent").value = doc.content_md;
@@ -4858,6 +4948,7 @@ function openConsentDraftEditor(doc) {
   $("#consentPreview").textContent = "";
   $("#consentPreviewWarning").hidden = true;
   $("#consentPreviewWarning").textContent = "";
+  renderConsentPurposeRows(purposes);
   $("#consentDraftEditor").hidden = false;
 }
 
@@ -4873,6 +4964,7 @@ function closeConsentDraftEditor() {
   $("#consentPreview").textContent = "";
   $("#consentPreviewWarning").hidden = true;
   $("#consentPreviewWarning").textContent = "";
+  $("#consentPurposesRows").innerHTML = "";
 }
 
 // Guarda el candado de "cambios sin guardar" antes de cerrar el editor o de saltar a otro borrador;
@@ -4911,18 +5003,24 @@ async function loadConsentPreview(docId) {
 // Lógica de guardado compartida entre el envío manual del formulario y el autoguardado (T21.c.2): hace el
 // PATCH, actualiza la fila de la tabla y el snapshot "guardado", y pide la vista previa. Nunca decide por
 // sí sola si el borrador es válido para guardar (eso lo hacen sus dos llamadores, con mensajes distintos).
-async function applyConsentDraftSave(title, contentMd) {
+// `purposes` (T21.c.3) viaja siempre junto a título/contenido, igual que ya hacían esos dos entre sí.
+async function applyConsentDraftSave(title, contentMd, purposes) {
   const docId = consentEditorDocId;
   const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(docId)}`, {
     session: privacyFlow.token,
     method: "PATCH",
-    body: { title, content_md: contentMd },
+    body: { title, content_md: contentMd, purposes },
   });
   if (res.status !== 200) return { ok: false, data: res.data };
   const index = consentDocs.findIndex((doc) => doc.id === docId);
   if (index !== -1) consentDocs[index] = res.data;
   renderConsentDocuments();
-  consentEditorSavedSnapshot = { title: res.data.title, content_md: res.data.content_md };
+  consentEditorSavedSnapshot = {
+    title: res.data.title,
+    content_md: res.data.content_md,
+    purposes: (res.data.purposes || []).map(normalizeConsentPurpose),
+  };
+  lockConsentPurposeCodes(consentEditorSavedSnapshot.purposes.map((purpose) => purpose.code));
   await loadConsentPreview(docId);
   return { ok: true, data: res.data };
 }
@@ -4933,10 +5031,13 @@ async function saveConsentDraft(event) {
   window.clearTimeout(consentEditorAutosaveTimer);
   const title = $("#consentEditorTitle").value.trim();
   const contentMd = $("#consentEditorContent").value;
+  const purposes = collectConsentPurposes();
   if (!title || !contentMd.trim()) { $("#consentEditorMessage").textContent = "El título y el contenido son obligatorios."; return; }
+  const purposesError = consentPurposesValidationError(purposes);
+  if (purposesError) { $("#consentEditorMessage").textContent = purposesError; return; }
 
   $("#consentEditorMessage").textContent = "";
-  const res = await applyConsentDraftSave(title, contentMd);
+  const res = await applyConsentDraftSave(title, contentMd, purposes);
   if (!res.ok) {
     $("#consentEditorMessage").textContent = consentDocErrorMessage(res.data?.error);
     return;
@@ -4957,11 +5058,13 @@ async function autosaveConsentDraft() {
   if (!consentEditorDocId || !consentEditorIsDirty()) return;
   const title = $("#consentEditorTitle").value.trim();
   const contentMd = $("#consentEditorContent").value;
-  // Mismo requisito que el guardado manual: nunca autoguarda un borrador sin título o sin contenido.
-  // Se queda marcado "Cambios sin guardar." hasta que el admin lo complete o guarde a mano.
-  if (!title || !contentMd.trim()) return;
+  const purposes = collectConsentPurposes();
+  // Mismo requisito que el guardado manual: nunca autoguarda un borrador sin título, sin contenido o con
+  // finalidades inválidas. Se queda marcado "Cambios sin guardar." hasta que el admin lo complete o guarde
+  // a mano.
+  if (!title || !contentMd.trim() || consentPurposesValidationError(purposes)) return;
   $("#consentEditorAutosaveStatus").textContent = "Guardando cambios…";
-  const res = await applyConsentDraftSave(title, contentMd);
+  const res = await applyConsentDraftSave(title, contentMd, purposes);
   if (!res.ok) {
     $("#consentEditorAutosaveStatus").textContent = `No se pudo guardar automáticamente: ${consentDocErrorMessage(res.data?.error)}`;
     return;
@@ -5123,6 +5226,18 @@ function bindPrivacy() {
   $("#consentEditorClose").addEventListener("click", closeConsentDraftEditorWithConfirm);
   $("#consentEditorTitle").addEventListener("input", scheduleConsentAutosave);
   $("#consentEditorContent").addEventListener("input", scheduleConsentAutosave);
+  $("#consentPurposeAdd").addEventListener("click", () => {
+    $("#consentPurposesRows").appendChild(createConsentPurposeRow({ code: "", label: "", description: "", required: false, order: null }, false));
+    scheduleConsentAutosave();
+  });
+  $("#consentPurposesRows").addEventListener("input", scheduleConsentAutosave);
+  $("#consentPurposesRows").addEventListener("change", scheduleConsentAutosave);
+  $("#consentPurposesRows").addEventListener("click", (event) => {
+    const button = event.target.closest(".purpose-remove");
+    if (!button) return;
+    button.closest("tr").remove();
+    scheduleConsentAutosave();
+  });
 }
 
 init();

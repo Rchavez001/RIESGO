@@ -496,7 +496,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 4 · Panel administrativo — sección "Consentimiento informado"
 
-- [ ] **T21 — Navegación y pestaña Versiones + Editor** (REQ-13 a, b)
+- [x] **T21 — Navegación y pestaña Versiones + Editor** (REQ-13 a, b) (hecha 2026-10-14, iteración 66 — cierra con T21.c.3, última subtarea de la división a/b/c.1/c.2/c.3)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Ninguna pantalla del panel para el módulo existe todavía en `central-admin-app`. Depende de T05 (identidad individual en el panel) y T14 (acciones de `admin-consent` que esta pantalla consume).
   - Menú "Consentimiento informado"; lista de versiones; crear borrador desde vigente; editor
     Markdown con vista previa en vivo (marcadores resueltos y resaltados si faltan);
@@ -608,7 +608,40 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
         (`panel-e2e` incluido, 346 casos; `db-reset`/`e2e-local` SKIP opt-in). Iteración 65, no múltiplo de 5:
         `GATES_FULL=1` no obligatorio esta vez.
-    - [ ] **T21.c.3 — Editor de finalidades (`purposes`), código inmutable para las existentes**
+    - [x] **T21.c.3 — Editor de finalidades (`purposes`), código inmutable para las existentes** (hecha 2026-10-14, iteración 66)
+      - **Estado:** cerrada. Dentro de `#consentDraftEditor` (fuera del `<form>` para no forzar el
+        `.form-grid` de dos columnas, pero igual de alcance para guardado/autoguardado): tabla
+        `#consentPurposesRows` con una fila por finalidad (código, etiqueta, descripción, obligatoria,
+        orden, "Quitar") y botón "Agregar finalidad". El código de una finalidad ya presente al abrir el
+        editor, o ya guardada con éxito en esta misma sesión (`lockConsentPurposeCodes`, bloqueo "in situ"
+        sin reconstruir la tabla para no perder una fila añadida mientras un guardado anterior seguía en
+        vuelo), queda con el campo `.purpose-code` deshabilitado; una fila nueva ("Agregar finalidad") lo
+        deja editable hasta el primer guardado. El resto de campos (etiqueta, descripción, obligatoria,
+        orden) siempre es editable y "Quitar" funciona en cualquier fila (existente o nueva) — nada en REQ-03
+        exige lo contrario, solo el código es inmutable.
+      - **`app.js`:** `normalizeConsentPurpose` (forma estable para comparar snapshot vs. DOM; `order` se
+        manda `undefined`, nunca `null`, si está vacío — `PurposeSchema.order` es `z.number().optional()` y
+        rechaza `null`), `createConsentPurposeRow`/`renderConsentPurposeRows`, `collectConsentPurposes`
+        (lee el DOM en el momento de guardar, igual que título/contenido), `consentPurposesValidationError`
+        (mismo criterio que `PurposeSchema`/`UpdateDraftSchema` del backend: mínimo 1 finalidad, código y
+        etiqueta no vacíos, códigos sin repetir — se comprueba en el cliente para no gastar un PATCH en un
+        400 previsible), `lockConsentPurposeCodes`. `consentEditorIsDirty`/`applyConsentDraftSave`/
+        `saveConsentDraft`/`autosaveConsentDraft` ganan `purposes` (viaja siempre en el PATCH junto a
+        título/contenido, igual que esos dos ya viajaban juntos). `closeConsentDraftEditor` limpia
+        `#consentPurposesRows`.
+      - **`index.html`:** sección "Finalidades" (tabla + botón "Agregar finalidad") entre el `<form>` del
+        editor y la vista previa.
+      - **Tests (`consent-editor.spec.ts`, 7 nuevos bajo "T21.c.3"):** abrir el editor muestra las
+        finalidades existentes con el código bloqueado; "Agregar finalidad" crea fila con código editable
+        y participa en el PATCH; tras guardar con éxito el código de una finalidad recién agregada queda
+        bloqueado; "Quitar" excluye esa finalidad del PATCH; quitar todas las finalidades → mensaje de
+        error, sin backend; código repetido → mensaje de error, sin backend; cambiar la etiqueta de una
+        finalidad existente dispara el autoguardado. Los 3 tests ya existentes de T21.c.1/T21.c.2 que
+        comprobaban el cuerpo exacto del PATCH se actualizaron para incluir `purposes` (consecuencia directa
+        de que ahora viaja siempre junto a título/contenido, no una tarea aparte).
+      - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
+        (`panel-e2e` incluido, 353 casos; `db-reset`/`e2e-local` SKIP opt-in). Iteración 66, no múltiplo de
+        5: `GATES_FULL=1` no obligatorio esta vez.
 
 - [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.

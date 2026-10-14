@@ -1961,3 +1961,65 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   desbloqueada de la división de T21.c.
 - Porcentaje: T21 no se cierra todavía (T21.c.3 sigue `[ ]`); no mueve el contador estricto de 28 tareas.
   Ponderado: sin cambio aplicable (igual que T21.a/T21.b/T21.c.1).
+
+## Iteración 66 — 2026-10-14 — T21.c.3 editor de finalidades (`purposes`), código inmutable para las existentes — cierra T21
+- **Punto de partida:** primera tarea `[ ]` desbloqueada de TASKS.md. La SPEC (REQ-03) define `purposes`
+  como `[{code,label,description,required,order}]`, versionadas con el documento; el backend
+  (`admin-consent/handler.ts`, `PurposeSchema`/`UpdateDraftSchema`) ya aceptaba `purposes` en
+  `PATCH /documents/:id` desde T14 — no hacía falta ningún cambio de backend, solo construir el editor en
+  el panel que hasta ahora no existía (T21.c.1/T21.c.2 dejaban el PATCH limitado a `{title, content_md}`
+  a propósito).
+- **Diseño (sin acceptance criteria detallados en TASKS.md, solo el título de la subtarea):** "código
+  inmutable para las existentes" se interpretó como: el campo `code` de una finalidad ya presente en el
+  borrador al abrir el editor queda bloqueado (input deshabilitado) y lo sigue estando tras cualquier
+  guardado exitoso posterior (incluida una finalidad nueva añadida en esta misma sesión, en cuanto se
+  guarda con éxito); el resto de campos (etiqueta, descripción, obligatoria, orden) y la posibilidad de
+  quitar una fila (existente o nueva) quedan sin restringir — ni REQ-03 ni el título de la tarea piden lo
+  contrario, y el borrador sigue siendo editable libremente hasta publicarse (eso ya lo impone el trigger
+  `consent_documents_immutable` de 073, no esta subtarea).
+- **Cambios:**
+  - `central-admin-app/index.html`: sección "Finalidades" (`#consentPurposesRows` + botón
+    `#consentPurposeAdd`) entre el `<form>` del editor y la vista previa — deliberadamente FUERA del
+    `<form class="form-grid compact">` para no forzar una tabla dentro de un grid de 2 columnas pensado
+    para `<label>`; sigue participando del mismo guardado/autoguardado porque el JS lee cada campo por
+    `id`/clase, no por pertenencia al `<form>`.
+  - `central-admin-app/app.js`: `normalizeConsentPurpose` (forma estable para comparar snapshot vs. DOM;
+    `order` se manda `undefined`, nunca `null`, cuando está vacío — `PurposeSchema.order` es
+    `z.number().optional()` y un `null` explícito lo habría rechazado con 400 `invalid_input` al guardar
+    una finalidad nueva sin orden, detectado por inspección del schema antes de escribirlo así, no por un
+    test en rojo); `createConsentPurposeRow`/`renderConsentPurposeRows` (una fila por finalidad, código
+    deshabilitado si `existing`); `collectConsentPurposes` (lee el DOM en el momento de guardar, igual que
+    título/contenido — una fila añadida o quitada mientras un autoguardado anterior seguía en vuelo no se
+    pierde); `consentPurposesValidationError` (mismo criterio que el backend: mínimo 1 finalidad, código y
+    etiqueta no vacíos, códigos sin repetir); `lockConsentPurposeCodes` (bloquea el código "in situ" tras
+    un guardado exitoso, SIN reconstruir la tabla completa — reconstruirla desde la respuesta del backend
+    habría perdido una fila añadida por el admin mientras ese guardado seguía en vuelo). `consentEditorIsDirty`/
+    `applyConsentDraftSave`/`saveConsentDraft`/`autosaveConsentDraft` ganan `purposes`, que ahora viaja
+    siempre en el PATCH junto a título/contenido (mismo patrón que esos dos ya seguían entre sí).
+    `closeConsentDraftEditor` limpia `#consentPurposesRows`. `bindPrivacy`: delegación de eventos en
+    `#consentPurposesRows` (`input`/`change` reprograman el autoguardado, `click` en `.purpose-remove`
+    quita la fila) y listener de `#consentPurposeAdd`.
+  - `tests/admin/consent-editor.spec.ts`: `DRAFT_PURPOSES` (dos finalidades realistas, antes `purposes: []`
+    en el fixture) y 7 tests nuevos bajo "T21.c.3": finalidades existentes con código bloqueado al abrir;
+    "Agregar finalidad" crea fila con código editable y entra en el PATCH; tras guardar con éxito el código
+    de una finalidad recién agregada queda bloqueado; "Quitar" excluye la finalidad del PATCH; quitar todas
+    las finalidades → error sin backend; código repetido → error sin backend; cambiar la etiqueta de una
+    finalidad existente dispara el autoguardado. Los 3 tests ya existentes de T21.c.1/T21.c.2 que
+    comprobaban el cuerpo exacto del PATCH (`toEqual({title, content_md})`) se actualizaron para incluir
+    `purposes: DRAFT_PURPOSES` — consecuencia directa y esperada de que `purposes` ahora viaja siempre
+    junto a título/contenido, no un cambio de alcance aparte.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only typecheck-frontend` y
+  `--only panel-e2e` por separado primero (`panel-e2e` en verde con los 7 casos nuevos y los 3 actualizados
+  pasando con la nueva aserción), luego la corrida completa por defecto: typecheck-frontend,
+  lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e (353 casos), deno-check, deno-test,
+  sql-ciclo-de-vida, sql-guest-limit — las 9 puertas no-opcionales OK; db-reset y e2e-local SKIP explícitos
+  (opt-in, no se tocaron, sin cambios de backend/migraciones en esta tarea). Iteración 66, no múltiplo de 5:
+  `GATES_FULL=1` no obligatorio esta vez.
+- Desviaciones de SPEC: ninguna. La interpretación de "código inmutable para las existentes" (arriba) no
+  estaba escrita como criterio de aceptación explícito en TASKS.md — se documenta aquí por si un humano
+  quiere ajustarla (p. ej. restringir también "Quitar" sobre finalidades ya existentes) antes de T22
+  (Publicar), que es quien primero expondría estos borradores a un re-consentimiento real.
+- Riesgos / pendientes detectados: ninguno nuevo. T21 queda completo (T21.a, T21.b, T21.c.1-3). Siguiente
+  tarea desbloqueada en TASKS.md: T22 (Comparar y Publicar).
+- Porcentaje: T21 se cierra como tarea completa (antes contaba 0/28 estricto por no estar `[x]` la línea
+  padre; con T21.c.3 ya no quedan subtareas abiertas bajo T21, así que el contador estricto sube en 1).

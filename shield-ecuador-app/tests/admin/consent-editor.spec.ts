@@ -7,9 +7,17 @@ const USER = { id: '0d9b7c1e-2f3a-4b5c-8d6e-7f8091a2b3c4', email: 'admin.uno@exa
 const FID = '11111111-2222-4333-8444-555555555555'
 const AAL2_TOKEN = 'eyJhbGciOiJFUzI1NiJ9.dG90cC1hYWwy.c2lnMg'
 
+// T21.c.3: dos finalidades ya existentes en el borrador (código inmutable al abrir el editor); el código
+// real de REQ-03 (`registro_aprendizaje`/`novedades`/`publicidad_personalizada`) no importa para este test
+// de UI, solo que haya más de una y que sus `code` no cambien tras guardarlas.
+const DRAFT_PURPOSES = [
+  { code: 'registro_aprendizaje', label: 'Registro y aprendizaje', description: 'Uso para operar el servicio', required: true, order: 1 },
+  { code: 'novedades', label: 'Novedades', description: '', required: false, order: 2 },
+]
+
 const DRAFT = {
   id: 'd-2', version: '1.1', title: 'Aviso de consentimiento', content_md: '# Aviso\n\nTexto {{responsable_nombre}}.',
-  content_sha256: 'a', purposes: [], status: 'draft', requires_reconsent: false, change_summary: 'ajustes menores',
+  content_sha256: 'a', purposes: DRAFT_PURPOSES, status: 'draft', requires_reconsent: false, change_summary: 'ajustes menores',
   based_on_id: 'd-1', created_by: USER.id, created_at: '2026-10-10T12:00:00Z', updated_by: null, updated_at: null,
   published_by: null, published_at: null, retired_by: null, retired_at: null, acceptance_count: 0,
 }
@@ -124,7 +132,7 @@ test.describe('T21.c.1 · editor de título/contenido de un borrador + vista pre
 
     const patch = seen.find((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')!
     expect(patch.session).toBe(AAL2_TOKEN)
-    expect(JSON.parse(patch.body!)).toEqual({ title: 'Aviso de consentimiento (revisado)', content_md: '# Aviso\n\nTexto nuevo {{responsable_nombre}}.' })
+    expect(JSON.parse(patch.body!)).toEqual({ title: 'Aviso de consentimiento (revisado)', content_md: '# Aviso\n\nTexto nuevo {{responsable_nombre}}.', purposes: DRAFT_PURPOSES })
 
     const preview = seen.find((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}/preview` && s.method === 'GET')!
     expect(preview.session).toBe(AAL2_TOKEN)
@@ -196,7 +204,7 @@ test.describe('T21.c.2 · autoguardado del borrador + aviso de cambios sin guard
     await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Guardado automáticamente', { timeout: 5000 })
     const patches = seen.filter((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')
     expect(patches).toHaveLength(1)
-    expect(JSON.parse(patches[0].body!)).toEqual({ title: DRAFT.title, content_md: '# Aviso\n\nTexto editado sin pulsar guardar.' })
+    expect(JSON.parse(patches[0].body!)).toEqual({ title: DRAFT.title, content_md: '# Aviso\n\nTexto editado sin pulsar guardar.', purposes: DRAFT_PURPOSES })
     await expect(page.locator('#consentDocsRows tr').nth(0)).toContainText(DRAFT.title)
   })
 
@@ -214,7 +222,7 @@ test.describe('T21.c.2 · autoguardado del borrador + aviso de cambios sin guard
     await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Guardado automáticamente', { timeout: 5000 })
     const patches = seen.filter((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')
     expect(patches).toHaveLength(1)
-    expect(JSON.parse(patches[0].body!)).toEqual({ title: DRAFT.title, content_md: '# Aviso\n\nTexto final.' })
+    expect(JSON.parse(patches[0].body!)).toEqual({ title: DRAFT.title, content_md: '# Aviso\n\nTexto final.', purposes: DRAFT_PURPOSES })
   })
 
   test('autoguardado sin título: no llama al backend, sigue "Cambios sin guardar"', async ({ page }) => {
@@ -260,5 +268,108 @@ test.describe('T21.c.2 · autoguardado del borrador + aviso de cambios sin guard
     page.once('dialog', (dialog) => void dialog.dismiss())
     await page.locator('#consentDocsRows tr', { hasText: draft2.version }).getByRole('button', { name: 'Editar' }).click()
     await expect(page.locator('#consentEditorContent')).toHaveValue('# Cambio sin guardar en el primer borrador')
+  })
+})
+
+// T21.c.3 (REQ-03): editor de finalidades (`purposes`) dentro del mismo panel de borrador. El código de
+// una finalidad ya existente al abrir el editor (o ya guardada con éxito en esta sesión) es inmutable;
+// el resto de campos y las finalidades nuevas (botón "Agregar finalidad") son editables. Mismo patrón de
+// mocking que T21.c.1/T21.c.2.
+test.describe('T21.c.3 · editor de finalidades, código inmutable para las existentes', () => {
+  test.beforeEach(async ({}, info) => { test.skip(info.project.name !== 'desktop-chrome', 'servidor: una sola vez') })
+
+  test('abrir el editor muestra las finalidades existentes, con el código bloqueado', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    const rows = page.locator('#consentPurposesRows tr')
+    await expect(rows).toHaveCount(2)
+    await expect(rows.nth(0).locator('.purpose-code')).toHaveValue('registro_aprendizaje')
+    await expect(rows.nth(0).locator('.purpose-code')).toBeDisabled()
+    await expect(rows.nth(0).locator('.purpose-label')).toHaveValue('Registro y aprendizaje')
+    await expect(rows.nth(0).locator('.purpose-required')).toBeChecked()
+    await expect(rows.nth(1).locator('.purpose-code')).toHaveValue('novedades')
+    await expect(rows.nth(1).locator('.purpose-code')).toBeDisabled()
+    await expect(rows.nth(1).locator('.purpose-required')).not.toBeChecked()
+  })
+
+  test('"Agregar finalidad" agrega una fila con código editable; guardar la incluye en el PATCH', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentPurposeAdd').click()
+    const rows = page.locator('#consentPurposesRows tr')
+    await expect(rows).toHaveCount(3)
+    await expect(rows.nth(2).locator('.purpose-code')).toBeEnabled()
+    await rows.nth(2).locator('.purpose-code').fill('publicidad_personalizada')
+    await rows.nth(2).locator('.purpose-label').fill('Publicidad personalizada')
+    await page.locator('#consentEditorForm').getByRole('button', { name: 'Guardar cambios' }).click()
+
+    const patch = seen.find((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')!
+    expect(JSON.parse(patch.body!).purposes).toEqual([
+      ...DRAFT_PURPOSES,
+      { code: 'publicidad_personalizada', label: 'Publicidad personalizada', description: '', required: false },
+    ])
+  })
+
+  test('tras guardar con éxito, el código de una finalidad recién agregada queda bloqueado', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentPurposeAdd').click()
+    const newRow = page.locator('#consentPurposesRows tr').nth(2)
+    await newRow.locator('.purpose-code').fill('publicidad_personalizada')
+    await newRow.locator('.purpose-label').fill('Publicidad personalizada')
+    await expect(newRow.locator('.purpose-code')).toBeEnabled()
+    await page.locator('#consentEditorForm').getByRole('button', { name: 'Guardar cambios' }).click()
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Guardado a las')
+    await expect(newRow.locator('.purpose-code')).toBeDisabled()
+  })
+
+  test('"Quitar" excluye esa finalidad del PATCH', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentPurposesRows tr').nth(1).getByRole('button', { name: 'Quitar' }).click()
+    await expect(page.locator('#consentPurposesRows tr')).toHaveCount(1)
+    await page.locator('#consentEditorForm').getByRole('button', { name: 'Guardar cambios' }).click()
+    const patch = seen.find((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')!
+    expect(JSON.parse(patch.body!).purposes).toEqual([DRAFT_PURPOSES[0]])
+  })
+
+  test('quitar todas las finalidades: mensaje de error, no llama al backend', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentPurposesRows tr').nth(1).getByRole('button', { name: 'Quitar' }).click()
+    await page.locator('#consentPurposesRows tr').nth(0).getByRole('button', { name: 'Quitar' }).click()
+    await page.locator('#consentEditorForm').getByRole('button', { name: 'Guardar cambios' }).click()
+    await expect(page.locator('#consentEditorMessage')).toContainText('al menos una finalidad')
+    expect(seen.some((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')).toBe(false)
+  })
+
+  test('código repetido entre finalidades: mensaje de error, no llama al backend', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentPurposeAdd').click()
+    const newRow = page.locator('#consentPurposesRows tr').nth(2)
+    await newRow.locator('.purpose-code').fill('novedades')
+    await newRow.locator('.purpose-label').fill('Duplicada')
+    await page.locator('#consentEditorForm').getByRole('button', { name: 'Guardar cambios' }).click()
+    await expect(page.locator('#consentEditorMessage')).toContainText('repetido')
+    expect(seen.some((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')).toBe(false)
+  })
+
+  test('cambiar la etiqueta de una finalidad existente dispara el autoguardado', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentPurposesRows tr').nth(0).locator('.purpose-label').fill('Registro (actualizado)')
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Cambios sin guardar')
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Guardado automáticamente', { timeout: 5000 })
+    const patches = seen.filter((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(JSON.parse(patches[0].body!).purposes[0].label).toBe('Registro (actualizado)')
   })
 })
