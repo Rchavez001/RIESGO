@@ -1836,3 +1836,46 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: T21 no se cierra (solo T21.a de tres subtareas); no mueve el contador estricto de 28 tareas
   (T21 sigue `[ ]` como unidad). Ponderado: sin cambio aplicable (T21.a no tiene peso propio asignado en
   esa cuenta, igual que las subtareas de TEST-INT).
+
+## Iteración 63 — 2026-10-14 — T21.b: panel — pestaña "Versiones" (listado, crear borrador)
+- **Punto de partida:** `central-admin-app/{app.js,index.html}` y `loop-consentimiento/TASKS.md` llevaban
+  sin commitear desde una iteración anterior interrumpida (misma clase de restos ya documentada varias
+  veces en este loop: el propio `TASKS.md` del WIP ya traía la entrada de T21.b redactada como `[x]` con
+  todo el detalle de diseño, solo faltaba auditarla, verificarla y cerrarla en PROGRESS.md/commit). T21.b es
+  la siguiente tarea `[ ]` desbloqueada tras T21.a (iteración 62); el diff coincide exactamente con su
+  alcance.
+- **Auditoría del WIP antes de aceptarlo:** el menú "Consentimiento informado" ya existía (T05.b); el WIP
+  añade `<article id="consentDocuments">` dentro de `#consent`, alternado junto con `#privacyIdentity` por
+  `privacyShow`/`privacyReset` (mismo patrón que el resto del módulo: nunca persiste en `state`/
+  localStorage). Tabla de versiones vía `GET /documents` (T21.a); formulario "Crear borrador desde vigente"
+  (`POST /documents`, T14) oculto para `privacy_auditor` (`privacyFlow.roles`, nuevo campo, se llena en
+  `privacyVerify`). Revisado método por método en `app.js`: `renderConsentDocuments` usa `esc()` en todos
+  los campos de texto de la fila (sin XSS: `version`/`title`/`status` vienen del backend pero se escapan
+  igual que el resto del panel); el caso de error distingue "lista vacía real" de "no se sabe" (no pinta
+  "Sin versiones todavía." si la llamada falló, evita afirmar algo que no se verificó); `createConsentDraft`
+  valida `version` en cliente antes de llamar al backend (evita una llamada vacía, el backend igual la
+  rechazaría con `invalid_input`). Sin bugs encontrados: el WIP era correcto y completo para el alcance de
+  T21.b (no intenta nada de T21.c, documentado explícitamente como "fuera de alcance" en el propio WIP).
+- **Cambios:** `shield-ecuador-app/central-admin-app/app.js` (`consentDocs`, `CONSENT_DOC_ERRORS`/
+  `consentDocErrorMessage`, `CONSENT_DOC_STATUS_LABEL`, `renderConsentDocuments`, `loadConsentDocuments`,
+  `createConsentDraft`; `privacyFlow.roles`; enganches en `privacyVerify`/`privacyReset`/`bindNavigation`/
+  `bindPrivacy`); `shield-ecuador-app/central-admin-app/index.html` (`#consentDocuments`, tabla +
+  `#consentDraftForm`); `shield-ecuador-app/tests/admin/consent-documents.spec.ts` (nuevo, 9 casos);
+  `loop-consentimiento/TASKS.md` (T21.b `[x]`, ya venía redactado en el WIP, verificado contra el código
+  real); este archivo.
+- **Pruebas añadidas (`consent-documents.spec.ts`, 9, ya en el WIP, verificadas sin cambios):** lista
+  ordenada con aceptaciones; lista vacía → mensaje explícito; rol editor/admin ve el formulario, rol solo
+  auditor no (dos pruebas); crear borrador envía `version`+`change_summary` con la sesión aal2 y recarga la
+  lista; version vacía no llama al backend; error 403 al crear → mensaje legible; error 403 al listar →
+  mensaje legible y tabla vacía (sin el placeholder de "sin versiones"); al cerrar sesión, la pestaña
+  desaparece y no deja la tabla con datos.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo: typecheck-frontend, lint-frontend
+  [14 = línea base], unit-frontend, panel-unit, panel-e2e (incluye los 9 casos nuevos), deno-check,
+  deno-test, sql-ciclo-de-vida, sql-guest-limit — las 9 puertas no-opcionales OK; `db-reset`/`e2e-local`
+  SKIP opt-in como siempre. Iteración 63, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta vez.
+- Desviaciones de SPEC: ninguna. El caso de arranque (sin ninguna versión publicada aún) queda
+  explícitamente fuera de esta subtarea y remitido a T21.c, como ya documentaba el propio WIP.
+- Riesgos / pendientes detectados: ninguno nuevo. T21.c (editor Markdown + vista previa + finalidades +
+  autosave) es la siguiente tarea desbloqueada.
+- Porcentaje: T21 no se cierra todavía (T21.c sigue `[ ]`); no mueve el contador estricto de 28 tareas.
+  Ponderado: sin cambio aplicable (igual que T21.a, T21.b no tiene peso propio asignado en esa cuenta).

@@ -1227,6 +1227,38 @@
               </div>
             </div>
           </article>
+
+          <!-- T21.b (REQ-13 a, b): pestaña Versiones. Consume GET /documents (T21.a) y crea un borrador desde la
+               vigente con POST /documents (T14). Solo visible con la sesión individual del módulo ya verificada. -->
+          <article id="consentDocuments" class="card" hidden>
+            <div class="section-toolbar compact">
+              <h2>Versiones del aviso</h2>
+              <button id="consentDocsRefresh" class="btn secondary small" type="button">Actualizar</button>
+            </div>
+            <p id="consentDocsMessage" class="privacy-message" role="alert"></p>
+
+            <form id="consentDraftForm" class="form-grid compact" novalidate hidden>
+              <label>
+                Versión nueva
+                <input id="consentDraftVersion" type="text" placeholder="Ej. 1.1" maxlength="50" required />
+              </label>
+              <label>
+                Resumen de cambios (opcional)
+                <input id="consentDraftSummary" type="text" maxlength="2000" />
+              </label>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Crear borrador desde vigente</button>
+              </div>
+            </form>
+
+            <div class="table-scroll">
+              <table class="data-table">
+                <caption class="sr-only">Versiones del aviso de consentimiento</caption>
+                <thead><tr><th>Versión</th><th>Estado</th><th>Título</th><th>Aceptaciones</th><th>Publicado</th><th>Creado</th></tr></thead>
+                <tbody id="consentDocsRows"></tbody>
+              </table>
+            </div>
+          </article>
         </section>
       </main>
     </div>

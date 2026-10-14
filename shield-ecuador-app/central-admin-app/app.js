@@ -239,6 +239,9 @@ function bindNavigation() {
       if (button.dataset.panel === "securityCenter") {
         void loadSecurityCenter();
       }
+      if (button.dataset.panel === "consent" && privacyFlow.token) {
+        void loadConsentDocuments();
+      }
     });
   });
 }
@@ -4738,7 +4741,7 @@ async function publishSecurityKataDraft() {
 // factor TOTP (aal2), a través de /api/privacy/* (server.js), y admin-consent verifica JWT, TOTP y rol. Los tokens viven
 // SOLO en `privacyFlow` (memoria de esta pestaña): nunca en `state` (que "Guardar borrador" persiste), localStorage ni
 // sessionStorage, y nunca se escriben en el DOM ni en la consola. Recargar la página obliga a entrar de nuevo.
-const privacyFlow = { token: null, email: null, factorId: null, challengeId: null };
+const privacyFlow = { token: null, email: null, factorId: null, challengeId: null, roles: [] };
 
 const PRIVACY_ERRORS = {
   forbidden: "Tu cuenta no tiene un rol del módulo de consentimiento. Pide a un administrador del módulo que te lo asigne.",
@@ -4748,6 +4751,75 @@ const PRIVACY_ERRORS = {
   token_expired: "La sesión del módulo caducó. Vuelve a entrar.",
   anonymous_session: "Las sesiones de invitado no pueden administrar el módulo.",
 };
+
+// T21.b: pestaña "Versiones" (REQ-13 a, b). `consentDocs` vive solo en memoria de esta pestaña, igual que
+// `privacyFlow`: no es secreto, pero no hace falta persistirlo en `state`/localStorage.
+let consentDocs = [];
+
+const CONSENT_DOC_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "Revisa los datos del formulario: la versión es obligatoria.",
+  bootstrap_requires_title_content_purposes: "Todavía no hay ninguna versión publicada: la primera versión necesita el editor Markdown (pendiente, T21.c).",
+};
+
+function consentDocErrorMessage(code) {
+  return CONSENT_DOC_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+const CONSENT_DOC_STATUS_LABEL = { draft: "Borrador", published: "Publicada", retired: "Retirada" };
+
+function renderConsentDocuments() {
+  const rows = $("#consentDocsRows");
+  if (consentDocs.length === 0) {
+    rows.innerHTML = `<tr><td colspan="6" class="muted">Sin versiones todavía.</td></tr>`;
+    return;
+  }
+  rows.innerHTML = consentDocs.map((doc) => `
+    <tr>
+      <td>${esc(doc.version)}</td>
+      <td>${esc(CONSENT_DOC_STATUS_LABEL[doc.status] || doc.status)}</td>
+      <td>${esc(doc.title)}</td>
+      <td>${Number(doc.acceptance_count || 0).toLocaleString("es-EC")}</td>
+      <td>${doc.published_at ? esc(new Date(doc.published_at).toLocaleString("es-EC")) : "—"}</td>
+      <td>${esc(new Date(doc.created_at).toLocaleString("es-EC"))}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadConsentDocuments() {
+  const res = await privacyCall("/fn/admin-consent/documents", { session: privacyFlow.token, method: "GET" });
+  if (res.status === 200 && Array.isArray(res.data)) {
+    consentDocs = res.data;
+    $("#consentDocsMessage").textContent = "";
+    renderConsentDocuments();
+    return;
+  }
+  // Error: no se sabe cuántas versiones hay realmente, así que la tabla queda vacía (sin el mensaje "Sin
+  // versiones todavía", que afirmaría algo que no se sabe) y solo se muestra el motivo del fallo.
+  consentDocs = [];
+  $("#consentDocsRows").innerHTML = "";
+  $("#consentDocsMessage").textContent = consentDocErrorMessage(res.data?.error);
+}
+
+async function createConsentDraft(event) {
+  event.preventDefault();
+  const version = $("#consentDraftVersion").value.trim();
+  const changeSummary = $("#consentDraftSummary").value.trim();
+  if (!version) { $("#consentDocsMessage").textContent = "Escribe la versión nueva."; return; }
+
+  const res = await privacyCall("/fn/admin-consent/documents", {
+    session: privacyFlow.token,
+    body: { version, ...(changeSummary ? { change_summary: changeSummary } : {}) },
+  });
+  if (res.status !== 201) {
+    $("#consentDocsMessage").textContent = consentDocErrorMessage(res.data?.error);
+    return;
+  }
+  $("#consentDraftVersion").value = "";
+  $("#consentDraftSummary").value = "";
+  $("#consentDocsMessage").textContent = "";
+  await loadConsentDocuments();
+}
 
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
@@ -4769,6 +4841,7 @@ function privacyShow(step) {
   $("#privacyLoginForm").hidden = step !== "login";
   $("#privacyCodeForm").hidden = step !== "code";
   $("#privacyIdentity").hidden = step !== "identity";
+  $("#consentDocuments").hidden = step !== "identity";
   if (step !== "code") privacyClearEnroll();
 }
 
@@ -4779,10 +4852,15 @@ function privacyClearEnroll() {
 }
 
 function privacyReset(message = "") {
-  Object.assign(privacyFlow, { token: null, email: null, factorId: null, challengeId: null });
+  Object.assign(privacyFlow, { token: null, email: null, factorId: null, challengeId: null, roles: [] });
   $("#privacyWho").textContent = "";
   $("#privacyRoles").textContent = "";
   $("#privacyCode").value = "";
+  consentDocs = [];
+  $("#consentDocsRows").innerHTML = "";
+  $("#consentDocsMessage").textContent = "";
+  $("#consentDraftVersion").value = "";
+  $("#consentDraftSummary").value = "";
   privacyShow("login");
   privacyMessage(message);
 }
@@ -4861,9 +4939,12 @@ async function privacyVerify(event) {
     return;
   }
   $("#privacyWho").textContent = privacyFlow.email;
-  $("#privacyRoles").textContent = (session.data.roles || []).join(", ");
+  privacyFlow.roles = session.data.roles || [];
+  $("#privacyRoles").textContent = privacyFlow.roles.join(", ");
+  $("#consentDraftForm").hidden = !privacyFlow.roles.some((role) => role === "privacy_editor" || role === "privacy_admin");
   privacyMessage("");
   privacyShow("identity");
+  void loadConsentDocuments();
 }
 
 async function privacyLogout(message = "") {
@@ -4877,6 +4958,8 @@ function bindPrivacy() {
   $("#privacyCodeForm").addEventListener("submit", privacyVerify);
   $("#privacyCancel").addEventListener("click", () => void privacyLogout());
   $("#privacyLogout").addEventListener("click", () => void privacyLogout());
+  $("#consentDraftForm").addEventListener("submit", createConsentDraft);
+  $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
 }
 
 init();

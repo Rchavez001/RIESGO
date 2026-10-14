@@ -524,9 +524,38 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Nota de alcance:** esta subtarea es solo el backend que consume la pantalla; T21.b (navegación +
       pestaña Versiones en `central-admin-app`, con su `GET /documents` ya listo para usarse) y T21.c
       (editor Markdown + vista previa + editor de finalidades + autosave) siguen `[ ]`, sin empezar.
-  - [ ] **T21.b — Panel: menú "Consentimiento informado" + pestaña Versiones (listado, crear borrador)**
-    - Menú nuevo en `central-admin-app`; pestaña Versiones que consume `GET /documents` (T21.a); botón
-      "Crear borrador desde vigente" (`POST /documents`, T14, ya existe).
+  - [x] **T21.b — Panel: menú "Consentimiento informado" + pestaña Versiones (listado, crear borrador)** (hecha 2026-10-14, iteración 63)
+    - **Estado:** cerrada. El menú "Consentimiento informado" ya existía (`index.html` línea 48, de T05.b);
+      esta subtarea añade, dentro de la misma sección `#consent`, un nuevo `<article id="consentDocuments">`
+      (sibling de `.privacy-access`) visible solo con la sesión individual del módulo ya verificada
+      (`privacyShow`/`privacyReset` lo alternan junto con `#privacyIdentity`). Contiene: tabla de versiones
+      (versión, estado, título, nº de aceptaciones, publicado, creado) y, solo para `privacy_editor`/
+      `privacy_admin` (oculto para `privacy_auditor`), el formulario "Crear borrador desde vigente"
+      (versión + resumen de cambios opcional → `POST /documents`).
+    - **`central-admin-app/app.js`:** `consentDocs` (memoria de la pestaña, nunca `state`/localStorage, mismo
+      criterio que `privacyFlow`); `CONSENT_DOC_ERRORS`/`consentDocErrorMessage` (reusa `PRIVACY_ERRORS` +
+      `invalid_input`/`bootstrap_requires_title_content_purposes`); `CONSENT_DOC_STATUS_LABEL`;
+      `renderConsentDocuments` (placeholder "Sin versiones todavía." solo en éxito con lista vacía — en un
+      error de red/permiso la tabla queda vacía sin ese texto, que afirmaría algo que no se sabe);
+      `loadConsentDocuments` (`GET /documents` con la sesión aal2); `createConsentDraft` (valida `version` en
+      el cliente antes de llamar al backend). `privacyVerify` guarda `privacyFlow.roles` y oculta el
+      formulario de crear borrador para quien no sea editor/admin, y dispara `loadConsentDocuments()` al
+      entrar; `privacyReset` limpia `consentDocs` y el DOM de la pestaña al cerrar sesión; `bindNavigation`
+      vuelve a cargar la lista si se reabre la pestaña ya con sesión. `index.html`: `#consentDocuments`
+      (oculto por la regla ya existente `#consent [hidden] { display: none !important; }`).
+    - **Alcance deliberadamente fuera de esta subtarea:** el caso de arranque (ninguna versión publicada
+      todavía, `createDraft` exige `title`/`content_md`/`purposes`) no tiene UI propia — el formulario solo
+      cubre "versión nueva" + "resumen de cambios" (clonar de la vigente). Si se usa antes de que exista una
+      versión publicada, el backend responde `bootstrap_requires_title_content_purposes` y el mensaje en
+      pantalla lo explica remitiendo a T21.c (editor), que es quien debe cubrir ese caso.
+    - **Tests (`tests/admin/consent-documents.spec.ts`, nuevo, 9 casos, mismo patrón de mocking con
+      `page.route` que `privacy-login.spec.ts`):** lista ordenada con aceptaciones; lista vacía → mensaje
+      explícito; rol editor/admin ve el formulario, rol solo auditor no; crear borrador envía
+      `version`+`change_summary` con la sesión aal2 y recarga la lista; version vacía no llama al backend;
+      error 403 al crear → mensaje legible; error 403 al listar → mensaje legible y tabla vacía (sin el
+      placeholder de "sin versiones"); al cerrar sesión, la pestaña desaparece y no deja la tabla con datos.
+    - **Verificación:** `bash .claude/loops/consentimiento/gates.sh --only panel-e2e` en verde (incluye los 9
+      casos nuevos); corrida completa de `gates.sh` (9 puertas no-opcionales) — ver PROGRESS.md.
   - [ ] **T21.c — Panel: editor Markdown con vista previa en vivo + editor de finalidades + autosave**
     - Editor Markdown con vista previa (marcadores resueltos y resaltados si faltan, reutilizando
       `getPreview`/`diffDraft` de T14 donde aplique); editor de finalidades (código inmutable para las
