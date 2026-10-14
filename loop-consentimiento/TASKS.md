@@ -494,7 +494,46 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     cadena verificable (la cadena debe calcularse sobre campos no purgables o re-anclarse de forma
     documentada: decidir en esta tarea y justificar en `PROGRESS.md`).
 
-## Fase 4 · Frontend de usuario
+## Fase 4 · Panel administrativo — sección "Consentimiento informado"
+
+- [ ] **T21 — Navegación y pestaña Versiones + Editor** (REQ-13 a, b)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Ninguna pantalla del panel para el módulo existe todavía en `central-admin-app`. Depende de T05 (identidad individual en el panel) y T14 (acciones de `admin-consent` que esta pantalla consume).
+  - Menú "Consentimiento informado"; lista de versiones; crear borrador desde vigente; editor
+    Markdown con vista previa en vivo (marcadores resueltos y resaltados si faltan);
+    editor de finalidades (código inmutable para las existentes); guardado con autosave del
+    borrador y aviso de cambios sin guardar.
+
+- [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.
+  - Diff lado a lado; modal de publicación con motivo, casilla `requires_reconsent`,
+    confirmación escribiendo la versión; resumen de impacto (nº de usuarios que verán re-consentimiento).
+
+- [ ] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05.
+  - Formulario con todos los campos; flujo de verificación del nuevo correo con estado
+    "pendiente de verificación"; historial de versiones de configuración.
+
+- [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T12 (`EmailSender`, sin iniciar) y T05.
+  - Sección "Correo saliente" dentro de "Consentimiento informado", **visible y operable solo para `privacy_admin`** (editor y auditor no la ven).
+  - Formulario: modo (`resend` por defecto | `smtp`), host, puerto, seguridad SSL/TLS, usuario, contraseña, nombre y correo del remitente, reply-to, habilitado. La clave de Resend no aparece ni se edita. La contraseña se muestra como "configurada / no configurada" y solo se puede reemplazar escribiendo una nueva; nunca viaja de vuelta al navegador.
+  - Aviso en pantalla: "Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS". Botón "Enviar correo de prueba" (al admin conectado) con el último resultado (fecha y ok/error corto).
+  - Banner **"Correo no configurado / con errores"** con el contador de avisos pendientes y el botón para reenviarlos; visible en la pestaña Solicitudes y en la cabecera de la sección.
+  - Historial de versiones de la configuración (sin contraseñas) con quién y cuándo.
+  - **Tests E2E del panel:** editor y auditor no ven la sección; la contraseña no aparece en el DOM, en las respuestas de red ni tras guardar; el banner aparece con el modo roto y desaparece tras reenviar; el correo de prueba queda en la bitácora. Depende de T12 y T05.
+
+- [ ] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11)
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T16 (las acciones que esta pantalla invoca) y T05.
+  - Bitácora con filtros y detalle before/after (diff); export CSV.
+  - Evidencia: búsqueda, historial, IP enmascarada, "Revelar IP" con motivo; export de expediente.
+  - Solicitudes: tabla con semáforo (vigente / ≤3 días / vencida), cambio de estado con nota.
+  - Botón "Verificar integridad".
+  - **Tests E2E del panel:** editor no ve botón Publicar; auditor no ve "Revelar IP";
+    cada acción aparece en bitácora.
+
+## Fase 5 · Frontend de usuario
+
+- **Nota:** T18–T20 esperan la integración de `wip/ux-redesign`.
 
 - [x] **T18 — Pantalla de registro con aviso dinámico** (REQ-06, REQ-12)
   - **Cierre (2026-10-13, iteración 61):** punto de partida: `RegisterScreen.tsx`/`index.css`/`register.spec.ts`
@@ -543,6 +582,10 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - Estado por finalidad, versión aceptada, fecha; interruptores de opcionales; formulario de
     solicitud de derechos con tipo; muestra número de caso y fecha límite.
   - **Tests E2E:** revocar publicidad en un clic; solicitar baja muestra número de caso.
+  - **Nota (WIP):** parte del `git stash` `wip-T19-mi-privacidad-diseno-viejo` (diseño viejo de
+    `PrivacyPage.tsx`/`PrivacyPage.test.tsx`/`App.tsx`/`CyberBushido.tsx`/`index.css`, guardado para
+    no perderlo mientras se prioriza T21–T24 e integra `wip/ux-redesign`). El test de `PrivacyPage`
+    necesita `jest.mock('../components/CyberBushido')` para evitar el error de react-router/dom con Jest.
 
 - [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07)
   - **Estado real (2026-09-29, reconciliación):** Solo diseño e investigación (iteración 7, INV-SEC de la iteración 9). El paso 1 (inventario formal en PROGRESS.md con archivos y consultas) no se ha escrito como tal — lo más cercano es el hallazgo de INV-SEC sobre el RPC `learning_state`. Pasos 2A/2B/3 sin empezar.
@@ -558,43 +601,6 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende del modelo de `requires_reconsent` en `consent_documents` (ya existe la columna, T06) y de T19 (pantalla donde mostrarlo).
   - **Tests E2E:** publicar v1.1 con reconsent → siguiente login muestra aviso; aceptar continúa;
     rechazar la obligatoria solo permite baja o cerrar sesión.
-
-## Fase 5 · Panel administrativo — sección "Consentimiento informado"
-
-- [ ] **T21 — Navegación y pestaña Versiones + Editor** (REQ-13 a, b)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Ninguna pantalla del panel para el módulo existe todavía en `central-admin-app`. Depende de T05 (identidad individual en el panel) y T14 (acciones de `admin-consent` que esta pantalla consume).
-  - Menú "Consentimiento informado"; lista de versiones; crear borrador desde vigente; editor
-    Markdown con vista previa en vivo (marcadores resueltos y resaltados si faltan);
-    editor de finalidades (código inmutable para las existentes); guardado con autosave del
-    borrador y aviso de cambios sin guardar.
-
-- [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T21 y T14.
-  - Diff lado a lado; modal de publicación con motivo, casilla `requires_reconsent`,
-    confirmación escribiendo la versión; resumen de impacto (nº de usuarios que verán re-consentimiento).
-
-- [ ] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05.
-  - Formulario con todos los campos; flujo de verificación del nuevo correo con estado
-    "pendiente de verificación"; historial de versiones de configuración.
-
-- [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T12 (`EmailSender`, sin iniciar) y T05.
-  - Sección "Correo saliente" dentro de "Consentimiento informado", **visible y operable solo para `privacy_admin`** (editor y auditor no la ven).
-  - Formulario: modo (`resend` por defecto | `smtp`), host, puerto, seguridad SSL/TLS, usuario, contraseña, nombre y correo del remitente, reply-to, habilitado. La clave de Resend no aparece ni se edita. La contraseña se muestra como "configurada / no configurada" y solo se puede reemplazar escribiendo una nueva; nunca viaja de vuelta al navegador.
-  - Aviso en pantalla: "Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS". Botón "Enviar correo de prueba" (al admin conectado) con el último resultado (fecha y ok/error corto).
-  - Banner **"Correo no configurado / con errores"** con el contador de avisos pendientes y el botón para reenviarlos; visible en la pestaña Solicitudes y en la cabecera de la sección.
-  - Historial de versiones de la configuración (sin contraseñas) con quién y cuándo.
-  - **Tests E2E del panel:** editor y auditor no ven la sección; la contraseña no aparece en el DOM, en las respuestas de red ni tras guardar; el banner aparece con el modo roto y desaparece tras reenviar; el correo de prueba queda en la bitácora. Depende de T12 y T05.
-
-- [ ] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T16 (las acciones que esta pantalla invoca) y T05.
-  - Bitácora con filtros y detalle before/after (diff); export CSV.
-  - Evidencia: búsqueda, historial, IP enmascarada, "Revelar IP" con motivo; export de expediente.
-  - Solicitudes: tabla con semáforo (vigente / ≤3 días / vencida), cambio de estado con nota.
-  - Botón "Verificar integridad".
-  - **Tests E2E del panel:** editor no ve botón Publicar; auditor no ve "Revelar IP";
-    cada acción aparece en bitácora.
 
 ## Fase 6 · Migración, documentación y cierre
 
