@@ -576,7 +576,38 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         error del PATCH (p. ej. `concurrent_modification`, `invalid_input`) muestra un mensaje legible sin
         perder lo escrito; error de la vista previa (`settings_unavailable`) no rompe el guardado ya hecho;
         cerrar el editor limpia el panel; pruebas Playwright (mismo patrón que `consent-documents.spec.ts`).
-    - [ ] **T21.c.2 — Autosave del borrador + aviso de cambios sin guardar**
+    - [x] **T21.c.2 — Autosave del borrador + aviso de cambios sin guardar** (hecha 2026-10-14, iteración 65 — WIP de una iteración anterior interrumpida, auditado y con un bug real corregido antes de aceptarlo)
+      - **Estado:** cerrada. `consentEditorSavedSnapshot` (title/content_md confirmados por el backend o los
+        valores iniciales del borrador) + `consentEditorIsDirty()` detectan cambios sin guardar comparando
+        contra los campos del formulario. `scheduleConsentAutosave` (listener `input` en título/contenido)
+        reinicia un debounce de 1500 ms (`CONSENT_AUTOSAVE_DEBOUNCE_MS`) en cada tecla y muestra "Cambios sin
+        guardar." en `#consentEditorAutosaveStatus`; al disparar, `autosaveConsentDraft` repite la misma
+        validación que el guardado manual (nunca autoguarda sin título/contenido) y llama a
+        `applyConsentDraftSave` (extraído de `saveConsentDraft`: hace el PATCH, actualiza la fila de la tabla,
+        el snapshot "guardado" y pide la vista previa — lógica compartida entre el envío manual y el
+        autoguardado). `closeConsentDraftEditorWithConfirm` y el listener de "Editar" sobre otro borrador
+        piden confirmación (`window.confirm`) solo si hay cambios sin guardar; `closeConsentDraftEditor` en sí
+        (usado también desde `privacyReset`) nunca pregunta, para no dejar un cierre de sesión a medias si el
+        admin cancela el diálogo.
+      - **Bug real corregido en el WIP (encontrado por el propio gate, no por inspección manual):** el
+        refactor a `applyConsentDraftSave` movió la llamada a `loadConsentPreview` DENTRO de la función
+        compartida, pero `saveConsentDraft` seguía limpiando `#consentEditorMessage` DESPUÉS de llamarla —
+        borrando el mensaje "configuración no disponible" que `loadConsentPreview` ya había puesto si la
+        vista previa fallaba. `panel-e2e` lo detectó solo: el test ya existente de T21.c.1 "el guardado
+        funciona aunque la vista previa falle después" pasó a fallar con este WIP. Corregido moviendo el
+        `$("#consentEditorMessage").textContent = ""` a ANTES de `applyConsentDraftSave` (mismo orden que
+        tenía el código antes del refactor: limpiar, luego PATCH+preview, nunca al revés). Verificado: tras
+        el cambio, `bash .claude/loops/consentimiento/gates.sh` completo en verde.
+      - **Tests (`consent-editor.spec.ts`, 5 nuevos bajo "T21.c.2"):** escribir muestra "Cambios sin guardar"
+        y autoguarda sin pulsar el botón (un solo PATCH); escribir varias veces reinicia la pausa (un solo
+        PATCH con el texto final); autoguardado sin título no llama al backend y sigue "Cambios sin
+        guardar"; cerrar con cambios sin guardar pide confirmación (cancelar conserva editor y texto,
+        confirmar descarta y cierra); abrir otro borrador con cambios sin guardar pide confirmación. Un 6º
+        test de T21.c.1 ("cerrar el editor limpia el panel") se amplió para confirmar que, sin cambios, no
+        aparece el diálogo de confirmación.
+      - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
+        (`panel-e2e` incluido, 346 casos; `db-reset`/`e2e-local` SKIP opt-in). Iteración 65, no múltiplo de 5:
+        `GATES_FULL=1` no obligatorio esta vez.
     - [ ] **T21.c.3 — Editor de finalidades (`purposes`), código inmutable para las existentes**
 
 - [ ] **T22 — Comparar y Publicar** (REQ-13 c, d)

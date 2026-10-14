@@ -1260,14 +1260,15 @@
             </div>
 
             <!-- T21.c.1 (REQ-13 b): editor de título/contenido de un borrador + vista previa (GET …/preview,
-                 T14). Autosave/aviso de cambios sin guardar (T21.c.2) y editor de finalidades (T21.c.3)
-                 quedan fuera de esta subtarea. -->
+                 T14). T21.c.2 añade autoguardado con debounce y el aviso "Cambios sin guardar". Editor de
+                 finalidades (T21.c.3) sigue fuera de esta subtarea. -->
             <div id="consentDraftEditor" class="card" hidden>
               <div class="section-toolbar compact">
                 <h3>Editar borrador</h3>
                 <button id="consentEditorClose" class="btn secondary small" type="button">Cerrar</button>
               </div>
               <p id="consentEditorMessage" class="privacy-message" role="alert"></p>
+              <p id="consentEditorAutosaveStatus" class="muted" role="status" aria-live="polite"></p>
               <form id="consentEditorForm" class="form-grid compact" novalidate>
                 <label>
                   Título

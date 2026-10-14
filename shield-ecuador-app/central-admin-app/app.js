@@ -4834,12 +4834,27 @@ async function createConsentDraft(event) {
 // `GET /documents/:id/preview` (T14, reutiliza `renderConsent`). `consentEditorDocId` vive solo en memoria
 // de esta pestaña, igual que `consentDocs`/`privacyFlow`.
 let consentEditorDocId = null;
+// T21.c.2: `consentEditorSavedSnapshot` guarda el último title/content_md confirmado por el backend (o los
+// valores iniciales del borrador al abrir el editor); el campo difiere de ese snapshot → hay cambios sin
+// guardar. `consentEditorAutosaveTimer` vive solo en memoria de esta pestaña, igual que el resto.
+let consentEditorSavedSnapshot = null;
+let consentEditorAutosaveTimer = null;
+const CONSENT_AUTOSAVE_DEBOUNCE_MS = 1500;
+
+function consentEditorIsDirty() {
+  if (!consentEditorSavedSnapshot) return false;
+  return $("#consentEditorTitle").value.trim() !== consentEditorSavedSnapshot.title
+    || $("#consentEditorContent").value !== consentEditorSavedSnapshot.content_md;
+}
 
 function openConsentDraftEditor(doc) {
   consentEditorDocId = doc.id;
+  consentEditorSavedSnapshot = { title: doc.title, content_md: doc.content_md };
+  window.clearTimeout(consentEditorAutosaveTimer);
   $("#consentEditorTitle").value = doc.title;
   $("#consentEditorContent").value = doc.content_md;
   $("#consentEditorMessage").textContent = "";
+  $("#consentEditorAutosaveStatus").textContent = "";
   $("#consentPreview").textContent = "";
   $("#consentPreviewWarning").hidden = true;
   $("#consentPreviewWarning").textContent = "";
@@ -4847,14 +4862,25 @@ function openConsentDraftEditor(doc) {
 }
 
 function closeConsentDraftEditor() {
+  window.clearTimeout(consentEditorAutosaveTimer);
   consentEditorDocId = null;
+  consentEditorSavedSnapshot = null;
   $("#consentDraftEditor").hidden = true;
   $("#consentEditorTitle").value = "";
   $("#consentEditorContent").value = "";
   $("#consentEditorMessage").textContent = "";
+  $("#consentEditorAutosaveStatus").textContent = "";
   $("#consentPreview").textContent = "";
   $("#consentPreviewWarning").hidden = true;
   $("#consentPreviewWarning").textContent = "";
+}
+
+// Guarda el candado de "cambios sin guardar" antes de cerrar el editor o de saltar a otro borrador;
+// `closeConsentDraftEditor` en sí (usado también desde `privacyReset`) nunca pregunta, para no dejar un
+// cierre de sesión a medias si el admin cancela el diálogo.
+function closeConsentDraftEditorWithConfirm() {
+  if (consentEditorIsDirty() && !window.confirm("Hay cambios sin guardar que se perderán si cierras. ¿Cerrar igual?")) return;
+  closeConsentDraftEditor();
 }
 
 // El texto que devuelve `renderConsent` deja los marcadores sin resolver/desconocidos literalmente como
@@ -4882,27 +4908,65 @@ async function loadConsentPreview(docId) {
   }
 }
 
-async function saveConsentDraft(event) {
-  event.preventDefault();
-  if (!consentEditorDocId) return;
-  const title = $("#consentEditorTitle").value.trim();
-  const contentMd = $("#consentEditorContent").value;
-  if (!title || !contentMd.trim()) { $("#consentEditorMessage").textContent = "El título y el contenido son obligatorios."; return; }
-
-  const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(consentEditorDocId)}`, {
+// Lógica de guardado compartida entre el envío manual del formulario y el autoguardado (T21.c.2): hace el
+// PATCH, actualiza la fila de la tabla y el snapshot "guardado", y pide la vista previa. Nunca decide por
+// sí sola si el borrador es válido para guardar (eso lo hacen sus dos llamadores, con mensajes distintos).
+async function applyConsentDraftSave(title, contentMd) {
+  const docId = consentEditorDocId;
+  const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(docId)}`, {
     session: privacyFlow.token,
     method: "PATCH",
     body: { title, content_md: contentMd },
   });
-  if (res.status !== 200) {
+  if (res.status !== 200) return { ok: false, data: res.data };
+  const index = consentDocs.findIndex((doc) => doc.id === docId);
+  if (index !== -1) consentDocs[index] = res.data;
+  renderConsentDocuments();
+  consentEditorSavedSnapshot = { title: res.data.title, content_md: res.data.content_md };
+  await loadConsentPreview(docId);
+  return { ok: true, data: res.data };
+}
+
+async function saveConsentDraft(event) {
+  event.preventDefault();
+  if (!consentEditorDocId) return;
+  window.clearTimeout(consentEditorAutosaveTimer);
+  const title = $("#consentEditorTitle").value.trim();
+  const contentMd = $("#consentEditorContent").value;
+  if (!title || !contentMd.trim()) { $("#consentEditorMessage").textContent = "El título y el contenido son obligatorios."; return; }
+
+  $("#consentEditorMessage").textContent = "";
+  const res = await applyConsentDraftSave(title, contentMd);
+  if (!res.ok) {
     $("#consentEditorMessage").textContent = consentDocErrorMessage(res.data?.error);
     return;
   }
-  $("#consentEditorMessage").textContent = "";
-  const index = consentDocs.findIndex((doc) => doc.id === consentEditorDocId);
-  if (index !== -1) consentDocs[index] = res.data;
-  renderConsentDocuments();
-  await loadConsentPreview(consentEditorDocId);
+  $("#consentEditorAutosaveStatus").textContent = `Guardado a las ${new Date().toLocaleTimeString("es-EC")}.`;
+}
+
+// T21.c.2: cada tecla en título/contenido reprograma el autoguardado (debounce); si el borrador queda
+// limpio (p. ej. el admin deshizo el cambio a mano) no hace falta guardar nada.
+function scheduleConsentAutosave() {
+  window.clearTimeout(consentEditorAutosaveTimer);
+  if (!consentEditorIsDirty()) { $("#consentEditorAutosaveStatus").textContent = ""; return; }
+  $("#consentEditorAutosaveStatus").textContent = "Cambios sin guardar.";
+  consentEditorAutosaveTimer = window.setTimeout(() => { void autosaveConsentDraft(); }, CONSENT_AUTOSAVE_DEBOUNCE_MS);
+}
+
+async function autosaveConsentDraft() {
+  if (!consentEditorDocId || !consentEditorIsDirty()) return;
+  const title = $("#consentEditorTitle").value.trim();
+  const contentMd = $("#consentEditorContent").value;
+  // Mismo requisito que el guardado manual: nunca autoguarda un borrador sin título o sin contenido.
+  // Se queda marcado "Cambios sin guardar." hasta que el admin lo complete o guarde a mano.
+  if (!title || !contentMd.trim()) return;
+  $("#consentEditorAutosaveStatus").textContent = "Guardando cambios…";
+  const res = await applyConsentDraftSave(title, contentMd);
+  if (!res.ok) {
+    $("#consentEditorAutosaveStatus").textContent = `No se pudo guardar automáticamente: ${consentDocErrorMessage(res.data?.error)}`;
+    return;
+  }
+  $("#consentEditorAutosaveStatus").textContent = `Guardado automáticamente a las ${new Date().toLocaleTimeString("es-EC")}.`;
 }
 
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
@@ -5051,10 +5115,14 @@ function bindPrivacy() {
     const button = event.target.closest("[data-edit-id]");
     if (!button) return;
     const doc = consentDocs.find((d) => d.id === button.dataset.editId);
-    if (doc) openConsentDraftEditor(doc);
+    if (!doc || doc.id === consentEditorDocId) return;
+    if (consentEditorIsDirty() && !window.confirm("Hay cambios sin guardar que se perderán si abres otro borrador. ¿Continuar?")) return;
+    openConsentDraftEditor(doc);
   });
   $("#consentEditorForm").addEventListener("submit", saveConsentDraft);
-  $("#consentEditorClose").addEventListener("click", closeConsentDraftEditor);
+  $("#consentEditorClose").addEventListener("click", closeConsentDraftEditorWithConfirm);
+  $("#consentEditorTitle").addEventListener("input", scheduleConsentAutosave);
+  $("#consentEditorContent").addEventListener("input", scheduleConsentAutosave);
 }
 
 init();

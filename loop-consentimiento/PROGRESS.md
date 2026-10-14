@@ -1926,3 +1926,38 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   siguiente tarea desbloqueada.
 - Porcentaje: T21 no se cierra todavía (T21.c.2/T21.c.3 siguen `[ ]`); no mueve el contador estricto de 28
   tareas. Ponderado: sin cambio aplicable (igual que T21.a/T21.b).
+
+---
+## Iteración 65 — 2026-10-14 — T21.c.2: autosave + aviso de cambios sin guardar, con un bug real de la vista previa corregido en el camino
+- **Punto de partida:** `app.js`/`index.html`/`consent-editor.spec.ts` modificados sin commitear, de una
+  iteración anterior interrumpida. Auditado antes de aceptarlo: implementa exactamente T21.c.2 tal como lo
+  describe `TASKS.md` (debounce de 1500 ms, confirmación al cerrar/cambiar de borrador con cambios sin
+  guardar, reutilización del PATCH+preview en `applyConsentDraftSave`), con 5 pruebas Playwright nuevas.
+- **Bug real encontrado por `gates.sh`, no por inspección manual:** el refactor movió `loadConsentPreview`
+  dentro de `applyConsentDraftSave` (compartida entre guardado manual y autoguardado), pero `saveConsentDraft`
+  seguía limpiando `#consentEditorMessage` DESPUÉS de llamarla — borraba el mensaje "configuración no
+  disponible" que la vista previa fallida ya había puesto. `panel-e2e` detectó la regresión solo: el test ya
+  existente de T21.c.1 "el guardado funciona aunque la vista previa falle después" pasó de verde a rojo con
+  este WIP, sin que se tocara su código. Corregido moviendo la línea de limpieza a ANTES de
+  `applyConsentDraftSave` (mismo orden que tenía el código previo al refactor). Los otros dos fallos de la
+  primera corrida (`users.spec.ts:86`/`:95`, módulo A12 ajeno a este trabajo) no se repitieron en la segunda
+  corrida completa: flakiness de entorno, no una regresión de este cambio.
+- **Cambios:** `shield-ecuador-app/central-admin-app/app.js` (estado `consentEditorSavedSnapshot`/
+  `consentEditorAutosaveTimer`, `consentEditorIsDirty`, `scheduleConsentAutosave`, `autosaveConsentDraft`,
+  `applyConsentDraftSave` extraída de `saveConsentDraft`, `closeConsentDraftEditorWithConfirm`, listeners
+  `input` en título/contenido y confirmación al reabrir otro borrador — más la corrección de orden descrita
+  arriba); `shield-ecuador-app/central-admin-app/index.html` (`#consentEditorAutosaveStatus`, comentario
+  actualizado); `shield-ecuador-app/tests/admin/consent-editor.spec.ts` (5 pruebas nuevas bajo "T21.c.2" +
+  ampliación de la prueba de cierre de T21.c.1 para confirmar que, sin cambios, no aparece el diálogo);
+  `loop-consentimiento/TASKS.md` (T21.c.2 `[x]`); este archivo.
+- **Pruebas añadidas:** ver detalle en `TASKS.md`, T21.c.2 — autoguardado con debounce (un solo PATCH tras
+  varias teclas), autoguardado sin título no llama al backend, confirmación al cerrar/cambiar de borrador
+  (cancelar conserva, confirmar descarta).
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo, dos corridas (la primera con el `FAIL`
+  descrito arriba, antes del fix): segunda corrida con las 9 puertas no-opcionales OK (`panel-e2e` incluido,
+  346 casos); `db-reset`/`e2e-local` SKIP opt-in. Iteración 65, no múltiplo de 5: `GATES_FULL=1` no obligatorio.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. T21.c.3 (editor de finalidades) es la siguiente tarea
+  desbloqueada de la división de T21.c.
+- Porcentaje: T21 no se cierra todavía (T21.c.3 sigue `[ ]`); no mueve el contador estricto de 28 tareas.
+  Ponderado: sin cambio aplicable (igual que T21.a/T21.b/T21.c.1).

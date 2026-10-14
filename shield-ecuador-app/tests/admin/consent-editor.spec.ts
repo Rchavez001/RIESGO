@@ -27,6 +27,7 @@ type Opts = {
   patchBody?: unknown
   previewStatus?: number
   previewBody?: unknown
+  extraDocs?: Array<typeof DRAFT>
 }
 type Seen = { url: string; method: string; session: string | undefined; body: string | null }
 
@@ -45,11 +46,13 @@ async function setup(page: Page, o: Opts = {}) {
     if (path === `/auth/factors/${FID}/verify`) return json(200, { access_token: AAL2_TOKEN, refresh_token: 'r2', user: USER })
     if (path === '/fn/admin-consent/session') return json(200, { user_id: USER.id, roles })
     if (path === '/auth/logout') return route.fulfill({ status: 204, body: '' })
-    if (path === '/fn/admin-consent/documents' && req.method() === 'GET') return json(200, DOCS)
-    if (path === `/fn/admin-consent/documents/${DRAFT.id}` && req.method() === 'PATCH') {
+    if (path === '/fn/admin-consent/documents' && req.method() === 'GET') return json(200, [...DOCS, ...(o.extraDocs ?? [])])
+    const patchMatch = path.match(/^\/fn\/admin-consent\/documents\/([^/]+)$/)
+    if (patchMatch && req.method() === 'PATCH') {
       if (o.patchStatus && o.patchStatus !== 200) return json(o.patchStatus, o.patchBody ?? { error: 'invalid_input' })
+      const base = [...DOCS, ...(o.extraDocs ?? [])].find((d) => d.id === patchMatch[1]) ?? DRAFT
       const patch = JSON.parse(req.postData() || '{}')
-      return json(200, o.patchBody ?? { ...DRAFT, ...patch })
+      return json(200, o.patchBody ?? { ...base, ...patch })
     }
     if (path === `/fn/admin-consent/documents/${DRAFT.id}/preview` && req.method() === 'GET') {
       if (o.previewStatus && o.previewStatus !== 200) return json(o.previewStatus, o.previewBody ?? { error: 'settings_unavailable' })
@@ -165,13 +168,97 @@ test.describe('T21.c.1 · editor de título/contenido de un borrador + vista pre
     await expect(page.locator('#consentEditorMessage')).toContainText('configuración no disponible')
   })
 
-  test('cerrar el editor limpia el panel', async ({ page }) => {
+  test('cerrar el editor sin cambios: no pide confirmación y limpia el panel', async ({ page }) => {
     await setup(page)
     await openConsentAsIdentity(page)
     await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
     await expect(page.locator('#consentDraftEditor')).toBeVisible()
+    let dialogShown = false
+    page.on('dialog', () => { dialogShown = true })
     await page.locator('#consentEditorClose').click()
     await expect(page.locator('#consentDraftEditor')).toBeHidden()
     await expect(page.locator('#consentEditorTitle')).toHaveValue('')
+    expect(dialogShown).toBe(false)
+  })
+})
+
+// T21.c.2: autoguardado con debounce + aviso de "cambios sin guardar". Mismo patrón de mocking que T21.c.1.
+test.describe('T21.c.2 · autoguardado del borrador + aviso de cambios sin guardar', () => {
+  test.beforeEach(async ({}, info) => { test.skip(info.project.name !== 'desktop-chrome', 'servidor: una sola vez') })
+
+  test('escribir muestra "Cambios sin guardar" y, tras una pausa, autoguarda sin pulsar el botón', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentEditorContent').fill('# Aviso\n\nTexto editado sin pulsar guardar.')
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Cambios sin guardar')
+
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Guardado automáticamente', { timeout: 5000 })
+    const patches = seen.filter((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(JSON.parse(patches[0].body!)).toEqual({ title: DRAFT.title, content_md: '# Aviso\n\nTexto editado sin pulsar guardar.' })
+    await expect(page.locator('#consentDocsRows tr').nth(0)).toContainText(DRAFT.title)
+  })
+
+  test('escribir varias veces reinicia la pausa: solo un PATCH tras la última tecla', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    const content = page.locator('#consentEditorContent')
+    await content.fill('# Aviso\n\nPrimer intento.')
+    await page.waitForTimeout(700)
+    await content.fill('# Aviso\n\nSegundo intento.')
+    await page.waitForTimeout(700)
+    await content.fill('# Aviso\n\nTexto final.')
+
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Guardado automáticamente', { timeout: 5000 })
+    const patches = seen.filter((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    expect(JSON.parse(patches[0].body!)).toEqual({ title: DRAFT.title, content_md: '# Aviso\n\nTexto final.' })
+  })
+
+  test('autoguardado sin título: no llama al backend, sigue "Cambios sin guardar"', async ({ page }) => {
+    const seen = await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentEditorTitle').fill('')
+    await page.waitForTimeout(2000)
+    const patches = seen.filter((s) => s.url === `/fn/admin-consent/documents/${DRAFT.id}` && s.method === 'PATCH')
+    expect(patches).toHaveLength(0)
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Cambios sin guardar')
+  })
+
+  test('cerrar con cambios sin guardar pide confirmación; cancelar conserva el editor abierto y el texto', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentEditorContent').fill('# Cambio local todavía sin guardar')
+    await expect(page.locator('#consentEditorAutosaveStatus')).toContainText('Cambios sin guardar')
+    page.once('dialog', (dialog) => void dialog.dismiss())
+    await page.locator('#consentEditorClose').click()
+    await expect(page.locator('#consentDraftEditor')).toBeVisible()
+    await expect(page.locator('#consentEditorContent')).toHaveValue('# Cambio local todavía sin guardar')
+  })
+
+  test('cerrar con cambios sin guardar y confirmar: descarta y cierra el editor', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr').nth(0).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentEditorContent').fill('# Cambio que se va a descartar')
+    page.once('dialog', (dialog) => void dialog.accept())
+    await page.locator('#consentEditorClose').click()
+    await expect(page.locator('#consentDraftEditor')).toBeHidden()
+    await expect(page.locator('#consentEditorTitle')).toHaveValue('')
+  })
+
+  test('abrir otro borrador con cambios sin guardar pide confirmación', async ({ page }) => {
+    const draft2 = { ...DRAFT, id: 'd-3', version: '1.2', title: 'Aviso de consentimiento (otro borrador)' }
+    await setup(page, { extraDocs: [draft2] })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentDocsRows tr', { hasText: DRAFT.version }).getByRole('button', { name: 'Editar' }).click()
+    await page.locator('#consentEditorContent').fill('# Cambio sin guardar en el primer borrador')
+    page.once('dialog', (dialog) => void dialog.dismiss())
+    await page.locator('#consentDocsRows tr', { hasText: draft2.version }).getByRole('button', { name: 'Editar' }).click()
+    await expect(page.locator('#consentEditorContent')).toHaveValue('# Cambio sin guardar en el primer borrador')
   })
 })
