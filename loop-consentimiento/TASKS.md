@@ -662,11 +662,18 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         cambiados en antes/después; sin cambios respecto a la vigente → mensaje "Sin diferencias…"; sin
         versión vigente → mensaje explícito; cerrar limpia el panel; pruebas Playwright (mismo patrón
         que `consent-editor.spec.ts`).
-    - [ ] **T22.b — Panel: modal de "Publicar"** (REQ-13 d)
+    - [x] **T22.b — Panel: modal de "Publicar"** (REQ-13 d) (hecha 2026-10-14, iteración 68)
       - Motivo obligatorio, casilla `requires_reconsent` (editable antes de publicar, viaja en el mismo
         PATCH que ya acepta T21.c.1/T14), confirmación escribiendo la versión exacta del borrador,
         resumen de impacto (nº de aceptaciones de la versión vigente que se retira — ya disponible como
         `acceptance_count` en el listado de T21.a, sin necesitar un endpoint nuevo).
+      - **Aceptación:** "Publicar" solo visible en borradores y solo para `privacy_admin` (ADMIN_ONLY,
+        más restrictivo que "Editar"/"Comparar"); abrir muestra el resumen de impacto de la vigente (o
+        "no hay ninguna versión publicada" si no existe); motivo vacío o versión de confirmación
+        incorrecta no llaman al backend; si la casilla cambia respecto al borrador, un PATCH viaja ANTES
+        del POST .../publish; si ese PATCH falla, no se intenta publicar; error real del backend (cuatro
+        ojos, etc.) deja el modal abierto con mensaje legible; éxito cierra el modal y recarga la lista;
+        cerrar limpia los campos; pruebas Playwright (`consent-publish.spec.ts`, 11 casos).
     - [ ] **T22.c — Panel: acción "Retirar borrador"** (REQ-13 d)
       - Motivo obligatorio + confirmación escribiendo la versión (mismo patrón que Publicar) para
         descartar un borrador sin publicarlo (`POST /documents/:id/retire`, T14, sin cambios de

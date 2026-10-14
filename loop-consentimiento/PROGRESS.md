@@ -2087,4 +2087,58 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   `requires_reconsent`, confirmación escribiendo la versión, resumen de impacto reutilizando
   `acceptance_count` de T21.a sin endpoint nuevo) es la siguiente tarea desbloqueada de la división de T22.
 - Porcentaje: T22 no se cierra todavía (T22.b/T22.c siguen `[ ]`); no mueve el contador estricto de 28
+
+## Iteración 68 — 2026-10-14 — T22.b: modal de "Publicar" un borrador, cierra trabajo de una iteración headless interrumpida
+
+- **Punto de partida:** `git status` mostraba cambios sin commit (`central-admin-app/app.js`,
+  `central-admin-app/index.html` modificados; `tests/admin/consent-publish.spec.ts` sin versionar) que no
+  correspondían a ninguna entrada registrada todavía en este archivo. Antes de asumir que eran de "otra
+  sesión" (regla del paso 1 del PROMPT.md): revisado `loop-consentimiento/logs/iter-003-20261014-135214.log`
+  (el más reciente), cuyas marcas de tiempo (13:57-13:59) coinciden con las de los tres archivos; termina con
+  `"You've hit your session limit · resets 5:20pm"` tras 50 turnos — mismo patrón que la Iteración 30
+  (headless, murió a mitad de camino por límite de sesión, no un proceso concurrente). Confirmado: es la
+  propia iteración headless anterior de este mismo loop implementando T22.b (siguiente tarea desbloqueada
+  tras T22.a, iteración 67), interrumpida después de escribir el código y las pruebas pero antes de verificar
+  y cerrar.
+- **Revisión del trabajo encontrado (sin descartarlo, sin asumir que estaba completo):** leído el diff
+  completo de `app.js`/`index.html` y el archivo de pruebas entero antes de ejecutar nada. Contrastado contra
+  el backend real (`admin-consent/handler.ts`): la ruta `POST /documents/:id/publish` exige `ADMIN_ONLY`
+  (línea 1484, más restrictivo que `EDITOR_ROLES` de "Editar"/"Comparar") y su `body` solo admite `reason`
+  (`ReasonSchema`, `publishDraft` línea 680-682) — coincide exactamente con lo que el panel ya asumía
+  (`consentDocsCanPublish = roles.includes("privacy_admin")`; `requires_reconsent` viaja en un PATCH previo
+  propio, nunca en el body de `/publish`). No hizo falta cambiar nada del código encontrado.
+- **Cambios (ya escritos por la iteración interrumpida; confirmados y cerrados en esta):**
+  - `central-admin-app/index.html`: card `#consentPublishView` (motivo, casilla
+    `#consentPublishRequiresReconsent`, confirmación `#consentPublishConfirmVersion`, resumen de impacto
+    `#consentPublishImpact`) después de `#consentDiffView`.
+  - `central-admin-app/app.js`: `consentDocsCanPublish` (recalculado en `privacyVerify`, igual patrón que
+    `consentDocsCanEdit`); botón `data-publish-id` en `renderConsentDocuments` (solo `status==='draft'` y
+    `consentDocsCanPublish`); `consentPublishImpactText` (reutiliza `acceptance_count` de la vigente, T21.a,
+    sin endpoint nuevo); `openConsentPublishView`/`closeConsentPublishView`; `submitConsentPublish` (motivo
+    obligatorio, confirmación exacta de versión, PATCH de `requires_reconsent` SOLO si cambió y ANTES del
+    POST `/publish`, aborta sin publicar si ese PATCH falla); `CONSENT_PUBLISH_ERRORS`/
+    `consentPublishErrorMessage` (mensajes propios para códigos cuyo significado en `CONSENT_DOC_ERRORS` no
+    aplica a este flujo, p. ej. `settings_unavailable` ahí implica "sí se guardó", falso aquí).
+  - `tests/admin/consent-publish.spec.ts` (nuevo, 11 casos): visibilidad del botón solo para
+    `privacy_admin` y solo en borradores (ni `privacy_editor` ni `privacy_auditor` lo ven, aunque el editor sí
+    vea "Editar"); resumen de impacto con la vigente y sin ninguna vigente; motivo vacío y versión incorrecta
+    no llaman al backend; publicar con éxito (sesión aal2 correcta, body exacto `{reason}`, sin PATCH de por
+    medio, recarga la lista, cierra el modal); cambiar la casilla aplica un PATCH ANTES del publish en ese
+    orden; si el PATCH falla no se intenta publicar; error de "cuatro ojos" deja el modal abierto con mensaje
+    legible; cerrar limpia los campos.
+- **Por qué no hace falta ninguna prueba nueva de integración (regla TEST-INT/PROMPT.md):** el panel reutiliza
+  `POST /documents/:id/publish` (T14/`publish_consent_document`, 080) y el PATCH de `requires_reconsent`
+  (T21.c.1), ambos con su propia prueba de integración contra Postgres real ya cerrada (`publish_consent_document.sql`,
+  `publish_consent_document_e2e_local.cjs`); esta tarea no añade ninguna operación de escritura nueva en el
+  backend, solo el modal del panel que los invoca.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo (sin flags): typecheck-frontend,
+  lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e (con los 11 casos nuevos), deno-check,
+  deno-test, sql-ciclo-de-vida, sql-guest-limit — las 9 puertas no-opcionales OK; db-reset/e2e-local SKIP
+  opt-in como siempre (sin cambios de backend/migraciones en esta tarea). Iteración 68, no múltiplo de 5:
+  `GATES_FULL=1` no obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. T22.c (acción "Retirar borrador", mismo patrón de motivo +
+  confirmación de versión que Publicar, sobre `POST /documents/:id/retire`, T14, sin cambios de backend) es
+  la siguiente tarea desbloqueada de la división de T22.
+- Porcentaje: T22 no se cierra todavía (T22.c sigue `[ ]`); no mueve el contador estricto de 28.
   tareas. Ponderado: sin cambio aplicable (mismo criterio que las subtareas de T21 antes de cerrarse).

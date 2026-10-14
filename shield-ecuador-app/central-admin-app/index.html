@@ -1312,6 +1312,38 @@
               <p id="consentDiffMessage" class="privacy-message" role="alert"></p>
               <div id="consentDiffFields"></div>
             </div>
+
+            <!-- T22.b (REQ-13 d): modal de "Publicar" un borrador (POST …/publish, T14; exige
+                 `privacy_admin`, ADMIN_ONLY — más restrictivo que "Editar"/"Comparar", que también
+                 aceptan `privacy_editor`). Motivo obligatorio, casilla "Requiere reconsentimiento"
+                 (si cambia respecto al borrador, viaja antes en un PATCH propio: POST …/publish no
+                 admite ese campo en su cuerpo, solo `reason`), confirmación escribiendo la versión
+                 exacta, resumen de impacto (aceptaciones de la vigente que se retira, T21.a). -->
+            <div id="consentPublishView" class="card" hidden>
+              <div class="section-toolbar compact">
+                <h3>Publicar borrador</h3>
+                <button id="consentPublishClose" class="btn secondary small" type="button">Cerrar</button>
+              </div>
+              <p id="consentPublishMessage" class="privacy-message" role="alert"></p>
+              <p id="consentPublishImpact" class="muted"></p>
+              <form id="consentPublishForm" class="form-grid compact" novalidate>
+                <label class="check-row">
+                  <input id="consentPublishRequiresReconsent" type="checkbox" />
+                  Requiere reconsentimiento de los titulares
+                </label>
+                <label>
+                  Motivo
+                  <textarea id="consentPublishReason" rows="3" maxlength="2000" required></textarea>
+                </label>
+                <label>
+                  Escribe la versión exacta para confirmar
+                  <input id="consentPublishConfirmVersion" type="text" maxlength="50" required />
+                </label>
+                <div class="modal-actions">
+                  <button class="btn danger" type="submit">Publicar</button>
+                </div>
+              </form>
+            </div>
           </article>
         </section>
       </main>

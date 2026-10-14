@@ -4758,6 +4758,10 @@ let consentDocs = [];
 // T21.c.1: solo editor/admin ven "Editar" (mismo candado que "Crear borrador desde vigente"); se recalcula
 // en `privacyVerify` junto con `#consentDraftForm.hidden`, nunca se infiere del DOM.
 let consentDocsCanEdit = false;
+// T22.b: "Publicar" exige `privacy_admin` (ADMIN_ONLY, admin-consent/handler.ts) — más restrictivo que
+// "Editar"/"Comparar" (EDITOR_ROLES, que también aceptan `privacy_editor`). Se recalcula en `privacyVerify`,
+// igual que `consentDocsCanEdit`.
+let consentDocsCanPublish = false;
 
 const CONSENT_DOC_ERRORS = {
   ...PRIVACY_ERRORS,
@@ -4772,6 +4776,22 @@ const CONSENT_DOC_ERRORS = {
 
 function consentDocErrorMessage(code) {
   return CONSENT_DOC_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+// T22.b: códigos de error propios de "Publicar" cuyo significado en `CONSENT_DOC_ERRORS` no aplica aquí
+// (p. ej. `settings_unavailable` ahí dice "el guardado sí se hizo", falso en este flujo: si falla, no se
+// publicó nada) o que ningún otro flujo del editor usa (`reason_required`, `four_eyes_required`,
+// `notice_invalid`). Cualquier otro código cae en `consentDocErrorMessage`.
+const CONSENT_PUBLISH_ERRORS = {
+  reason_required: "El motivo es obligatorio.",
+  four_eyes_required: "No puedes publicar un borrador que tú mismo editaste en último lugar: debe publicarlo otra persona con el rol (cuatro ojos).",
+  notice_invalid: "El aviso tiene marcadores sin resolver o desconocidos; corrígelo en el editor antes de publicar.",
+  settings_unavailable: "No se pudo publicar: la configuración del aviso no está disponible. No se publicó nada.",
+  not_draft: "Esa versión ya no es un borrador; no se puede publicar. Actualiza la lista.",
+};
+
+function consentPublishErrorMessage(code) {
+  return CONSENT_PUBLISH_ERRORS[code] || consentDocErrorMessage(code);
 }
 
 const CONSENT_DOC_STATUS_LABEL = { draft: "Borrador", published: "Publicada", retired: "Retirada" };
@@ -4790,7 +4810,7 @@ function renderConsentDocuments() {
       <td>${Number(doc.acceptance_count || 0).toLocaleString("es-EC")}</td>
       <td>${doc.published_at ? esc(new Date(doc.published_at).toLocaleString("es-EC")) : "—"}</td>
       <td>${esc(new Date(doc.created_at).toLocaleString("es-EC"))}</td>
-      <td>${doc.status === "draft" && consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-edit-id="${esc(doc.id)}">Editar</button> <button type="button" class="btn secondary small" data-diff-id="${esc(doc.id)}">Comparar</button>` : ""}</td>
+      <td>${doc.status === "draft" && consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-edit-id="${esc(doc.id)}">Editar</button> <button type="button" class="btn secondary small" data-diff-id="${esc(doc.id)}">Comparar</button>` : ""}${doc.status === "draft" && consentDocsCanPublish ? ` <button type="button" class="btn secondary small" data-publish-id="${esc(doc.id)}">Publicar</button>` : ""}</td>
     </tr>
   `).join("");
 }
@@ -5162,6 +5182,78 @@ function closeConsentDiffView() {
   $("#consentDiffFields").innerHTML = "";
 }
 
+// T22.b (REQ-13 d): "Publicar" un borrador (POST …/publish, T14, exige `privacy_admin`).
+// `consentPublishDoc` vive solo en memoria de esta pestaña, igual que `consentEditorDocId`.
+let consentPublishDoc = null;
+
+// Resumen de impacto: nº de aceptaciones de la versión vigente que quedará retirada al publicar — ya
+// disponible como `acceptance_count` en el listado de T21.a, sin necesitar ningún endpoint nuevo.
+function consentPublishImpactText() {
+  const published = consentDocs.find((doc) => doc.status === "published");
+  if (!published) return "No hay ninguna versión publicada todavía: esta será la primera.";
+  const count = Number(published.acceptance_count || 0).toLocaleString("es-EC");
+  return `La versión vigente (v${published.version}) tiene ${count} aceptaciones registradas; al publicar, quedará retirada.`;
+}
+
+function openConsentPublishView(doc) {
+  consentPublishDoc = doc;
+  $("#consentPublishMessage").textContent = "";
+  $("#consentPublishImpact").textContent = consentPublishImpactText();
+  $("#consentPublishRequiresReconsent").checked = Boolean(doc.requires_reconsent);
+  $("#consentPublishReason").value = "";
+  $("#consentPublishConfirmVersion").value = "";
+  $("#consentPublishView").hidden = false;
+}
+
+function closeConsentPublishView() {
+  consentPublishDoc = null;
+  $("#consentPublishView").hidden = true;
+  $("#consentPublishMessage").textContent = "";
+  $("#consentPublishImpact").textContent = "";
+  $("#consentPublishReason").value = "";
+  $("#consentPublishConfirmVersion").value = "";
+}
+
+// Motivo obligatorio; confirmación escribiendo la versión exacta del borrador; si la casilla "requiere
+// reconsentimiento" cambió respecto al valor actual del borrador, viaja antes en un PATCH propio (el mismo
+// que ya acepta T21.c.1/T14) porque `POST …/publish` no admite ese campo en su cuerpo, solo `reason`
+// (ver `ReasonSchema`, admin-consent/handler.ts).
+async function submitConsentPublish(event) {
+  event.preventDefault();
+  const doc = consentPublishDoc;
+  if (!doc) return;
+  const reason = $("#consentPublishReason").value.trim();
+  if (!reason) { $("#consentPublishMessage").textContent = "El motivo es obligatorio."; return; }
+  const confirmVersion = $("#consentPublishConfirmVersion").value.trim();
+  if (confirmVersion !== doc.version) { $("#consentPublishMessage").textContent = `Escribe exactamente "${doc.version}" para confirmar.`; return; }
+  const requiresReconsent = $("#consentPublishRequiresReconsent").checked;
+
+  $("#consentPublishMessage").textContent = "";
+  if (requiresReconsent !== Boolean(doc.requires_reconsent)) {
+    const patchRes = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(doc.id)}`, {
+      session: privacyFlow.token,
+      method: "PATCH",
+      body: { requires_reconsent: requiresReconsent },
+    });
+    if (patchRes.status !== 200) {
+      $("#consentPublishMessage").textContent = consentPublishErrorMessage(patchRes.data?.error);
+      return;
+    }
+    doc.requires_reconsent = requiresReconsent;
+  }
+
+  const res = await privacyCall(`/fn/admin-consent/documents/${encodeURIComponent(doc.id)}/publish`, {
+    session: privacyFlow.token,
+    body: { reason },
+  });
+  if (res.status !== 200) {
+    $("#consentPublishMessage").textContent = consentPublishErrorMessage(res.data?.error);
+    return;
+  }
+  closeConsentPublishView();
+  await loadConsentDocuments();
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5199,12 +5291,14 @@ function privacyReset(message = "") {
   $("#privacyCode").value = "";
   consentDocs = [];
   consentDocsCanEdit = false;
+  consentDocsCanPublish = false;
   $("#consentDocsRows").innerHTML = "";
   $("#consentDocsMessage").textContent = "";
   $("#consentDraftVersion").value = "";
   $("#consentDraftSummary").value = "";
   closeConsentDraftEditor();
   closeConsentDiffView();
+  closeConsentPublishView();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5286,6 +5380,7 @@ async function privacyVerify(event) {
   privacyFlow.roles = session.data.roles || [];
   $("#privacyRoles").textContent = privacyFlow.roles.join(", ");
   consentDocsCanEdit = privacyFlow.roles.some((role) => role === "privacy_editor" || role === "privacy_admin");
+  consentDocsCanPublish = privacyFlow.roles.includes("privacy_admin");
   $("#consentDraftForm").hidden = !consentDocsCanEdit;
   privacyMessage("");
   privacyShow("identity");
@@ -5319,11 +5414,20 @@ function bindPrivacy() {
       const doc = consentDocs.find((d) => d.id === diffButton.dataset.diffId);
       if (!doc) return;
       void openConsentDiffView(doc);
+      return;
+    }
+    const publishButton = event.target.closest("[data-publish-id]");
+    if (publishButton) {
+      const doc = consentDocs.find((d) => d.id === publishButton.dataset.publishId);
+      if (!doc) return;
+      openConsentPublishView(doc);
     }
   });
   $("#consentEditorForm").addEventListener("submit", saveConsentDraft);
   $("#consentEditorClose").addEventListener("click", closeConsentDraftEditorWithConfirm);
   $("#consentDiffClose").addEventListener("click", closeConsentDiffView);
+  $("#consentPublishForm").addEventListener("submit", submitConsentPublish);
+  $("#consentPublishClose").addEventListener("click", closeConsentPublishView);
   $("#consentEditorTitle").addEventListener("input", scheduleConsentAutosave);
   $("#consentEditorContent").addEventListener("input", scheduleConsentAutosave);
   $("#consentPurposeAdd").addEventListener("click", () => {
