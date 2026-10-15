@@ -1426,6 +1426,42 @@
               </div>
             </form>
           </article>
+
+          <!-- T23.b (REQ-15): cambio del correo de privacidad con verificación (correo nuevo → código de
+               6 dígitos válido 30 min → confirmar). `POST /settings/email-change` y
+               `POST /settings/email-change/confirm` (admin-consent/handler.ts) exigen `privacy_admin`
+               (ADMIN_ONLY, mismo candado que T23.a); la sección completa queda oculta para editor/auditor,
+               no solo de solo lectura. El estado "pendiente de verificación" vive solo en memoria de esta
+               pestaña: no hay ruta GET para recuperar una verificación pendiente tras recargar la página. -->
+          <article id="consentEmailChange" class="card" hidden>
+            <div class="section-toolbar compact">
+              <h2>Correo de privacidad</h2>
+            </div>
+            <p id="consentEmailChangeMessage" class="privacy-message" role="alert"></p>
+            <p id="consentEmailChangeCurrent" class="muted"></p>
+            <form id="consentEmailChangeRequestForm" class="form-grid compact" novalidate>
+              <label>
+                Nueva dirección de contacto de privacidad
+                <input id="consentEmailChangeNewEmail" type="email" maxlength="254" required />
+              </label>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Enviar código de verificación</button>
+              </div>
+            </form>
+            <div id="consentEmailChangePending" hidden>
+              <p id="consentEmailChangePendingInfo" class="muted"></p>
+              <form id="consentEmailChangeConfirmForm" class="form-grid compact" novalidate>
+                <label>
+                  Código de verificación (6 dígitos)
+                  <input id="consentEmailChangeCode" type="text" inputmode="numeric" pattern="\d{6}" maxlength="6" required />
+                </label>
+                <div class="modal-actions">
+                  <button class="btn primary" type="submit">Confirmar</button>
+                  <button class="btn" type="button" id="consentEmailChangeCancel">Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </article>
         </section>
       </main>
     </div>

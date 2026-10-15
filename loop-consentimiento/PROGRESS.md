@@ -2269,4 +2269,64 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   subcadena (ver arriba) vale la pena tenerla presente para cualquier etiqueta nueva del panel en el
   futuro.
 - Porcentaje: T23 no se cierra todavía (T23.b y T23.c siguen `[ ]`); no mueve el contador estricto de 28
+
+## Iteración 71 — 2026-10-14 — T23.b: Panel — cambio del correo de privacidad con verificación
+
+- **Punto de partida:** `git status` limpio. Siguiente tarea `[ ]` desbloqueada en orden de `TASKS.md`:
+  T23.b (backend ya existe completo desde T15: `POST /settings/email-change` y
+  `POST /settings/email-change/confirm`, ambas `ADMIN_ONLY`, `admin-consent/handler.ts` líneas 1298-1312).
+  Falta solo el panel, igual que T23.a.
+- **Cambios:**
+  - `central-admin-app/index.html`: `<article id="consentEmailChange" class="card" hidden>` nueva,
+    después de `#consentSettings`. Muestra el correo de privacidad vigente (`consentSettingsCurrent.
+    privacy_email`, ya cargado por `GET /settings` desde T23.a aunque esa tarea no lo mostrara); formulario
+    de "nueva dirección de contacto de privacidad" (`POST /settings/email-change`) y, tras enviarlo, un
+    formulario de código de 6 dígitos con el vencimiento (`POST /settings/email-change/confirm`) y un botón
+    "Cancelar" que solo resetea el estado local (no hay endpoint de cancelación en el backend).
+  - `central-admin-app/app.js`: `showConsentEmailChangeCurrent`/`applyConsentEmailChangePending`/
+    `resetConsentEmailChangeForm`/`requestConsentEmailChange`/`confirmConsentEmailChange`/
+    `cancelConsentEmailChangePending`. A diferencia de T23.a (campos de solo lectura para editor/auditor),
+    toda la sección `#consentEmailChange` queda oculta para quien no sea `privacy_admin` (mismo candado
+    `consentSettingsCanEdit`, recalculado en `privacyVerify`): no hay nada que mostrar en solo lectura, es
+    una acción, no un dato. El estado "pendiente de verificación" vive solo en memoria de la pestaña
+    (como `consentDocs`): no existe una ruta `GET` para recuperar una verificación ya pedida tras recargar
+    la página — anotado como limitación conocida, no como defecto nuevo (el backend de T15.c tampoco la
+    expone). Conectado a `privacyShow`/`privacyReset`/`privacyVerify`/`bindPrivacy`, mismo patrón que
+    `#consentSettings`.
+  - `tests/admin/consent-email-change.spec.ts` (nuevo, 11 casos): `privacy_admin` ve el correo vigente y el
+    formulario de nuevo correo; editor/auditor no ven la sección (2 casos); nuevo correo vacío no llama al
+    backend; enviar código con éxito muestra el formulario de código con el correo y el vencimiento, body
+    exacto `{ new_email }`; `email_transport_not_configured` deja el formulario de nuevo correo visible con
+    mensaje; código con formato inválido no llama al backend; código incorrecto (`invalid_code`) deja el
+    formulario de código visible; intentos agotados (429 `attempts_exhausted`) y código vencido (410
+    `code_expired`) con mensajes propios; confirmar con éxito actualiza el correo vigente y la
+    `settings_version`, vuelve al formulario de nuevo correo, body exacto `{ code }`; cancelar vuelve al
+    formulario de nuevo correo sin llamar al backend de confirmación.
+  - `loop-consentimiento/TASKS.md`: T23.b `[x]`.
+- **Bug encontrado y corregido durante la verificación (misma trampa que la Iteración 70, no un hallazgo
+  nuevo):** la primera corrida de `panel-e2e` reventó `privacy-login.spec.ts` en cascada (10 pruebas) con
+  `strict mode violation: locator('#consent').getByLabel('Correo') resolved to 2 elements` — la etiqueta
+  nueva "Nuevo **correo** de privacidad" competía por subcadena (sin distinguir mayúsculas) con la
+  etiqueta "Correo" del login, aunque el `<article>` esté `hidden` (Playwright resuelve el elemento en el
+  DOM antes de comprobar visibilidad). Corregido renombrando la etiqueta a "Nueva dirección de contacto de
+  privacidad" (sin la subcadena "correo"); segunda corrida, verde. La etiqueta del código ("Código de
+  verificación (6 dígitos)") no colisiona: no contiene la subcadena literal "Código de 6 dígitos" que usan
+  las demás pruebas.
+- **Por qué no hace falta ninguna prueba nueva de integración (regla TEST-INT/PROMPT.md):** esta subtarea
+  no añade ningún endpoint ni operación de escritura nueva — reutiliza `POST /settings/email-change` y
+  `POST /settings/email-change/confirm` (T15.c), ya cubiertas contra Postgres real por
+  `supabase/tests/consent/privacy_email_change_confirm.sql` y `settings_versioning.sql` (TEST-INT, cerrada
+  2026-10-07). Solo el formulario del panel que los invoca.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo (sin flags), segunda corrida tras el fix
+  de la etiqueta: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e
+  (con los 11 casos nuevos, verde), deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit — las 9
+  puertas no-opcionales OK; db-reset/e2e-local SKIP opt-in (sin cambios de backend/migraciones en esta
+  tarea). Iteración 71, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T23.c (historial de versiones, necesita `GET /settings/history` nuevo
+  en `admin-consent`) queda como la última subtarea de T23. La limitación de "pendiente de verificación
+  sin persistir entre recargas" (ver arriba) es aceptable para esta entrega (coincide con el límite del
+  backend de T15.c, no es un defecto introducido aquí), pero vale la pena anotarla si T23.c o una revisión
+  de seguridad futura deciden que hace falta una ruta `GET` para consultarla.
+- Porcentaje: T23 no se cierra todavía (T23.c sigue `[ ]`); no mueve el contador estricto de 28
   tareas. Ponderado: sin cambio aplicable (mismo criterio que las subtareas de T21/T22 antes de cerrarse).

@@ -5364,6 +5364,7 @@ async function loadConsentSettings() {
     $("#consentSettingsMessage").textContent = "";
     fillConsentSettingsForm(consentSettingsCurrent);
     applyConsentSettingsEditLock();
+    showConsentEmailChangeCurrent();
     return;
   }
   $("#consentSettingsMessage").textContent = consentSettingsErrorMessage(res.data?.error);
@@ -5418,6 +5419,104 @@ async function submitConsentSettings(event) {
   $("#consentSettingsMessage").textContent = "Configuración guardada.";
 }
 
+// T23.b (REQ-15): cambio del correo de privacidad con verificación. Sección completa oculta para
+// editor/auditor (candado en privacyVerify, no aquí); `consentSettingsCurrent.privacy_email` ya llega con
+// `GET /settings` (T23.a lo carga, solo que el formulario de esa tarea no lo muestra). El "pendiente" vive
+// solo en memoria: no hay ruta GET para recuperar una verificación ya pedida tras recargar la página.
+const CONSENT_EMAIL_CHANGE_REQUEST_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "Escribe un correo válido.",
+  email_transport_not_configured: "No se pudo enviar el código: el correo saliente no está configurado.",
+  email_send_failed: "No se pudo enviar el código de verificación. Inténtalo de nuevo.",
+};
+
+const CONSENT_EMAIL_CHANGE_CONFIRM_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "El código debe tener 6 dígitos.",
+  not_found: "No hay ninguna verificación pendiente. Solicita un código nuevo.",
+  attempts_exhausted: "Se agotaron los intentos para este código. Solicita uno nuevo.",
+  code_expired: "El código venció. Solicita uno nuevo.",
+  invalid_code: "Código incorrecto. Verifica e inténtalo de nuevo.",
+};
+
+function consentEmailChangeRequestErrorMessage(code) {
+  return CONSENT_EMAIL_CHANGE_REQUEST_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+function consentEmailChangeConfirmErrorMessage(code) {
+  return CONSENT_EMAIL_CHANGE_CONFIRM_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+function showConsentEmailChangeCurrent() {
+  $("#consentEmailChangeCurrent").textContent = consentSettingsCurrent
+    ? `Correo de privacidad vigente: ${consentSettingsCurrent.privacy_email}.`
+    : "";
+}
+
+// `pending` es `{ new_email, expires_at }` o `null`; alterna entre el formulario de "nuevo correo" y el
+// de "código", y guarda el aviso de vencimiento (REQ-15: código válido 30 min).
+function applyConsentEmailChangePending(pending) {
+  $("#consentEmailChangeRequestForm").hidden = !!pending;
+  $("#consentEmailChangePending").hidden = !pending;
+  $("#consentEmailChangeCode").value = "";
+  $("#consentEmailChangePendingInfo").textContent = pending
+    ? `Código enviado a ${pending.new_email}. Vence: ${new Date(pending.expires_at).toLocaleString()}.`
+    : "";
+}
+
+function resetConsentEmailChangeForm() {
+  $("#consentEmailChangeMessage").textContent = "";
+  $("#consentEmailChangeNewEmail").value = "";
+  $("#consentEmailChangeCurrent").textContent = "";
+  applyConsentEmailChangePending(null);
+}
+
+async function requestConsentEmailChange(event) {
+  event.preventDefault();
+  if (!consentSettingsCanEdit) return;
+  const newEmail = $("#consentEmailChangeNewEmail").value.trim();
+  if (!newEmail) { $("#consentEmailChangeMessage").textContent = "Escribe el nuevo correo de privacidad."; return; }
+
+  $("#consentEmailChangeMessage").textContent = "";
+  const res = await privacyCall("/fn/admin-consent/settings/email-change", {
+    session: privacyFlow.token,
+    body: { new_email: newEmail },
+  });
+  if (res.status !== 200) {
+    $("#consentEmailChangeMessage").textContent = consentEmailChangeRequestErrorMessage(res.data?.error);
+    return;
+  }
+  applyConsentEmailChangePending({ new_email: newEmail, expires_at: res.data.expires_at });
+  $("#consentEmailChangeMessage").textContent = "Código enviado. Revisa el correo nuevo e ingresa el código.";
+}
+
+async function confirmConsentEmailChange(event) {
+  event.preventDefault();
+  if (!consentSettingsCanEdit) return;
+  const code = $("#consentEmailChangeCode").value.trim();
+  if (!/^\d{6}$/.test(code)) { $("#consentEmailChangeMessage").textContent = "El código tiene 6 dígitos."; return; }
+
+  $("#consentEmailChangeMessage").textContent = "";
+  const res = await privacyCall("/fn/admin-consent/settings/email-change/confirm", {
+    session: privacyFlow.token,
+    body: { code },
+  });
+  if (res.status !== 200) {
+    $("#consentEmailChangeMessage").textContent = consentEmailChangeConfirmErrorMessage(res.data?.error);
+    return;
+  }
+  consentSettingsCurrent = res.data;
+  fillConsentSettingsForm(consentSettingsCurrent);
+  applyConsentEmailChangePending(null);
+  showConsentEmailChangeCurrent();
+  $("#consentEmailChangeMessage").textContent = "Correo de privacidad actualizado.";
+}
+
+function cancelConsentEmailChangePending() {
+  applyConsentEmailChangePending(null);
+  $("#consentEmailChangeMessage").textContent = "";
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5467,6 +5566,8 @@ function privacyReset(message = "") {
   closeConsentRetireView();
   consentSettingsCanEdit = false;
   resetConsentSettingsForm();
+  $("#consentEmailChange").hidden = true;
+  resetConsentEmailChangeForm();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5552,6 +5653,8 @@ async function privacyVerify(event) {
   // T23.a: mismo candado ADMIN_ONLY que `consentDocsCanPublish` (POST /settings exige `privacy_admin`).
   consentSettingsCanEdit = privacyFlow.roles.includes("privacy_admin");
   $("#consentDraftForm").hidden = !consentDocsCanEdit;
+  // T23.b: sección completa oculta para editor/auditor (no solo de solo lectura, a diferencia de T23.a).
+  $("#consentEmailChange").hidden = !consentSettingsCanEdit;
   privacyMessage("");
   privacyShow("identity");
   void loadConsentDocuments();
@@ -5571,6 +5674,9 @@ function bindPrivacy() {
   $("#privacyLogout").addEventListener("click", () => void privacyLogout());
   $("#consentDraftForm").addEventListener("submit", createConsentDraft);
   $("#consentSettingsForm").addEventListener("submit", submitConsentSettings);
+  $("#consentEmailChangeRequestForm").addEventListener("submit", requestConsentEmailChange);
+  $("#consentEmailChangeConfirmForm").addEventListener("submit", confirmConsentEmailChange);
+  $("#consentEmailChangeCancel").addEventListener("click", cancelConsentEmailChangePending);
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
   $("#consentDocsRows").addEventListener("click", (event) => {
     const editButton = event.target.closest("[data-edit-id]");

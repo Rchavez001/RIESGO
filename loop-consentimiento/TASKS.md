@@ -708,7 +708,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         recargar la página; errores del backend (`invalid_input`, `settings_unavailable`) se muestran
         legibles sin perder lo escrito; los campos vacíos se envían como `null`, nunca `""`; pruebas
         Playwright.
-    - [ ] **T23.b — Panel: cambio del correo de privacidad con verificación** (REQ-15)
+    - [x] **T23.b — Panel: cambio del correo de privacidad con verificación** (REQ-15) (hecha 2026-10-14, iteración 71)
       - Flujo propio (correo nuevo → código de 6 dígitos válido 30 min → confirmar), con estado "pendiente
         de verificación" visible mientras no se confirme. `POST /settings/email-change` (`ADMIN_ONLY`) y
         `POST /settings/email-change/confirm` (`ADMIN_ONLY`). Casos negativos: código incorrecto,
