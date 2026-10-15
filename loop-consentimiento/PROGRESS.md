@@ -2198,3 +2198,75 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   desbloqueada en TASKS.md: T23 (Configuración del responsable y delegado, REQ-14/REQ-15).
 - Porcentaje: T22 se cierra como tarea completa (antes contaba 0/28 estricto por no estar `[x]` la línea
   padre; con T22.c ya no quedan subtareas abiertas bajo T22, así que el contador estricto sube en 1).
+
+## Iteración 70 — 2026-10-14 — T23.a: Panel — formulario de configuración del responsable y delegado
+
+- **Punto de partida:** `git status` limpio (sin WIP de una iteración anterior). Siguiente tarea `[ ]`
+  desbloqueada en orden de `TASKS.md`: T23 (depende de T15 y T05, ambas `[x]`).
+- **División (antes de codificar, regla de TASKS.md: "si una tarea resulta demasiado grande, divídela en
+  Tnn.a, Tnn.b… y ejecuta solo la primera"):** T23 cubre tres cosas bien distintas (formulario de REQ-14,
+  cambio verificado del correo de privacidad de REQ-15, historial de versiones) con un solo backend ya
+  listo desde T15 para las dos primeras y NINGÚN backend para la tercera. Investigado antes de dividir:
+  `admin-consent/handler.ts` ya tiene `GET/POST /settings` (líneas 1282-1296, T15) y
+  `POST /settings/email-change`+`/confirm` (1298-1312, T15); no existe ninguna ruta de historial, y
+  `privacy_settings`/`privacy_settings_current` tienen `REVOKE ALL FROM authenticated` (073/075) — el
+  panel no puede leerlas por su cuenta con el JWT del admin. Se dividió en T23.a (formulario base, sin
+  `privacy_email`), T23.b (verificación del correo) y T23.c (historial, necesita endpoint nuevo); T23.a es
+  la única ejecutable sin trabajo de backend adicional.
+- **Cambios:**
+  - `central-admin-app/index.html`: `<article id="consentSettings" class="card" hidden>` nueva, después de
+    `#consentDocuments` (mismo patrón de visibilidad que esa, controlada por `privacyShow`). Campos:
+    responsable (nombre, domicilio, teléfono), DPO (nombre, contacto), URL de Política de Privacidad,
+    asunto del mensaje de baja, plazo de respuesta (días), plazo de conservación de IP (días). Sin
+    `privacy_email` (T23.b) ni `four_eyes_publish` (no es parte de REQ-14).
+  - `central-admin-app/app.js`: `consentSettingsCurrent`/`consentSettingsCanEdit` (mismo candado ADMIN_ONLY
+    que `consentDocsCanPublish`, recalculado en `privacyVerify`); `fillConsentSettingsForm`/
+    `applyConsentSettingsEditLock` (deshabilita los 9 campos y oculta "Guardar" si no es `privacy_admin`,
+    pero los valores se cargan igual para editor/auditor — `GET /settings` acepta cualquier rol de
+    `PRIVACY_ROLES`); `loadConsentSettings`/`resetConsentSettingsForm`; `emptyToNull` (los campos nullable
+    viajan como `null`, nunca `""` — `UpdateSettingsSchema` los valida con `.nullable()` y rechaza la
+    cadena vacía); `submitConsentSettings` (valida en el cliente asunto no vacío, `response_days` 1-90,
+    `ip_retention_days` ≥0 antes de llamar al backend; en éxito actualiza la versión mostrada sin recargar
+    la página). Conectado a `privacyShow`/`privacyReset`/`privacyVerify`/`bindPrivacy`, mismo patrón que
+    `#consentDocuments`.
+  - `tests/admin/consent-settings.spec.ts` (nuevo, 10 casos): carga los valores vigentes al entrar;
+    `privacy_admin` ve "Guardar" con campos habilitados; editor/auditor ven los campos deshabilitados sin
+    "Guardar" (2 casos); asunto vacío, plazo de respuesta 91 y plazo de IP negativo no llaman al backend (3
+    casos negativos de validación cliente); guardar con éxito manda el body exacto sin `privacy_email` ni
+    `four_eyes_publish` y refleja la `settings_version` nueva; campos opcionales vacíos viajan como `null`;
+    error real del backend (`invalid_input`) muestra mensaje legible sin perder lo escrito ni actualizar la
+    versión.
+  - `loop-consentimiento/TASKS.md`: T23 dividida en T23.a/T23.b/T23.c (ver arriba); T23.a `[x]`.
+- **Bug encontrado y corregido durante la verificación (no es un hallazgo de seguridad, es de los propios
+  tests):** la primera corrida de `panel-e2e` reventó 90 pruebas en CASCADA — no solo las de este archivo,
+  también `privacy-login.spec.ts`, `consent-diff.spec.ts`, `consent-documents.spec.ts`,
+  `consent-editor.spec.ts`, `consent-publish.spec.ts`, `consent-retire.spec.ts` — todas con
+  `strict mode violation: locator('#consent').getByLabel('Correo') resolved to 2 elements`. Causa: el
+  campo nuevo llevaba la etiqueta "Asunto del **correo** de baja"; `getByLabel('Correo')` de Playwright
+  hace coincidencia por subcadena **sin distinguir mayúsculas/minúsculas**, así que esa etiqueta nueva
+  (aunque su `<article>` esté `hidden`, Playwright sigue *resolviendo* el elemento en el DOM antes de
+  comprobar visibilidad) empezó a competir con la etiqueta "Correo" del login en CUALQUIER prueba que
+  entrara a la pestaña de identidad, sin importar si tocaba esta tarea o no. Corregido renombrando la
+  etiqueta a "Asunto del **mensaje** de baja" (mismo campo, mismo id, sin la subcadena "correo"); segunda
+  corrida de `panel-e2e`, verde. Anotado aquí porque es una trampa genérica para cualquier etiqueta nueva
+  del panel: evitar que el texto visible de una etiqueta contenga, como subcadena sin distinguir
+  mayúsculas, el texto de otra etiqueta ya usada en pruebas con `getByLabel` en la misma página (aunque esa
+  etiqueta nueva viva detrás de un `hidden`).
+- **Por qué no hace falta ninguna prueba nueva de integración (regla TEST-INT/PROMPT.md):** esta subtarea
+  no añade ningún endpoint ni operación de escritura nueva — reutiliza `GET/POST /settings` (T15), que ya
+  tiene su propia cobertura (`handler_test.ts` con fakes; sin hallazgo de atomicidad como T14/080 porque es
+  un INSERT de una sola tabla, sin la restricción `DEFERRABLE` que motivó aquella regla). Solo el
+  formulario del panel que los invoca.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo (sin flags), segunda corrida tras el fix
+  de la etiqueta: typecheck-frontend, lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e
+  (con los 10 casos nuevos, verde), deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit — las 9
+  puertas no-opcionales OK; db-reset/e2e-local SKIP opt-in como siempre (sin cambios de backend/migraciones
+  en esta tarea). Iteración 70, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta vez.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: T23.b (correo de privacidad con verificación, REQ-15) y T23.c (historial
+  de versiones, necesita `GET /settings/history` nuevo en `admin-consent` — la tabla está revocada para
+  `authenticated`) quedan como las siguientes subtareas desbloqueadas de T23. La trampa de `getByLabel` por
+  subcadena (ver arriba) vale la pena tenerla presente para cualquier etiqueta nueva del panel en el
+  futuro.
+- Porcentaje: T23 no se cierra todavía (T23.b y T23.c siguen `[ ]`); no mueve el contador estricto de 28
+  tareas. Ponderado: sin cambio aplicable (mismo criterio que las subtareas de T21/T22 antes de cerrarse).

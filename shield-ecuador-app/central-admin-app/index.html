@@ -1371,6 +1371,61 @@
               </form>
             </div>
           </article>
+
+          <!-- T23.a (REQ-14): formulario de configuración del responsable y delegado. `GET /settings`
+               (T15, cualquier rol de PRIVACY_ROLES) carga los valores vigentes; `POST /settings` (T15,
+               ADMIN_ONLY) los guarda y crea una `settings_version` nueva. `privacy_email` no viaja por
+               este formulario: cambia solo con su propio flujo de verificación (T23.b, REQ-15). Editor y
+               auditor ven los valores (campos deshabilitados, sin botón "Guardar"); solo `privacy_admin`
+               edita. -->
+          <article id="consentSettings" class="card" hidden>
+            <div class="section-toolbar compact">
+              <h2>Configuración del responsable y delegado</h2>
+            </div>
+            <p id="consentSettingsMessage" class="privacy-message" role="alert"></p>
+            <p id="consentSettingsVersion" class="muted"></p>
+            <form id="consentSettingsForm" class="form-grid compact" novalidate>
+              <label>
+                Responsable (nombre o razón social)
+                <input id="consentSettingsControllerName" type="text" maxlength="300" />
+              </label>
+              <label>
+                Domicilio del responsable
+                <input id="consentSettingsControllerAddress" type="text" maxlength="500" />
+              </label>
+              <label>
+                Teléfono del responsable
+                <input id="consentSettingsControllerPhone" type="text" maxlength="50" />
+              </label>
+              <label>
+                Nombre del delegado de protección de datos (DPO)
+                <input id="consentSettingsDpoName" type="text" maxlength="300" />
+              </label>
+              <label>
+                Contacto del delegado (DPO)
+                <input id="consentSettingsDpoContact" type="text" maxlength="300" />
+              </label>
+              <label>
+                URL de la Política de Privacidad
+                <input id="consentSettingsPolicyUrl" type="url" maxlength="500" />
+              </label>
+              <label>
+                Asunto del mensaje de baja
+                <input id="consentSettingsUnsubscribeSubject" type="text" maxlength="300" required />
+              </label>
+              <label>
+                Plazo de respuesta a solicitudes (días)
+                <input id="consentSettingsResponseDays" type="number" min="1" max="90" step="1" required />
+              </label>
+              <label>
+                Plazo de conservación de IP (días)
+                <input id="consentSettingsIpRetentionDays" type="number" min="0" step="1" required />
+              </label>
+              <div id="consentSettingsSaveRow" class="modal-actions">
+                <button class="btn primary" type="submit">Guardar</button>
+              </div>
+            </form>
+          </article>
         </section>
       </main>
     </div>

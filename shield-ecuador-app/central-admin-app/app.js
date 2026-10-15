@@ -5311,6 +5311,113 @@ async function submitConsentRetire(event) {
   await loadConsentDocuments();
 }
 
+// T23.a (REQ-14): formulario de configuración del responsable y delegado. `GET /settings` (T15) acepta
+// cualquier rol de PRIVACY_ROLES; `POST /settings` (T15) exige `privacy_admin` (ADMIN_ONLY, mismo candado
+// que Publicar/Retirar). `privacy_email` no es parte de este formulario (T23.b la cambia aparte, REQ-15).
+let consentSettingsCurrent = null;
+let consentSettingsCanEdit = false;
+
+const CONSENT_SETTINGS_FIELD_IDS = [
+  "ControllerName", "ControllerAddress", "ControllerPhone", "DpoName", "DpoContact",
+  "PolicyUrl", "UnsubscribeSubject", "ResponseDays", "IpRetentionDays",
+];
+
+const CONSENT_SETTINGS_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "Revisa los datos: el asunto de baja es obligatorio, el plazo de respuesta debe ser de 1 a 90 días, la URL de la Política de Privacidad debe ser válida y el plazo de conservación de IP, 0 o más.",
+  settings_unavailable: "No se pudo completar la acción: la configuración no está disponible. Actualiza e inténtalo de nuevo.",
+};
+
+function consentSettingsErrorMessage(code) {
+  return CONSENT_SETTINGS_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+function fillConsentSettingsForm(settings) {
+  $("#consentSettingsControllerName").value = settings.controller_name ?? "";
+  $("#consentSettingsControllerAddress").value = settings.controller_address ?? "";
+  $("#consentSettingsControllerPhone").value = settings.controller_phone ?? "";
+  $("#consentSettingsDpoName").value = settings.dpo_name ?? "";
+  $("#consentSettingsDpoContact").value = settings.dpo_contact ?? "";
+  $("#consentSettingsPolicyUrl").value = settings.privacy_policy_url ?? "";
+  $("#consentSettingsUnsubscribeSubject").value = settings.unsubscribe_subject ?? "";
+  $("#consentSettingsResponseDays").value = settings.response_days ?? "";
+  $("#consentSettingsIpRetentionDays").value = settings.ip_retention_days ?? "";
+  $("#consentSettingsVersion").textContent = `Versión de configuración vigente: ${settings.settings_version}.`;
+}
+
+function applyConsentSettingsEditLock() {
+  CONSENT_SETTINGS_FIELD_IDS.forEach((id) => { $(`#consentSettings${id}`).disabled = !consentSettingsCanEdit; });
+  $("#consentSettingsSaveRow").hidden = !consentSettingsCanEdit;
+}
+
+function resetConsentSettingsForm() {
+  consentSettingsCurrent = null;
+  CONSENT_SETTINGS_FIELD_IDS.forEach((id) => { $(`#consentSettings${id}`).value = ""; });
+  $("#consentSettingsMessage").textContent = "";
+  $("#consentSettingsVersion").textContent = "";
+}
+
+async function loadConsentSettings() {
+  const res = await privacyCall("/fn/admin-consent/settings", { session: privacyFlow.token, method: "GET" });
+  if (res.status === 200 && res.data) {
+    consentSettingsCurrent = res.data;
+    $("#consentSettingsMessage").textContent = "";
+    fillConsentSettingsForm(consentSettingsCurrent);
+    applyConsentSettingsEditLock();
+    return;
+  }
+  $("#consentSettingsMessage").textContent = consentSettingsErrorMessage(res.data?.error);
+}
+
+// Un campo vacío viaja como `null`, nunca `""`: `UpdateSettingsSchema` (admin-consent/handler.ts) valida
+// esos campos con `.nullable()` y rechaza la cadena vacía.
+function emptyToNull(value) {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+async function submitConsentSettings(event) {
+  event.preventDefault();
+  if (!consentSettingsCanEdit) return;
+
+  const unsubscribeSubject = $("#consentSettingsUnsubscribeSubject").value.trim();
+  if (!unsubscribeSubject) { $("#consentSettingsMessage").textContent = "El asunto del correo de baja es obligatorio."; return; }
+
+  const responseDays = Number($("#consentSettingsResponseDays").value);
+  if (!Number.isInteger(responseDays) || responseDays < 1 || responseDays > 90) {
+    $("#consentSettingsMessage").textContent = "El plazo de respuesta debe ser un número entero de 1 a 90 días.";
+    return;
+  }
+
+  const ipRetentionDays = Number($("#consentSettingsIpRetentionDays").value);
+  if (!Number.isInteger(ipRetentionDays) || ipRetentionDays < 0) {
+    $("#consentSettingsMessage").textContent = "El plazo de conservación de IP debe ser un número entero de 0 o más.";
+    return;
+  }
+
+  const body = {
+    controller_name: emptyToNull($("#consentSettingsControllerName").value),
+    controller_address: emptyToNull($("#consentSettingsControllerAddress").value),
+    controller_phone: emptyToNull($("#consentSettingsControllerPhone").value),
+    dpo_name: emptyToNull($("#consentSettingsDpoName").value),
+    dpo_contact: emptyToNull($("#consentSettingsDpoContact").value),
+    privacy_policy_url: emptyToNull($("#consentSettingsPolicyUrl").value),
+    unsubscribe_subject: unsubscribeSubject,
+    response_days: responseDays,
+    ip_retention_days: ipRetentionDays,
+  };
+
+  $("#consentSettingsMessage").textContent = "";
+  const res = await privacyCall("/fn/admin-consent/settings", { session: privacyFlow.token, body });
+  if (res.status !== 200) {
+    $("#consentSettingsMessage").textContent = consentSettingsErrorMessage(res.data?.error);
+    return;
+  }
+  consentSettingsCurrent = res.data;
+  fillConsentSettingsForm(consentSettingsCurrent);
+  $("#consentSettingsMessage").textContent = "Configuración guardada.";
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5332,6 +5439,7 @@ function privacyShow(step) {
   $("#privacyCodeForm").hidden = step !== "code";
   $("#privacyIdentity").hidden = step !== "identity";
   $("#consentDocuments").hidden = step !== "identity";
+  $("#consentSettings").hidden = step !== "identity";
   if (step !== "code") privacyClearEnroll();
 }
 
@@ -5357,6 +5465,8 @@ function privacyReset(message = "") {
   closeConsentDiffView();
   closeConsentPublishView();
   closeConsentRetireView();
+  consentSettingsCanEdit = false;
+  resetConsentSettingsForm();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5439,10 +5549,13 @@ async function privacyVerify(event) {
   $("#privacyRoles").textContent = privacyFlow.roles.join(", ");
   consentDocsCanEdit = privacyFlow.roles.some((role) => role === "privacy_editor" || role === "privacy_admin");
   consentDocsCanPublish = privacyFlow.roles.includes("privacy_admin");
+  // T23.a: mismo candado ADMIN_ONLY que `consentDocsCanPublish` (POST /settings exige `privacy_admin`).
+  consentSettingsCanEdit = privacyFlow.roles.includes("privacy_admin");
   $("#consentDraftForm").hidden = !consentDocsCanEdit;
   privacyMessage("");
   privacyShow("identity");
   void loadConsentDocuments();
+  void loadConsentSettings();
 }
 
 async function privacyLogout(message = "") {
@@ -5457,6 +5570,7 @@ function bindPrivacy() {
   $("#privacyCancel").addEventListener("click", () => void privacyLogout());
   $("#privacyLogout").addEventListener("click", () => void privacyLogout());
   $("#consentDraftForm").addEventListener("submit", createConsentDraft);
+  $("#consentSettingsForm").addEventListener("submit", submitConsentSettings);
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
   $("#consentDocsRows").addEventListener("click", (event) => {
     const editButton = event.target.closest("[data-edit-id]");

@@ -685,9 +685,39 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         Playwright (`consent-retire.spec.ts`, 7 casos).
 
 - [ ] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05.
+  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05. T15 y T05 ya están `[x]`: desbloqueada.
   - Formulario con todos los campos; flujo de verificación del nuevo correo con estado
     "pendiente de verificación"; historial de versiones de configuración.
+  - **División (2026-10-14, iteración 70, antes de codificar):** backend ya existe completo desde T15
+    (`GET/POST /settings`, `POST /settings/email-change`, `POST /settings/email-change/confirm`,
+    `admin-consent/handler.ts`); falta solo el panel. `privacy_settings`/`privacy_settings_current` tienen
+    `REVOKE ALL FROM authenticated` (073/075): el panel no puede leer el historial con una consulta directa
+    a PostgREST con el JWT del admin — hace falta un endpoint nuevo en `admin-consent` para T23.c.
+    - [x] **T23.a — Panel: formulario de configuración del responsable** (REQ-14, sin `privacy_email`) (hecha 2026-10-14, iteración 70)
+      - Sección nueva dentro de "Consentimiento informado" (después de `#consentDocuments`). Carga con
+        `GET /settings` (cualquier rol de `PRIVACY_ROLES`); campos: nombre/razón social, domicilio,
+        teléfono, nombre y contacto del delegado (DPO), URL de Política de Privacidad, asunto de baja,
+        `response_days`, `ip_retention_days`. Guardar con `POST /settings` (solo `privacy_admin`,
+        `ADMIN_ONLY`): editor/auditor ven los valores de solo lectura, sin botón "Guardar". Los campos
+        nullable (`controller_name`, `controller_address`, `controller_phone`, `dpo_name`, `dpo_contact`,
+        `privacy_policy_url`) viajan como `null` si se vacían, nunca `""` (el backend los valida con
+        `.nullable()`, no acepta cadena vacía). `privacy_email` y `four_eyes_publish` no son parte de este
+        formulario (el primero tiene su propio flujo, T23.b; el segundo no está en el alcance de REQ-14).
+      - **Aceptación:** el formulario muestra los valores vigentes al entrar; solo `privacy_admin` ve
+        "Guardar" (editor/auditor, solo lectura); guardar con éxito refleja la `settings_version` nueva sin
+        recargar la página; errores del backend (`invalid_input`, `settings_unavailable`) se muestran
+        legibles sin perder lo escrito; los campos vacíos se envían como `null`, nunca `""`; pruebas
+        Playwright.
+    - [ ] **T23.b — Panel: cambio del correo de privacidad con verificación** (REQ-15)
+      - Flujo propio (correo nuevo → código de 6 dígitos válido 30 min → confirmar), con estado "pendiente
+        de verificación" visible mientras no se confirme. `POST /settings/email-change` (`ADMIN_ONLY`) y
+        `POST /settings/email-change/confirm` (`ADMIN_ONLY`). Casos negativos: código incorrecto,
+        vencido, intentos agotados (429 `attempts_exhausted`).
+    - [ ] **T23.c — Panel: historial de versiones de configuración**
+      - Necesita un endpoint nuevo en `admin-consent` (p. ej. `GET /settings/history`, `PRIVACY_ROLES`) que
+        liste `privacy_settings` ordenado por `settings_version` descendente — no existe hoy ninguna ruta
+        que lo haga y la tabla está revocada para `authenticated` (073/075), así que el panel no puede
+        consultarla por su cuenta. Quién y cuándo, sin exponer nada que no esté ya en `GET /settings`.
 
 - [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T12 (`EmailSender`, sin iniciar) y T05.
