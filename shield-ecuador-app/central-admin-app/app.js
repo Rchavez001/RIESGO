@@ -5417,6 +5417,51 @@ async function submitConsentSettings(event) {
   consentSettingsCurrent = res.data;
   fillConsentSettingsForm(consentSettingsCurrent);
   $("#consentSettingsMessage").textContent = "Configuración guardada.";
+  void loadConsentSettingsHistory();
+}
+
+// T23.c: historial de versiones (GET /settings/history, los tres roles del módulo, solo lectura). Mismos
+// campos que `fillConsentSettingsForm` ya muestra para la vigente, más "quién" (created_by, UUID del
+// admin — el panel no tiene ningún endpoint que resuelva un UUID a un correo) y "cuándo" (created_at).
+let consentSettingsHistory = [];
+
+function renderConsentSettingsHistory() {
+  const rows = $("#consentSettingsHistoryRows");
+  if (consentSettingsHistory.length === 0) {
+    rows.innerHTML = `<tr><td colspan="6" class="muted">Sin historial todavía.</td></tr>`;
+    return;
+  }
+  rows.innerHTML = consentSettingsHistory.map((row) => `
+    <tr>
+      <td>${esc(row.settings_version)}</td>
+      <td>${esc(row.privacy_email)}</td>
+      <td>${esc(row.response_days)}</td>
+      <td>${esc(row.ip_retention_days)}</td>
+      <td>${esc(row.created_by)}</td>
+      <td>${esc(new Date(row.created_at).toLocaleString("es-EC"))}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadConsentSettingsHistory() {
+  const res = await privacyCall("/fn/admin-consent/settings/history", { session: privacyFlow.token, method: "GET" });
+  if (res.status === 200 && Array.isArray(res.data)) {
+    consentSettingsHistory = res.data;
+    $("#consentSettingsHistoryMessage").textContent = "";
+    renderConsentSettingsHistory();
+    return;
+  }
+  // Error: no se sabe cuántas versiones hay realmente (mismo criterio que `loadConsentDocuments`): la
+  // tabla queda vacía, sin el mensaje "Sin historial todavía", que afirmaría algo que no se sabe.
+  consentSettingsHistory = [];
+  $("#consentSettingsHistoryRows").innerHTML = "";
+  $("#consentSettingsHistoryMessage").textContent = consentSettingsErrorMessage(res.data?.error);
+}
+
+function resetConsentSettingsHistory() {
+  consentSettingsHistory = [];
+  $("#consentSettingsHistoryRows").innerHTML = "";
+  $("#consentSettingsHistoryMessage").textContent = "";
 }
 
 // T23.b (REQ-15): cambio del correo de privacidad con verificación. Sección completa oculta para
@@ -5510,6 +5555,7 @@ async function confirmConsentEmailChange(event) {
   applyConsentEmailChangePending(null);
   showConsentEmailChangeCurrent();
   $("#consentEmailChangeMessage").textContent = "Correo de privacidad actualizado.";
+  void loadConsentSettingsHistory();
 }
 
 function cancelConsentEmailChangePending() {
@@ -5566,6 +5612,7 @@ function privacyReset(message = "") {
   closeConsentRetireView();
   consentSettingsCanEdit = false;
   resetConsentSettingsForm();
+  resetConsentSettingsHistory();
   $("#consentEmailChange").hidden = true;
   resetConsentEmailChangeForm();
   privacyShow("login");
@@ -5659,6 +5706,7 @@ async function privacyVerify(event) {
   privacyShow("identity");
   void loadConsentDocuments();
   void loadConsentSettings();
+  void loadConsentSettingsHistory();
 }
 
 async function privacyLogout(message = "") {
@@ -5678,6 +5726,7 @@ function bindPrivacy() {
   $("#consentEmailChangeConfirmForm").addEventListener("submit", confirmConsentEmailChange);
   $("#consentEmailChangeCancel").addEventListener("click", cancelConsentEmailChangePending);
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
+  $("#consentSettingsHistoryRefresh").addEventListener("click", () => void loadConsentSettingsHistory());
   $("#consentDocsRows").addEventListener("click", (event) => {
     const editButton = event.target.closest("[data-edit-id]");
     if (editButton) {

@@ -41,6 +41,7 @@ import {
   type NewEmailTransportInput,
   type NewEmailVerificationInput,
   type NewPrivacySettingsInput,
+  type PrivacySettingsHistoryRow,
   type RateLimitCheck,
   type SettingsDeps,
 } from './handler.ts'
@@ -302,9 +303,9 @@ function makeChainsStore(opts: { consent?: ChainVerification; audit?: ChainVerif
   return { chains }
 }
 
-// A diferencia de `makeDocsStore`/`makeEmailTransportStore`, `current` es mutable aquí (sin un array de
-// filas expuesto): basta con que `insert` reemplace la vigente, igual que haría la vista
-// `privacy_settings_current` real tras un INSERT.
+// A diferencia de `makeDocsStore`/`makeEmailTransportStore`, `current` es mutable aquí: basta con que
+// `insert` reemplace la vigente, igual que haría la vista `privacy_settings_current` real tras un INSERT.
+// `history` (T23.c) sí es un array expuesto, más reciente primero, como `listHistory` real.
 function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): SettingsDeps {
   let current: CurrentPrivacySettings = {
     settings_version: 1,
@@ -314,12 +315,17 @@ function settingsDeps(overrides: Partial<CurrentPrivacySettings> = {}): Settings
     response_days: 15, ip_retention_days: 730, four_eyes_publish: false,
     ...overrides,
   }
+  const history: PrivacySettingsHistoryRow[] = [
+    { ...current, created_by: ADMIN_ID, created_at: '2026-01-01T00:00:00Z' },
+  ]
   return {
     getCurrent: () => Promise.resolve(current),
     insert: (row: NewPrivacySettingsInput) => {
       current = { ...row }
+      history.unshift({ ...current, created_by: row.created_by, created_at: `2026-02-${String(history.length + 1).padStart(2, '0')}T00:00:00Z` })
       return Promise.resolve(current)
     },
+    listHistory: () => Promise.resolve([...history]),
   }
 }
 
@@ -897,7 +903,7 @@ Deno.test('intentar enviar privacy_email en el body se ignora: no cambia el corr
 Deno.test('GET /settings sin ninguna configuración → 503 settings_unavailable', async () => {
   const res = await handle(
     req(await sign(claims()), '/settings', 'GET'),
-    fullDeps({ roles: ['privacy_admin'], settings: { getCurrent: () => Promise.resolve(null), insert: settingsDeps().insert } }),
+    fullDeps({ roles: ['privacy_admin'], settings: { ...settingsDeps(), getCurrent: () => Promise.resolve(null) } }),
   )
   assertEquals([res.status, (await res.json()).error], [503, 'settings_unavailable'])
 })
@@ -905,6 +911,34 @@ Deno.test('GET /settings sin ninguna configuración → 503 settings_unavailable
 Deno.test('PUT /settings → 405', async () => {
   const res = await handle(req(await sign(claims()), '/settings', 'PUT'), fullDeps({ roles: ['privacy_admin'] }))
   assertEquals(res.status, 405)
+})
+
+// ── GET /settings/history (T23.c): quién y cuándo de cada versión, sin nada que no esté ya en GET /settings ──
+Deno.test('GET /settings/history: los tres roles ven el historial, más reciente primero, con quién y cuándo', async () => {
+  const settings = settingsDeps()
+  await settings.insert({
+    settings_version: 2, controller_name: 'CiberDojo', controller_address: 'Guayaquil', controller_phone: '000',
+    privacy_email: 'privacidad@example.test', dpo_name: 'DPO', dpo_contact: 'dpo@example.test',
+    privacy_policy_url: 'https://example.test/privacidad', unsubscribe_subject: 'Baja y eliminación',
+    response_days: 20, ip_retention_days: 730, four_eyes_publish: false, created_by: EDITOR_ID,
+  })
+  for (const roles of [['privacy_editor'], ['privacy_admin'], ['privacy_auditor']]) {
+    const res = await handle(req(await sign(claims()), '/settings/history', 'GET'), fullDeps({ roles, settings }))
+    assertEquals(res.status, 200)
+    const body = (await res.json()) as PrivacySettingsHistoryRow[]
+    assertEquals(body.map((r) => r.settings_version), [2, 1]) // settings_version DESC
+    assertEquals(body[0].created_by, EDITOR_ID)
+    assertEquals(body[0].response_days, 20)
+    assertExists(body[0].created_at)
+    assertEquals(body[1].created_by, ADMIN_ID)
+  }
+})
+
+Deno.test('GET /settings/history: sin rol del módulo → 403, y ningún método distinto de GET', async () => {
+  const resNoRole = await handle(req(await sign(claims()), '/settings/history', 'GET'), fullDeps({ roles: [] }))
+  assertEquals(resNoRole.status, 403)
+  const resPost = await handle(req(await sign(claims()), '/settings/history', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(resPost.status, 405)
 })
 
 // ── T15.c (REQ-15): POST /settings/email-change y /settings/email-change/confirm ───────────────────────

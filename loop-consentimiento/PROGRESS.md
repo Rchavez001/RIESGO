@@ -2330,3 +2330,55 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   de seguridad futura deciden que hace falta una ruta `GET` para consultarla.
 - Porcentaje: T23 no se cierra todavía (T23.c sigue `[ ]`); no mueve el contador estricto de 28
   tareas. Ponderado: sin cambio aplicable (mismo criterio que las subtareas de T21/T22 antes de cerrarse).
+
+## Iteración 72 — 2026-10-14 — T23.c: Panel — historial de versiones de configuración, cierra T23
+
+- **Punto de partida:** `git status` limpio. Siguiente tarea `[ ]` desbloqueada en orden de `TASKS.md`:
+  T23.c, última subtarea de T23. A diferencia de T23.a/T23.b, el backend NO existía: `privacy_settings`
+  tiene `REVOKE ALL FROM authenticated, anon` (073) y ninguna ruta de `admin-consent` listaba el historial
+  — `GET /settings` solo devuelve la vigente (`privacy_settings_current`).
+- **Cambios:**
+  - `supabase/functions/admin-consent/handler.ts`: `PrivacySettingsHistoryRow` (= `CurrentPrivacySettings`
+    + `created_by`/`created_at`, "quién y cuándo" — ningún campo que `GET /settings` no exponga ya para la
+    vigente); `SettingsDeps.listHistory()`; ruta `GET /settings/history` (`PRIVACY_ROLES`, los tres roles,
+    mismo candado de solo lectura que `GET /audit-log`/`GET /verify-chains`; sin bitácora, por el mismo
+    motivo que `verify_chains`: leer no expone ningún dato personal nuevo).
+  - `supabase/functions/admin-consent/index.ts`: `SETTINGS_HISTORY_COLUMNS` (= `SETTINGS_COLUMNS` +
+    `created_by, created_at`); `listHistory` hace `SELECT` de `privacy_settings` ordenado por
+    `settings_version DESC` con la service role (igual que `insert`/`getCurrent`, la tabla sigue vedada a
+    `authenticated`).
+  - `central-admin-app/index.html`: tabla "Historial de versiones" dentro de `#consentSettings`, después
+    del formulario de T23.a (versión, correo de privacidad, plazo de respuesta, conservación de IP, creado
+    por, creado) con botón "Actualizar".
+  - `central-admin-app/app.js`: `consentSettingsHistory`, `renderConsentSettingsHistory`,
+    `loadConsentSettingsHistory` (mismo criterio de error que `loadConsentDocuments`: en un fallo la tabla
+    queda vacía sin el mensaje "Sin historial todavía", que afirmaría algo que no se sabe),
+    `resetConsentSettingsHistory`. Cargado junto a `loadConsentSettings`/`loadConsentDocuments` en
+    `privacyVerify` (los tres roles); recargado tras guardar la configuración (`submitConsentSettings`) y
+    tras confirmar el cambio de correo (`confirmConsentEmailChange`) — ambas acciones crean una
+    `settings_version` nueva que debe verse sin recargar la página; limpiado en `privacyReset`.
+  - `supabase/functions/admin-consent/handler_test.ts`: `settingsDeps()` gana un array `history` (más
+    reciente primero, como el `listHistory` real) poblado por cada `insert`; 2 pruebas nuevas (los tres
+    roles ven el historial ordenado DESC con `created_by`/`created_at`; sin rol → 403, método distinto de
+    GET → 405).
+  - `tests/admin/consent-settings.spec.ts`: fixture `HISTORY` (2 versiones) y mock de
+    `GET /fn/admin-consent/settings/history`; 7 casos nuevos bajo "T23.c" (uno por rol del módulo, más
+    reciente primero con quién/cuándo; sin historial → mensaje explícito; error del backend → mensaje
+    legible sin el texto de "sin historial"; botón "Actualizar" vuelve a pedirlo; guardar la configuración
+    lo recarga; cerrar sesión limpia la tabla).
+  - `loop-consentimiento/TASKS.md`: T23.c `[x]`; T23 `[x]` (cierra con T23.c, última subtarea de tres).
+- **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea es de solo
+  lectura (`SELECT` sobre `privacy_settings`, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake
+  pudiera ocultar) — mismo razonamiento que T16.a/T16.c/T21.a.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh` completo (sin flags): typecheck-frontend,
+  lint-frontend [14 = línea base], unit-frontend, panel-unit, panel-e2e (con los 9 casos nuevos, verde),
+  deno-check, deno-test, sql-ciclo-de-vida, sql-guest-limit — las 9 puertas no-opcionales OK; db-reset y
+  e2e-local SKIP explícitos (opt-in, sin cambios de migraciones en esta tarea). Iteración 72, no múltiplo
+  de 5: `GATES_FULL=1` no obligatorio esta vez. `npx -y deno@2.9.6 test --allow-env
+  supabase/functions/admin-consent/handler_test.ts` en aislado: 133/133 OK antes de la corrida completa.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. T23 queda completo (T23.a, T23.b, T23.c). Siguiente
+  tarea desbloqueada en TASKS.md: T23b (sección "Correo saliente" del panel, depende de T12 y T05, ambas
+  `[x]`).
+- Porcentaje: T23 se cierra como tarea completa. **Estricto 22 de 28 = 78,6 %** (antes 21/28 = 75,0 %,
+  tras el cierre de T22 en la Iteración 69).

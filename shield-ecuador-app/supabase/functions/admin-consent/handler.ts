@@ -121,10 +121,19 @@ export interface NewPrivacySettingsInput {
   created_by: string
 }
 
+/** Fila de `privacy_settings` para la pestaña "Historial" (T23.c): mismos campos que `GET /settings` más
+ *  "quién y cuándo" (`created_by`/`created_at`) — ningún campo nuevo que no esté ya en `GET /settings`. */
+export interface PrivacySettingsHistoryRow extends CurrentPrivacySettings {
+  created_by: string
+  created_at: string
+}
+
 export interface SettingsDeps {
   getCurrent: () => Promise<CurrentPrivacySettings | null>
   /** INSERT de una sola tabla (sin problema de atomicidad, a diferencia de `documents.publish`). */
   insert: (row: NewPrivacySettingsInput) => Promise<CurrentPrivacySettings>
+  /** Todas las versiones (cualquier estado), más recientes primero (T23.c). Solo lectura. */
+  listHistory: () => Promise<PrivacySettingsHistoryRow[]>
 }
 
 export interface EmailVerificationRow {
@@ -1293,6 +1302,13 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
         return json(200, updated)
       }
       return json(405, { error: 'method_not_allowed' })
+    }
+
+    if (path === '/settings/history') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      await requireRole(req, PRIVACY_ROLES, deps.guard)
+      const history = await deps.settings.listHistory()
+      return json(200, history)
     }
 
     if (path === '/settings/email-change') {

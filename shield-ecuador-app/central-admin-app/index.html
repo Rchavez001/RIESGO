@@ -1425,6 +1425,22 @@
                 <button class="btn primary" type="submit">Guardar</button>
               </div>
             </form>
+
+            <!-- T23.c: historial de versiones de configuración (GET /settings/history, PRIVACY_ROLES,
+                 solo lectura). Mismos campos que `GET /settings`, más "quién y cuándo" — nada nuevo que
+                 la tabla no exponga ya para la versión vigente. -->
+            <div class="section-toolbar compact">
+              <h3>Historial de versiones</h3>
+              <button id="consentSettingsHistoryRefresh" class="btn secondary small" type="button">Actualizar</button>
+            </div>
+            <p id="consentSettingsHistoryMessage" class="privacy-message" role="alert"></p>
+            <div class="table-scroll">
+              <table class="data-table">
+                <caption class="sr-only">Historial de versiones de la configuración del responsable</caption>
+                <thead><tr><th>Versión</th><th>Correo de privacidad</th><th>Plazo de respuesta (días)</th><th>Conservación de IP (días)</th><th>Creado por</th><th>Creado</th></tr></thead>
+                <tbody id="consentSettingsHistoryRows"></tbody>
+              </table>
+            </div>
           </article>
 
           <!-- T23.b (REQ-15): cambio del correo de privacidad con verificación (correo nuevo → código de

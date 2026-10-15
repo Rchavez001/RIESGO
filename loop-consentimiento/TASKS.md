@@ -684,7 +684,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         (`not_draft`, etc.) deja el modal abierto con mensaje legible; cerrar limpia los campos; pruebas
         Playwright (`consent-retire.spec.ts`, 7 casos).
 
-- [ ] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15)
+- [x] **T23 — Configuración del responsable y delegado** (REQ-14, REQ-15) (hecha 2026-10-14, iteración 72 — cierra con T23.c, última subtarea de tres)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T15 (`update_settings`/`confirm_email_verification`, sin hacer) y T05. T15 y T05 ya están `[x]`: desbloqueada.
   - Formulario con todos los campos; flujo de verificación del nuevo correo con estado
     "pendiente de verificación"; historial de versiones de configuración.
@@ -713,11 +713,28 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         de verificación" visible mientras no se confirme. `POST /settings/email-change` (`ADMIN_ONLY`) y
         `POST /settings/email-change/confirm` (`ADMIN_ONLY`). Casos negativos: código incorrecto,
         vencido, intentos agotados (429 `attempts_exhausted`).
-    - [ ] **T23.c — Panel: historial de versiones de configuración**
-      - Necesita un endpoint nuevo en `admin-consent` (p. ej. `GET /settings/history`, `PRIVACY_ROLES`) que
-        liste `privacy_settings` ordenado por `settings_version` descendente — no existe hoy ninguna ruta
-        que lo haga y la tabla está revocada para `authenticated` (073/075), así que el panel no puede
-        consultarla por su cuenta. Quién y cuándo, sin exponer nada que no esté ya en `GET /settings`.
+    - [x] **T23.c — Panel: historial de versiones de configuración** (hecha 2026-10-14, iteración 72)
+      - **Estado:** cerrada. `GET /settings/history` nuevo en `admin-consent` (`PRIVACY_ROLES`, solo
+        lectura, sin bitácora — mismo criterio que `GET /verify-chains`/`GET /audit-log`: leer no expone
+        dato personal nuevo). `SettingsDeps.listHistory()` (`index.ts`): `SELECT` de `privacy_settings`
+        (`SETTINGS_HISTORY_COLUMNS` = las mismas columnas de `GET /settings` + `created_by`/`created_at`,
+        nunca `privacy_email_pending`/`privacy_email_code_hash`/`privacy_email_code_expires_at`) ordenado
+        por `settings_version DESC`. Panel: tabla "Historial de versiones" dentro de
+        `#consentSettings` (versión, correo de privacidad, plazo de respuesta, conservación de IP, creado
+        por, creado), cargada para los tres roles al verificar la sesión y recargada tras guardar la
+        configuración (T23.a) o confirmar el cambio de correo (T23.b) — ambas acciones crean una
+        `settings_version` nueva que debe aparecer sin recargar la página.
+      - **Tests:** `handler_test.ts` (2 nuevos): los tres roles ven el historial ordenado DESC con
+        `created_by`/`created_at`; sin rol → 403, método distinto de GET → 405. `tests/admin/consent-settings.spec.ts`
+        (7 nuevos bajo "T23.c"): los tres roles ven la tabla; sin historial → mensaje explícito; error del
+        backend → mensaje legible sin el texto de "sin historial"; botón "Actualizar" vuelve a pedirlo;
+        guardar la configuración lo recarga; cerrar sesión limpia la tabla.
+      - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** solo lectura
+        (`SELECT` sobre `privacy_settings`, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera
+        ocultar) — mismo razonamiento que T16.a/T16.c/T21.a.
+      - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
+        (`panel-e2e` incluido; `db-reset`/`e2e-local` SKIP opt-in). Iteración 72, no múltiplo de 5:
+        `GATES_FULL=1` no obligatorio esta vez.
 
 - [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T12 (`EmailSender`, sin iniciar) y T05.

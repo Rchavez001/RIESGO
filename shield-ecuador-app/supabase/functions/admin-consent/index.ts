@@ -26,6 +26,7 @@ import {
   type NewEmailTransportInput,
   type NewEmailVerificationInput,
   type NewPrivacySettingsInput,
+  type PrivacySettingsHistoryRow,
   type PublishInput,
 } from './handler.ts'
 
@@ -39,6 +40,9 @@ const DOC_COLUMNS =
   'id, version, title, content_md, content_sha256, purposes, status, requires_reconsent, change_summary, based_on_id, created_by, created_at, updated_by, updated_at, published_by, published_at, retired_by, retired_at'
 const SETTINGS_COLUMNS =
   'settings_version, controller_name, controller_address, controller_phone, privacy_email, dpo_name, dpo_contact, privacy_policy_url, unsubscribe_subject, response_days, ip_retention_days, four_eyes_publish'
+// T23.c: mismos campos que GET /settings, más "quién y cuándo" (created_by/created_at) — nunca
+// privacy_email_pending/privacy_email_code_hash/privacy_email_code_expires_at (fuera de SETTINGS_COLUMNS).
+const SETTINGS_HISTORY_COLUMNS = `${SETTINGS_COLUMNS}, created_by, created_at`
 const EMAIL_TRANSPORT_COLUMNS =
   'transport_version, mode, from_name, from_email, smtp_host, smtp_port, smtp_username, smtp_password_ciphertext, created_by, created_at'
 const EMAIL_OUTBOX_COLUMNS = 'id, reference_table, reference_id, created_at'
@@ -320,6 +324,14 @@ serve((req) =>
         const { data, error } = await db.from('privacy_settings').insert(row).select(SETTINGS_COLUMNS).single()
         if (error) throw new Error(`privacy_settings insert: ${error.code ?? 'error'}`)
         return data as CurrentPrivacySettings
+      },
+      listHistory: async () => {
+        const { data, error } = await db
+          .from('privacy_settings')
+          .select(SETTINGS_HISTORY_COLUMNS)
+          .order('settings_version', { ascending: false })
+        if (error) throw new Error(`privacy_settings history: ${error.code ?? 'error'}`)
+        return (data ?? []) as PrivacySettingsHistoryRow[]
       },
     },
     emailVerification: {

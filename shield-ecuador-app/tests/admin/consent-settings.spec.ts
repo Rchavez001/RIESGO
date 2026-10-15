@@ -24,7 +24,21 @@ const SETTINGS = {
   four_eyes_publish: true,
 }
 
-type Opts = { roles?: string[]; getStatus?: number; getBody?: unknown; postStatus?: number; postBody?: unknown }
+const HISTORY = [
+  { ...SETTINGS, settings_version: 3, created_by: '0d9b7c1e-2f3a-4b5c-8d6e-7f8091a2b3c4', created_at: '2026-10-10T12:00:00Z' },
+  { ...SETTINGS, settings_version: 2, controller_name: 'Nombre anterior', created_by: '1a2b3c4d-5e6f-4789-a0b1-c2d3e4f50617', created_at: '2026-09-01T08:00:00Z' },
+]
+
+type Opts = {
+  roles?: string[]
+  getStatus?: number
+  getBody?: unknown
+  postStatus?: number
+  postBody?: unknown
+  historyStatus?: number
+  historyErrorBody?: unknown
+  historyBody?: unknown[]
+}
 type Seen = { url: string; method: string; session: string | undefined; body: string | null }
 
 async function setup(page: Page, o: Opts = {}) {
@@ -51,6 +65,10 @@ async function setup(page: Page, o: Opts = {}) {
       if (o.postStatus && o.postStatus !== 200) return json(o.postStatus, o.postBody ?? { error: 'forbidden' })
       const patch = JSON.parse(req.postData() || '{}')
       return json(200, { ...SETTINGS, ...patch, settings_version: SETTINGS.settings_version + 1 })
+    }
+    if (path === '/fn/admin-consent/settings/history' && req.method() === 'GET') {
+      if (o.historyStatus && o.historyStatus !== 200) return json(o.historyStatus, o.historyErrorBody ?? { error: 'forbidden' })
+      return json(200, o.historyBody ?? HISTORY)
     }
     return json(404, { error: 'not_found' })
   })
@@ -183,5 +201,62 @@ test.describe('T23.a · Configuración del responsable y delegado', () => {
     await expect(page.locator('#consentSettingsMessage')).not.toBeEmpty()
     await expect(page.locator('#consentSettingsControllerPhone')).toHaveValue('+593900000000')
     await expect(page.locator('#consentSettingsVersion')).toContainText('3') // no se actualizó: el guardado falló
+  })
+})
+
+// T23.c: historial de versiones (GET /settings/history, PRIVACY_ROLES, solo lectura). Mismos campos que
+// `GET /settings` ya muestra para la vigente, más "quién" (created_by) y "cuándo" (created_at).
+test.describe('T23.c · Historial de versiones de configuración', () => {
+  test.beforeEach(async ({}, info) => { test.skip(info.project.name !== 'desktop-chrome', 'servidor: una sola vez') })
+
+  for (const roles of [['privacy_editor'], ['privacy_admin'], ['privacy_auditor']]) {
+    test(`rol ${roles[0]}: ve el historial, más reciente primero, con quién y cuándo`, async ({ page }) => {
+      await setup(page, { roles })
+      await openConsentAsIdentity(page)
+      const rows = page.locator('#consentSettingsHistoryRows tr')
+      await expect(rows).toHaveCount(2)
+      await expect(rows.nth(0)).toContainText('3') // settings_version DESC
+      await expect(rows.nth(0)).toContainText(HISTORY[0].created_by)
+      await expect(rows.nth(1)).toContainText('2')
+    })
+  }
+
+  test('sin historial todavía → mensaje explícito', async ({ page }) => {
+    await setup(page, { historyBody: [] })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentSettingsHistoryRows')).toContainText('Sin historial todavía.')
+  })
+
+  test('error del backend al listar → mensaje legible, tabla vacía sin el mensaje de "sin historial"', async ({ page }) => {
+    await setup(page, { historyStatus: 403, historyErrorBody: { error: 'forbidden' } })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentSettingsHistoryMessage')).not.toBeEmpty()
+    await expect(page.locator('#consentSettingsHistoryRows')).not.toContainText('Sin historial todavía.')
+    await expect(page.locator('#consentSettingsHistoryRows tr')).toHaveCount(0)
+  })
+
+  test('botón "Actualizar" vuelve a pedir el historial', async ({ page }) => {
+    const { seen } = await setup(page)
+    await openConsentAsIdentity(page)
+    seen.length = 0
+    await page.locator('#consentSettingsHistoryRefresh').click()
+    await expect.poll(() => seen.some((s) => s.url === '/fn/admin-consent/settings/history' && s.method === 'GET')).toBe(true)
+  })
+
+  test('guardar la configuración recarga el historial', async ({ page }) => {
+    const { seen } = await setup(page)
+    await openConsentAsIdentity(page)
+    seen.length = 0
+    await page.locator('#consentSettingsForm').getByRole('button', { name: 'Guardar' }).click()
+    await expect(page.locator('#consentSettingsVersion')).toContainText('4')
+    await expect.poll(() => seen.some((s) => s.url === '/fn/admin-consent/settings/history' && s.method === 'GET')).toBe(true)
+  })
+
+  test('cerrar sesión limpia la tabla', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentSettingsHistoryRows tr')).toHaveCount(2)
+    await page.locator('#privacyLogout').click()
+    await expect(page.locator('#consentSettingsHistoryRows')).toBeEmpty()
   })
 })
