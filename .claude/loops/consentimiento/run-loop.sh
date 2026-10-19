@@ -85,10 +85,12 @@ for i in $(seq 1 "$MAX_ITER"); do
     --max-turns "$MAX_TURNS" \
     --output-format stream-json --verbose 2>&1 | tee "$log" || true
 
-  # Clasificación por el evento final del log (classify_iteration(), en lib-classify.sh): lee SOLO la
-  # última línea no vacía, nunca el log completo. Un `grep` sobre todo el archivo da falsos positivos
-  # en cuanto la propia iteración lee/edita/diffea este script, cuyo texto contiene literalmente
-  # "<promise>LOOP_COMPLETO</promise>" y "usage limit" (ver cabecera de lib-classify.sh).
+  # Clasificación por el ÚLTIMO evento "result" del log (classify_iteration(), en lib-classify.sh): no
+  # por la última línea no vacía, que puede ser un evento "system" posterior (p. ej. task_updated/killed
+  # si esta misma sesión mató una tarea en segundo plano al cerrar). Tampoco por un `grep` sobre todo el
+  # archivo: eso da falsos positivos en cuanto la propia iteración lee/edita/diffea este script, cuyo
+  # texto contiene literalmente "<promise>LOOP_COMPLETO</promise>" y "usage limit" (ver cabecera de
+  # lib-classify.sh).
   classification="$(classify_iteration "$log")"
   case "$classification" in
     LIMITE\ *)
