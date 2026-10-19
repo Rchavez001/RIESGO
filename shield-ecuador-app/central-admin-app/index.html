@@ -1536,6 +1536,12 @@
                 <button class="btn primary" type="submit">Guardar</button>
               </div>
             </form>
+            <!-- T23b.b (REQ-21 c): el resultado solo vive en memoria de esta pestaña (sin ruta GET
+                 para recuperarlo tras recargar, mismo criterio que el "pendiente" de T23.b). -->
+            <div class="modal-actions compact">
+              <button id="consentEmailTransportTestButton" class="btn" type="button" hidden>Enviar correo de prueba</button>
+            </div>
+            <p id="consentEmailTransportTestResult" class="muted"></p>
           </article>
         </section>
       </main>

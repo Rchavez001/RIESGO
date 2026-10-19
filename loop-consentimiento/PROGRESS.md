@@ -2382,3 +2382,43 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   `[x]`).
 - Porcentaje: T23 se cierra como tarea completa. **Estricto 22 de 28 = 78,6 %** (antes 21/28 = 75,0 %,
   tras el cierre de T22 en la Iteración 69).
+
+## Iteración 73 — 2026-10-19 — T23b.b: Panel — botón "Enviar correo de prueba" + último resultado
+- **Punto de partida:** `git status` limpio; `T23b.a` (formulario de configuración de transporte) ya
+  estaba commiteado (`afb40e8`) desde una sesión anterior, sin entrada propia en este archivo — no se
+  reconstruye esa narrativa aquí, solo se documenta lo que cambia en esta iteración. Primera tarea `[ ]`
+  desbloqueada en TASKS.md: T23b.b (el backend `POST /email-transport/test` ya existía completo desde
+  T12.d.2/iteración 37, sin cambios de backend necesarios para esta subtarea).
+- **Cambios:**
+  - `central-admin-app/index.html`: botón `#consentEmailTransportTestButton` (`type="button"`, fuera del
+    `<form>` de T23b.a para no disparar su `submit`) y párrafo `#consentEmailTransportTestResult`, dentro de
+    `#consentEmailTransport`.
+  - `central-admin-app/app.js`: `fillConsentEmailTransportForm` oculta/muestra el botón según haya o no
+    transporte vigente; `resetConsentEmailTransportForm` lo oculta y limpia el resultado (se dispara desde
+    `privacyReset`, mismo patrón que el resto de la sección); `CONSENT_EMAIL_TRANSPORT_TEST_ERRORS`/
+    `consentEmailTransportTestErrorMessage` (mapea `email_transport_not_configured`, `rate_limited`,
+    `rate_limit_unavailable`); `sendConsentEmailTransportTest()` llama a `POST /email-transport/test` sin
+    cuerpo con la sesión aal2 y escribe `fecha — resultado: correcto.`/`… con error (<error_code>).` en éxito
+    HTTP, o el mensaje mapeado en un fallo HTTP; el resultado solo vive en el DOM de esta pestaña (sin ruta
+    `GET` para recuperarlo tras recargar, mismo criterio que el "pendiente" de verificación de correo de
+    T23.b). Listener nuevo en `bindPrivacy`.
+  - `loop-consentimiento/TASKS.md`: T23b.b `[x]`.
+- **Pruebas añadidas:** `tests/admin/consent-email-transport.spec.ts` (7 casos nuevos bajo "T23b.b", más la
+  ruta mock `POST /fn/admin-consent/email-transport/test` en `setup()`): sin transporte configurado el botón
+  no aparece; con transporte configurado aparece y el clic llama al endpoint sin cuerpo con la sesión aal2,
+  mostrando "resultado: correcto"; `success:false` muestra el `error_code`; 429/503/400 muestran el mensaje
+  mapeado correspondiente; cerrar sesión limpia el resultado y oculta el botón; rol auditor no ve ni la
+  sección ni el botón.
+- **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** el endpoint y su efecto en
+  `email_transport_tests`/`admin_audit_log` ya están cerrados y probados contra Postgres real en
+  T12.d.2/TEST-INT.e (D-15 condición 3); esta subtarea es solo el consumo del panel, sin ninguna escritura
+  nueva en la BD.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only "typecheck-frontend lint-frontend
+  unit-frontend panel-unit deno-check deno-test"` OK (lint 14 = línea base); `--only "sql-ciclo-de-vida
+  sql-guest-limit"` OK; `--only "panel-e2e"` OK (incluye los 7 casos nuevos). Iteración 73, no múltiplo de
+  5: `GATES_FULL=1` no obligatorio esta vez. `db-reset`/`e2e-local` SKIP opt-in, sin cambios de migraciones.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. Siguen `[ ]` dentro de la misma división: T23b.c (banner
+  de avisos pendientes) y T23b.d (historial de versiones de transporte), ambas desbloqueadas.
+- Porcentaje: sin cambio en el contador estricto (T23b es una tarea sin numeración de las 28 originales,
+  igual que TEST-INT). Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande).

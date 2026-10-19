@@ -5603,6 +5603,8 @@ function fillConsentEmailTransportForm(transport) {
     ? `Versión de transporte vigente: ${transport.transport_version}. Contraseña: ${transport.password_set ? "configurada" : "no configurada"}.`
     : "Sin transporte configurado todavía.";
   toggleConsentEmailTransportSmtpFields();
+  // T23b.b: el botón de correo de prueba solo tiene sentido si ya hay un transporte guardado.
+  $("#consentEmailTransportTestButton").hidden = !transport;
 }
 
 function resetConsentEmailTransportForm() {
@@ -5610,6 +5612,39 @@ function resetConsentEmailTransportForm() {
   $("#consentEmailTransportMessage").textContent = "";
   fillConsentEmailTransportForm(null);
   $("#consentEmailTransportVersion").textContent = "";
+  $("#consentEmailTransportTestResult").textContent = "";
+}
+
+// T23b.b (REQ-21 c): botón "Enviar correo de prueba" + último resultado, sin ruta GET para
+// recuperarlo tras recargar (solo en memoria de esta pestaña, mismo criterio que T23.b).
+const CONSENT_EMAIL_TRANSPORT_TEST_ERRORS = {
+  ...PRIVACY_ERRORS,
+  email_transport_not_configured: "No hay transporte de correo configurado todavía: guárdalo primero.",
+  rate_limited: "Demasiados correos de prueba seguidos: espera un momento antes de volver a intentarlo.",
+  rate_limit_unavailable: "No se pudo comprobar el límite de intentos. Inténtalo de nuevo en unos segundos.",
+};
+
+function consentEmailTransportTestErrorMessage(code) {
+  return CONSENT_EMAIL_TRANSPORT_TEST_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+async function sendConsentEmailTransportTest() {
+  if (!consentSettingsCanEdit || !consentEmailTransportCurrent) return;
+  const button = $("#consentEmailTransportTestButton");
+  button.disabled = true;
+  $("#consentEmailTransportTestResult").textContent = "Enviando correo de prueba…";
+  try {
+    const res = await privacyCall("/fn/admin-consent/email-transport/test", { session: privacyFlow.token });
+    const when = new Date().toLocaleString("es-EC");
+    if (res.status !== 200) {
+      $("#consentEmailTransportTestResult").textContent = `${when} — ${consentEmailTransportTestErrorMessage(res.data?.error)}`;
+      return;
+    }
+    const outcome = res.data?.success ? "correcto" : `con error (${res.data?.error_code || "desconocido"})`;
+    $("#consentEmailTransportTestResult").textContent = `${when} — resultado: ${outcome}.`;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function loadConsentEmailTransport() {
@@ -5833,6 +5868,7 @@ function bindPrivacy() {
   $("#consentEmailChangeCancel").addEventListener("click", cancelConsentEmailChangePending);
   $("#consentEmailTransportForm").addEventListener("submit", submitConsentEmailTransport);
   $("#consentEmailTransportMode").addEventListener("change", toggleConsentEmailTransportSmtpFields);
+  $("#consentEmailTransportTestButton").addEventListener("click", () => void sendConsentEmailTransportTest());
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
   $("#consentSettingsHistoryRefresh").addEventListener("click", () => void loadConsentSettingsHistory());
   $("#consentDocsRows").addEventListener("click", (event) => {

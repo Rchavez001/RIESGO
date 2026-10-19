@@ -42,6 +42,8 @@ type Opts = {
   getStatus?: number
   saveStatus?: number
   saveBody?: unknown
+  testStatus?: number
+  testBody?: unknown
 }
 type Seen = { url: string; method: string; session: string | undefined; body: string | null }
 
@@ -83,6 +85,10 @@ async function setup(page: Page, o: Opts = {}) {
         created_by: USER.id,
         created_at: '2026-10-14T12:00:00.000Z',
       })
+    }
+    if (path === '/fn/admin-consent/email-transport/test' && req.method() === 'POST') {
+      if (o.testStatus && o.testStatus !== 200) return json(o.testStatus, o.testBody ?? { error: 'rate_limited' })
+      return json(200, o.testBody ?? { success: true, error_code: null })
     }
     return json(404, { error: 'not_found' })
   })
@@ -251,5 +257,72 @@ test.describe('T23b.a · Formulario de transporte de correo saliente', () => {
     await page.locator('#privacyLogout').click()
     await expect(page.locator('#consentEmailTransport')).toBeHidden()
     await expect(page.locator('#consentEmailTransportVersion')).toHaveText('')
+  })
+})
+
+test.describe('T23b.b · Botón "Enviar correo de prueba" + último resultado', () => {
+  test.beforeEach(async ({}, info) => { test.skip(info.project.name !== 'desktop-chrome', 'servidor: una sola vez') })
+
+  test('sin transporte configurado: el botón no aparece', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailTransportTestButton')).toBeHidden()
+  })
+
+  test('con transporte configurado: el botón aparece y, tras guardar, sigue visible', async ({ page }) => {
+    const { seen } = await setup(page, { transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailTransportTestButton')).toBeVisible()
+
+    await page.locator('#consentEmailTransportTestButton').click()
+    await expect(page.locator('#consentEmailTransportTestResult')).toContainText('resultado: correcto')
+    const call = seen.find((s) => s.url === '/fn/admin-consent/email-transport/test' && s.method === 'POST')!
+    expect(call.session).toBe(AAL2_TOKEN)
+    expect(call.body ?? null).toBeNull()
+  })
+
+  test('resultado con error (success:false + error_code): se muestra el código', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT, testBody: { success: false, error_code: 'smtp_connect_failed' } })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentEmailTransportTestButton').click()
+    await expect(page.locator('#consentEmailTransportTestResult')).toContainText('con error (smtp_connect_failed)')
+  })
+
+  test('429 rate_limited: mensaje legible', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT, testStatus: 429, testBody: { error: 'rate_limited' } })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentEmailTransportTestButton').click()
+    await expect(page.locator('#consentEmailTransportTestResult')).toContainText('espera un momento')
+  })
+
+  test('503 rate_limit_unavailable: mensaje legible', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT, testStatus: 503, testBody: { error: 'rate_limit_unavailable' } })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentEmailTransportTestButton').click()
+    await expect(page.locator('#consentEmailTransportTestResult')).toContainText('No se pudo comprobar el límite')
+  })
+
+  test('400 email_transport_not_configured: mensaje legible', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT, testStatus: 400, testBody: { error: 'email_transport_not_configured' } })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentEmailTransportTestButton').click()
+    await expect(page.locator('#consentEmailTransportTestResult')).toContainText('guárdalo primero')
+  })
+
+  test('cerrar sesión limpia el resultado y oculta el botón', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentEmailTransportTestButton').click()
+    await expect(page.locator('#consentEmailTransportTestResult')).not.toBeEmpty()
+    await page.locator('#privacyLogout').click()
+    await expect(page.locator('#consentEmailTransportTestButton')).toBeHidden()
+    await expect(page.locator('#consentEmailTransportTestResult')).toHaveText('')
+  })
+
+  test('rol solo editor/auditor: no ve la sección ni el botón', async ({ page }) => {
+    await setup(page, { roles: ['privacy_auditor'], transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailTransport')).toBeHidden()
+    await expect(page.locator('#consentEmailTransportTestButton')).toBeHidden()
   })
 })

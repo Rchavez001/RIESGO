@@ -767,12 +767,30 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         tras guardar; errores del backend (`invalid_input`, `smtp_fields_required`,
         `smtp_password_required`) se muestran legibles; éxito actualiza la versión y el estado de la
         contraseña sin recargar la página; pruebas Playwright (`consent-email-transport.spec.ts`).
-    - [ ] **T23b.b — Panel: botón "Enviar correo de prueba" + último resultado** (REQ-21 c)
-      - `POST /email-transport/test` (`ADMIN_ONLY`, mismo candado): botón visible solo si hay transporte
-        configurado; muestra el último resultado (fecha + ok/error corto) solo en memoria de esta pestaña
-        (sin ruta GET para recuperarlo tras recargar, mismo criterio que T23.b con el "pendiente" de
-        verificación de correo). Casos negativos del backend a mapear: 429 `rate_limited`, 503
-        `rate_limit_unavailable`, 400 `email_transport_not_configured`.
+    - [x] **T23b.b — Panel: botón "Enviar correo de prueba" + último resultado** (REQ-21 c) (hecha 2026-10-19)
+      - **Estado:** cerrada. `POST /email-transport/test` (`ADMIN_ONLY`, ya existía desde T12.d.2) consumido
+        desde un botón nuevo `#consentEmailTransportTestButton` (`type="button"`, fuera del `<form>` de T23b.a
+        para no disparar su `submit`), visible solo si `consentEmailTransportCurrent` no es `null`
+        (`fillConsentEmailTransportForm` lo oculta/muestra junto con el resto del formulario; `resetConsent
+        EmailTransportForm` lo oculta y limpia el resultado al cerrar sesión, mismo patrón que el resto de
+        `#consentEmailTransport`). `sendConsentEmailTransportTest()`: sin sesión editora o sin transporte no
+        llama al backend; con éxito muestra `fecha — resultado: correcto.` o `… con error (<error_code>).`
+        (cuando `success:false`, el propio backend ya deja `error_code` en la bitácora, T12.d.2); con fallo
+        HTTP mapea `rate_limited`/`rate_limit_unavailable`/`email_transport_not_configured` a un mensaje
+        legible (`CONSENT_EMAIL_TRANSPORT_TEST_ERRORS`, mismo patrón que `CONSENT_EMAIL_TRANSPORT_ERRORS`). El
+        resultado solo vive en memoria del DOM de esta pestaña (sin ruta `GET` para recuperarlo tras recargar,
+        igual que el "pendiente" de verificación de correo de T23.b) — no hizo falta ningún cambio de backend.
+      - **Tests (`tests/admin/consent-email-transport.spec.ts`, 7 nuevos bajo "T23b.b"):** sin transporte
+        configurado el botón no aparece; con transporte configurado aparece y el clic llama al endpoint sin
+        cuerpo con la sesión aal2, mostrando "resultado: correcto"; `success:false` muestra el `error_code`;
+        429/503/400 muestran el mensaje mapeado correspondiente; cerrar sesión limpia el resultado y oculta
+        el botón; rol auditor no ve ni la sección ni el botón.
+      - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** el endpoint y su efecto
+        en `email_transport_tests`/`admin_audit_log` ya están cerrados y probados contra Postgres real en
+        T12.d.2/TEST-INT.e (D-15 condición 3); esta subtarea es solo el consumo del panel, sin ninguna
+        escritura nueva en la BD.
+      - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
+        (`panel-e2e` incluido; `db-reset`/`e2e-local` SKIP opt-in como siempre).
     - [ ] **T23b.c — Panel: banner "Correo no configurado / con errores" + reenviar avisos pendientes** (REQ-21 f)
       - `GET /email-outbox` (conteo + items) y `POST /email-outbox/resend` (`ADMIN_ONLY`). Banner en la
         cabecera de la sección "Consentimiento informado" con el contador y botón de reenvío. **Alcance
