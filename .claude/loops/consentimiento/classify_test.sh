@@ -44,26 +44,40 @@ echo "== classify_iteration() sobre 3 logs reales de loop-consentimiento/logs/ =
 check_classify "09:58 — cierre limpio ITERACION_OK" \
   "$LOGS_DIR/iter-001-20261003-095846.log" "ITERACION_OK"
 
-# 2) Corrida accidental de las 12:39 (editaba este mismo run-loop.sh y a la vez investigaba SMTP/SSRF;
-#    terminó interrumpida): el evento final real es {"type":"system","subtype":"task_notification",...},
-#    SIN veredicto — aunque el log, más arriba, contiene ambas cadenas "<promise>LOOP_COMPLETO</promise>"
-#    y "usage limit" como texto de un diff/lectura de run-loop.sh, no como veredicto. Si esto da
-#    LOOP_COMPLETO o LIMITE, la regresión (grep sobre el log completo) volvió. Antes de este fix esto
-#    daba SIN_CIERRE; sin evento final "result", es INTERRUMPIDA (la iteración se cortó a medias).
-check_classify "12:39 — interrumpida, sin cierre limpio" \
-  "$LOGS_DIR/iter-001-20261003-123942.log" "INTERRUMPIDA"
+# 2) Corrida accidental de las 12:39 (editaba este mismo run-loop.sh y a la vez investigaba SMTP/SSRF):
+#    el evento final no vacío es {"type":"system","subtype":"task_notification",...}, pero SÍ hay un
+#    {"type":"result","is_error":false,"result":"Implemented T12.c…"} más arriba en el log, sin ninguna
+#    <promise> -> SIN_CIERRE. El log, más arriba todavía, contiene ambas cadenas
+#    "<promise>LOOP_COMPLETO</promise>" y "usage limit" como texto de un diff/lectura de run-loop.sh, no
+#    como veredicto: si esto da LOOP_COMPLETO o LIMITE, la regresión (grep sobre el log completo) volvió.
+#    (Antes del fix de 2026-10-19 — mirar solo la última línea no vacía — esto daba INTERRUMPIDA, por no
+#    ver el "result" real detrás del evento "system" final; ver también 2.a-d.)
+check_classify "12:39 — result sin <promise>, seguido de un evento system final" \
+  "$LOGS_DIR/iter-001-20261003-123942.log" "SIN_CIERRE"
 
 # 2.a-c) Las tres corridas del 13-10 (gates.sh/`--full` corriendo en segundo plano cuando el proceso
-#    terminó): cada una se cortó con el mismo patrón, evento final {"type":"system",
-#    "subtype":"task_notification",...} anunciando que las puertas seguían corriendo, nunca un
-#    {"type":"result",...}. La de las 08:49 es la que dejó el WIP de admin-consent (T16.f) sin
-#    commitear que se retomó en la Iteración 60 (ver PROGRESS.md).
-check_classify "08:09 — interrumpida (gates.sh en segundo plano)" \
-  "$LOGS_DIR/iter-001-20261013-080918.log" "INTERRUMPIDA"
-check_classify "08:27 — interrumpida (gates.sh --full en segundo plano, iteración 60)" \
-  "$LOGS_DIR/iter-002-20261013-082756.log" "INTERRUMPIDA"
-check_classify "08:49 — interrumpida (gates.sh en segundo plano; dejó el WIP de T16.f)" \
-  "$LOGS_DIR/iter-003-20261013-084910.log" "INTERRUMPIDA"
+#    terminó): cada una tiene un {"type":"result","is_error":false,"result":"Esperando…"/"Quedo a la
+#    espera…"/"Gates are still running…"} sin <promise>, seguido de eventos "system"/"task_notification"
+#    que anunciaban que las puertas seguían corriendo -> SIN_CIERRE (hubo result, solo que sin cierre).
+#    La de las 08:49 es la que dejó el WIP de admin-consent (T16.f) sin commitear que se retomó en la
+#    Iteración 60 (ver PROGRESS.md). (Antes del fix de 2026-10-19 esto daba INTERRUMPIDA por mirar solo
+#    la última línea no vacía, que es el evento "system", no el "result" que lo precede.)
+check_classify "08:09 — result sin <promise> (gates.sh en segundo plano)" \
+  "$LOGS_DIR/iter-001-20261013-080918.log" "SIN_CIERRE"
+check_classify "08:27 — result sin <promise> (gates.sh --full en segundo plano, iteración 60)" \
+  "$LOGS_DIR/iter-002-20261013-082756.log" "SIN_CIERRE"
+check_classify "08:49 — result sin <promise> (gates.sh en segundo plano; dejó el WIP de T16.f)" \
+  "$LOGS_DIR/iter-003-20261013-084910.log" "SIN_CIERRE"
+
+# 2.d) 18:01 del 19-10: mismo patrón de fondo (gates.sh en segundo plano) pero con una diferencia clave
+#    frente a 2.a-c: el evento final SÍ es {"type":"result","is_error":false,"result":"Esperando a que
+#    termine la ejecución de `gates.sh` en segundo plano…"} (sin <promise>) — lo que viene DESPUÉS en el
+#    log son eventos "system"/"task_updated" con status "killed" (la sesión headless mató la tarea al
+#    cerrar) y "system"/"task_notification". Antes del fix de classify_iteration() (que miraba solo la
+#    última línea no vacía), esto daba INTERRUMPIDA por error: sí hubo result, solo que sin <promise> ->
+#    debe ser SIN_CIERRE.
+check_classify "18:01 — result sin <promise> seguido de eventos system (gates.sh matado al cerrar)" \
+  "$LOGS_DIR/iter-003-20261019-180115.log" "SIN_CIERRE"
 
 # 3) Límite de sesión real (proceso murió antes de emitir ningún JSON; el log es solo la línea de
 #    texto plano que imprime `claude` en ese caso).

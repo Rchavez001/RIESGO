@@ -2,25 +2,49 @@
 # Solo funciones puras (ruta de log -> una línea de salida); sin `set -e`, sin top-level, para poder
 # sourcearse desde una prueba aislada sin ejecutar el resto de run-loop.sh.
 #
-# classify_iteration() lee SOLO la última línea no vacía del log, nunca el log completo: con
-# `--output-format stream-json`, un `grep` sobre todo el archivo encuentra falsos positivos en cuanto
-# la propia iteración lee, edita o diffea run-loop.sh (su tool_result incluye, por ejemplo, la cadena
-# literal "<promise>LOOP_COMPLETO</promise>" o "usage limit" como TEXTO del archivo, no como veredicto
-# real) — reproducido con loop-consentimiento/logs/iter-001-20261003-123942.log, que termina en un
-# evento "system"/"task_notification" (sin cierre limpio) pero contiene ambas cadenas en medio del log
-# porque esa iteración estaba editando este mismo script. El evento final `{"type":"result",...}` (o,
-# si el proceso murió por un límite de sesión/uso, la línea de texto plano que `claude` imprime en ese
-# caso, sin JSON) es la única fuente fiable del veredicto real de la iteración.
+# classify_iteration() busca el ÚLTIMO evento `{"type":"result",...}` en TODO el log, nunca solo la
+# última línea: con `--output-format stream-json`, un `grep`/`tail -n 1` sobre la última línea se
+# equivoca en dos direcciones.
+#   (a) Falso positivo: si la propia iteración lee, edita o diffea run-loop.sh, su tool_result puede
+#       contener la cadena literal "<promise>LOOP_COMPLETO</promise>" o "usage limit" como TEXTO del
+#       archivo, no como veredicto real — reproducido con
+#       loop-consentimiento/logs/iter-001-20261003-123942.log.
+#   (b) Falso negativo (2026-10-19, iter-003-20261019-180115.log): la iteración lanzó `gates.sh` EN
+#       SEGUNDO PLANO y cerró el turno sin `<promise>`; el evento `{"type":"result","is_error":false,
+#       "result":"Esperando a que termine…"}` SÍ se emitió, pero en modo headless (`-p`) cerrar la
+#       sesión mata la tarea en segundo plano, y eso añade eventos `"system"/"task_updated"` (con
+#       `"patch":{"status":"killed"}`) y `"system"/"task_notification"` DESPUÉS del `result` real. Si
+#       solo se mira la última línea no vacía, esa cola de eventos "system" hace que la iteración se
+#       clasifique como INTERRUMPIDA (sin result) cuando en realidad terminó con result y es SIN_CIERRE
+#       (le faltó la <promise>, no el result). classify_test.sh cubre este log.
+# El evento final `{"type":"result",...}` (o, si el proceso murió por un límite de sesión/uso ANTES de
+# emitir cualquier JSON, la línea de texto plano que `claude` imprime en ese caso) sigue siendo la única
+# fuente fiable del veredicto real — solo que ahora se busca retrocediendo desde el final, no se asume
+# que sea la última línea del archivo.
 classify_iteration() {
-  local log="$1" line line_type msg
-  line="$(grep -v '^[[:space:]]*$' "$log" 2>/dev/null | tail -n 1)"
+  local log="$1" line msg is_limit last_nonempty
 
-  line_type="$(printf '%s' "$line" | node -e '
-    try { const j = JSON.parse(require("fs").readFileSync(0, "utf8")); process.stdout.write(j.type || ""); }
-    catch (e) { /* línea final no es JSON (p. ej. límite de sesión/uso: texto plano) */ }
-  ' 2>/dev/null)"
+  last_nonempty="$(grep -v '^[[:space:]]*$' "$log" 2>/dev/null | tail -n 1)"
 
-  if [[ "$line_type" == "result" ]]; then
+  # Único proceso Node: recorre todas las líneas del log y se queda con la última que parsee como JSON
+  # con type "result" (puede no ser la última línea no vacía; ver (b) arriba). Cadena vacía si no hay
+  # ningún "result" en todo el log.
+  line="$(node -e '
+    const fs = require("fs");
+    const lines = fs.readFileSync(process.argv[1], "utf8").split("\n");
+    let last = "";
+    for (const l of lines) {
+      const t = l.trim();
+      if (!t) continue;
+      try {
+        const j = JSON.parse(t);
+        if (j.type === "result") last = t;
+      } catch (e) { /* línea que no es JSON (texto suelto, no el evento result) */ }
+    }
+    process.stdout.write(last);
+  ' "$log" 2>/dev/null)"
+
+  if [[ -n "$line" ]]; then
     msg="$(printf '%s' "$line" | node -e '
       const j = JSON.parse(require("fs").readFileSync(0, "utf8"));
       process.stdout.write(String(j.result ?? ""));
@@ -42,13 +66,13 @@ classify_iteration() {
     elif [[ "$msg" == *"<promise>ITERACION_OK</promise>"* ]];  then echo "ITERACION_OK"
     else echo "SIN_CIERRE"
     fi
-  elif echo "$line" | grep -qiE "hit your session limit|usage limit|rate limit"; then
-    echo "LIMITE $line"
+  elif echo "$last_nonempty" | grep -qiE "hit your session limit|usage limit|rate limit"; then
+    echo "LIMITE $last_nonempty"
   else
-    # El evento final no es "result" (p. ej. "system"/"task_notification", como cuando `run-loop.sh`
-    # mata el proceso con gates.sh todavía corriendo en segundo plano): no hubo veredicto, la iteración
-    # se cortó a medias. Distinto de SIN_CIERRE (sí hubo un "result" final, pero sin <promise> conocida).
-    echo "INTERRUMPIDA $line"
+    # Ningún evento "result" en todo el log (p. ej. el proceso murió con gates.sh todavía corriendo en
+    # primer plano, antes de poder emitir resultado alguno): no hubo veredicto, la iteración se cortó a
+    # medias. Distinto de SIN_CIERRE (sí hubo un "result" final, pero sin <promise> conocida).
+    echo "INTERRUMPIDA $last_nonempty"
   fi
 }
 
