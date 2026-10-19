@@ -737,13 +737,58 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         `GATES_FULL=1` no obligatorio esta vez.
 
 - [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T12 (`EmailSender`, sin iniciar) y T05.
-  - Sección "Correo saliente" dentro de "Consentimiento informado", **visible y operable solo para `privacy_admin`** (editor y auditor no la ven).
-  - Formulario: modo (`resend` por defecto | `smtp`), host, puerto, seguridad SSL/TLS, usuario, contraseña, nombre y correo del remitente, reply-to, habilitado. La clave de Resend no aparece ni se edita. La contraseña se muestra como "configurada / no configurada" y solo se puede reemplazar escribiendo una nueva; nunca viaja de vuelta al navegador.
-  - Aviso en pantalla: "Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS". Botón "Enviar correo de prueba" (al admin conectado) con el último resultado (fecha y ok/error corto).
-  - Banner **"Correo no configurado / con errores"** con el contador de avisos pendientes y el botón para reenviarlos; visible en la pestaña Solicitudes y en la cabecera de la sección.
-  - Historial de versiones de la configuración (sin contraseñas) con quién y cuándo.
-  - **Tests E2E del panel:** editor y auditor no ven la sección; la contraseña no aparece en el DOM, en las respuestas de red ni tras guardar; el banner aparece con el modo roto y desaparece tras reenviar; el correo de prueba queda en la bitácora. Depende de T12 y T05.
+  - **Estado real (2026-10-14, reconciliación):** backend completo desde T12.d (`GET/POST /email-transport`,
+    `POST /email-transport/test`, `GET /email-outbox`, `POST /email-outbox/resend`, todas `ADMIN_ONLY` en
+    `admin-consent/handler.ts`); falta solo el panel. T12 y T05 ya están `[x]`: desbloqueada.
+  - **Desviación de SPEC detectada al revisar el backend real (documentar, no corregir aquí):** el modelo
+    orientativo de REQ-21/§5 lista columnas `enabled`/`reply_to` para `email_transport_settings`; la
+    migración real (079, T12.b, ya cerrada) y `UpdateEmailTransportSchema` (`handler.ts`, T12.d.1, ya
+    cerrada) **no las tienen** — solo `mode`, `from_name`, `from_email`, `smtp_host`, `smtp_port` (465|2525
+    únicos), `smtp_username`, `smtp_password`. El panel se construye contra la API real (sin esos dos
+    campos, que no existen); si se necesitan, es una migración nueva + cambio de `handler.ts` fuera del
+    alcance de T23b (sección de panel).
+  - Sección "Correo saliente" dentro de "Consentimiento informado", **visible y operable solo para
+    `privacy_admin`** (editor y auditor no la ven) — mismo patrón que T23.b (`#consentEmailChange`).
+  - **División (2026-10-14, antes de codificar — mezcla formulario, prueba, banner e historial, mismo
+    patrón que T21/T22/T23/T12.d/T15/T16):** formulario de configuración, luego correo de prueba, luego
+    banner de avisos pendientes, luego historial; en ese orden de dependencia.
+    - [x] **T23b.a — Panel: formulario de configuración de transporte de correo saliente** (REQ-21 a, b, d)
+      - `GET /email-transport` (carga, puede ser `null` si nunca se configuró) y `POST /email-transport`
+        (guarda, crea `transport_version` nueva), ambas `ADMIN_ONLY`. Campos: modo (`resend`|`smtp`),
+        nombre/correo del remitente (siempre), host/puerto (465|2525, `<select>`)/usuario/contraseña (solo
+        modo `smtp`, contraseña opcional si ya hay una guardada). Texto "Contraseña: configurada/no
+        configurada" en vez de mostrarla; el campo de contraseña nunca se rellena desde `GET` ni se deja
+        con lo escrito tras un guardado (éxito o error). Aviso fijo en pantalla: "Supabase bloquea los
+        puertos 25 y 587; usa 465 con SSL/TLS".
+      - **Aceptación:** solo `privacy_admin` ve la sección (editor/auditor, oculta); sin transporte
+        configurado se ve "Sin transporte configurado todavía." con el formulario en modo `resend` por
+        defecto; guardar en modo `resend` no manda campos `smtp_*`; cambiar a `smtp` exige host/usuario
+        en el cliente antes de llamar al backend; la contraseña nunca aparece en el DOM tras cargar ni
+        tras guardar; errores del backend (`invalid_input`, `smtp_fields_required`,
+        `smtp_password_required`) se muestran legibles; éxito actualiza la versión y el estado de la
+        contraseña sin recargar la página; pruebas Playwright (`consent-email-transport.spec.ts`).
+    - [ ] **T23b.b — Panel: botón "Enviar correo de prueba" + último resultado** (REQ-21 c)
+      - `POST /email-transport/test` (`ADMIN_ONLY`, mismo candado): botón visible solo si hay transporte
+        configurado; muestra el último resultado (fecha + ok/error corto) solo en memoria de esta pestaña
+        (sin ruta GET para recuperarlo tras recargar, mismo criterio que T23.b con el "pendiente" de
+        verificación de correo). Casos negativos del backend a mapear: 429 `rate_limited`, 503
+        `rate_limit_unavailable`, 400 `email_transport_not_configured`.
+    - [ ] **T23b.c — Panel: banner "Correo no configurado / con errores" + reenviar avisos pendientes** (REQ-21 f)
+      - `GET /email-outbox` (conteo + items) y `POST /email-outbox/resend` (`ADMIN_ONLY`). Banner en la
+        cabecera de la sección "Consentimiento informado" con el contador y botón de reenvío. **Alcance
+        reducido frente al texto original de T23b:** "visible… en la pestaña Solicitudes" se descarta por
+        ahora — T24 (Bitácora, Evidencia y Solicitudes) todavía no existe; cuando se cree, esa tarea debe
+        añadir el mismo banner ahí, reutilizando el mismo endpoint.
+    - [ ] **T23b.d — Panel: historial de versiones de transporte (sin contraseñas)** (REQ-21 b)
+      - Mismo patrón que T23.c (`GET /settings/history`): si `email_outbox`/`email-transport` necesitan un
+        endpoint de historial nuevo en `admin-consent`, crearlo aquí (hoy no existe ninguno; `GET
+        /email-transport` solo devuelve la vigente). Tabla con versión, modo, remitente, contraseña
+        configurada (sí/no, nunca la contraseña ni su ciphertext), creado por, creado.
+  - **Tests E2E del panel (repartidos entre las subtareas de arriba):** editor y auditor no ven la sección;
+    la contraseña no aparece en el DOM, en las respuestas de red ni tras guardar; el banner aparece con el
+    modo roto y desaparece tras reenviar; el correo de prueba queda en la bitácora (ya cubierto del lado
+    del backend por TEST-INT.e/D-15; el panel solo necesita mostrar el resultado, no probar la bitácora de
+    nuevo).
 
 - [ ] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T16 (las acciones que esta pantalla invoca) y T05.

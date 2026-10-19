@@ -5563,6 +5563,107 @@ function cancelConsentEmailChangePending() {
   $("#consentEmailChangeMessage").textContent = "";
 }
 
+// T23b.a (REQ-21 a, b, d): formulario de configuración de transporte de correo saliente. `GET/POST
+// /email-transport` (admin-consent/handler.ts) exigen `privacy_admin` (ADMIN_ONLY, mismo candado que
+// T23.b): se reutiliza `consentSettingsCanEdit`, el mismo gate exacto. El backend real (079/T12.d.1) no
+// tiene `enabled`/`reply_to` (sí los lista el modelo orientativo de REQ-21/§5): este formulario solo cubre
+// los campos que la API realmente acepta (ver nota de desviación en TASKS.md, T23b).
+let consentEmailTransportCurrent = null;
+
+const CONSENT_EMAIL_TRANSPORT_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "Revisa los datos: el nombre y el correo del remitente son obligatorios, y el puerto SMTP debe ser 465 o 2525.",
+  smtp_fields_required: "En modo SMTP, el host, el puerto y el usuario son obligatorios.",
+  smtp_password_required: "Escribe la contraseña SMTP: todavía no hay ninguna guardada para reutilizar.",
+};
+
+function consentEmailTransportErrorMessage(code) {
+  return CONSENT_EMAIL_TRANSPORT_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+// Oculta/muestra los campos SMTP según el modo elegido (no cambia si no hay `select`, p. ej. si el DOM aún
+// no cargó esta sección en una página distinta de tests).
+function toggleConsentEmailTransportSmtpFields() {
+  const modeField = $("#consentEmailTransportMode");
+  if (!modeField) return;
+  $("#consentEmailTransportSmtpFields").hidden = modeField.value !== "smtp";
+}
+
+// `transport` es la fila pública (`password_set`, nunca la contraseña/ciphertext) o `null` si nunca se
+// configuró. El campo de contraseña SIEMPRE queda vacío: ni `GET` ni una respuesta de `POST` la traen.
+function fillConsentEmailTransportForm(transport) {
+  $("#consentEmailTransportMode").value = transport?.mode ?? "resend";
+  $("#consentEmailTransportFromName").value = transport?.from_name ?? "";
+  $("#consentEmailTransportFromEmail").value = transport?.from_email ?? "";
+  $("#consentEmailTransportSmtpHost").value = transport?.smtp_host ?? "";
+  $("#consentEmailTransportSmtpPort").value = transport?.smtp_port ? String(transport.smtp_port) : "465";
+  $("#consentEmailTransportSmtpUsername").value = transport?.smtp_username ?? "";
+  $("#consentEmailTransportSmtpPassword").value = "";
+  $("#consentEmailTransportVersion").textContent = transport
+    ? `Versión de transporte vigente: ${transport.transport_version}. Contraseña: ${transport.password_set ? "configurada" : "no configurada"}.`
+    : "Sin transporte configurado todavía.";
+  toggleConsentEmailTransportSmtpFields();
+}
+
+function resetConsentEmailTransportForm() {
+  consentEmailTransportCurrent = null;
+  $("#consentEmailTransportMessage").textContent = "";
+  fillConsentEmailTransportForm(null);
+  $("#consentEmailTransportVersion").textContent = "";
+}
+
+async function loadConsentEmailTransport() {
+  const res = await privacyCall("/fn/admin-consent/email-transport", { session: privacyFlow.token, method: "GET" });
+  if (res.status === 200) {
+    consentEmailTransportCurrent = res.data;
+    $("#consentEmailTransportMessage").textContent = "";
+    fillConsentEmailTransportForm(consentEmailTransportCurrent);
+    return;
+  }
+  $("#consentEmailTransportMessage").textContent = consentEmailTransportErrorMessage(res.data?.error);
+}
+
+async function submitConsentEmailTransport(event) {
+  event.preventDefault();
+  if (!consentSettingsCanEdit) return;
+
+  const mode = $("#consentEmailTransportMode").value;
+  const fromName = $("#consentEmailTransportFromName").value.trim();
+  const fromEmail = $("#consentEmailTransportFromEmail").value.trim();
+  if (!fromName || !fromEmail) {
+    $("#consentEmailTransportMessage").textContent = "El nombre y el correo del remitente son obligatorios.";
+    return;
+  }
+
+  const payload = { mode, from_name: fromName, from_email: fromEmail };
+  if (mode === "smtp") {
+    const host = $("#consentEmailTransportSmtpHost").value.trim();
+    const port = Number($("#consentEmailTransportSmtpPort").value);
+    const username = $("#consentEmailTransportSmtpUsername").value.trim();
+    const password = $("#consentEmailTransportSmtpPassword").value;
+    if (!host || !username) {
+      $("#consentEmailTransportMessage").textContent = "El host y el usuario SMTP son obligatorios en modo SMTP.";
+      return;
+    }
+    payload.smtp_host = host;
+    payload.smtp_port = port;
+    payload.smtp_username = username;
+    if (password) payload.smtp_password = password;
+  }
+
+  $("#consentEmailTransportMessage").textContent = "";
+  const res = await privacyCall("/fn/admin-consent/email-transport", { session: privacyFlow.token, body: payload });
+  // La contraseña nunca se queda en el formulario, haya ido bien o mal.
+  $("#consentEmailTransportSmtpPassword").value = "";
+  if (res.status !== 200) {
+    $("#consentEmailTransportMessage").textContent = consentEmailTransportErrorMessage(res.data?.error);
+    return;
+  }
+  consentEmailTransportCurrent = res.data;
+  fillConsentEmailTransportForm(consentEmailTransportCurrent);
+  $("#consentEmailTransportMessage").textContent = "Transporte de correo guardado.";
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5615,6 +5716,8 @@ function privacyReset(message = "") {
   resetConsentSettingsHistory();
   $("#consentEmailChange").hidden = true;
   resetConsentEmailChangeForm();
+  $("#consentEmailTransport").hidden = true;
+  resetConsentEmailTransportForm();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5702,11 +5805,14 @@ async function privacyVerify(event) {
   $("#consentDraftForm").hidden = !consentDocsCanEdit;
   // T23.b: sección completa oculta para editor/auditor (no solo de solo lectura, a diferencia de T23.a).
   $("#consentEmailChange").hidden = !consentSettingsCanEdit;
+  // T23b.a: mismo candado ADMIN_ONLY que T23.b (POST /email-transport exige `privacy_admin`).
+  $("#consentEmailTransport").hidden = !consentSettingsCanEdit;
   privacyMessage("");
   privacyShow("identity");
   void loadConsentDocuments();
   void loadConsentSettings();
   void loadConsentSettingsHistory();
+  void loadConsentEmailTransport();
 }
 
 async function privacyLogout(message = "") {
@@ -5725,6 +5831,8 @@ function bindPrivacy() {
   $("#consentEmailChangeRequestForm").addEventListener("submit", requestConsentEmailChange);
   $("#consentEmailChangeConfirmForm").addEventListener("submit", confirmConsentEmailChange);
   $("#consentEmailChangeCancel").addEventListener("click", cancelConsentEmailChangePending);
+  $("#consentEmailTransportForm").addEventListener("submit", submitConsentEmailTransport);
+  $("#consentEmailTransportMode").addEventListener("change", toggleConsentEmailTransportSmtpFields);
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
   $("#consentSettingsHistoryRefresh").addEventListener("click", () => void loadConsentSettingsHistory());
   $("#consentDocsRows").addEventListener("click", (event) => {

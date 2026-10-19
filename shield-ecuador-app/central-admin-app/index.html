@@ -1478,6 +1478,65 @@
               </form>
             </div>
           </article>
+
+          <!-- T23b.a (REQ-21 a, b, d): formulario de configuración de transporte de correo saliente.
+               `GET /email-transport` (ADMIN_ONLY) carga la vigente (o null si nunca se configuró);
+               `POST /email-transport` (ADMIN_ONLY) crea una `transport_version` nueva. Sección completa
+               oculta para editor/auditor, mismo patrón que `#consentEmailChange`. La contraseña SMTP
+               NUNCA viaja de vuelta al navegador: `GET`/`POST` solo devuelven `password_set` (booleano);
+               el campo de contraseña del formulario queda vacío siempre (dejarlo en blanco al guardar en
+               modo smtp conserva la contraseña vigente, re-cifrada bajo la versión nueva por el backend).
+               `enabled`/`reply-to` del modelo orientativo de REQ-21/§5 no existen en el backend real (079/
+               T12.d.1, ya cerradas): este formulario solo cubre los campos que la API realmente acepta. -->
+          <article id="consentEmailTransport" class="card" hidden>
+            <div class="section-toolbar compact">
+              <h2>Correo saliente</h2>
+            </div>
+            <p id="consentEmailTransportMessage" class="privacy-message" role="alert"></p>
+            <p id="consentEmailTransportVersion" class="muted"></p>
+            <form id="consentEmailTransportForm" class="form-grid compact" novalidate>
+              <label>
+                Modo
+                <select id="consentEmailTransportMode">
+                  <option value="resend">Resend (integración existente)</option>
+                  <option value="smtp">SMTP</option>
+                </select>
+              </label>
+              <label>
+                Nombre del remitente
+                <input id="consentEmailTransportFromName" type="text" maxlength="300" required />
+              </label>
+              <label>
+                Dirección del remitente
+                <input id="consentEmailTransportFromEmail" type="email" maxlength="254" required />
+              </label>
+              <div id="consentEmailTransportSmtpFields" hidden>
+                <p class="muted">Supabase bloquea los puertos 25 y 587; usa 465 con SSL/TLS.</p>
+                <label>
+                  Host SMTP
+                  <input id="consentEmailTransportSmtpHost" type="text" maxlength="255" />
+                </label>
+                <label>
+                  Puerto
+                  <select id="consentEmailTransportSmtpPort">
+                    <option value="465">465 (SSL/TLS)</option>
+                    <option value="2525">2525</option>
+                  </select>
+                </label>
+                <label>
+                  Usuario SMTP
+                  <input id="consentEmailTransportSmtpUsername" type="text" maxlength="255" />
+                </label>
+                <label>
+                  Clave SMTP (dejar en blanco para conservar la actual)
+                  <input id="consentEmailTransportSmtpPassword" type="password" maxlength="500" autocomplete="new-password" />
+                </label>
+              </div>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Guardar</button>
+              </div>
+            </form>
+          </article>
         </section>
       </main>
     </div>
