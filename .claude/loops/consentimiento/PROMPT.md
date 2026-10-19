@@ -155,6 +155,29 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
   `cd … && docker exec … psql …`, y `bash …/gates.sh --only …; echo "EXIT=$?"` — todos con "This command
   requires approval" o el error de comando compuesto; la única invocación que corrió limpia fue
   `bash .claude/loops/consentimiento/gates.sh --only sql-ciclo-de-vida` sola, sin nada antes ni después.)
+- **Nunca ejecutar `gates.sh` en segundo plano (`run_in_background`, `&`) ni terminar el turno
+  "esperando" a que termine: en modo headless, terminar el turno mata las tareas en segundo plano.**
+  Si la suite completa puede superar el límite de un comando (10 min = 600000 ms), ejecútala por
+  partes **en primer plano**, cada parte en su propia llamada a Bash con `--only "<puertas>"` y
+  `timeout: 600000` (por ejemplo, primero las puertas rápidas y luego `panel-e2e` y las SQL por
+  separado). (2026-10-19: `iter-003-20261019-180115.log` lanzó `gates.sh` en segundo plano y cerró el
+  turno con el `result` "Esperando a que termine la ejecución de `gates.sh`…", sin `<promise>`; al
+  terminar la sesión headless, el proceso en segundo plano quedó `{"type":"system","subtype":
+  "task_updated","patch":{"status":"killed"}}` — la iteración se perdió sin veredicto. Ver también el
+  fix de `classify_iteration()` en `lib-classify.sh`: ese `result` sin cierre ya no se confunde con
+  "interrumpida sin ningún result" porque ahora se busca el ÚLTIMO evento `result` del log completo, no
+  la última línea.)
+  - Grupos recomendados (medidos el 2026-10-19 en este entorno, sin `GATES_FULL`, todos muy por debajo
+    de los 600000 ms):
+    - "puertas rápidas": `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` → ~51s.
+    - "SQL": `--only "sql-ciclo-de-vida sql-guest-limit"` → ~23s.
+    - "panel-e2e" (perfiles por defecto `desktop-chrome`+`pixel-7-chrome`): `--only "panel-e2e"` → ~432s (7m12s) — el grupo que más se acerca al límite, pero con margen de sobra bajo los 600000 ms.
+  - **`GATES_FULL=1` (7 perfiles, obligatorio cada 5 iteraciones y antes de release) NO entra en este
+    esquema:** `panel-e2e` solo, con los 7 perfiles, mide ~1416–1430s (>10 min; ver Iteración 50 en
+    PROGRESS.md) y `--full` es todo-o-nada — `gates.sh` no permite elegir un subconjunto de perfiles vía
+    `--only`. Mientras eso no cambie, no intentes forzarlo en segundo plano para esquivar el límite de
+    10 min: documenta el bloqueo en `PROGRESS.md`/`DECISIONS.md` y pide verificación humana para esa
+    corrida en particular (fuera de una sesión headless de un solo comando).
 
 **Migraciones**
 - Nunca modifiques una migración existente. Crea la siguiente disponible: detecta el número mayor
