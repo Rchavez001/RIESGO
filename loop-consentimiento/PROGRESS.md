@@ -3279,3 +3279,46 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   conocidos sin cambios: `GATES_FULL=1` humano desde la Iteración 75, D-08, D-16 (bloquea T19b en su Paso 2B).
 - Porcentaje: sin cambio en el conteo estricto de 28 (T98 no es una de esas 28). 23/28 = **82,1 %** sigue
   siendo la cifra vigente.
+
+## Iteración 88 — 2026-10-20 — D-16 decidida y UX-integración (merge `wip/ux-redesign`)
+- **Punto de partida:** sesión interactiva (no headless) a petición directa de la persona responsable para
+  preparar el release. D-16 (Paso 2B de T19b) seguía `ABIERTA`; se le preguntó a la persona responsable con
+  las 3 opciones ya redactadas en `DECISIONS.md` y eligió la **Opción A** (nuevo `channel='invitado'` vía
+  migración siguiente disponible + endpoint estrecho con excepción acotada en `auth-guard.ts` para sesión
+  anónima real). Se registró en `DECISIONS.md` (D-16 → DECIDIDA) y se quitó el `⛔ BLOQUEADA` de T19b en
+  `TASKS.md` (commit `659e45d`).
+- **UX-integración:** `git merge --no-ff wip/ux-redesign` sobre `feature/consentimiento-lopdp` (`git status`
+  limpio antes de fusionar, confirmado). 4 conflictos reales (los demás archivos de la rama UX se aplicaron
+  solos, sin solape con el módulo):
+  - `App.tsx`: ambas ramas modificaban el `return` final de `ProtectedShell` para el caso no-admin. Se
+    combinó `ReconsentGate` (T20/REQ-09, módulo) envolviendo el `DojoShell` con la lógica de invitado/
+    `isAdmin`/`GuestRegisterPrompt` de UX — `ReconsentGate` ya trataba `is_anonymous` como `'clear'` desde su
+    propio comentario ("Guests... skip this check entirely"), así que envolver el caso invitado no introduce
+    ningún bloqueo nuevo para sesiones anónimas.
+  - `senseiChallengeTypes.ts`: conflicto cosmético (un comentario sobre `generated_at` de la rama UX); se
+    conservó.
+  - `DojoDetailPage.tsx`: las dos ramas evolucionaron el aviso de tope de invitado de forma distinta — HEAD
+    (módulo) ya validaba el tope en servidor (`GUEST_LIMIT_REACHED`, migración 076/INV-SEC), UX solo lo
+    calculaba en cliente. Se combinó el texto del aviso de UX (menciona el número del límite) con el manejo
+    de error `GUEST_LIMIT_REACHED` del módulo.
+  - `tests/frontend/dojo-detail.spec.ts`: ambas ramas añadieron una prueba distinta para el mismo escenario
+    (tope de 10 preguntas) por rutas distintas (error de servidor vs. flujo de UI completo); se conservaron
+    las dos, no se descartó ninguna.
+  - `enable_anonymous_sign_ins` en `supabase/config.toml` no lo tocó la rama UX: sigue en `true` solo en el
+    árbol local, sin desplegarse (D-12; T99 lo verifica).
+  - Commit de la fusión: `c946441`.
+- **Gates (por partes, en primer plano, cada uno en su propia llamada, como exige el protocolo headless aun
+  fuera de una sesión headless):** `--only "typecheck-frontend lint-frontend unit-frontend panel-unit
+  deno-check deno-test"` OK (~2.9 min); `--only "sql-ciclo-de-vida sql-guest-limit"` OK (~27s); `--only
+  "panel-e2e"` (perfiles por defecto) OK (638s). `GATES_FULL=1` (7 perfiles) **no se corrió esta iteración**:
+  sigue pendiente de una corrida humana fuera de una sesión de un solo comando (ver Iteración 75 y D-08/D-16
+  en los pendientes de T99 — ya no por D-16, que quedó decidida, pero el resto del motivo sigue vigente).
+- **Pendiente detectado, sin corregir (fuera del alcance de esta tarea):** `tests/proposal.visual.cjs`
+  (versionado, no corre en `gates.sh`) sigue apuntando a `http://localhost:3001/demo/index.html`, ruta que
+  esta misma fusión borró (`frontend/public/demo/`). La tarea `UX-integración` de `TASKS.md` ya pedía
+  confirmar esto con la persona responsable antes de retirar o actualizar el archivo; no se tocó.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) `tests/proposal.visual.cjs` roto (ver arriba); (2) `GATES_FULL=1`
+  sigue pendiente de corrida humana; (3) D-08 sigue `ABIERTA`; (4) T19b Paso 2B ya desbloqueada por D-16 pero
+  sin implementar todavía (siguiente tarea de esta misma sesión).
+- Porcentaje: sin cambio (la fusión UX no cierra ninguna de las 28 tareas del conteo estricto).
