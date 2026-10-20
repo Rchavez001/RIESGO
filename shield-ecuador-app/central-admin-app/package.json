@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/tpotService.test.js"
+    "test": "node tests/tpotService.test.js && node ../tests/privacy-fn-route.test.cjs"
   },
   "engines": {
     "node": "20.x"

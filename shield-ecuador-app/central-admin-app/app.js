@@ -5796,6 +5796,237 @@ async function resendConsentEmailOutbox() {
   }
 }
 
+// T24.a (REQ-16): bitácora administrativa. Los tres roles del módulo la ven (mismo candado que
+// `GET /audit-log`/`GET /audit-log/export.csv`, PRIVACY_ROLES): a diferencia de `#consentEmailTransport`,
+// aquí no hace falta ninguna bandera `consentXCanEdit` para ocultar la sección completa.
+const CONSENT_AUDIT_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "Revisa los filtros: hay un valor que no se reconoce (fecha, ID de actor o acción).",
+  reason_required: "El motivo es obligatorio para exportar.",
+};
+
+function consentAuditErrorMessage(code) {
+  return CONSENT_AUDIT_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+let consentAuditFilter = { from: "", to: "", actor_id: "", action: "" };
+const CONSENT_AUDIT_LIMIT = 50;
+let consentAuditOffset = 0;
+let consentAuditTotal = 0;
+let consentAuditItems = [];
+
+// Mismos nombres que `AuditLogFilter`/`AuditLogQuerySchema` (admin-consent/handler.ts): `from`/`to` solo
+// llevan fecha (sin hora, sin ":") porque el proxy del panel (`PRIVACY_FN_RE`, server.js) no admitía
+// percent-encoding en el query hasta T24.a — con `encodeURIComponent` ya sí, pero los campos de fecha
+// usan `type="date"` igual (sin hora) por simplicidad, no por esa restricción.
+function buildConsentAuditQuery(extra = {}) {
+  const params = { ...consentAuditFilter, ...extra };
+  const parts = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    parts.push(`${key}=${encodeURIComponent(value)}`);
+  }
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+function renderConsentAuditRows() {
+  const rows = $("#consentAuditRows");
+  if (consentAuditItems.length === 0) {
+    rows.innerHTML = `<tr><td colspan="7" class="muted">Sin entradas para los filtros seleccionados.</td></tr>`;
+  } else {
+    rows.innerHTML = consentAuditItems.map((row) => `
+      <tr>
+        <td>${esc(new Date(row.created_at).toLocaleString("es-EC"))}</td>
+        <td>${esc(row.actor_id || "—")}</td>
+        <td>${esc(row.actor_role)}</td>
+        <td>${esc(row.action)}</td>
+        <td>${esc(row.entity)}${row.entity_id ? ` (${esc(row.entity_id)})` : ""}</td>
+        <td>${row.reason ? esc(row.reason) : "—"}</td>
+        <td><button type="button" class="btn secondary small" data-audit-detail-id="${esc(String(row.id))}">Ver detalle</button></td>
+      </tr>
+    `).join("");
+  }
+  const from = consentAuditTotal === 0 ? 0 : consentAuditOffset + 1;
+  const to = consentAuditOffset + consentAuditItems.length;
+  $("#consentAuditPageInfo").textContent = `Mostrando ${from}-${to} de ${consentAuditTotal}`;
+  $("#consentAuditPrev").disabled = consentAuditOffset === 0;
+  $("#consentAuditNext").disabled = to >= consentAuditTotal;
+}
+
+async function loadConsentAuditLog() {
+  const query = buildConsentAuditQuery({ limit: CONSENT_AUDIT_LIMIT, offset: consentAuditOffset });
+  const res = await privacyCall(`/fn/admin-consent/audit-log${query}`, { session: privacyFlow.token, method: "GET" });
+  if (res.status === 200 && res.data && Array.isArray(res.data.items)) {
+    consentAuditItems = res.data.items;
+    consentAuditTotal = res.data.total || 0;
+    $("#consentAuditMessage").textContent = "";
+    renderConsentAuditRows();
+    return;
+  }
+  // Error: no se sabe cuántas entradas hay realmente, así que la tabla queda vacía (sin el mensaje "Sin
+  // entradas", que afirmaría algo que no se sabe) y solo se muestra el motivo del fallo.
+  consentAuditItems = [];
+  consentAuditTotal = 0;
+  $("#consentAuditRows").innerHTML = "";
+  $("#consentAuditPageInfo").textContent = "";
+  $("#consentAuditMessage").textContent = consentAuditErrorMessage(res.data?.error);
+}
+
+function submitConsentAuditFilter(event) {
+  event.preventDefault();
+  consentAuditFilter = {
+    from: $("#consentAuditFrom").value,
+    to: $("#consentAuditTo").value,
+    actor_id: $("#consentAuditActorId").value.trim(),
+    action: $("#consentAuditAction").value.trim(),
+  };
+  consentAuditOffset = 0;
+  void loadConsentAuditLog();
+}
+
+function clearConsentAuditFilters() {
+  $("#consentAuditFrom").value = "";
+  $("#consentAuditTo").value = "";
+  $("#consentAuditActorId").value = "";
+  $("#consentAuditAction").value = "";
+  consentAuditFilter = { from: "", to: "", actor_id: "", action: "" };
+  consentAuditOffset = 0;
+  void loadConsentAuditLog();
+}
+
+function consentAuditPrev() {
+  consentAuditOffset = Math.max(0, consentAuditOffset - CONSENT_AUDIT_LIMIT);
+  void loadConsentAuditLog();
+}
+
+function consentAuditNext() {
+  consentAuditOffset += CONSENT_AUDIT_LIMIT;
+  void loadConsentAuditLog();
+}
+
+// Diff genérico de `before`/`after` (JSONB arbitrario de `admin_audit_log`, sin una forma fija por
+// `action`/`entity`): reutiliza `diffLines` (T22.a) por cada campo presente en cualquiera de los dos
+// lados, en vez de la lista fija `CONSENT_DIFF_FIELD_ORDER` (pensada solo para `consent_documents`).
+function consentAuditFieldText(value) {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2);
+}
+
+// `hasBefore`/`hasAfter` distinguen "el campo no existía en ese lado" de "existía con un valor nulo":
+// sin esto, un campo nuevo (p. ej. `title` al publicar por primera vez) mostraría un lado "antes"
+// inventado ("undefined") en vez de solo el lado que de verdad cambió.
+function renderConsentAuditDiffField(field, hasBefore, before, hasAfter, after) {
+  let rows;
+  if (hasBefore && hasAfter) {
+    const ops = diffLines(consentAuditFieldText(before), consentAuditFieldText(after));
+    rows = ops.map((op) => {
+      if (op.type === "equal") return `<tr><td>${esc(op.before)}</td><td>${esc(op.after)}</td></tr>`;
+      if (op.type === "remove") return `<tr><td class="diff-removed">${esc(op.before)}</td><td></td></tr>`;
+      return `<tr><td></td><td class="diff-added">${esc(op.after)}</td></tr>`;
+    }).join("");
+  } else if (hasAfter) {
+    rows = consentAuditFieldText(after).split("\n").map((line) => `<tr><td></td><td class="diff-added">${esc(line)}</td></tr>`).join("");
+  } else {
+    rows = consentAuditFieldText(before).split("\n").map((line) => `<tr><td class="diff-removed">${esc(line)}</td><td></td></tr>`).join("");
+  }
+  return `
+    <div class="consent-diff-field">
+      <h4>${esc(field)}</h4>
+      <table class="data-table consent-diff-table">
+        <caption class="sr-only">Diferencias de ${esc(field)}</caption>
+        <thead><tr><th>Antes</th><th>Después</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderConsentAuditDiff(before, after) {
+  const container = $("#consentAuditDetailFields");
+  const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (isPlainObject(before) || isPlainObject(after)) {
+    const beforeObj = isPlainObject(before) ? before : {};
+    const afterObj = isPlainObject(after) ? after : {};
+    const fields = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]));
+    container.innerHTML = fields.map((field) => renderConsentAuditDiffField(
+      field,
+      Object.prototype.hasOwnProperty.call(beforeObj, field), beforeObj[field],
+      Object.prototype.hasOwnProperty.call(afterObj, field), afterObj[field],
+    )).join("");
+    return;
+  }
+  if (before === null && after === null) {
+    container.innerHTML = `<p class="muted">Sin datos de antes/después para esta entrada.</p>`;
+    return;
+  }
+  container.innerHTML = renderConsentAuditDiffField("valor", before !== null, before, after !== null, after);
+}
+
+function openConsentAuditDetail(row) {
+  $("#consentAuditDetailMeta").innerHTML = `
+    <p><strong>Fecha:</strong> ${esc(new Date(row.created_at).toLocaleString("es-EC"))}</p>
+    <p><strong>Actor:</strong> ${esc(row.actor_id || "—")} (${esc(row.actor_role)})</p>
+    <p><strong>Acción:</strong> ${esc(row.action)}</p>
+    <p><strong>Entidad:</strong> ${esc(row.entity)}${row.entity_id ? ` (${esc(row.entity_id)})` : ""}</p>
+    <p><strong>Motivo:</strong> ${row.reason ? esc(row.reason) : "—"}</p>
+  `;
+  renderConsentAuditDiff(row.before ?? null, row.after ?? null);
+  $("#consentAuditDetailView").hidden = false;
+}
+
+function closeConsentAuditDetail() {
+  $("#consentAuditDetailView").hidden = true;
+  $("#consentAuditDetailMeta").innerHTML = "";
+  $("#consentAuditDetailFields").innerHTML = "";
+}
+
+function resetConsentAuditLog() {
+  consentAuditFilter = { from: "", to: "", actor_id: "", action: "" };
+  consentAuditOffset = 0;
+  consentAuditTotal = 0;
+  consentAuditItems = [];
+  $("#consentAuditFrom").value = "";
+  $("#consentAuditTo").value = "";
+  $("#consentAuditActorId").value = "";
+  $("#consentAuditAction").value = "";
+  $("#consentAuditRows").innerHTML = "";
+  $("#consentAuditPageInfo").textContent = "";
+  $("#consentAuditMessage").textContent = "";
+  $("#consentAuditExportReason").value = "";
+  $("#consentAuditExportMessage").textContent = "";
+  closeConsentAuditDetail();
+}
+
+// T16.b: exige `reason` en el query string (la exportación sale del sistema como archivo). El proxy
+// admite ahora percent-encoding en el query (ver nota de `PRIVACY_FN_RE`, server.js) para que un motivo
+// con espacios llegue a la función real.
+async function submitConsentAuditExport(event) {
+  event.preventDefault();
+  const reason = $("#consentAuditExportReason").value.trim();
+  if (!reason) {
+    $("#consentAuditExportMessage").textContent = "El motivo es obligatorio para exportar.";
+    return;
+  }
+  const query = buildConsentAuditQuery({ reason });
+  const res = await privacyCallText(`/fn/admin-consent/audit-log/export.csv${query}`, { session: privacyFlow.token });
+  if (res.status !== 200 || !res.isCsv) {
+    $("#consentAuditExportMessage").textContent = consentAuditErrorMessage(res.data?.error);
+    return;
+  }
+  const blob = new Blob([res.text], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "bitacora-consentimiento.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  $("#consentAuditExportReason").value = "";
+  $("#consentAuditExportMessage").textContent = "Exportación descargada.";
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5805,6 +6036,26 @@ async function privacyCall(path, { session, body, method = "POST" } = {}) {
     return { status: response.status, data };
   } catch {
     return { status: 0, data: null };
+  }
+}
+
+// T24.a: igual que `privacyCall`, pero para descargas (CSV) en vez de JSON — un error HTTP de estas rutas
+// (p. ej. 400 `reason_required`) sigue llegando como JSON, nunca como CSV, así que el tipo de contenido
+// de la respuesta decide cómo leerla.
+async function privacyCallText(path, { session } = {}) {
+  const headers = {};
+  if (session) headers["X-Admin-Session"] = session;
+  try {
+    const response = await fetch(`/api/privacy${path}`, { method: "GET", headers });
+    const contentType = response.headers.get("content-type") || "";
+    if (response.status === 200 && contentType.includes("text/csv")) {
+      const text = await response.text();
+      return { status: response.status, text, isCsv: true };
+    }
+    const data = await response.json().catch(() => null);
+    return { status: response.status, data, isCsv: false };
+  } catch {
+    return { status: 0, data: null, isCsv: false };
   }
 }
 
@@ -5818,6 +6069,7 @@ function privacyShow(step) {
   $("#privacyIdentity").hidden = step !== "identity";
   $("#consentDocuments").hidden = step !== "identity";
   $("#consentSettings").hidden = step !== "identity";
+  $("#consentAuditLog").hidden = step !== "identity";
   if (step !== "code") privacyClearEnroll();
 }
 
@@ -5852,6 +6104,7 @@ function privacyReset(message = "") {
   resetConsentEmailTransportForm();
   resetConsentEmailTransportHistory();
   resetConsentEmailOutboxBanner();
+  resetConsentAuditLog();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5949,6 +6202,8 @@ async function privacyVerify(event) {
   void loadConsentEmailTransport();
   void loadConsentEmailTransportHistory();
   void loadConsentEmailOutbox();
+  // T24.a: los tres roles del módulo ven la bitácora, a diferencia de las secciones ADMIN_ONLY de arriba.
+  void loadConsentAuditLog();
 }
 
 async function privacyLogout(message = "") {
@@ -6025,6 +6280,19 @@ function bindPrivacy() {
     button.closest("tr").remove();
     scheduleConsentAutosave();
   });
+  $("#consentAuditFilterForm").addEventListener("submit", submitConsentAuditFilter);
+  $("#consentAuditClear").addEventListener("click", clearConsentAuditFilters);
+  $("#consentAuditPrev").addEventListener("click", consentAuditPrev);
+  $("#consentAuditNext").addEventListener("click", consentAuditNext);
+  $("#consentAuditRows").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-audit-detail-id]");
+    if (!button) return;
+    const row = consentAuditItems.find((r) => String(r.id) === button.dataset.auditDetailId);
+    if (!row) return;
+    openConsentAuditDetail(row);
+  });
+  $("#consentAuditDetailClose").addEventListener("click", closeConsentAuditDetail);
+  $("#consentAuditExportForm").addEventListener("submit", (event) => void submitConsentAuditExport(event));
 }
 
 init();

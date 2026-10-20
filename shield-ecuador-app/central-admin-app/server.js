@@ -46,7 +46,11 @@ const PRIVACY_AUTH_ROUTES = [
 ];
 // T16.b: cada segmento admite como máximo un punto interno (p. ej. "export.csv"), nunca al inicio — así
 // "." y ".." (que sí romperían la ruta reenviada a Supabase) nunca pasan como segmento válido.
-const PRIVACY_FN_RE = /^\/fn\/admin-consent(\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?)*(\?[A-Za-z0-9_=&.-]*)?$/;
+// T24.a: el query string admite además tripletas %XX (percent-encoding) — sin esto, un `reason` con
+// espacios u otro texto libre (p. ej. el motivo obligatorio de `/audit-log/export.csv`, T16.b) nunca
+// llega aquí: el navegador lo manda como `%20`, que no encajaba en el charset anterior, y el proxy
+// devolvía 404 antes de reenviar nada a la función real.
+const PRIVACY_FN_RE = /^\/fn\/admin-consent(\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?)*(\?(?:[A-Za-z0-9_=&.-]|%[0-9A-Fa-f]{2})*)?$/;
 const JWT_SHAPE_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 // script-src has no 'unsafe-inline': inline event handlers were replaced by data-act delegation (a real XSS sink).

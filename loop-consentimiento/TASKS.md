@@ -840,12 +840,60 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 - [ ] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T16 (las acciones que esta pantalla invoca) y T05.
-  - Bitácora con filtros y detalle before/after (diff); export CSV.
-  - Evidencia: búsqueda, historial, IP enmascarada, "Revelar IP" con motivo; export de expediente.
-  - Solicitudes: tabla con semáforo (vigente / ≤3 días / vencida), cambio de estado con nota.
-  - Botón "Verificar integridad".
-  - **Tests E2E del panel:** editor no ve botón Publicar; auditor no ve "Revelar IP";
-    cada acción aparece en bitácora.
+  - **División (2026-10-19, antes de codificar, iteración 76):** el backend completo (T16.a-f) ya está
+    cerrado desde la iteración 60; esta tarea es solo el panel (frontend) que lo consume. Mezcla cuatro
+    piezas de tamaño comparable (bitácora, evidencia+revelar IP, expediente, solicitudes+verificar
+    integridad); se parte en cinco, mismo patrón que T16/T23b.
+  - [x] **T24.a — Panel: Bitácora — filtros, paginación, detalle before/after (diff) y exportar CSV** (REQ-16) (hecha 2026-10-19, iteración 76)
+    - **Estado:** cerrada. `#consentAuditLog` (nuevo, visible a los tres roles del módulo — `GET /audit-log`
+      y `GET /audit-log/export.csv` son `PRIVACY_ROLES`, T16.a/T16.b, a diferencia de las secciones
+      ADMIN_ONLY de T23b): filtros `from`/`to` (`type="date"`, sin hora)/`actor_id`/`action` combinables,
+      paginación `limit=50` fija con "Anterior"/"Siguiente" (deshabilitados en los extremos, calculados
+      desde `total` real de la API, nunca contando filas en el cliente), "Ver detalle" por fila (metadatos +
+      diff genérico campo por campo de `before`/`after`, reutilizando `diffLines` de T22.a pero sin la
+      lista fija `CONSENT_DIFF_FIELD_ORDER` — un campo nuevo en un solo lado nunca se compara contra un
+      "antes"/"después" inventado: `renderConsentAuditDiffField` distingue "el campo no existía en ese
+      lado" de "existía con `null`" vía `hasOwnProperty`), y "Exportar CSV" con motivo obligatorio
+      (`ReasonSchema`, T16.b) que dispara una descarga real (`Blob`+`<a download>`, sin navegar).
+    - **Hallazgo real cerrado en el camino (no solo este endpoint, mismo patrón que T16.b con
+      `export.csv`):** `PRIVACY_FN_RE` (`central-admin-app/server.js`) no admitía percent-encoding en el
+      query string (`(\?[A-Za-z0-9_=&.-]*)?`) — un `reason` con espacios, tildes o cualquier texto libre
+      viaja como `%XX` (`encodeURIComponent`) y el proxy lo rechazaba con 404 antes de reenviar nada a la
+      función real; el propio `GET /audit-log/export.csv` (T16.b) habría quedado inalcanzable desde el
+      panel en producción para cualquier motivo que no fuera un solo token alfanumérico. Corregido
+      admitiendo tripletas `%[0-9A-Fa-f]{2}` dentro del query (`tests/privacy-fn-route.test.cjs`, 2 casos
+      `ok` nuevos con percent-encoding real y 3 `bad` nuevos con percent-encoding mal formado/espacio sin
+      codificar). **Deuda de entorno cerrada en el mismo gesto:** este archivo existía desde T16.b
+      (iteración 54) pero nunca se había podido ejecutar ni cablear en `gates.sh` (`.claude/` protegido,
+      D-14) — en vez de tocar `gates.sh`, se cableó en `central-admin-app/package.json` (`"test": "node
+      tests/tpotService.test.js && node ../tests/privacy-fn-route.test.cjs"`), que `panel_unit()` de
+      `gates.sh` ya invoca sin cambios (`cd central-admin-app && npm test`): confirmado con `npm test`
+      real en esta sesión (`npm test:*` sí está en el allowlist, a diferencia de `node ...` suelto) antes
+      de correr `gates.sh`.
+    - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea es de solo
+      lectura sobre `admin_audit_log` (`SELECT` vía `deps.auditTrail.list`, ya cerrado y probado en T16.a/
+      T16.b) — sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar.
+    - **Pruebas añadidas:** `tests/privacy-fn-route.test.cjs` (5 casos nuevos, ver arriba);
+      `tests/admin/consent-audit-log.spec.ts` (nuevo, 16 casos): los tres roles ven la sección y la cargan
+      al entrar; filas con fecha/actor/rol/acción/entidad/motivo; sin entradas → mensaje explícito; error
+      del backend → mensaje legible, tabla vacía; filtrar manda `from`/`to`/`actor_id`/`action` con la
+      sesión aal2; limpiar filtros vuelve a pedir sin filtros; paginación ("Siguiente" pide `offset=50`,
+      "Anterior" deshabilitado en la primera página, "Siguiente" deshabilitado al llegar al final según
+      `total`); "Ver detalle" con ambos lados presentes (diff campo por campo) y con `before: null` (solo
+      "después", sin inventar un "antes"); cerrar detalle limpia el contenido; exportar sin motivo no llama
+      al backend; exportar con motivo con espacios/tildes dispara una descarga real
+      (`page.waitForEvent('download')`) con el query correcto (motivo + filtros, sin `limit`/`offset`);
+      error del backend al exportar (`reason_required`) deja el campo con lo escrito; cerrar sesión limpia
+      filtros, tabla, detalle y el formulario de exportación.
+    - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
+      no-opcionales OK, `panel-e2e` con los 16 casos nuevos incluidos; `db-reset`/`e2e-local` SKIP opt-in,
+      sin cambios de migraciones; iteración 76, no múltiplo de 5, `GATES_FULL=1` no obligatorio esta vez).
+  - [ ] **T24.b — Panel: Evidencia — búsqueda por correo/user_id, historial con IP enmascarada, "Revelar IP" con motivo** (REQ-17)
+  - [ ] **T24.c — Panel: Evidencia — exportar expediente de un titular (JSON y PDF)** (REQ-17)
+  - [ ] **T24.d — Panel: Solicitudes — tabla con semáforo (vigente / ≤3 días / vencida) y cambio de estado con nota** (REQ-11, REQ-16)
+  - [ ] **T24.e — Panel: botón "Verificar integridad" (`verify-chains`) + tests E2E de regresión cruzada** (REQ-18)
+    - **Tests E2E del panel (cierre de T24):** editor no ve botón Publicar; auditor no ve "Revelar IP";
+      cada acción aparece en bitácora.
 
 ## Fase 5 · Frontend de usuario
 

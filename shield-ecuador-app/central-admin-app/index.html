@@ -1571,6 +1571,76 @@
               </table>
             </div>
           </article>
+
+          <!-- T24.a (REQ-16): bitácora administrativa (GET /audit-log, GET /audit-log/export.csv,
+               ambas PRIVACY_ROLES: los tres roles del módulo la ven, igual que T16.a/T16.b). Filtros
+               combinables, paginación, detalle con diff genérico de `before`/`after` y exportación CSV
+               con motivo obligatorio. -->
+          <article id="consentAuditLog" class="card" hidden>
+            <div class="section-toolbar compact">
+              <h2>Bitácora administrativa</h2>
+            </div>
+            <form id="consentAuditFilterForm" class="form-grid compact" novalidate>
+              <label>
+                Desde
+                <input id="consentAuditFrom" type="date" />
+              </label>
+              <label>
+                Hasta
+                <input id="consentAuditTo" type="date" />
+              </label>
+              <label>
+                ID de actor (UUID)
+                <input id="consentAuditActorId" type="text" maxlength="36" />
+              </label>
+              <label>
+                Acción
+                <input id="consentAuditAction" type="text" maxlength="200" />
+              </label>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Filtrar</button>
+                <button id="consentAuditClear" class="btn secondary" type="button">Limpiar filtros</button>
+              </div>
+            </form>
+            <p id="consentAuditMessage" class="privacy-message" role="alert"></p>
+            <div class="table-scroll">
+              <table class="data-table">
+                <caption class="sr-only">Bitácora administrativa</caption>
+                <thead><tr><th>Fecha</th><th>Actor</th><th>Rol</th><th>Acción</th><th>Entidad</th><th>Motivo</th><th></th></tr></thead>
+                <tbody id="consentAuditRows"></tbody>
+              </table>
+            </div>
+            <div class="section-toolbar compact">
+              <p id="consentAuditPageInfo" class="muted"></p>
+              <div>
+                <button id="consentAuditPrev" class="btn secondary small" type="button">Anterior</button>
+                <button id="consentAuditNext" class="btn secondary small" type="button">Siguiente</button>
+              </div>
+            </div>
+
+            <div id="consentAuditDetailView" class="card" hidden>
+              <div class="section-toolbar compact">
+                <h3>Detalle de la entrada</h3>
+                <button id="consentAuditDetailClose" class="btn secondary small" type="button">Cerrar</button>
+              </div>
+              <div id="consentAuditDetailMeta"></div>
+              <div id="consentAuditDetailFields"></div>
+            </div>
+
+            <div class="section-toolbar compact">
+              <h3>Exportar CSV</h3>
+            </div>
+            <form id="consentAuditExportForm" class="form-grid compact" novalidate>
+              <label>
+                Motivo de la exportación
+                <input id="consentAuditExportReason" type="text" maxlength="2000" required />
+              </label>
+              <div class="modal-actions">
+                <button class="btn secondary" type="submit">Exportar CSV</button>
+              </div>
+            </form>
+            <p id="consentAuditExportMessage" class="muted" role="status" aria-live="polite"></p>
+          </article>
         </section>
       </main>
     </div>
