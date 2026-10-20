@@ -2803,3 +2803,54 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   T24 no tiene numeración de las 28 originales, mismo criterio que T23b/TEST-INT; T24 se cierra como tarea
   completa con T24.e, pero no mueve este contador). Ponderado: sin cambio (T24 no tiene peso propio
   asignado en esa cuenta, mismo criterio que T23b/TEST-INT).
+
+## Iteración 81 — 2026-10-20 — Investigación: ¿bloquea `wip/ux-redesign` a T19/T20? (sin código; corrige la nota de Fase 5 y divide T19)
+- **Punto de partida:** `git status` limpio. T24 cerrado (iteración 80); T17 sigue `⛔ BLOQUEADA (D-02)`.
+  La propia Iteración 80 dejó pendiente, como siguiente paso explícito, revisar con código real la nota
+  de Fase 5 ("T18–T20 esperan la integración de `wip/ux-redesign`") antes de decidir si T19 arranca tal
+  cual o si hace falta una decisión `D-nn` nueva — esta iteración es exactamente esa revisión.
+- **Investigación (solo lectura, sin tocar código del módulo):**
+  - `git branch -a`/`git log --oneline wip/ux-redesign -5`: la rama existe local y en `origin`, 2 commits
+    (`b1be911` "rediseño UX/UI y modo invitado (sin verificar)", `39865be` versiona `cara.webm`/`sello.webm`).
+  - `git merge-base feature/consentimiento-lopdp wip/ux-redesign` = `b24a5c4` (un commit de documentación de
+    T03, muy anterior a todo el trabajo de T04 en adelante). `git rev-list --count feature/consentimiento-lopdp
+    ^b24a5c4` = **138 commits** de esta rama por delante de ese punto, frente a los 2 de `wip/ux-redesign`:
+    fusionarla hoy no sería un merge razonable, sería reconstruirla desde cero contra el estado actual.
+  - `git diff --stat b24a5c4 wip/ux-redesign -- shield-ecuador-app/frontend`: la rama solo toca `App.tsx`,
+    `GuestRegisterPrompt.tsx` (nuevo), `SenseiChallengeModal.tsx`, `senseiChallengeTypes.ts`, `viewAsUser.ts`
+    (nuevo), `CinematicLandingPage.tsx`, `DojoDetailPage.tsx`, borra `public/demo/`+`PracticePage.tsx` y
+    versiona `cara.webm`/`sello.webm`. Leído el diff completo de `App.tsx`: modo invitado (`GuestRegisterPrompt`,
+    `isGuestAllowedPath`), vista "como usuario" para admin (`viewAsUser`), rutas de Campeonato, quitar
+    `/practica`. **Ningún archivo relacionado con "Mi privacidad" (`PrivacyPage`) ni con re-consentimiento.**
+  - `git stash show -p stash@{0} --stat` (`wip-T19-mi-privacidad-diseno-viejo`, mencionado en la nota de T19):
+    solo contiene `TASKS.md` (la división T19.a/T19.b, ya razonada contra T11/T13 cerradas), 2 líneas de
+    `App.tsx` (import + ruta `/privacidad` **sin componente que exista**), un enlace de navegación en
+    `CyberBushido.tsx` y CSS nuevo en `index.css` (`.privacy-purpose-*`). **No contiene `PrivacyPage.tsx` ni
+    `PrivacyPage.test.tsx`** — confirmado además con `Glob("**/*Privacy*")` sobre todo `shield-ecuador-app`
+    (sin resultados) y con la imposibilidad de usar `-u`/`--include-untracked` en esta sesión (bloqueado por
+    el permiso de Bash de este entorno, no es relevante para la conclusión: si esos archivos fueran
+    untracked, `git stash push` sin `-u` los habría dejado intactos en el árbol de trabajo, y el `Glob` ya
+    confirmó que no están ahí). La nota anterior de T19 que los mencionaba como "diseño viejo" a auditar era
+    incorrecta — probablemente aspiracional, de una iteración que se interrumpió antes de escribirlos.
+- **Conclusión:** la nota de Fase 5 era demasiado amplia. T19 y T20 **no** dependen de `wip/ux-redesign`
+  (sin solape de archivos, y la rama ya está demasiado desactualizada para fusionarse tal cual); **T18 ya
+  se cerró (iteración 61) sin esperar la integración**, lo que ya lo sugería. Solo **T19b** (modo invitado,
+  `GuestRegisterPrompt.tsx` vive en esa rama) y **`UX-integración`** (borrado de `public/demo/`, D-12) siguen
+  genuinamente relacionadas con esa rama. No hace falta una decisión `D-nn` nueva: es una corrección de un
+  hecho verificable (qué archivos toca una rama), no una decisión de producto que requiera criterio humano.
+- **Cambios:** `loop-consentimiento/TASKS.md` — nota de Fase 5 corregida con la evidencia de arriba; T19
+  dividida en T19.a (estado + interruptores, REQ-08) y T19.b (formulario de solicitud de derechos, REQ-10),
+  recuperando el razonamiento ya escrito en el stash (sigue vigente: T11/T13 cerradas, nada cambió); nota de
+  T19 corregida para no afirmar que `PrivacyPage.tsx`/`PrivacyPage.test.tsx` existen en el stash. Sin cambios
+  de código, pruebas ni migraciones — el stash `wip-T19-mi-privacidad-diseno-viejo` sigue intacto, sin tocar.
+- **Pruebas añadidas:** ninguna (iteración de investigación/documentación, mismo criterio que la Iteración 31
+  y que T01).
+- **Gates:** no aplica — ningún archivo de código, prueba ni migración cambió (mismo criterio que la
+  Iteración 31: solo se editó documentación). `git status` antes/después solo muestra `TASKS.md`/`PROGRESS.md`.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. **Siguiente tarea desbloqueada: T19.a** (pantalla "Mi
+  privacidad", estado + interruptores de un clic) — puede arrancar en la próxima iteración sin más
+  investigación previa. T19b sigue genuinamente pendiente de que la persona responsable decida qué hacer con
+  `wip/ux-redesign` (integrarla, rehacerla, o descartarla) antes de construir el aviso breve de invitado.
+- Porcentaje: sin cambio (22 de 28 = 78,6 % estricto; ponderado sin cambio) — esta iteración fue
+  investigación/documentación, no cerró ninguna tarea ni subtarea numerada.

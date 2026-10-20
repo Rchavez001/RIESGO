@@ -1045,7 +1045,21 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 5 · Frontend de usuario
 
-- **Nota:** T18–T20 esperan la integración de `wip/ux-redesign`.
+- **Nota (corregida 2026-10-20, iteración 81; la nota original decía, sin verificar, "T18–T20 esperan la
+  integración de `wip/ux-redesign`"):** verificado con `git diff --stat` entre el punto de bifurcación
+  (`b24a5c4`, `git merge-base feature/consentimiento-lopdp wip/ux-redesign`) y la punta de `wip/ux-redesign`
+  (`39865be`): la rama **solo** toca `App.tsx` (modo invitado: `GuestRegisterPrompt`, rutas de campeonato,
+  vista "como usuario" de admin, quita `/practica`), `DojoDetailPage.tsx`, `SenseiChallengeModal.tsx`,
+  `senseiChallengeTypes.ts`, `viewAsUser.ts`, `CinematicLandingPage.tsx`, borra `public/demo/`/
+  `PracticePage.tsx` y versiona `cara.webm`/`sello.webm` — **nada relacionado con "Mi privacidad" ni con el
+  re-consentimiento**. Además, la rama tiene solo 2 commits sobre ese punto de bifurcación, mientras
+  `feature/consentimiento-lopdp` ya lleva 138 commits encima del mismo punto: fusionarla hoy sería, en la
+  práctica, reconstruirla desde cero contra el estado actual, no un "merge" razonable. T18 ya se cerró
+  (iteración 61) sin esperar esta integración, confirmando que la nota original era demasiado amplia.
+  **Conclusión: T19 y T20 NO dependen de `wip/ux-redesign` y pueden proceder ya.** Solo **T19b** (modo
+  invitado/sesión anónima) y la tarea **`UX-integración`** (al final de este archivo) tocan contenido real
+  de esa rama (`GuestRegisterPrompt.tsx`, borrado de `public/demo/`) y siguen esperando esa integración,
+  junto con la decisión D-12 ya tomada. Detalle completo de la verificación: `PROGRESS.md`, iteración 81.
 
 - [x] **T18 — Pantalla de registro con aviso dinámico** (REQ-06, REQ-12)
   - **Cierre (2026-10-13, iteración 61):** punto de partida: `RegisterScreen.tsx`/`index.css`/`register.spec.ts`
@@ -1090,14 +1104,48 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     visible (ya existía), mensajes de estado anunciados con `aria-live="polite"` (nuevo en esta iteración).
 
 - [ ] **T19 — "Mi privacidad" en la cuenta** (REQ-08, REQ-10)
-  - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T11 (`update-my-consent`) y T13 (`request-data-subject-right`), ninguna hecha todavía.
-  - Estado por finalidad, versión aceptada, fecha; interruptores de opcionales; formulario de
-    solicitud de derechos con tipo; muestra número de caso y fecha límite.
-  - **Tests E2E:** revocar publicidad en un clic; solicitar baja muestra número de caso.
-  - **Nota (WIP):** parte del `git stash` `wip-T19-mi-privacidad-diseno-viejo` (diseño viejo de
-    `PrivacyPage.tsx`/`PrivacyPage.test.tsx`/`App.tsx`/`CyberBushido.tsx`/`index.css`, guardado para
-    no perderlo mientras se prioriza T21–T24 e integra `wip/ux-redesign`). El test de `PrivacyPage`
-    necesita `jest.mock('../components/CyberBushido')` para evitar el error de react-router/dom con Jest.
+  - **Estado real (2026-10-20, iteración 81; ya no bloqueada por `wip/ux-redesign`, ver nota de Fase 5):**
+    Sin empezar la implementación. T11 (`update-my-consent`) y T13 (`request-data-subject-right`), de las
+    que depende, **ya están cerradas**.
+  - **División (ya redactada en `git stash` `wip-T19-mi-privacidad-diseno-viejo`, confirmada vigente esta
+    iteración — T11/T13 siguen cerradas, nada cambió desde que se escribió): la tarea mezcla una pantalla
+    de solo estado + interruptores de un clic (REQ-08, sin formulario) con otra más grande — formulario de
+    solicitud de derechos con tipo, número de caso y fecha límite (REQ-10) —; se parte en dos, mismo
+    patrón que T12.d/T15/T16.
+  - [ ] **T19.a — Pantalla "Mi privacidad": estado por finalidad + otorgar/revocar opcionales con un clic** (REQ-08)
+    - Estado vigente de cada finalidad (versión aceptada, fecha) leído de `my_consent_state` (073: ya
+      filtra por `auth.uid()` y ya excluye ip/ua — ninguna columna que ocultar en el cliente); catálogo
+      de finalidades (código/etiqueta/descripción/obligatoria) de `get-consent-notice` (ya público,
+      REQ-02/SEC-08, el mismo que usa `RegisterScreen`). La finalidad obligatoria (`registro_aprendizaje`)
+      se muestra de solo lectura (sin interruptor) — revocarla no es un endpoint de esta pantalla, es dar
+      de baja la cuenta (T19.b/REQ-10). Las opcionales usan `update-my-consent` (ya cerrado, T11):
+      un clic en la casilla dispara `grant`/`revoke` de inmediato (sin paso de "guardar" aparte, sin pedir
+      motivo — REQ-08 "revocación sin justificación"), y tras la respuesta se vuelve a leer
+      `my_consent_state` para reflejar la versión/fecha reales en vez de adivinarlas en el cliente.
+    - **Aceptación:** los tres estados (activa/inactiva/sin decisión) se muestran con versión y fecha;
+      clic en una opcional llama a `update-my-consent` con el `purpose_code`/`action` correctos y
+      refresca el estado tras la respuesta; la obligatoria nunca expone un control para desactivarla;
+      un fallo del backend no cambia el estado mostrado y avisa sin tecnicismos; ningún campo de
+      ip/ua llega nunca al cliente (ya lo garantiza la vista, no hace falta filtrarlo).
+  - [ ] **T19.b — Formulario de solicitud de derechos (baja y demás) desde la cuenta** (REQ-10)
+    - Formulario con `request_type` (los 9 valores de T13: `REQUEST_TYPES`) + detalle opcional, que llama
+      a `request-data-subject-right` (ya cerrado, T13) y muestra el número de caso y la fecha límite de
+      la respuesta (`case_number`, `due_at`). Mapear los códigos de error ya definidos por la función
+      (`rate_limited`, `RATE_LIMIT_UNAVAILABLE`, `missing_client_ip`, `settings_unavailable`) a mensajes
+      sin tecnicismos, mismo criterio que `RegisterScreen`/`friendlyAuthError`.
+    - **Aceptación:** enviar el formulario muestra el número de caso y la fecha límite; un tipo fuera de
+      la lista no llega a enviarse (validado en el cliente, además del `invalid_input` del servidor);
+      errores de cuota/transporte se comunican sin tecnicismos; no se pide ni se muestra IP.
+  - **Tests E2E (ambas subtareas):** revocar publicidad en un clic; solicitar baja muestra número de caso.
+  - **Nota (WIP, verificada esta iteración):** el `git stash` `wip-T19-mi-privacidad-diseno-viejo` solo
+    contiene esta división de `TASKS.md` + una ruta `/privacidad` sin componente en `App.tsx` + un enlace
+    de navegación en `CyberBushido.tsx` + CSS (`.privacy-purpose-*`) en `index.css` — **no** contiene
+    `PrivacyPage.tsx` ni `PrivacyPage.test.tsx` (no existen en ningún lado del repo, confirmado con
+    `Glob`/`git log --all`): la mención anterior de esos dos archivos en este mismo párrafo era incorrecta
+    (aspiracional, nunca llegaron a crearse antes de que la iteración que los iba a escribir se
+    interrumpiera). La pantalla hay que escribirla desde cero en T19.a; no hay diseño previo que auditar,
+    solo la división de tareas y el enlace/ruta de navegación, que SÍ se pueden retomar del stash en T19.a
+    (la ruta y el enlace no rompen nada mientras no se haga `pop`: el stash no se ha tocado).
 
 - [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07)
   - **Estado real (2026-09-29, reconciliación):** Solo diseño e investigación (iteración 7, INV-SEC de la iteración 9). El paso 1 (inventario formal en PROGRESS.md con archivos y consultas) no se ha escrito como tal — lo más cercano es el hallazgo de INV-SEC sobre el RPC `learning_state`. Pasos 2A/2B/3 sin empezar.
