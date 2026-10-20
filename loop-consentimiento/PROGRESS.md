@@ -2986,3 +2986,102 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   REQ-09), que depende de T19 y ya puede arrancar.
 - Porcentaje: estricto sin cambio (T19.b es subtarea de T19, que no tiene numeración propia entre las 28
   — mismo criterio que T19.a/T24.a-e; 22 de 28 = 78,6 %). Ponderado sin cambio por el mismo motivo.
+
+## Iteración 84 — 2026-10-20 — T19b Paso 1: inventario de lo que guarda hoy un invitado (sesión anónima) — sin código, confirma Opción B de D-12
+- **Punto de partida:** `git status` limpio. Primera tarea `[ ]` desbloqueada tras la Iteración 83 es
+  T19b (sus dependencias, T04, están `[x]`; no está `⛔ BLOQUEADA`, solo pendiente de su Paso 1). D-12 ya
+  está `DECIDIDA` (2026-09-28): primero inventariar qué guarda hoy un invitado, documentarlo en
+  `PROGRESS.md` con archivos y consultas de solo lectura, y solo entonces elegir 2A/2B. Paso 1 es
+  exactamente eso: no cambia código ni toca producción (las consultas que la toquen las ejecuta la
+  persona responsable, y aquí no hizo falta ninguna: todo lo que sigue sale de leer el repo).
+- **Método:** `Grep`/`Glob` de `is_anonymous`/`anonymous`/`guest`/`signInAnonymously` en todo
+  `shield-ecuador-app` (frontend + `supabase/functions` + `supabase/migrations` + `supabase/baseline/prod_schema.sql`),
+  seguido de lectura completa de cada archivo relevante. Nada ejecutado contra ningún Postgres (ni local
+  ni de producción): toda la evidencia es estática, del código y el esquema versionados.
+- **Hallazgo principal — SÍ guarda datos en la base (confirma Opción B de D-12):**
+  - `frontend/src/contexts/AuthContext.tsx:206-209` (`continueAsGuest`): un clic en "Probar sin cuenta"
+    (`CinematicLandingPage.tsx:109`, `CinematicPublicShell.tsx:15`) llama a
+    `supabase.auth.signInAnonymously()` directo, sin ningún aviso previo, ni breve ni completo — abre una
+    sesión real de Supabase Auth (`auth.users`, rol `authenticated`, `is_anonymous = true`) sin fila en
+    `public.users` (confirmado: no hay trigger `on_auth_user_created`/`handle_new_user` en
+    `prod_schema.sql`; la única fila de `users` la crea `secure-register-user`, ya cerrada en T10).
+  - Esa sesión SÍ escribe en `public.learning_progress` (`user_id, dojo_id, version, question_ids,
+    answers jsonb, cursor, updated_at` — PK `(user_id, dojo_id)`, FK `user_id → auth.users(id) ON DELETE
+    CASCADE`, RLS habilitada sin políticas para `anon`/`authenticated`: solo accesible vía las funciones
+    `SECURITY DEFINER` de abajo, nunca por REST directo): `learning_state`/`learning_answer` (076,
+    `migrations/076_learning_guest_limit.sql:11-28`) insertan y actualizan esa fila para CUALQUIER
+    `auth.uid()` no nulo, invitado o no. El único campo que identifica a la persona es el UUID de
+    `auth.users` que Supabase genera para la sesión anónima — ningún correo, nombre ni IP entra en esta
+    tabla.
+  - Contradice el texto que ve el invitado: `DojoDetailPage.tsx:80` dice "Estás en modo invitado: tu
+    avance no se guarda", pero sí se guarda (fila real, persiste mientras dure esa sesión anónima). Lo que
+    es cierto es que no sobrevive a convertirse en cuenta: `signUp` (`AuthContext.tsx:167-193`) llama a
+    `secure-register-user` con un correo/contraseña nuevos y nunca referencia el `auth.uid()` de la sesión
+    anónima previa (ni "upgrade"/`linkIdentity`, ni copia de `learning_progress`) — la fila del invitado
+    queda huérfana bajo el UUID anónimo, sin relación con la cuenta nueva. El texto de la UI describe bien
+    el efecto para quien se registra, pero no lo que pasa en la base mientras tanto.
+  - Tope ya server-side desde 076 (no de esta iteración): un invitado no pasa de 10 respuestas del primer
+    dojo (`GUEST_LIMIT_REACHED`) ni puede llamar `learning_start_exam` (bloqueo explícito con el mismo
+    código). `learning_overview`/`learning_next` no tienen bloqueo propio pero tampoco lo necesitan: solo
+    leen/avanzan el cursor de la misma fila ya cubierta arriba, sin nueva tabla ni columna.
+  - `championship_registrations`/`learning_attempts`: nunca se crean para un invitado — `register_for_championship`
+    (062) y `learning_start_exam` (076) rechazan `is_anonymous = true` antes de cualquier `INSERT`.
+- **`security_events`/`admin_audit_log`/logs con IP: ningún camino de invitado los toca.**
+  `_shared/security-events.ts` (`logSecurityEvent`) nunca se llama desde `learning_*`, `AuthContext.tsx`
+  ni ningún punto de entrada del modo invitado (confirmado con `Grep` de `logSecurityEvent` contra
+  `ask-sensei`, `vuln-scanner-ai`, `get-ranking` y los tres `learning_*` tocados arriba: cero
+  coincidencias). `admin_audit_log` es exclusivo de acciones administrativas y el propio
+  `_shared/auth-guard.ts:94` (`requireUser`) rechaza con 403 `anonymous_session` cualquier intento de una
+  sesión anónima de llegar a una función del módulo de consentimiento, así que ninguna acción de invitado
+  puede generar una fila ahí. El único log de IP que toca a todo tipo de sesión por igual (invitado o no)
+  es el `auth.audit_log_entries` nativo de Supabase Auth — infraestructura de Supabase, no de este
+  módulo, fuera del alcance de esta tarea.
+- **Funciones que aceptan sesión anónima hoy:** `learning_state`, `learning_answer` (tope 10),
+  `learning_next`, `learning_overview` (076/prod_schema, todas vía `auth.uid()` sin filtrar
+  `is_anonymous`, con el único tope explícito en `learning_answer`/`learning_start_exam`). Ninguna otra
+  función de `supabase/functions/` acepta una sesión anónima: `ask-sensei/index.ts:62`,
+  `vuln-scanner-ai/index.ts:82` y `get-ranking/index.ts:36` la rechazan explícitamente
+  (`user.is_anonymous` → 401/403) antes de leer o escribir nada; `admin-consent`/`secure-register-user`/
+  `update-my-consent`/`submit-consent`/`request-data-subject-right` pasan todos por
+  `_shared/auth-guard.ts`, que rechaza `is_anonymous` de raíz.
+- **¿Algo manda datos de un invitado a un proveedor de IA? No por los caminos del modo invitado.**
+  `ask-sensei` y `vuln-scanner-ai` (los dos que llaman a un modelo de pago) rechazan `is_anonymous` antes
+  de construir ningún prompt. **Hallazgo aparte, fuera del alcance de D-12/T19b (no depende de
+  `is_anonymous` ni de sesión alguna) pero detectado durante esta auditoría:**
+  `supabase/functions/generate-recommendations/index.ts` no llama a `requireUser`/`auth-guard.ts` ni
+  comprueba identidad de ningún tipo, y no figura en `supabase/config.toml` con `verify_jwt = false` (por
+  tanto hereda el `true` por defecto de Supabase, que solo exige CUALQUIER JWT válido — la propia clave
+  `anon` pública que el frontend ya embebe cuenta como uno). En la práctica, cualquier visitante sin
+  cuenta ni sesión alguna (ni siquiera anónima) puede invocarla con `riskProfile`/`businessType` en el
+  cuerpo y disparar una llamada real a DeepSeek/Kimi. No envía ningún dato personal identificable del
+  invitado (no lee `auth.uid()`, no toca ninguna tabla de usuarios), así que no es un hallazgo de D-12,
+  pero sí un gasto/abuso potencial independiente del módulo — anotado en "pendientes detectados" y como
+  candidato a `Tnn-extra`, no resuelto aquí por no mezclar tareas.
+- **Conclusión de Paso 1 (confirma Opción B de D-12):** un invitado SÍ guarda datos en la base
+  (`learning_progress`, real, por sesión anónima). Corresponde a **Paso 2B**: aviso breve con enlace al
+  aviso completo y botón "Continuar como invitado" ANTES de llamar a `signInAnonymously()`, registrado
+  como evidencia con una finalidad nueva `invitado_basico` (texto a validar por la persona responsable,
+  igual que el resto del aviso), sesión anónima con caducidad configurada y probada, y conversión a
+  cuenta por el flujo completo de REQ-06 (ya es lo que pasa hoy, aunque sin intención: `signUp` ya no
+  reutiliza la sesión anónima). Paso 3 (comprobación en T99 de `enable_anonymous_sign_ins = false`
+  mientras 2B no esté cerrado) sigue aplicando sin cambios — hoy `supabase/config.toml` sigue con
+  `enable_anonymous_sign_ins = true` (línea 171), consistente con que 2B todavía no está implementado.
+- **Cambios:** `loop-consentimiento/TASKS.md` (T19b: nota "Paso 1 — completado" con esta conclusión;
+  el checkbox de T19b sigue `[ ]`, no se cierra: solo se completó su primer paso, 2B/3 siguen
+  pendientes); este archivo. Sin cambios de código, pruebas ni migraciones — ninguno era necesario para
+  un inventario de solo lectura.
+- **Gates:** no se tocó código; no aplica repetir `gates.sh` (mismo criterio que la Iteración 31/81). La
+  corrida completa más reciente (Iteración 83) seguía en verde y ningún archivo de `shield-ecuador-app`
+  cambió desde entonces.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) `generate-recommendations` sin ningún control de identidad —
+  ver arriba, candidato a `Tnn-extra` independiente del módulo, no resuelto en esta iteración; (2) el
+  texto de `DojoDetailPage.tsx` ("tu avance no se guarda") es impreciso respecto a lo que pasa en la
+  base mientras dura la sesión anónima — relevante para quien escriba el aviso breve de 2B, pero no se
+  tocó ese archivo aquí (cambiarlo es trabajo de 2B, no de este paso de inventario); (3) Paso 2B necesita
+  un texto validado por la persona responsable antes de poder escribirse como código — la próxima
+  iteración que retome T19b deberá decidir si eso bloquea con un nuevo D-nn o si puede avanzar con un
+  borrador pendiente de validación, igual que el aviso principal tuvo su propio seed antes de la revisión
+  legal (D-07).
+- Porcentaje: sin cambio (T19b no se cierra, solo su Paso 1; 22 de 28 = 78,6 % estricto, sin cambio
+  ponderado).

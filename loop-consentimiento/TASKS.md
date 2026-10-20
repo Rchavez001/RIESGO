@@ -1151,6 +1151,14 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     (la ruta y el enlace no rompen nada mientras no se haga `pop`: el stash no se ha tocado).
 
 - [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07)
+  - **Paso 1 — completado (2026-10-20, iteración 84):** inventario estático (sin tocar producción ni
+    código) en PROGRESS.md. Conclusión: SÍ guarda datos (`learning_progress`, fila real por sesión
+    anónima vía `learning_state`/`learning_answer`, 076) → aplica **Opción B** de D-12. `security_events`/
+    `admin_audit_log` no los toca ningún camino de invitado; `ask-sensei`/`vuln-scanner-ai` rechazan
+    `is_anonymous` antes de llamar a cualquier proveedor de IA (hallazgo aparte, independiente de
+    `is_anonymous`: `generate-recommendations` no comprueba identidad alguna — ver PROGRESS.md,
+    "pendientes detectados"). Sigue pendiente: Paso 2B (aviso breve + finalidad `invitado_basico`,
+    texto a validar por la persona responsable) y Paso 3 (comprobación en T99).
   - **Estado real (2026-09-29, reconciliación):** Solo diseño e investigación (iteración 7, INV-SEC de la iteración 9). El paso 1 (inventario formal en PROGRESS.md con archivos y consultas) no se ha escrito como tal — lo más cercano es el hallazgo de INV-SEC sobre el RPC `learning_state`. Pasos 2A/2B/3 sin empezar.
   - **Decisión D-12 (2026-09-28):** primero inventariar; luego A o B según el resultado; mientras no esté implementado y probado, **`enable_anonymous_sign_ins` debe estar desactivado en producción** (opción C) y el modo invitado **no entra en el release**.
   - **Paso 1 — inventario (sin cambiar código):** qué guarda hoy un usuario con `is_anonymous = true`: filas por tabla y columna (`users`, `learning_state`, puntajes, respuestas), `security_events`, `admin_audit_log`, logs con IP, funciones que aceptan sesión anónima, y si alguna manda datos a un proveedor de IA. Documentarlo en `PROGRESS.md` con archivos y consultas de solo lectura (las que toquen producción las ejecuta la persona responsable). Puntos de partida: `frontend/src/components/GuestRegisterPrompt.tsx` (sin versionar), `App.tsx` (`isGuest`), `CinematicPublicShell.tsx`, `DojoDetailPage.tsx`, `supabase/config.toml` (`enable_anonymous_sign_ins`), migración 058 (`learning_state_guest_fix`, sin versionar).
