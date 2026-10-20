@@ -3201,3 +3201,52 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   Ponderado: sin recalcular de forma rigurosa desde hace varias iteraciones (el seguimiento numérico de
   "puntos/2800" quedó desactualizado tras los cierres de T21-T24/T19 sin registrar el salto exacto cada
   vez) — no se inventa un número de continuidad falsa aquí; el conteo estricto (23/28) es la cifra fiable.
+
+## Iteración 86 — 2026-10-20 — T98.a (`SECURITY_PRIVACY.md`: sección del módulo de consentimiento), sin código
+- **Punto de partida:** `git status` limpio. Primera tarea `[ ]` desbloqueada en orden tras la Iteración 85
+  sigue siendo T25 — su propio texto prohíbe escribir o ejecutar la migración (a) y el script (b) como
+  iteración normal del loop (necesitan la ventana de release y el OK explícito), así que no hay nada
+  ejecutable ahí esta sesión. Siguiente candidato: **T98 — Documentación** (H14), sin marca `⛔` y sin
+  ninguna decisión abierta que la bloquee (a diferencia de T99, que sí depende de D-08/D-16/`GATES_FULL`
+  humano pendientes).
+- **División antes de escribir (mismo criterio que T05/T12.d/T16/T21/T23b/T24):** T98 mezcla seis
+  documentos independientes (seguridad/cripto, manual administrativo, modelo de datos, secretos de
+  entorno, runbook de solicitudes, lista para legal) sin dependencia real entre sí más allá de leer el
+  código ya cerrado — se partió en `T98.a`-`T98.f` en `TASKS.md`, en ese orden, y se ejecutó solo la
+  primera.
+- **Investigación antes de escribir (sin tocar código):** `SECURITY_PRIVACY.md` existente describe solo el
+  flujo de PII de `secure-register-user`/`pii.ts`/`migrate-user-pii` (de antes de este módulo) — ninguna
+  mención a `consent_records`/`admin_audit_log`/`crypto.ts`/`client-ip.ts`. Se leyó `_shared/crypto.ts`
+  completo para confirmar los nombres reales de las variables de entorno (en vez de asumirlos de TASKS.md/
+  DECISIONS.md): la clave AES por defecto sigue siendo `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION` (D-09,
+  reutilizado, documentado ya en la sección anterior del archivo); la clave HMAC del módulo es
+  `LOOKUP_HMAC_KEY_B64` (comentario explícito en `crypto.ts:126-128`: "must hold its OWN base64 32-byte
+  secret, distinct from any AES key above and from `SECURITY_EVENTS_HMAC_KEY`"), usada también para la
+  clave del bucket de rate limit (`_shared/rate-limit.ts:78`, `hmacLookup(normalized, 'LOOKUP_HMAC_KEY_B64')`).
+  Confirmado con `Glob`/`Grep` que `LOOKUP_HMAC_KEY_B64` no aparece en ningún `.env.example` del repo
+  (`central-admin-app/.env.example`, `frontend/.env.example`) ni en `GUIA_LEVANTAMIENTO_PROYECTO.md`/
+  `SETUP.md`: es un secreto real que falta provisionar antes del release, no solo falta documentarlo —
+  anotado también como motivo de `T98.d` (siguiente subtarea, pendiente).
+- **Cambios:** `shield-ecuador-app/SECURITY_PRIVACY.md` (nueva sección "Módulo de consentimiento informado
+  (LOPDP)", después de "Recomendaciones pendientes" original... en realidad insertada ANTES de esa
+  sección, para no romper su posición de cierre del documento): cifrado/HMAC (con la distinción H15 y el
+  soporte de rotación multi-clave que `pii.ts` no tiene), IP del titular (`client-ip.ts`, D-08 pendiente),
+  evidencia/bitácora append-only (073/078, `verify_*_chain()`), identidad administrativa individual (T05,
+  H08), correo saliente con anti-SSRF (T12.c, D-15), el secreto `LOOKUP_HMAC_KEY_B64` que falta provisionar
+  (con el comando de generación, mismo patrón que el de `PII_ENCRYPTION_KEY_B64` ya documentado arriba en
+  el archivo) y una nota explícita de que la sección no declara "cumple LOPDP"/"cumple ISO 42001" (regla de
+  PROMPT.md). `loop-consentimiento/TASKS.md` (T98 dividida en T98.a-f; T98.a `[x]`); este archivo.
+- **Pruebas añadidas:** ninguna — tarea de documentación pura, sin código ni migración nueva; no aplica la
+  regla de "toda escritura en BD necesita prueba contra Postgres real" (no hay escritura alguna).
+- **Gates:** no se tocó ningún archivo de código, prueba ni migración (solo 2 `.md` de `shield-ecuador-app`/
+  `loop-consentimiento`) — no aplica repetir `gates.sh` (mismo criterio que las Iteraciones 31/81/84). La
+  corrida completa más reciente (Iteración 85: 9 puertas no-opcionales OK) sigue vigente; ningún archivo
+  que `gates.sh` verifique cambió desde entonces.
+- Desviaciones de SPEC: ninguna (tarea de documentación, no de REQ/SEC).
+- Riesgos / pendientes detectados: (1) `T98.d` (secretos de entorno) queda como la tarea que de verdad debe
+  resolver la falta de `LOOKUP_HMAC_KEY_B64` en cualquier `.env.example`/guía de arranque — esta iteración
+  solo lo señala dentro de `SECURITY_PRIVACY.md`, no lo provisiona (no es una acción de producción, pero
+  tampoco corresponde a T98.a); (2) siguen pendientes T98.b-T98.f, sin empezar; (3) mismos pendientes ya
+  conocidos de T99 sin cambios: `GATES_FULL=1` humano desde la Iteración 75, D-08, D-16.
+- Porcentaje: sin cambio en el conteo estricto de 28 (T98 no es una de esas 28; es de la sección "Fase 6",
+  fuera del contador principal, igual que T25/T99). 23/28 = **82,1 %** sigue siendo la cifra vigente.

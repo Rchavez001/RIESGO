@@ -1198,6 +1198,35 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - Actualizar `SECURITY_PRIVACY.md`, manual administrativo (sección nueva con capturas o pasos),
     `BASE_DE_DATOS.md`, `.env.example`; procedimiento de rotación de claves; runbook de atención
     de solicitudes de baja; lista de lo que debe completar el área legal antes de publicar.
+  - **División (2026-10-20, antes de seguir escribiendo — mezcla seis documentos independientes, mismo
+    patrón que T05/T12.d/T16/T21/T23b/T24):** seguridad/criptografía, luego manual administrativo, luego
+    modelo de datos, luego secretos de entorno, luego runbook de solicitudes, luego lista para legal; en
+    ese orden (cada una es autocontenida, sin dependencia real entre sí salvo la lectura del código, ya
+    cerrado desde T02-T24).
+    - [x] **T98.a — `SECURITY_PRIVACY.md`: sección del módulo de consentimiento** (hecha 2026-10-20, iteración 86)
+      - Cripto (`crypto.ts`: reutiliza `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION`, AAD `tabla:columna:propietario`,
+        soporte multi-versión vía `_V{n}` a diferencia de `pii.ts`), HMAC separado (`LOOKUP_HMAC_KEY_B64`, H15:
+        nunca la clave AES ni `SECURITY_EVENTS_HMAC_KEY`), IP (`client-ip.ts`/`TRUSTED_PROXY_HOPS`, D-08
+        pendiente en el proyecto hospedado), append-only (`consent_records`/`admin_audit_log`/
+        `data_subject_requests`: trigger + RLS + REVOKE), identidad administrativa individual (T05, H08),
+        correo saliente con anti-SSRF (T12.c, D-15), secretos nuevos a provisionar antes del release.
+      - **Aceptación:** sección nueva, sin afirmar "cumple LOPDP"/"cumple ISO 42001" (usa "implementa
+        controles alineados con"); cada afirmación trazable a un archivo real (`crypto.ts`, `client-ip.ts`,
+        migraciones 073-081) sin inventar nada no verificado en el código.
+    - [ ] **T98.b — Manual administrativo: sección "Consentimiento informado"** (pasos del panel: versiones,
+      publicar, correo saliente, bitácora/evidencia/solicitudes, verificar integridad)
+    - [ ] **T98.c — `BASE_DE_DATOS.md`: tablas del módulo** (073-081: `consent_documents`, `consent_records`,
+      `admin_audit_log`, `data_subject_requests`, `privacy_settings`, `email_transport_settings`/
+      `email_transport_tests`/`email_outbox`, `admin_roles`, `privacy_email_verifications`), mismo nivel de
+      detalle y verificación contra el código que la sección 1-9 existente (cita el número de migración).
+    - [ ] **T98.d — Secretos de entorno del módulo** (`LOOKUP_HMAC_KEY_B64`: generación y `supabase secrets set`,
+      en `GUIA_LEVANTAMIENTO_PROYECTO.md`, mismo patrón que las demás claves ya documentadas ahí; confirmar que
+      `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION` ya documentadas cubren también este módulo, sin duplicarlas)
+    - [ ] **T98.e — Runbook de atención de solicitudes de derechos/baja** (REQ-10, REQ-11: cómo un
+      `privacy_editor`/`privacy_admin` atiende un caso desde que llega el aviso al delegado hasta
+      `atendida`/`rechazada_con_motivo`, con los plazos del semáforo)
+    - [ ] **T98.f — Lista de pendientes para el área legal antes de publicar** (D-02 plazos de conservación,
+      D-07 datos del responsable/delegado, confirmación de D-10 sobre el consentimiento legacy)
 
 - [ ] **T99 — Verificación final**
   - `gates.sh` completo en verde; `verify_consent_chain()` y `verify_audit_chain()` OK sobre seed;

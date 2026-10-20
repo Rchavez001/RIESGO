@@ -137,6 +137,93 @@ Desde una revision posterior de este documento (2026-09-08), el panel admin tamb
 
 **Brechas de RLS detectadas en esta revision** (no presentes en la version anterior de este documento): las tablas `sponsors`, `ai_configs` y `recommendations_cache` no tienen Row Level Security habilitado en ninguna de las 21 migraciones de Supabase, y `domains_whitelist`/`katas` no tienen una politica de escritura para admin declarada en SQL (solo lectura publica). Ver `BASE_DE_DATOS.md` seccion 9 para el detalle completo y la recomendacion de confirmar si esto es intencional.
 
+## Módulo de consentimiento informado (LOPDP)
+
+Rama `feature/consentimiento-lopdp`, migraciones `073`-`081` (escritas y probadas en local; **no aplicadas
+en producción todavía** — ver `loop-consentimiento/PLAN_PRODUCCION_RELEASE.md` para el orden de release).
+Implementa controles alineados con la LOPDP de Ecuador y su Reglamento; esta sección documenta cómo, no
+una declaración de cumplimiento (ver nota al final).
+
+### Cifrado y HMAC
+
+- Módulo propio `supabase/functions/_shared/crypto.ts`, con el mismo formato JSON de payload que ya usa
+  `pii.ts` (`{v, alg, iv, tag, ct}`, AES-256-GCM, IV de 96 bits, tag de 128 bits) para no introducir un
+  segundo formato incompatible en la misma base (D-09). Reutiliza el secreto existente
+  `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION` (sección anterior) como clave por defecto.
+- **AAD obligatoria en columnas nuevas** (`options.requireAad: true`): cada ciphertext queda atado a
+  `tabla:columna:propietario` (`buildAad`), así que copiar el mismo valor cifrado a otra fila o columna
+  hace fallar la verificación GCM en vez de descifrar silenciosamente el dato de otra persona.
+- **Clave HMAC separada de la clave de cifrado (H15):** `LOOKUP_HMAC_KEY_B64` (variable nueva, distinta de
+  `PII_ENCRYPTION_KEY_B64` y de `SECURITY_EVENTS_HMAC_KEY`, que es exclusiva de `security_events.ip_hash`).
+  Se usa para: `user_ref_hmac`/búsqueda de evidencia por `user_id`, búsqueda de usuario por correo en el
+  panel de evidencia, y la clave del bucket de rate limit de las Edge Functions del módulo (nunca correo
+  o IP en claro como clave de bucket). **Debe generarse y provisionarse antes del release** (no existe
+  todavía en ningún entorno, ver "Secretos nuevos" abajo).
+- **Soporte de rotación multi-clave**, a diferencia de `pii.ts` (que siempre descifra con la clave base y
+  ignora `payload.v`, ver T02-extra pendiente arriba): `decryptPii`/`encryptPii` de este módulo leen la
+  versión del propio payload y resuelven `${keyEnvPrefix}_V${version}` antes de caer a la clave sin
+  sufijo, así que subir `PII_KEY_VERSION` y añadir `PII_ENCRYPTION_KEY_B64_V<n>` no rompe la lectura de
+  filas cifradas con la versión anterior (sin ventana de mantenimiento ni re-cifrado inmediato).
+
+### IP del titular y del administrador
+
+- `_shared/client-ip.ts` (`getClientIp`): lee únicamente la cabecera del proxy de confianza
+  (`TRUSTED_PROXY_HOPS`, por defecto `1`); cualquier campo `ip` en el body de la petición se ignora y se
+  registra como intento anómalo. `maskIp` enmascara por defecto (`a.b.c.xxx` / IPv6 a 3 hextetos);
+  "Revelar IP" en el panel (solo `privacy_admin`, motivo obligatorio) es la única vía a la IP real.
+- **Pendiente antes de producción (D-08, abierta):** qué cabecera exacta trae la IP real en el proyecto
+  Supabase hospedado (medido en local: el proxy Kong añade la IP real al final de `X-Forwarded-For`;
+  hospedado probablemente tiene Cloudflare delante — sin medir, no se cambia `TRUSTED_PROXY_HOPS`).
+
+### Evidencia y bitácora append-only
+
+`consent_records`, `admin_audit_log` y `data_subject_requests` (migraciones 073/078) son append-only por
+diseño: trigger que calcula una cadena de hash encadenado (`prev_hash`/`row_hash`) al insertar, trigger
+que bloquea `UPDATE`/`DELETE`, y `REVOKE` de esos privilegios incluso para `service_role` salvo a través de
+funciones `SECURITY DEFINER` concretas (`update_data_subject_request_status`, `publish_consent_document`,
+`confirm_privacy_email_change`), cada una atribuida al administrador real que la invoca (ver siguiente
+punto) y registrada en la misma transacción que el cambio. `verify_consent_chain()`/`verify_audit_chain()`
+detectan el primer eslabón roto si alguna fila se alterase fuera de este camino. No existe todavía un job
+de purga por retención (T17, bloqueada por la decisión pendiente de plazos, D-02).
+
+### Identidad administrativa individual (H08)
+
+El panel (`central-admin-app`) ya no atribuye las acciones de este módulo a Basic Auth compartida ni a
+`service_role` genérico: cada admin inicia sesión con Supabase Auth + TOTP (`admin_roles`: `privacy_editor`
+/ `privacy_admin` / `privacy_auditor`) y el panel envía el JWT del propio admin a la función `admin-consent`,
+que exige `aal2` (TOTP verificado) para las acciones sensibles. El proxy de `central-admin-app` con
+`service_role` rechaza explícitamente las tablas/RPC/función de este módulo (nunca las sirve con la
+credencial compartida).
+
+### Correo saliente
+
+Transporte configurable (D-05): `resend` (reutiliza `resend_api_key` ya existente en Vault vía
+`app_secrets`, declarado en el aviso como transferencia internacional a EE. UU.) o `smtp` (host/puerto
+465/2525 únicos, contraseña cifrada con `crypto.ts`+AAD, nunca devuelta al panel). `_shared/email/
+ssrf-guard.ts` resuelve DNS y rechaza IP privada/loopback/link-local/metadatos antes de cada envío SMTP;
+la revalidación es por-envío, no una conexión pineada a la IP ya resuelta (D-15, riesgo residual de
+DNS-rebinding aceptado — el host solo lo configura un `privacy_admin` de confianza, no una entrada
+arbitraria).
+
+### Secretos nuevos a provisionar antes del release
+
+Ninguno de los siguientes existe todavía en ningún entorno (local ni hospedado); generarlos y
+documentar la rotación es trabajo de `T98.d`, pendiente. Se anotan aquí por completitud de esta sección:
+
+```bash
+# Misma clave por sesión de generación que PII_ENCRYPTION_KEY_B64 (ver arriba) — 32 bytes base64.
+# NUNCA reutilizar el mismo valor que PII_ENCRYPTION_KEY_B64 (H15: deben ser claves distintas).
+LOOKUP_HMAC_KEY_B64=<base64 de 32 bytes aleatorios, generado igual que PII_ENCRYPTION_KEY_B64>
+```
+
+### Nota sobre el alcance de esta sección
+
+Esta sección documenta los controles implementados (qué hace el código hoy); no es una declaración de que
+el módulo "cumple LOPDP" ni "cumple ISO/IEC 42001" — eso lo determina el área legal, no este documento.
+Ver `loop-consentimiento/DECISIONS.md` para las decisiones aún abiertas que afectan el release (D-02, D-07,
+D-08, D-16) y `loop-consentimiento/TASKS.md` (T98.b-T98.f) para el resto de la documentación pendiente
+(manual administrativo, modelo de datos, runbook de solicitudes, lista para legal).
+
 ## Recomendaciones pendientes
 
 - Rotar inmediatamente la service role key que estuvo expuesta en frontend historico.
