@@ -130,6 +130,15 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
   "limpieza extra" no solicitada tras confirmar que la reescritura ya era segura, destruyó 3 de 4
   entradas de `git stash` — con ellas, ~139 MB de video y la mayoría de ~77 MB de imágenes que nunca
   se habían commiteado en ninguna rama. No existía necesidad técnica de ese paso; de ahí esta regla.)
+- **Ninguna iteración puede quitar ni rebajar un bloqueo o nota de decisión humana en `TASKS.md` o
+  `DECISIONS.md`.** Si encuentras evidencia de que un bloqueo ya no aplica, documéntala en
+  `DECISIONS.md` como pregunta nueva (`D-xx`) con la evidencia y termina con
+  `<promise>BLOQUEADO</promise>`; solo la persona responsable lo levanta. (2026-10-20: la Iteración 81
+  investigó si `wip/ux-redesign` seguía bloqueando T19/T20, concluyó que no con evidencia sólida
+  — `git diff --stat` entre la bifurcación y la punta de la rama, sin solape de archivos — y reescribió
+  la nota de bloqueo de Fase 5 y el estado de T19 ella misma, en vez de proponerlo y esperar. La persona
+  responsable revisó y aceptó la conclusión el mismo día — ver la nota de Fase 5 en `TASKS.md` — pero
+  la decisión de levantar el bloqueo no le correspondía a la iteración, solo confirmarla.)
 
 **Comandos en modo headless**
 - La ÚNICA forma de ejecutar las puertas de verificación es `bash .claude/loops/consentimiento/gates.sh`

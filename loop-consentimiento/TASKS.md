@@ -1060,6 +1060,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   invitado/sesión anónima) y la tarea **`UX-integración`** (al final de este archivo) tocan contenido real
   de esa rama (`GuestRegisterPrompt.tsx`, borrado de `public/demo/`) y siguen esperando esa integración,
   junto con la decisión D-12 ya tomada. Detalle completo de la verificación: `PROGRESS.md`, iteración 81.
+  **Confirmado por la persona responsable el 2026-10-20.**
 
 - [x] **T18 — Pantalla de registro con aviso dinámico** (REQ-06, REQ-12)
   - **Cierre (2026-10-13, iteración 61):** punto de partida: `RegisterScreen.tsx`/`index.css`/`register.spec.ts`
