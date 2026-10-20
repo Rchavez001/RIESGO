@@ -2735,3 +2735,71 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio en el contador estricto (T24 sigue abierta — cuatro de cinco subtareas cerradas).
   Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande, mismo criterio que
   T23b/TEST-INT/T24.a/T24.b/T24.c).
+
+## Iteración 80 — 2026-10-20 — T24.e: Panel — botón "Verificar integridad" + tests E2E de regresión cruzada (cierra T24)
+- **Punto de partida:** `git status` limpio. Primera tarea `[ ]` desbloqueada en TASKS.md: T24.e, última
+  subtarea de T24. Backend ya cerrado desde T16.f (iteración 60, `GET /verify-chains`, `PRIVACY_ROLES`,
+  devuelve `{consent, audit}` con `{broken, first_broken_id, detail}` cada una, sin bitácora propia) — esta
+  subtarea es solo el panel que lo consume más los tests de regresión que cierran la tarea completa.
+- **Cambios:**
+  - `central-admin-app/index.html`: `#consentVerifyChains` (nuevo, después de `#consentRequests`): botón
+    "Verificar integridad" + párrafo de mensaje de error + bloque de resultado.
+  - `central-admin-app/app.js`: `CONSENT_VERIFY_CHAINS_ERRORS`/`consentVerifyChainsErrorMessage`,
+    `renderConsentVerifyChainsResult` (una línea por cadena: "cadena íntegra" o "cadena ROTA — primer
+    eslabón afectado #N (detalle)"), `checkConsentVerifyChains` (llama a `GET /verify-chains` solo al
+    pulsar el botón — a diferencia de Bitácora/Solicitudes, que cargan solas al entrar en
+    `privacyVerify`: verificar las dos cadenas recorre `consent_records`/`admin_audit_log` completas en
+    el backend, un costo real que no se quiere pagar en cada login), `resetConsentVerifyChains`; wiring en
+    `privacyShow`/`privacyReset`/`bindPrivacy` (sin tocar `privacyVerify`, justo por no ser autocargada).
+  - `tests/admin/consent-verify-chains.spec.ts` (nuevo, 9 casos): los tres roles ven la sección sin pedir
+    nada hasta pulsar el botón; pulsar manda `GET /verify-chains` con la sesión aal2 y muestra ambas
+    cadenas íntegras; cadena de evidencia rota (señala el eslabón y detalle, sin afectar el texto de la de
+    bitácora); cadena de bitácora rota; error del backend → mensaje legible, sin resultado previo; cerrar
+    sesión limpia el resultado, el mensaje y oculta la sección.
+  - `tests/admin/consent-t24-regression.spec.ts` (nuevo, 3 casos — "tests E2E de regresión cruzada" que
+    pide la tarea para cerrar T24): a diferencia del resto de specs de T24 (cada uno aislado por sección,
+    con su propio `setup()`), estos recorren varias secciones EN LA MISMA sesión: (1) editor: sin
+    "Publicar" (Documentos) ni "Revelar IP" (Evidencia); (2) auditor: sin "Publicar", sin "Revelar IP", sin
+    "Cambiar estado" (Solicitudes) — pero sí puede usar "Verificar integridad" (solo lectura, los tres
+    roles); (3) como `privacy_admin`, revelar IP (Evidencia), cambiar el estado de una solicitud
+    (Solicitudes) y publicar un borrador (Documentos) — tres acciones en tres secciones distintas de la
+    misma sesión — quedan reflejadas al recargar la Bitácora (botón "Filtrar" sin filtros): las tres filas
+    nuevas aparecen con su `action` correcto. El mock de `/audit-log` usa un "ledger" en memoria por test
+    (`makeAuditLedger()`) al que cada acción (`publish`/`reveal-ip`/`requests/.../status`) añade su propia
+    fila ANTES de responder con éxito — simula que la bitácora real deja la entrada de inmediato, sin
+    necesitar un backend real para demostrar el cruce entre secciones.
+  - `loop-consentimiento/TASKS.md`: T24.e `[x]`; T24 `[x]` (cierra con T24.e, última subtarea de cinco).
+- **Por qué no hace falta ningún cambio de backend ni prueba SQL nueva (regla de TEST-INT/PROMPT.md):**
+  `GET /verify-chains` ya estaba cerrado y probado contra el modelo real en T16.f (`verify_consent_chain()`/
+  `verify_audit_chain()`, 073/081, cubiertas desde T07/T08) — esta subtarea es solo el consumo desde el
+  panel, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo.
+- **Gates (en grupos, en primer plano, cada uno por debajo de los 600000 ms — ver REGLAS DURAS):**
+  `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` OK (lint 14 =
+  línea base); `--only "sql-ciclo-de-vida sql-guest-limit"` OK; `--only "panel-e2e"` OK (453s, incluye los
+  12 casos nuevos — 9 de `consent-verify-chains.spec.ts` + 3 de `consent-t24-regression.spec.ts`, perfiles
+  por defecto `desktop-chrome`+`pixel-7-chrome`).
+  - **Iteración 80, múltiplo de 5 → `GATES_FULL=1` (7 perfiles) es obligatoria (paso 6 de PROMPT.md), pero
+    no se pudo completar esta sesión:** mismo bloqueo documentado desde la Iteración 75 — `panel-e2e` con
+    los 7 perfiles mide ~1416-1430s (Iteración 50), por encima del límite de 600000 ms (10 min) de una sola
+    llamada a Bash, y `--full` es todo-o-nada (`gates.sh` no permite un subconjunto de perfiles vía
+    `--only`). Las REGLAS DURAS (2026-10-19) prohíben forzarlo en segundo plano para esquivar ese límite.
+    **Queda pendiente de una corrida humana** (fuera de una sesión headless de un solo comando) de
+    `bash .claude/loops/consentimiento/gates.sh --full` antes de la próxima vez que se calcule esto como
+    requisito de release (T99) — no bloquea el cierre de T24.e/T24 en sí, cuyos propios criterios de
+    aceptación (gates.sh por defecto, 9 puertas no-opcionales) ya están en verde. `db-reset`/`e2e-local`
+    SKIP opt-in, sin cambios de migraciones en esta tarea.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: la corrida de `GATES_FULL=1` pendiente de verificación humana sigue
+  acumulándose sin resolver desde la Iteración 75 (ya documentada en las Iteraciones 75/79) — no es nueva,
+  pero conviene que un humano la ejecute pronto, antes de que T99 la necesite de verdad. T24 queda completo
+  (T24.a/b/c/d/e). Siguiente tarea desbloqueada en TASKS.md: no hay ninguna `[ ]` sin alguna nota de espera
+  — T17 sigue `⛔ BLOQUEADA (D-02)`; T19/T19b/T20 (Fase 5) llevan la nota "esperan la integración de
+  `wip/ux-redesign`" desde el encabezado de esa fase (no es una `⛔ BLOQUEADA` formal con `D-nn`, así que en
+  sentido estricto T19 es la primera tarea `[ ]` con dependencias `[x]` — T11 y T13 ya están cerradas —, pero
+  la nota de fase sugiere investigar primero el estado de esa integración antes de empezarla, igual que ya
+  advertía T13.d/T15.d sin bloquear nada). La próxima iteración debe revisar esa nota con código real antes
+  de decidir si T19 arranca tal cual o si hace falta una D-nn nueva.
+- Porcentaje: sin cambio en el contador estricto (sigue en 22 de 28 = 78,6 %, desde el cierre de T23 —
+  T24 no tiene numeración de las 28 originales, mismo criterio que T23b/TEST-INT; T24 se cierra como tarea
+  completa con T24.e, pero no mueve este contador). Ponderado: sin cambio (T24 no tiene peso propio
+  asignado en esa cuenta, mismo criterio que T23b/TEST-INT).

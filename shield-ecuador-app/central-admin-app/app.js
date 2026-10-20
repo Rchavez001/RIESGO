@@ -6378,6 +6378,44 @@ function resetConsentRequests() {
   closeConsentRequestsStatus();
 }
 
+// T24.e (REQ-18): botón "Verificar integridad" — GET /verify-chains (PRIVACY_ROLES, T16.f), solo lectura,
+// sin disparo automático (a diferencia de `#consentAuditLog`/`#consentRequests`, que cargan al entrar):
+// verificar las dos cadenas tiene un costo real en el backend (recorre `consent_records`/`admin_audit_log`
+// completas), así que solo corre cuando el admin lo pide. Visible a los tres roles, mismo candado que
+// `#consentAuditLog`/`#consentRequests`. La propia acción no deja bitácora (ver el comentario de
+// `verifyChains` en admin-consent/handler.ts: solo lectura, no expone datos personales).
+const CONSENT_VERIFY_CHAINS_ERRORS = { ...PRIVACY_ERRORS };
+
+function consentVerifyChainsErrorMessage(code) {
+  return CONSENT_VERIFY_CHAINS_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+function renderConsentVerifyChainsResult(result) {
+  const line = (label, chain) => chain.broken
+    ? `${label}: cadena ROTA — primer eslabón afectado #${chain.first_broken_id}${chain.detail ? ` (${chain.detail})` : ""}`
+    : `${label}: cadena íntegra.`;
+  $("#consentVerifyChainsResult").innerHTML = `
+    <p>${esc(line("Evidencia de consentimiento", result.consent))}</p>
+    <p>${esc(line("Bitácora administrativa", result.audit))}</p>
+  `;
+}
+
+async function checkConsentVerifyChains() {
+  $("#consentVerifyChainsMessage").textContent = "";
+  $("#consentVerifyChainsResult").innerHTML = "";
+  const res = await privacyCall("/fn/admin-consent/verify-chains", { session: privacyFlow.token, method: "GET" });
+  if (res.status !== 200 || !res.data || typeof res.data.consent !== "object" || typeof res.data.audit !== "object") {
+    $("#consentVerifyChainsMessage").textContent = consentVerifyChainsErrorMessage(res.data?.error);
+    return;
+  }
+  renderConsentVerifyChainsResult(res.data);
+}
+
+function resetConsentVerifyChains() {
+  $("#consentVerifyChainsMessage").textContent = "";
+  $("#consentVerifyChainsResult").innerHTML = "";
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -6423,6 +6461,7 @@ function privacyShow(step) {
   $("#consentAuditLog").hidden = step !== "identity";
   $("#consentEvidence").hidden = step !== "identity";
   $("#consentRequests").hidden = step !== "identity";
+  $("#consentVerifyChains").hidden = step !== "identity";
   if (step !== "code") privacyClearEnroll();
 }
 
@@ -6460,6 +6499,7 @@ function privacyReset(message = "") {
   resetConsentAuditLog();
   resetConsentEvidence();
   resetConsentRequests();
+  resetConsentVerifyChains();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -6667,6 +6707,7 @@ function bindPrivacy() {
   });
   $("#consentRequestsStatusForm").addEventListener("submit", (event) => void submitConsentRequestsStatus(event));
   $("#consentRequestsStatusClose").addEventListener("click", closeConsentRequestsStatus);
+  $("#consentVerifyChainsButton").addEventListener("click", () => void checkConsentVerifyChains());
 }
 
 init();

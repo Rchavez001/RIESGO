@@ -838,7 +838,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     del backend por TEST-INT.e/D-15; el panel solo necesita mostrar el resultado, no probar la bitácora de
     nuevo).
 
-- [ ] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11)
+- [x] **T24 — Bitácora, Evidencia y Solicitudes** (REQ-16, REQ-17, REQ-11) (hecha 2026-10-20, iteración 80 — cierra con T24.e, última subtarea de cinco)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende de T16 (las acciones que esta pantalla invoca) y T05.
   - **División (2026-10-19, antes de codificar, iteración 76):** el backend completo (T16.a-f) ya está
     cerrado desde la iteración 60; esta tarea es solo el panel (frontend) que lo consume. Mezcla cuatro
@@ -1003,9 +1003,45 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
       no-opcionales OK, `panel-e2e` con los 17 casos nuevos incluidos; `db-reset`/`e2e-local` SKIP opt-in,
       sin cambios de migraciones; iteración 79, no múltiplo de 5, `GATES_FULL=1` no obligatorio esta vez).
-  - [ ] **T24.e — Panel: botón "Verificar integridad" (`verify-chains`) + tests E2E de regresión cruzada** (REQ-18)
-    - **Tests E2E del panel (cierre de T24):** editor no ve botón Publicar; auditor no ve "Revelar IP";
-      cada acción aparece en bitácora.
+  - [x] **T24.e — Panel: botón "Verificar integridad" (`verify-chains`) + tests E2E de regresión cruzada** (REQ-18) (hecha 2026-10-20, iteración 80 — cierra T24, última subtarea de cinco)
+    - **Estado:** cerrada. `#consentVerifyChains` (nuevo, visible a los tres roles — `GET /verify-chains`
+      es `PRIVACY_ROLES`, T16.f, mismo candado que `#consentAuditLog`/`#consentRequests`): botón
+      "Verificar integridad" sin disparo automático (a diferencia de Bitácora/Solicitudes, que cargan al
+      entrar con `privacyVerify`) — verificar las dos cadenas recorre `consent_records`/`admin_audit_log`
+      completas en el backend, así que solo corre cuando el admin lo pide. Muestra el estado de ambas
+      cadenas (`consent`/`audit`, T16.f: `{broken, first_broken_id, detail}`) como "cadena íntegra" o
+      "cadena ROTA — primer eslabón afectado #N (detalle)", cada una independiente de la otra. La propia
+      acción no deja bitácora (ya documentado en el comentario de `verifyChains`,
+      `admin-consent/handler.ts`: solo lectura, no expone datos personales — REQ-16 no la lista entre las
+      acciones que la exigen).
+    - **Por qué no hace falta ningún cambio de backend ni prueba SQL nueva (regla de TEST-INT/PROMPT.md):**
+      `GET /verify-chains` ya estaba cerrado y probado contra el modelo real en T16.f (`verify_consent_chain()`/
+      `verify_audit_chain()`, 073/081, ya cubiertas por sus propias pruebas SQL desde T07/T08) — esta
+      subtarea es solo el consumo desde el panel, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo.
+    - **Pruebas añadidas:** `tests/admin/consent-verify-chains.spec.ts` (nuevo, 9 casos): los tres roles ven
+      la sección sin pedir nada hasta pulsar el botón; pulsar manda `GET /verify-chains` con la sesión aal2
+      y muestra ambas cadenas íntegras; cadena de evidencia rota (señala el eslabón y el detalle, sin
+      afectar el texto de la de bitácora); cadena de bitácora rota; error del backend → mensaje legible,
+      sin resultado previo; cerrar sesión limpia el resultado, el mensaje y oculta la sección.
+    - **Tests E2E de regresión cruzada (cierre de T24):** `tests/admin/consent-t24-regression.spec.ts`
+      (nuevo, 3 casos que recorren varias secciones EN LA MISMA sesión, a diferencia del resto de specs de
+      T24 — cada uno aislado por archivo): (1) editor: sin "Publicar" (Documentos) ni "Revelar IP"
+      (Evidencia) en la misma sesión; (2) auditor: sin "Publicar", sin "Revelar IP", sin "Cambiar estado"
+      (Solicitudes) — pero sí puede usar "Verificar integridad" (solo lectura, los tres roles); (3) como
+      `privacy_admin`, revelar IP (Evidencia), cambiar el estado de una solicitud (Solicitudes) y publicar
+      un borrador (Documentos) — tres acciones en tres secciones distintas de la misma sesión — quedan
+      reflejadas al recargar la Bitácora (filtrar sin filtros): las tres filas nuevas aparecen con su
+      `action` correcto (`evidence.reveal_ip`, `data_subject_request.update_status`,
+      `consent_document.publish`), sin necesitar un backend real (cada acción mockeada añade su propia fila
+      al "ledger" simulado de `/audit-log` antes de responder con éxito, igual que la bitácora real lo
+      haría de inmediato).
+    - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
+      no-opcionales OK: typecheck/lint/unit-frontend/panel-unit/deno-check/deno-test/sql-ciclo-de-vida/
+      sql-guest-limit/panel-e2e con los 12 casos nuevos incluidos, 453s; `db-reset`/`e2e-local` SKIP
+      opt-in, sin cambios de migraciones). **Iteración 80, múltiplo de 5 → `GATES_FULL=1` es obligatoria
+      (paso 6 de PROMPT.md) pero no se pudo completar esta sesión** (mismo bloqueo que la Iteración 75:
+      `panel-e2e` con los 7 perfiles mide ~1416-1430s, por encima del límite de 600000 ms de una sola
+      llamada a Bash, y `--full` es todo-o-nada): queda pendiente de una corrida humana, ver PROGRESS.md.
 
 ## Fase 5 · Frontend de usuario
 
