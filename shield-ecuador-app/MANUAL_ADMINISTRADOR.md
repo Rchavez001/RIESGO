@@ -92,6 +92,42 @@ Panel real, de solo lectura. Selector de período (Quincenal 15 días / Mensual 
 3. Clic en una barra de sector → desglose de qué campañas se mostraron en ese sector y cuántas veces, usando `campaign_impressions` cruzado con `central_admin_campaigns`.
 Un cuarto bloque, siempre visible, muestra veces que se mostró cada campaña en total (todos los sectores).
 
+### 14. Consentimiento informado (`consent`) — módulo LOPDP
+
+A diferencia de los 13 paneles anteriores, esta sección **no usa la Basic Auth compartida de la consola ni el proxy con service role**: cada administrador entra con su propia cuenta (correo + contraseña de Supabase Auth) y un segundo factor TOTP propio, y toda acción queda atribuida a esa identidad individual (H08) — nunca a `central-admin`/`service_role`. El JWT de esa sesión, no el proxy, es lo que llama a la Edge Function `admin-consent`. Verificado leyendo `central-admin-app/index.html` (sección `#consent`, líneas 1179-1774) y `central-admin-app/app.js` línea por línea.
+
+**Acceso individual (artículo "Acceso individual al módulo"):** correo + contraseña (`privacyLoginForm`) → si la cuenta no tiene TOTP activado, pantalla de enrolamiento con código QR y clave manual (`privacyEnroll`); después, código de 6 dígitos (`privacyCodeForm`). Con la sesión verificada, `privacyIdentity` muestra el correo y los roles del admin (`privacy_editor`, `privacy_admin`, `privacy_auditor` — un admin puede tener varios) y el botón "Cerrar sesión del módulo". Ningún otro artículo de esta sección es visible hasta pasar este paso.
+
+Quién puede hacer qué, confirmado en `app.js` (no es un supuesto de diseño, son los candados reales):
+- **Editar** un borrador y **compararlo** con la versión vigente: `privacy_editor` o `privacy_admin`.
+- **Publicar** o **retirar** un borrador, **configurar responsable/delegado**, **cambiar el correo de privacidad**, **configurar el correo saliente** y **revelar la IP real** de una evidencia: solo `privacy_admin` (candado `ADMIN_ONLY` en el backend, no una preferencia de la interfaz).
+- **Cambiar el estado de una solicitud de derechos**: `privacy_editor` o `privacy_admin`, nunca `privacy_auditor`.
+- **Ver** la lista de versiones, la bitácora, la evidencia (con IP enmascarada) y las solicitudes, y **usar el botón de verificar integridad**: los tres roles.
+
+**Versiones del aviso (`consentDocuments`):** tabla con versión, estado, título, número de aceptaciones, fecha de publicación y de creación. "Crear borrador desde vigente" (versión nueva + resumen de cambios opcional) clona el contenido y las finalidades de la versión publicada. Si todavía no hay ninguna versión publicada (primer uso), el backend exige título/contenido/finalidades completos en la misma llamada; el mensaje en pantalla lo indica.
+
+**Editar borrador:** editor de título y contenido Markdown con vista previa en vivo (resuelve los marcadores del texto y resalta los que falten) y autoguardado (con aviso de "cambios sin guardar" si se cierra antes de que el autoguardado corra). Debajo, el editor de finalidades: el código de una finalidad que ya existía en el borrador no se puede cambiar; "Agregar finalidad" crea una fila nueva con código editable solo hasta el primer guardado exitoso.
+
+**Comparar con la versión vigente:** diff línea a línea del Markdown y antes/después del resto de campos que cambien. Sin versión vigente, o sin diferencias, muestra un mensaje explícito en vez de una tabla vacía.
+
+**Publicar borrador:** casilla "Requiere reconsentimiento de los titulares" (si la versión vigente queda retirada, decide si todos deben volver a aceptar en su próximo inicio de sesión — REQ-09/T20), motivo obligatorio, y confirmación escribiendo la versión exacta. Antes de confirmar, un resumen muestra cuántas aceptaciones tiene la versión que se va a retirar. "Retirar borrador" (sin publicar) solo pide motivo y la misma confirmación por versión — nunca tuvo aceptaciones, así que no hay resumen de impacto.
+
+**Configuración del responsable y delegado (`consentSettings`):** nombre/razón social y domicilio/teléfono del responsable, nombre y contacto del DPO, URL de la Política de Privacidad, asunto del correo de baja, plazo de respuesta a solicitudes (días) y plazo de conservación de IP (días). Cada guardado crea una versión nueva; el historial de abajo (solo lectura) muestra todas las versiones anteriores con quién y cuándo. Editor y auditor ven los valores con los campos deshabilitados, sin botón "Guardar". El correo de privacidad **no** se cambia desde este formulario.
+
+**Correo de privacidad (`consentEmailChange`):** cambiarlo exige verificación: se escribe la dirección nueva, llega un código de 6 dígitos (válido 30 minutos) a esa dirección, y solo se confirma con el código correcto. Evita desviar solicitudes de baja a un buzón que nadie revisa. El estado "pendiente de confirmación" vive solo en memoria de la pestaña — si se recarga la página a mitad del cambio, hay que pedir el código de nuevo.
+
+**Correo saliente (`consentEmailTransport`):** modo Resend (reutiliza la integración ya existente del repo) o SMTP propio (host, puerto 465 con SSL/TLS o 2525 — Supabase bloquea 25 y 587 —, usuario y contraseña). La contraseña SMTP nunca vuelve al navegador: el formulario solo informa si hay una configurada (`password_set`) y dejar el campo en blanco al guardar conserva la que ya había, re-cifrada bajo la versión nueva. Botón "Enviar correo de prueba" (resultado solo en memoria de la pestaña) e historial de versiones (modo, remitente, si tenía contraseña, quién y cuándo — nunca la contraseña ni su cifrado). Si el transporte activo falla o no está configurado, arriba de toda la sección aparece el banner "Correo no configurado / con errores" con el contador de avisos pendientes (`email_outbox`) y un botón "Reenviar avisos pendientes" — visible solo para `privacy_admin`.
+
+**Bitácora administrativa (`consentAuditLog`):** filtros combinables por fecha, ID de actor y texto de la acción; tabla con fecha, actor, rol, acción, entidad y motivo; el detalle de una fila muestra el diff `before`/`after` completo. "Exportar CSV" exige escribir un motivo (la exportación misma queda registrada como una entrada más de la bitácora).
+
+**Evidencia de consentimiento (`consentEvidence`):** búsqueda por correo del titular o por ID de usuario (nunca por coincidencia parcial sobre un campo cifrado); tabla con fecha, versión, finalidad, decisión, canal e IP — la IP se muestra siempre enmascarada (`192.0.2.xxx`) salvo que se use "Revelar IP real" (solo `privacy_admin`, exige motivo, se registra en bitácora). "Exportar expediente del titular" (JSON o PDF simple, motivo obligatorio) sirve para atender una solicitud de acceso o portabilidad.
+
+**Solicitudes de derechos (`consentRequests`):** lista filtrable por estado (recibida / requiere aclaración / en proceso / atendida / rechazada con motivo), con número de caso, tipo, canal, estado, plazo y fechas. "Cambiar estado" abre un formulario con el nuevo estado, una nota de resolución interna opcional y un motivo que solo es obligatorio al rechazar.
+
+**Verificación de integridad (`consentVerifyChains`):** un solo botón, "Verificar integridad", que ejecuta `verify_consent_chain()` y `verify_audit_chain()` contra la base y muestra el resultado (íntegra, o el primer eslabón roto si algo falla).
+
+**Nota de alcance:** esta sección documenta los pasos del panel tal como existen en el código al 2026-10-20 (`admin-consent`, `central-admin-app`). No afirma que el módulo "cumple LOPDP" ni "cumple ISO 42001" — implementa controles alineados con esos marcos; varias piezas (plazos de conservación definitivos, datos reales del responsable/delegado, medición de la cabecera de IP en el entorno hospedado) siguen pendientes de decisión humana o de confirmación legal antes de publicarse en producción (ver `loop-consentimiento/DECISIONS.md`).
+
 ---
 
-*Documento reescrito el 2026-09-08 a partir de la lectura completa de `central-admin-app/index.html` (665 líneas) y `central-admin-app/app.js` (2216 líneas). Reemplaza la versión anterior, que describía funcionalidades de campañas y navegación desactualizadas y no distinguía entre paneles reales y de maqueta.*
+*Documento reescrito el 2026-09-08 a partir de la lectura completa de `central-admin-app/index.html` (665 líneas) y `central-admin-app/app.js` (2216 líneas). Reemplaza la versión anterior, que describía funcionalidades de campañas y navegación desactualizadas y no distinguía entre paneles reales y de maqueta. Sección 14 (Consentimiento informado) añadida el 2026-10-20 (T98.b), a partir de la lectura de la sección `#consent` de `index.html` (1179-1774) y los candados de rol reales en `app.js`.*

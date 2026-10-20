@@ -3250,3 +3250,32 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   conocidos de T99 sin cambios: `GATES_FULL=1` humano desde la Iteración 75, D-08, D-16.
 - Porcentaje: sin cambio en el conteo estricto de 28 (T98 no es una de esas 28; es de la sección "Fase 6",
   fuera del contador principal, igual que T25/T99). 23/28 = **82,1 %** sigue siendo la cifra vigente.
+
+## Iteración 87 — 2026-10-20 — T98.b (manual administrativo: sección "Consentimiento informado"), sin código
+- **Punto de partida:** `git status` limpio. Primera tarea `[ ]` desbloqueada en orden sigue siendo T25 (sin
+  ventana de release esta sesión, igual que la Iteración 86). Siguiente candidato sin bloqueo: T98.b, segunda
+  subtarea de la división de T98 (Iteración 86).
+- **Investigación antes de escribir (sin tocar código):** se leyó `central-admin-app/index.html` completo
+  desde la sección `<section id="consent">` (línea 1179) hasta el cierre del último artículo (`consentVerifyChains`,
+  línea ~1774): 13 artículos reales (acceso individual, versiones + editor + diff + publicar + retirar,
+  configuración de responsable/delegado, cambio de correo de privacidad, correo saliente, bitácora, evidencia,
+  solicitudes de derechos, verificación de integridad). Se cruzó cada uno con los comentarios de `app.js` que
+  documentan qué ruta de `admin-consent` consume y, sobre todo, con los candados de rol reales (`grep` de
+  `PRIVACY_ROLES`/`ADMIN_ONLY`/`privacy_editor`/`privacy_admin`/`privacy_auditor`): confirmado que "Publicar"/
+  "Retirar"/configuración de responsable/cambio de correo/correo saliente/revelar IP son `ADMIN_ONLY`
+  (`privacy_admin`), que "Editar"/"Comparar" aceptan también `privacy_editor`, y que la bitácora/evidencia/
+  solicitudes/verificar integridad (lectura) son visibles para los tres roles — sin asumir nada del propio
+  texto de TASKS.md/SPEC.md que no estuviera confirmado en el código.
+- **Cambios:** `shield-ecuador-app/MANUAL_ADMINISTRADOR.md` (nueva sección "14. Consentimiento informado
+  (`consent`) — módulo LOPDP", después de la sección 13 "Reportes" y antes del pie de página, que se actualizó
+  para mencionar la nueva sección); `loop-consentimiento/TASKS.md` (T98.b `[x]`, con resumen); este archivo.
+- **Pruebas añadidas:** ninguna — tarea de documentación pura, sin código ni migración nueva; no aplica la
+  regla de "toda escritura en BD necesita prueba contra Postgres real" (no hay escritura alguna).
+- **Gates:** no se tocó ningún archivo de código, prueba ni migración (solo 2 `.md`) — no aplica repetir
+  `gates.sh` (mismo criterio que las Iteraciones 31/81/84/86). La corrida completa más reciente (Iteración 85:
+  9 puertas no-opcionales OK) sigue vigente; ningún archivo que `gates.sh` verifique cambió desde entonces.
+- Desviaciones de SPEC: ninguna (tarea de documentación, no de REQ/SEC).
+- Riesgos / pendientes detectados: (1) siguen pendientes T98.c-T98.f, sin empezar; (2) mismos pendientes ya
+  conocidos sin cambios: `GATES_FULL=1` humano desde la Iteración 75, D-08, D-16 (bloquea T19b en su Paso 2B).
+- Porcentaje: sin cambio en el conteo estricto de 28 (T98 no es una de esas 28). 23/28 = **82,1 %** sigue
+  siendo la cifra vigente.

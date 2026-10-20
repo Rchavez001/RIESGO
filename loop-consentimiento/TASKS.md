@@ -1213,8 +1213,16 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       - **Aceptación:** sección nueva, sin afirmar "cumple LOPDP"/"cumple ISO 42001" (usa "implementa
         controles alineados con"); cada afirmación trazable a un archivo real (`crypto.ts`, `client-ip.ts`,
         migraciones 073-081) sin inventar nada no verificado en el código.
-    - [ ] **T98.b — Manual administrativo: sección "Consentimiento informado"** (pasos del panel: versiones,
-      publicar, correo saliente, bitácora/evidencia/solicitudes, verificar integridad)
+    - [x] **T98.b — Manual administrativo: sección "Consentimiento informado"** (hecha 2026-10-20, iteración 87)
+      - Sección 14 nueva en `MANUAL_ADMINISTRADOR.md`: acceso individual (login+TOTP), candados de rol reales
+        (`privacy_editor`/`privacy_admin`/`privacy_auditor`, confirmados en `app.js`, no supuestos), versiones
+        (crear/editar/comparar/publicar/retirar), configuración del responsable/delegado, cambio del correo de
+        privacidad, correo saliente (Resend/SMTP + prueba + historial + banner de avisos pendientes), bitácora,
+        evidencia (búsqueda, revelar IP, exportar expediente), solicitudes de derechos (filtro + cambio de
+        estado) y verificación de integridad.
+      - **Aceptación:** mismo criterio que T98.a — sin afirmar "cumple LOPDP"/"cumple ISO 42001"; cada paso
+        trazable a un elemento real de `central-admin-app/index.html`/`app.js` (IDs e campos citados), sin
+        inventar pasos que el código no tiene.
     - [ ] **T98.c — `BASE_DE_DATOS.md`: tablas del módulo** (073-081: `consent_documents`, `consent_records`,
       `admin_audit_log`, `data_subject_requests`, `privacy_settings`, `email_transport_settings`/
       `email_transport_tests`/`email_outbox`, `admin_roles`, `privacy_email_verifications`), mismo nivel de
