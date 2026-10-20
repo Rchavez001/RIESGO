@@ -146,8 +146,8 @@ export function SenseiChallengeModal({ onClose }: { onClose: () => void }) {
 }
 
 const COIN_VIDEO_SRC: Record<'cara' | 'sello', string> = {
-  cara: '/videos/volado_1usd_cara_calidad_videojuego.webm',
-  sello: '/videos/volado_1usd_sello_calidad_videojuego.webm',
+  cara: '/videos/cara.webm',
+  sello: '/videos/sello.webm',
 }
 
 // Real, cropped photographs of the same physical dollar coin used in the

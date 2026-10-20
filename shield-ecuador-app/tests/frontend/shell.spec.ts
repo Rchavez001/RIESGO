@@ -112,7 +112,7 @@ test.describe('shell autenticado', () => {
     await signedIn(page, { anonymous: true })
     await open(page)
     await page.goto('/campeonato')
-    await expect(page.getByRole('heading', { name: /regístrate para continuar/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /regístrate para tener la experiencia completa/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /regístrate gratis/i })).toBeVisible()
   })
 

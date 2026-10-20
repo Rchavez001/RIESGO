@@ -5,7 +5,6 @@ import { Loader } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LandingPage } from './screens/CinematicLandingPage'
 import { CharactersPage } from './screens/CharactersPage'
-import { PracticePage } from './screens/PracticePage'
 import { LoginScreen } from './screens/LoginScreen'
 import { RegisterScreen } from './screens/RegisterScreen'
 import { DashboardScreen } from './screens/CinematicDashboardScreen'
@@ -15,6 +14,8 @@ import { KataExamPage } from './screens/KataExamPage'
 // Dev route: render kata page without auth for testing
 import { KataExamPage as DevKata } from './screens/KataExamPage'
 import { LeaderboardPage } from './screens/LeaderboardPage'
+import { ChampionshipPage } from './screens/ChampionshipPage'
+import { ChampionshipMatchPage } from './screens/ChampionshipMatchPage'
 import { ProfilePage } from './screens/ProfilePage'
 import { PrivacyPage } from './screens/PrivacyPage'
 import { ReconsentGate } from './components/ReconsentGate'
@@ -24,11 +25,14 @@ import { AuthCallbackPage } from './screens/AuthCallbackPage'
 import { DojoShell } from './components/CyberBushido'
 import { SenseiChallengeModal } from './components/SenseiChallengeModal'
 import { AdminShell } from './components/AdminShell'
+import { GuestRegisterPrompt } from './components/GuestRegisterPrompt'
 import { PageTransition } from './components/PageTransition'
+import { learningDojos } from './services/learning'
 import { ToastProvider } from './contexts/ToastContext'
 import { DojoAudioProvider } from './contexts/DojoAudioContext'
 import { useDojoStore } from './store/dojoStore'
 import { PWAInstallPrompt } from './components/PWAInstallPrompt'
+import { isViewingAsUser } from './lib/viewAsUser'
 
 // Lazy-loaded: heavy, infrequently-used screens kept out of the initial bundle.
 const TenantAdminPage = React.lazy(() => import('./screens/TenantAdminPage').then((m) => ({ default: m.TenantAdminPage })))
@@ -46,11 +50,23 @@ function LoadingScreen() {
   )
 }
 
+// A guest (anonymous) session only ever gets the dojo list and the first
+// dojo's own page — belt rank 0 already unlocks just that dojo server-side,
+// this only decides what UI a guest is allowed to reach at all (Sensei,
+// Campeonato, other dojos, etc. all render the register prompt instead).
+const FIRST_DOJO_ID = learningDojos[0]?.id
+function isGuestAllowedPath(pathname: string) {
+  return pathname === '/dojos' || pathname === `/dojo/${FIRST_DOJO_ID}`
+}
+
 function ProtectedShell() {
   const { user, userProfile, loading, signOut } = useAuth()
   const { belt, xp, setBelt, setXp } = useDojoStore()
   const location = useLocation()
   const [showChallenge, setShowChallenge] = React.useState(false)
+  const isAdmin = userProfile?.role === 'admin'
+  const previewingAsUser = isViewingAsUser()
+  const isGuest = Boolean(user?.is_anonymous)
 
   React.useEffect(() => {
     if (userProfile?.belt) {
@@ -65,7 +81,7 @@ function ProtectedShell() {
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />
 
-  if (userProfile?.role === 'admin') {
+  if (isAdmin && !previewingAsUser) {
     return (
       <ReconsentGate>
         <AdminShell
@@ -82,32 +98,24 @@ function ProtectedShell() {
   return (
     <ReconsentGate>
       <DojoShell
-        userName={userProfile?.full_name ?? user.email ?? 'Guerrero'}
+        userName={userProfile?.full_name ?? (isGuest ? 'Invitado' : user.email) ?? 'Guerrero'}
         belt={belt}
         xp={xp}
-        isAdmin={false}
+        isAdmin={isAdmin}
         onSignOut={() => void signOut()}
         onOpenChallenge={() => setShowChallenge(true)}
       >
-        <Outlet />
-        {showChallenge && <SenseiChallengeModal onClose={() => setShowChallenge(false)} />}
+        {isGuest && !isGuestAllowedPath(location.pathname) ? <GuestRegisterPrompt /> : <Outlet />}
+        {!isGuest && showChallenge && <SenseiChallengeModal onClose={() => setShowChallenge(false)} />}
       </DojoShell>
     </ReconsentGate>
   )
 }
 
 function DashboardOrAdminRedirect() {
-  const { userProfile, loading } = useAuth()
-  const location = useLocation()
-  const isPreview = new URLSearchParams(location.search).get('preview') === 'true'
+  const { loading } = useAuth()
 
-  React.useEffect(() => {
-    if (!loading && userProfile?.role === 'admin' && !isPreview) {
-      window.location.href = '/admin'
-    }
-  }, [loading, userProfile, isPreview])
-
-  if (loading || (userProfile?.role === 'admin' && !isPreview)) return null
+  if (loading) return null
   return <PageTransition><DashboardScreen /></PageTransition>
 }
 
@@ -144,7 +152,7 @@ function AppRoutes() {
         <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
         <Route path="/personajes" element={<PageTransition><CharactersPage /></PageTransition>} />
         <Route path="/personajes/:id" element={<PageTransition><CharactersPage /></PageTransition>} />
-        <Route path="/practica" element={<PageTransition><PracticePage /></PageTransition>} />
+        <Route path="/practica" element={<Navigate to="/dojos" replace />} />
         <Route path="/login" element={<PageTransition><LoginScreen /></PageTransition>} />
         <Route path="/registro" element={<PageTransition><RegisterScreen /></PageTransition>} />
         <Route path="/auth/callback" element={<PageTransition><AuthCallbackPage /></PageTransition>} />
@@ -158,6 +166,8 @@ function AppRoutes() {
           <Route path="/sensei" element={<PageTransition><SenseiConsultPage /></PageTransition>} />
           <Route path="/escaner" element={<PageTransition><React.Suspense fallback={<LoadingScreen />}><VulnScannerPage /></React.Suspense></PageTransition>} />
           <Route path="/ranking" element={<PageTransition><LeaderboardPage /></PageTransition>} />
+          <Route path="/campeonato" element={<PageTransition><ChampionshipPage /></PageTransition>} />
+          <Route path="/campeonato/combate/:matchId" element={<PageTransition><ChampionshipMatchPage /></PageTransition>} />
           <Route path="/perfil" element={<PageTransition><ProfilePage /></PageTransition>} />
           <Route path="/privacidad" element={<PageTransition><PrivacyPage /></PageTransition>} />
         </Route>

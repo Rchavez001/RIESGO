@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { signedIn } from './auth-fixture'
 
 test.describe('landing /', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,6 +25,14 @@ test.describe('landing /', () => {
     test.skip(!viewport || viewport.width > 700 || viewport.width > viewport.height, 'solo móvil vertical')
     const top = await page.locator('.cinema-actions .cinema-button').first().evaluate(e => e.getBoundingClientRect().top)
     // El alto real visible en Safari iOS es ~50–110px menor que el viewport emulado (barras del navegador).
+    expect(top).toBeLessThan(viewport!.height - 60)
+  })
+
+  test('el botón del video del Sensei también se ve sin hacer scroll en móvil vertical', async ({ page, viewport }) => {
+    // El titular + párrafo + botones + este botón + el aviso de abajo suman más alto que el
+    // viewport en un teléfono corto (ej. iPhone SE) si el espaciado no es lo bastante compacto.
+    test.skip(!viewport || viewport.width > 700 || viewport.width > viewport.height, 'solo móvil vertical')
+    const top = await page.locator('.cinema-sensei-video-btn').evaluate(e => e.getBoundingClientRect().top)
     expect(top).toBeLessThan(viewport!.height - 60)
   })
 
@@ -56,5 +65,12 @@ test.describe('landing /', () => {
     await page.locator('.sensei-video-stage video').evaluate((v: HTMLVideoElement) => { v.dispatchEvent(new Event('ended')) })
     await expect(page.getByRole('link', { name: /regístrate gratis/i })).toBeVisible()
     await expect(page.getByRole('link', { name: /probar sin cuenta/i }).last()).toBeVisible()
+  })
+
+  test('el video del Sensei también se ve con una cuenta ya registrada', async ({ page }) => {
+    await signedIn(page)
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+    await expect(page.locator('.cinema-sensei-video-btn')).toBeVisible()
   })
 })

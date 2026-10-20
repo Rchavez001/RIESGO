@@ -108,7 +108,7 @@ export function LandingPage() {
         )}
         <Link className="cinema-text-link" to="/dojos" onClick={handleTryWithoutAccount}>Probar sin cuenta ↗</Link>
       </div>
-      {!(user && !user.is_anonymous) && <button ref={videoTrigger} className="cinema-sensei-video-btn" onClick={() => setVideoOpen(true)} aria-haspopup="dialog"><span className="cinema-sensei-video-play" aria-hidden="true"><Play size={16} fill="currentColor" /></span><span><small>VIDEO · 45 SEG · CON SONIDO</small><strong>El primer consejo de tu Sensei</strong></span></button>}
+      <button ref={videoTrigger} className="cinema-sensei-video-btn" onClick={() => setVideoOpen(true)} aria-haspopup="dialog"><span className="cinema-sensei-video-play" aria-hidden="true"><Play size={16} fill="currentColor" /></span><span><small>VIDEO · 45 SEG · CON SONIDO</small><strong>El primer consejo de tu Sensei</strong></span></button>
       <p className="cinema-reassurance"><ShieldCheck size={16} /> No necesitas saber de informática para empezar.</p></div>
       <div className="cinema-sensei-caption"><strong>Primero, respira.</strong><span>DESPUÉS, VERIFICA.</span></div>
     </section>
