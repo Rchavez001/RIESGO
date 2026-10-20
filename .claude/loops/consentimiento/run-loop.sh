@@ -18,6 +18,7 @@ BRANCH="feature/consentimiento-lopdp"
 MAX_ITER="${MAX_ITER:-30}"
 MAX_TURNS="${MAX_TURNS:-100}"
 PAUSE="${PAUSE:-5}"
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS="${CLAUDE_CODE_MAX_OUTPUT_TOKENS:-32000}"
 
 command -v claude >/dev/null || { echo "Claude Code (claude) no está instalado"; exit 1; }
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "Ejecutar en la raíz del repo"; exit 1; }
@@ -107,6 +108,14 @@ for i in $(seq 1 "$MAX_ITER"); do
         now_epoch="$(date +%s)"
         wait_seconds=$(( resume_epoch - now_epoch ))
         (( wait_seconds < 0 )) && wait_seconds=0
+        # Si esta ES la última iteración de MAX_ITER, no hay ningún "próxima iteración" al que
+        # despertar: esperar aquí solo retrasa sin sentido un `exit` que iba a pasar igual al salir
+        # del `for`. Se termina ya, con la misma hora de reinicio que se le mostraría a un humano.
+        if (( i == MAX_ITER )); then
+          echo "⏳ Límite de SESIÓN alcanzado en la ÚLTIMA iteración (MAX_ITER=$MAX_ITER, ver $log)."
+          echo "   No se espera: no queda ninguna iteración después de esta. Hora de reinicio: $(date -d "@$resume_epoch" '+%Y-%m-%d %H:%M %Z') (ya incluye +5 min de margen). Vuelve a ejecutar el loop después de esa hora."
+          exit 4
+        fi
         echo "⏳ Límite de SESIÓN alcanzado (ver $log)."
         echo "   Reanudando a las $(date -d "@$resume_epoch" '+%Y-%m-%d %H:%M %Z') (hora de reinicio + 5 min; espera ${wait_seconds}s). MAX_ITER=$MAX_ITER sigue limitando el total de iteraciones."
         sleep "$wait_seconds"
