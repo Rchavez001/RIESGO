@@ -5697,6 +5697,52 @@ async function submitConsentEmailTransport(event) {
   consentEmailTransportCurrent = res.data;
   fillConsentEmailTransportForm(consentEmailTransportCurrent);
   $("#consentEmailTransportMessage").textContent = "Transporte de correo guardado.";
+  void loadConsentEmailTransportHistory();
+}
+
+// T23b.d (REQ-21 b): historial de versiones de transporte (GET /email-transport/history, ADMIN_ONLY,
+// solo lectura). Mismo patrón que `consentSettingsHistory` (T23.c), sin la contraseña ni su ciphertext:
+// solo "configurada/no configurada" (`password_set`), igual que el formulario de T23b.a.
+let consentEmailTransportHistory = [];
+
+function renderConsentEmailTransportHistory() {
+  const rows = $("#consentEmailTransportHistoryRows");
+  if (consentEmailTransportHistory.length === 0) {
+    rows.innerHTML = `<tr><td colspan="6" class="muted">Sin historial todavía.</td></tr>`;
+    return;
+  }
+  rows.innerHTML = consentEmailTransportHistory.map((row) => `
+    <tr>
+      <td>${esc(row.transport_version)}</td>
+      <td>${esc(row.mode)}</td>
+      <td>${esc(row.from_name)} &lt;${esc(row.from_email)}&gt;</td>
+      <td>${row.password_set ? "Configurada" : "No configurada"}</td>
+      <td>${esc(row.created_by)}</td>
+      <td>${esc(new Date(row.created_at).toLocaleString("es-EC"))}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadConsentEmailTransportHistory() {
+  if (!consentSettingsCanEdit) return;
+  const res = await privacyCall("/fn/admin-consent/email-transport/history", { session: privacyFlow.token, method: "GET" });
+  if (res.status === 200 && Array.isArray(res.data)) {
+    consentEmailTransportHistory = res.data;
+    $("#consentEmailTransportHistoryMessage").textContent = "";
+    renderConsentEmailTransportHistory();
+    return;
+  }
+  // Error: no se sabe cuántas versiones hay realmente (mismo criterio que `loadConsentSettingsHistory`):
+  // la tabla queda vacía, sin el mensaje "Sin historial todavía", que afirmaría algo que no se sabe.
+  consentEmailTransportHistory = [];
+  $("#consentEmailTransportHistoryRows").innerHTML = "";
+  $("#consentEmailTransportHistoryMessage").textContent = consentEmailTransportErrorMessage(res.data?.error);
+}
+
+function resetConsentEmailTransportHistory() {
+  consentEmailTransportHistory = [];
+  $("#consentEmailTransportHistoryRows").innerHTML = "";
+  $("#consentEmailTransportHistoryMessage").textContent = "";
 }
 
 // T23b.c (REQ-21 f): banner "Correo no configurado / con errores" + reenviar avisos pendientes
@@ -5804,6 +5850,7 @@ function privacyReset(message = "") {
   resetConsentEmailChangeForm();
   $("#consentEmailTransport").hidden = true;
   resetConsentEmailTransportForm();
+  resetConsentEmailTransportHistory();
   resetConsentEmailOutboxBanner();
   privacyShow("login");
   privacyMessage(message);
@@ -5900,6 +5947,7 @@ async function privacyVerify(event) {
   void loadConsentSettings();
   void loadConsentSettingsHistory();
   void loadConsentEmailTransport();
+  void loadConsentEmailTransportHistory();
   void loadConsentEmailOutbox();
 }
 
@@ -5923,6 +5971,7 @@ function bindPrivacy() {
   $("#consentEmailTransportMode").addEventListener("change", toggleConsentEmailTransportSmtpFields);
   $("#consentEmailTransportTestButton").addEventListener("click", () => void sendConsentEmailTransportTest());
   $("#consentEmailOutboxResendButton").addEventListener("click", () => void resendConsentEmailOutbox());
+  $("#consentEmailTransportHistoryRefresh").addEventListener("click", () => void loadConsentEmailTransportHistory());
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
   $("#consentSettingsHistoryRefresh").addEventListener("click", () => void loadConsentSettingsHistory());
   $("#consentDocsRows").addEventListener("click", (event) => {

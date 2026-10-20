@@ -42,6 +42,7 @@ import {
   type NewEmailVerificationInput,
   type NewPrivacySettingsInput,
   type PrivacySettingsHistoryRow,
+  type PublicEmailTransport,
   type RateLimitCheck,
   type SettingsDeps,
 } from './handler.ts'
@@ -164,6 +165,8 @@ function makeEmailTransportStore(
       tests.push({ transport_version: input.transportVersion, success: input.success, error_code: input.errorCode, tested_by: input.testedBy })
       return Promise.resolve()
     },
+    // T23b.d: todas las filas de `rows`, más recientes primero (igual que `ORDER BY transport_version DESC` real).
+    listHistory: () => Promise.resolve([...rows].sort((a, b) => b.transport_version - a.transport_version)),
   }
   return { emailTransport, rows, tests }
 }
@@ -1230,6 +1233,46 @@ Deno.test('cambiar de smtp a resend limpia los campos smtp y password_set pasa a
   const body = await res.json()
   assertEquals([body.mode, body.password_set, body.smtp_host, body.smtp_port, body.smtp_username], ['resend', false, null, null, null])
   assertEquals(rows[1].smtp_password_ciphertext, null)
+})
+
+// ── T23b.d (REQ-21 b): GET /email-transport/history — nunca la contraseña ni su ciphertext ─────────────
+
+Deno.test('GET /email-transport/history: privacy_admin ve el historial, más reciente primero, sin ciphertext', async () => {
+  const older: EmailTransportRow = {
+    transport_version: 1, mode: 'smtp', from_name: 'CiberDojo', from_email: 'privacidad@example.test',
+    smtp_host: 'smtp.example.test', smtp_port: 465, smtp_username: 'notificaciones',
+    smtp_password_ciphertext: 'enc:v1:Secreto1', created_by: ADMIN_ID, created_at: '2026-10-01T00:00:00Z',
+  }
+  const { emailTransport } = makeEmailTransportStore([older])
+  const res = await handle(
+    req(await sign(claims()), '/email-transport', 'POST', { mode: 'resend', from_name: 'CiberDojo', from_email: 'privacidad@example.test' }),
+    fullDeps({ roles: ['privacy_admin'], emailTransport }),
+  )
+  assertEquals(res.status, 200)
+  const historyRes = await handle(req(await sign(claims()), '/email-transport/history', 'GET'), fullDeps({ roles: ['privacy_admin'], emailTransport }))
+  assertEquals(historyRes.status, 200)
+  const body = (await historyRes.json()) as PublicEmailTransport[]
+  assertEquals(body.map((r) => r.transport_version), [2, 1]) // transport_version DESC
+  assertEquals([body[0].mode, body[0].password_set], ['resend', false])
+  assertEquals([body[1].mode, body[1].password_set], ['smtp', true])
+  assertEquals(body.some((r) => 'smtp_password_ciphertext' in r), false)
+  assertEquals(JSON.stringify(body).includes('Secreto1'), false)
+  assertEquals(JSON.stringify(body).includes('enc:v1'), false)
+})
+
+Deno.test('GET /email-transport/history: sin transporte configurado → 200 []', async () => {
+  const res = await handle(req(await sign(claims()), '/email-transport/history', 'GET'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(res.status, 200)
+  assertEquals(await res.json(), [])
+})
+
+Deno.test('GET /email-transport/history: editor/auditor → 403, y ningún método distinto de GET', async () => {
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    const res = await handle(req(await sign(claims()), '/email-transport/history', 'GET'), fullDeps({ roles: [role] }))
+    assertEquals([res.status, (await res.json()).error], [403, 'forbidden'])
+  }
+  const resPost = await handle(req(await sign(claims()), '/email-transport/history', 'POST'), fullDeps({ roles: ['privacy_admin'] }))
+  assertEquals(resPost.status, 405)
 })
 
 // ── T12.d.2 (REQ-21, D-15): POST /email-transport/test ───────────────────────────────────────────────

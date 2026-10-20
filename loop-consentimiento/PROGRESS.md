@@ -2472,3 +2472,68 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   T23b.a/b/c ya hechas.
 - Porcentaje: sin cambio en el contador estricto (T23b sigue sin numeración de las 28 originales, igual
   que TEST-INT). Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande).
+
+## Iteración 75 — 2026-10-19 — T23b.d: Panel — historial de versiones de transporte, cierra T23b
+- **Punto de partida:** `git status` limpio; `git log` confirma T23b.c cerrada (`4513f05`). Primera tarea
+  `[ ]` desbloqueada en TASKS.md: T23b.d, última subtarea de T23b. El backend NO existía (`GET
+  /email-transport` solo devuelve la vigente; a diferencia de T23.c, donde `privacy_settings` ya tenía su
+  propio `listHistory`, aquí había que añadirlo desde cero para `email_transport_settings`).
+- **Cambios:**
+  - `supabase/functions/admin-consent/handler.ts`: `EmailTransportDeps.listHistory()`; ruta `GET
+    /email-transport/history` con `ADMIN_ONLY` (mismo candado que el resto de `/email-transport*`, a
+    diferencia de `GET /settings/history`/T23.c, que es `PRIVACY_ROLES`: la sección completa de T23b es
+    solo para `privacy_admin`, editor/auditor no la ven en absoluto), mapeado con `toPublicEmailTransport`
+    (nunca `smtp_password_ciphertext`).
+  - `supabase/functions/admin-consent/index.ts`: `emailTransport.listHistory` — `SELECT` de
+    `email_transport_settings` (la tabla, no la vista `_current`) con `EMAIL_TRANSPORT_COLUMNS`, `ORDER BY
+    transport_version DESC`.
+  - `central-admin-app/index.html`: tabla "Historial de versiones" dentro de `#consentEmailTransport`,
+    después del botón/resultado de correo de prueba de T23b.b (versión, modo, remitente, contraseña
+    configurada sí/no, creado por, creado) con botón "Actualizar".
+  - `central-admin-app/app.js`: `consentEmailTransportHistory`, `renderConsentEmailTransportHistory`,
+    `loadConsentEmailTransportHistory` (guard `consentSettingsCanEdit`, mismo candado que
+    `loadConsentEmailOutbox`: para editor/auditor el endpoint nunca se consulta; mismo criterio de error
+    que `loadConsentSettingsHistory` — un fallo deja la tabla vacía sin el mensaje "Sin historial
+    todavía", que afirmaría algo que no se sabe), `resetConsentEmailTransportHistory`. Llamado junto con
+    `loadConsentEmailTransport`/`loadConsentEmailOutbox` en `privacyVerify`; recargado tras guardar la
+    configuración (`submitConsentEmailTransport`, nueva `transport_version`); limpiado en `privacyReset`
+    junto con `resetConsentEmailTransportForm`. Listener del botón "Actualizar" en `bindPrivacy`.
+  - `supabase/functions/admin-consent/handler_test.ts`: `makeEmailTransportStore` gana `listHistory`
+    (devuelve `rows` ordenadas por `transport_version DESC`, igual que el real); import de
+    `PublicEmailTransport`; 3 pruebas nuevas (privacy_admin ve el historial DESC sin ciphertext tras una
+    actualización real del store; sin transporte configurado → `200 []`; editor/auditor → 403, método
+    distinto de GET → 405).
+  - `tests/admin/consent-email-transport.spec.ts`: mock `GET /fn/admin-consent/email-transport/history`
+    en `setup()` (con `HISTORY`, dos versiones) y 7 casos nuevos bajo "T23b.d" (privacy_admin ve el
+    historial DESC sin la contraseña en el HTML; sin historial → mensaje explícito; error del backend →
+    mensaje legible sin el texto de "sin historial"; botón "Actualizar" vuelve a pedirlo; guardar la
+    configuración lo recarga; rol editor → tabla vacía y el endpoint nunca se consulta; cerrar sesión
+    limpia la tabla).
+  - `loop-consentimiento/TASKS.md`: T23b.d `[x]`; T23b `[x]` (cierra con T23b.d, última subtarea de cuatro).
+- **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea es de solo
+  lectura (`SELECT` sobre `email_transport_settings`, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un
+  fake pudiera ocultar) — mismo razonamiento que T23.c/T16.a/T16.c/T21.a.
+- **Gates (en grupos, en primer plano, cada uno por debajo de los 600000 ms — ver REGLAS DURAS):**
+  `bash .claude/loops/consentimiento/gates.sh --only "typecheck-frontend lint-frontend unit-frontend
+  panel-unit deno-check deno-test"` OK (lint 14 = línea base; `deno-test` de `admin-consent` en aislado:
+  136/136, incluidas las 3 nuevas de T23b.d); `--only "sql-ciclo-de-vida sql-guest-limit"` OK; `--only
+  "panel-e2e"` OK (427s, incluye los 14 casos nuevos — 7 × 2 perfiles por defecto).
+  - **Iteración 75, múltiplo de 5 → `GATES_FULL=1` (7 perfiles) es obligatoria (paso 6 de PROMPT.md), pero
+    no se pudo completar esta sesión:** `panel-e2e` con los 7 perfiles mide ~1416-1430s (Iteración 50),
+    por encima del límite de 600000 ms (10 min) de una sola llamada a Bash, y `--full` es todo-o-nada —
+    `gates.sh` no permite un subconjunto de perfiles vía `--only`. Las REGLAS DURAS (añadidas 2026-10-19,
+    a raíz del incidente de la Iteración 73/`iter-003-20261019-180115.log`) prohíben forzarlo en segundo
+    plano para esquivar ese límite. **Queda pendiente de una corrida humana** (fuera de una sesión headless
+    de un solo comando) de `bash .claude/loops/consentimiento/gates.sh --full` antes de la próxima vez que
+    se calcule esto como requisito de release (T99) — no bloquea el cierre de T23b.d en sí, cuyos propios
+    criterios de aceptación (gates.sh por defecto, 9 puertas no-opcionales) ya están en verde. `db-reset`/
+    `e2e-local` SKIP opt-in, sin cambios de migraciones en esta tarea.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: la corrida de `GATES_FULL=1` pendiente de verificación humana (ver
+  arriba) — no es nueva (ya pasaba en las iteraciones 35/40/45 antes de la 50), pero esta es la primera vez
+  que se documenta explícitamente como bloqueo de entorno en vez de simplemente omitirla. T23b queda
+  completo (T23b.a/b/c/d). Siguiente tarea desbloqueada en TASKS.md: T24 (Bitácora, Evidencia y
+  Solicitudes), depende de T16 y T05, ambas `[x]`.
+- Porcentaje: sin cambio en el contador estricto (T23b sigue sin numeración de las 28 originales, igual
+  que TEST-INT). Ponderado: sin recalcular esta iteración (T23b no tiene peso propio asignado en esa
+  cuenta, mismo criterio que TEST-INT).

@@ -219,6 +219,8 @@ export interface EmailTransportDeps {
   decryptPassword: (row: EmailTransportRow) => Promise<string>
   /** T12.d.2: registra el resultado de un correo de prueba (REQ-21) — nunca el texto del correo ni la contraseña. */
   recordTest: (input: { transportVersion: number; success: boolean; errorCode: string | null; testedBy: string }) => Promise<void>
+  /** T23b.d: todas las versiones (cualquier modo), más recientes primero. Solo lectura. */
+  listHistory: () => Promise<EmailTransportRow[]>
 }
 
 export interface RateLimitCheck {
@@ -1361,6 +1363,13 @@ export async function handle(req: Request, deps: AdminConsentDeps): Promise<Resp
         return json(200, toPublicEmailTransport(updated))
       }
       return json(405, { error: 'method_not_allowed' })
+    }
+
+    if (path === '/email-transport/history') {
+      if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' })
+      await requireRole(req, ADMIN_ONLY, deps.guard)
+      const history = await deps.emailTransport.listHistory()
+      return json(200, history.map(toPublicEmailTransport))
     }
 
     if (path === '/audit-log') {

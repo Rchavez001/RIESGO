@@ -36,6 +36,12 @@ const SMTP_TRANSPORT = {
   created_at: '2026-10-10T12:00:00.000Z',
 }
 
+// T23b.d: historial de versiones (más reciente primero, como lo devuelve GET /email-transport/history real).
+const HISTORY = [
+  { ...SMTP_TRANSPORT },
+  { transport_version: 1, mode: 'resend', from_name: 'Privacidad CiberDojo', from_email: 'privacidad@example.test', smtp_host: null, smtp_port: null, smtp_username: null, password_set: false, created_by: USER.id, created_at: '2026-10-01T09:00:00.000Z' },
+]
+
 type Opts = {
   roles?: string[]
   transport?: unknown
@@ -48,6 +54,9 @@ type Opts = {
   outboxCountAfterResend?: number
   resendStatus?: number
   resendBody?: unknown
+  historyBody?: unknown[]
+  historyStatus?: number
+  historyErrorBody?: unknown
 }
 type Seen = { url: string; method: string; session: string | undefined; body: string | null }
 
@@ -90,6 +99,10 @@ async function setup(page: Page, o: Opts = {}) {
         created_by: USER.id,
         created_at: '2026-10-14T12:00:00.000Z',
       })
+    }
+    if (path === '/fn/admin-consent/email-transport/history' && req.method() === 'GET') {
+      if (o.historyStatus && o.historyStatus !== 200) return json(o.historyStatus, o.historyErrorBody ?? { error: 'forbidden' })
+      return json(200, o.historyBody ?? HISTORY)
     }
     if (path === '/fn/admin-consent/email-transport/test' && req.method() === 'POST') {
       if (o.testStatus && o.testStatus !== 200) return json(o.testStatus, o.testBody ?? { error: 'rate_limited' })
@@ -406,5 +419,69 @@ test.describe('T23b.c · Banner "Correo no configurado / con errores" + reenviar
     await page.locator('#privacyLogout').click()
     await expect(page.locator('#consentEmailOutboxBanner')).toBeHidden()
     await expect(page.locator('#consentEmailOutboxMessage')).toHaveText('')
+  })
+})
+
+// T23b.d (REQ-21 b): historial de versiones de transporte (GET /email-transport/history, ADMIN_ONLY, solo
+// lectura) — sin la contraseña ni su ciphertext, solo "configurada/no configurada" (`password_set`).
+test.describe('T23b.d · Historial de versiones de transporte', () => {
+  test.beforeEach(async ({}, info) => { test.skip(info.project.name !== 'desktop-chrome', 'servidor: una sola vez') })
+
+  test('privacy_admin ve el historial, más reciente primero, sin la contraseña', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    const rows = page.locator('#consentEmailTransportHistoryRows tr')
+    await expect(rows).toHaveCount(2)
+    await expect(rows.nth(0)).toContainText('2') // transport_version DESC
+    await expect(rows.nth(0)).toContainText('Configurada')
+    await expect(rows.nth(1)).toContainText('1')
+    await expect(rows.nth(1)).toContainText('No configurada')
+    const html = await page.locator('#consentEmailTransportHistoryRows').innerHTML()
+    expect(html).not.toContain('Secreto1')
+  })
+
+  test('sin historial todavía → mensaje explícito', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT, historyBody: [] })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailTransportHistoryRows')).toContainText('Sin historial todavía.')
+  })
+
+  test('error del backend al listar → mensaje legible, tabla vacía sin el mensaje de "sin historial"', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT, historyStatus: 403, historyErrorBody: { error: 'forbidden' } })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailTransportHistoryMessage')).not.toBeEmpty()
+    await expect(page.locator('#consentEmailTransportHistoryRows')).not.toContainText('Sin historial todavía.')
+    await expect(page.locator('#consentEmailTransportHistoryRows tr')).toHaveCount(0)
+  })
+
+  test('botón "Actualizar" vuelve a pedir el historial', async ({ page }) => {
+    const { seen } = await setup(page, { transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    seen.length = 0
+    await page.locator('#consentEmailTransportHistoryRefresh').click()
+    await expect.poll(() => seen.some((s) => s.url === '/fn/admin-consent/email-transport/history' && s.method === 'GET')).toBe(true)
+  })
+
+  test('guardar la configuración recarga el historial', async ({ page }) => {
+    const { seen } = await setup(page, { transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    seen.length = 0
+    await page.locator('#consentEmailTransportForm').getByRole('button', { name: 'Guardar' }).click()
+    await expect.poll(() => seen.some((s) => s.url === '/fn/admin-consent/email-transport/history' && s.method === 'GET')).toBe(true)
+  })
+
+  test('rol editor/auditor: la tabla queda vacía y el endpoint nunca se consulta', async ({ page }) => {
+    const { seen } = await setup(page, { roles: ['privacy_editor'], transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailTransportHistoryRows tr')).toHaveCount(0)
+    expect(seen.some((s) => s.url === '/fn/admin-consent/email-transport/history')).toBe(false)
+  })
+
+  test('cerrar sesión limpia la tabla', async ({ page }) => {
+    await setup(page, { transport: SMTP_TRANSPORT })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailTransportHistoryRows tr')).toHaveCount(2)
+    await page.locator('#privacyLogout').click()
+    await expect(page.locator('#consentEmailTransportHistoryRows')).toBeEmpty()
   })
 })

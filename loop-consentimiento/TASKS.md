@@ -736,7 +736,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         (`panel-e2e` incluido; `db-reset`/`e2e-local` SKIP opt-in). Iteración 72, no múltiplo de 5:
         `GATES_FULL=1` no obligatorio esta vez.
 
-- [ ] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03)
+- [x] **T23b — Panel: sección "Correo saliente"** (REQ-21, SEC-03) (hecha 2026-10-19, iteración 75 — cierra con T23b.d, última subtarea de cuatro)
   - **Estado real (2026-10-14, reconciliación):** backend completo desde T12.d (`GET/POST /email-transport`,
     `POST /email-transport/test`, `GET /email-outbox`, `POST /email-outbox/resend`, todas `ADMIN_ONLY` en
     `admin-consent/handler.ts`); falta solo el panel. T12 y T05 ya están `[x]`: desbloqueada.
@@ -819,11 +819,19 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
         (`panel-e2e` incluido, 536/536 en verde en los 2 perfiles por defecto; `db-reset`/`e2e-local` SKIP
         opt-in como siempre).
-    - [ ] **T23b.d — Panel: historial de versiones de transporte (sin contraseñas)** (REQ-21 b)
-      - Mismo patrón que T23.c (`GET /settings/history`): si `email_outbox`/`email-transport` necesitan un
-        endpoint de historial nuevo en `admin-consent`, crearlo aquí (hoy no existe ninguno; `GET
-        /email-transport` solo devuelve la vigente). Tabla con versión, modo, remitente, contraseña
-        configurada (sí/no, nunca la contraseña ni su ciphertext), creado por, creado.
+    - [x] **T23b.d — Panel: historial de versiones de transporte (sin contraseñas)** (REQ-21 b) (hecha 2026-10-19, iteración 75)
+      - **Estado:** cerrada. `GET /email-transport/history` nuevo en `admin-consent` (no existía: `GET
+        /email-transport` solo devuelve la vigente), `ADMIN_ONLY` (mismo candado que el resto de T23b, a
+        diferencia de `GET /settings/history`/T23.c que es `PRIVACY_ROLES`), devuelve `EmailTransportDeps.
+        listHistory()` ordenado por `transport_version DESC` mapeado con `toPublicEmailTransport` (nunca
+        `smtp_password_ciphertext`). Tabla "Historial de versiones" en `#consentEmailTransport` (versión,
+        modo, remitente, "Configurada"/"No configurada", creado por, creado) con botón "Actualizar", mismo
+        patrón que T23.c; se recarga tras guardar la configuración (nueva `transport_version`) y se limpia
+        al cerrar sesión; para editor/auditor el endpoint nunca se consulta (mismo candado que el banner de
+        T23b.c).
+      - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** es de solo lectura
+        (`SELECT` sobre `email_transport_settings`, sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo) — mismo
+        razonamiento que T23.c/T16.a/T16.c/T21.a.
   - **Tests E2E del panel (repartidos entre las subtareas de arriba):** editor y auditor no ven la sección;
     la contraseña no aparece en el DOM, en las respuestas de red ni tras guardar; el banner aparece con el
     modo roto y desaparece tras reenviar; el correo de prueba queda en la bitácora (ya cubierto del lado

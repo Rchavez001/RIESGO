@@ -412,6 +412,14 @@ serve((req) =>
         })
         if (error) throw new Error(`email_transport_tests insert: ${error.code ?? 'error'}`)
       },
+      listHistory: async () => {
+        const { data, error } = await db
+          .from('email_transport_settings')
+          .select(EMAIL_TRANSPORT_COLUMNS)
+          .order('transport_version', { ascending: false })
+        if (error) throw new Error(`email_transport_settings history: ${error.code ?? 'error'}`)
+        return (data ?? []) as EmailTransportRow[]
+      },
     },
     // T13: `request-data-subject-right` es el único llamador que escribe en `email_outbox` hoy, con dos
     // `reference_table` posibles (`dsr_delegate_notice`/`dsr_ack`), ambas apuntando al mismo
