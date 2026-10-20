@@ -1641,6 +1641,44 @@
             </form>
             <p id="consentAuditExportMessage" class="muted" role="status" aria-live="polite"></p>
           </article>
+
+          <article id="consentEvidence" class="card" hidden>
+            <div class="section-toolbar compact">
+              <h2>Evidencia de consentimiento</h2>
+            </div>
+            <form id="consentEvidenceSearchForm" class="form-grid compact" novalidate>
+              <label>
+                Dirección de contacto del titular
+                <input id="consentEvidenceEmail" type="email" maxlength="254" />
+              </label>
+              <label>
+                ID de usuario (UUID)
+                <input id="consentEvidenceUserId" type="text" maxlength="36" />
+              </label>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Buscar</button>
+              </div>
+            </form>
+            <p id="consentEvidenceMessage" class="privacy-message" role="alert"></p>
+            <div class="table-scroll">
+              <table class="data-table">
+                <caption class="sr-only">Historial de consentimiento del titular</caption>
+                <thead><tr><th>Fecha</th><th>Versión</th><th>Finalidad</th><th>Decisión</th><th>Canal</th><th>IP</th></tr></thead>
+                <tbody id="consentEvidenceRows"></tbody>
+              </table>
+            </div>
+
+            <form id="consentEvidenceRevealForm" class="form-grid compact" novalidate hidden>
+              <label>
+                Motivo para revelar la IP real
+                <input id="consentEvidenceRevealReason" type="text" maxlength="2000" required />
+              </label>
+              <div class="modal-actions">
+                <button class="btn secondary" type="submit">Revelar IP</button>
+              </div>
+            </form>
+            <p id="consentEvidenceRevealMessage" class="muted" role="status" aria-live="polite"></p>
+          </article>
         </section>
       </main>
     </div>

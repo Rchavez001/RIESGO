@@ -6027,6 +6027,122 @@ async function submitConsentAuditExport(event) {
   $("#consentAuditExportMessage").textContent = "Exportación descargada.";
 }
 
+// T24.b (REQ-17): Evidencia — búsqueda por correo/user_id (`GET /evidence`, PRIVACY_ROLES, T16.c) con
+// historial de IP enmascarada, y "Revelar IP real" (`POST /evidence/reveal-ip`, ADMIN_ONLY, T16.d.1). La
+// sección completa es visible a los tres roles (mismo candado que `#consentAuditLog`); solo el botón de
+// revelar se oculta para editor/auditor, reusando `consentSettingsCanEdit` (mismo candado ADMIN_ONLY que
+// `#consentEmailChange`/T23b.a), sin necesitar una bandera `consentEvidenceCanReveal` aparte.
+const CONSENT_EVIDENCE_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "Escribe un correo o un ID de usuario (UUID) válido, nunca los dos a la vez.",
+  reason_required: "El motivo es obligatorio para revelar la IP.",
+};
+
+function consentEvidenceErrorMessage(code) {
+  return CONSENT_EVIDENCE_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+let consentEvidenceItems = [];
+// `null` hasta la primera búsqueda con éxito, o si no hay ningún usuario con ese correo/user_id (REQ-17:
+// la respuesta no distingue de forma visible "no existe" de "existe sin historial" — ver mensaje único
+// "Sin resultados…" en `renderConsentEvidenceRows`).
+let consentEvidenceUserId = null;
+// true tras "Revelar IP": `consentEvidenceItems` ya trae `ip` real (RevealedEvidenceRow), no `ip_masked`.
+let consentEvidenceRevealed = false;
+
+function renderConsentEvidenceRows() {
+  const rows = $("#consentEvidenceRows");
+  if (consentEvidenceItems.length === 0) {
+    rows.innerHTML = `<tr><td colspan="6" class="muted">Sin resultados para esa búsqueda.</td></tr>`;
+  } else {
+    rows.innerHTML = consentEvidenceItems.map((row) => `
+      <tr>
+        <td>${esc(new Date(row.server_ts).toLocaleString("es-EC"))}</td>
+        <td>${esc(row.document_version)}</td>
+        <td>${esc(row.purpose_code)}</td>
+        <td>${esc(row.decision)}</td>
+        <td>${esc(row.channel)}</td>
+        <td>${esc((consentEvidenceRevealed ? row.ip : row.ip_masked) ?? "n/d")}</td>
+      </tr>
+    `).join("");
+  }
+  $("#consentEvidenceRevealForm").hidden = !(consentSettingsCanEdit && consentEvidenceUserId && !consentEvidenceRevealed);
+}
+
+// Exactamente uno de correo/user_id (mismo criterio que `EvidenceSearchSchema`, admin-consent/handler.ts):
+// se comprueba en el cliente para no gastar una llamada en un 400 previsible (mismo criterio que
+// `consentPurposesValidationError`, T21.c.3).
+async function submitConsentEvidenceSearch(event) {
+  event.preventDefault();
+  const email = $("#consentEvidenceEmail").value.trim();
+  const userId = $("#consentEvidenceUserId").value.trim();
+  if (!email && !userId) {
+    $("#consentEvidenceMessage").textContent = "Escribe un correo o un ID de usuario.";
+    return;
+  }
+  if (email && userId) {
+    $("#consentEvidenceMessage").textContent = "Escribe solo uno: correo o ID de usuario.";
+    return;
+  }
+  const query = email ? `?email=${encodeURIComponent(email)}` : `?user_id=${encodeURIComponent(userId)}`;
+  const res = await privacyCall(`/fn/admin-consent/evidence${query}`, { session: privacyFlow.token, method: "GET" });
+  if (res.status !== 200 || !res.data || !Array.isArray(res.data.items)) {
+    // Error: no se sabe si el titular tiene o no historial, así que la tabla queda vacía (sin el mensaje
+    // "Sin resultados", que afirmaría algo que no se sabe) y solo se muestra el motivo del fallo — mismo
+    // criterio que `loadConsentAuditLog` (T24.a).
+    consentEvidenceItems = [];
+    consentEvidenceUserId = null;
+    consentEvidenceRevealed = false;
+    $("#consentEvidenceRows").innerHTML = "";
+    $("#consentEvidenceRevealForm").hidden = true;
+    $("#consentEvidenceMessage").textContent = consentEvidenceErrorMessage(res.data?.error);
+    return;
+  }
+  consentEvidenceItems = res.data.items;
+  consentEvidenceUserId = res.data.user_id;
+  consentEvidenceRevealed = false;
+  $("#consentEvidenceMessage").textContent = "";
+  $("#consentEvidenceRevealReason").value = "";
+  $("#consentEvidenceRevealMessage").textContent = "";
+  renderConsentEvidenceRows();
+}
+
+async function submitConsentEvidenceReveal(event) {
+  event.preventDefault();
+  if (!consentEvidenceUserId) return;
+  const reason = $("#consentEvidenceRevealReason").value.trim();
+  if (!reason) {
+    $("#consentEvidenceRevealMessage").textContent = "El motivo es obligatorio para revelar la IP.";
+    return;
+  }
+  const res = await privacyCall("/fn/admin-consent/evidence/reveal-ip", {
+    session: privacyFlow.token,
+    body: { user_id: consentEvidenceUserId, reason },
+  });
+  if (res.status !== 200 || !res.data || !Array.isArray(res.data.items)) {
+    $("#consentEvidenceRevealMessage").textContent = consentEvidenceErrorMessage(res.data?.error);
+    return;
+  }
+  consentEvidenceItems = res.data.items;
+  consentEvidenceRevealed = true;
+  $("#consentEvidenceRevealReason").value = "";
+  $("#consentEvidenceRevealMessage").textContent = "IP revelada.";
+  renderConsentEvidenceRows();
+}
+
+function resetConsentEvidence() {
+  consentEvidenceItems = [];
+  consentEvidenceUserId = null;
+  consentEvidenceRevealed = false;
+  $("#consentEvidenceEmail").value = "";
+  $("#consentEvidenceUserId").value = "";
+  $("#consentEvidenceMessage").textContent = "";
+  $("#consentEvidenceRows").innerHTML = "";
+  $("#consentEvidenceRevealReason").value = "";
+  $("#consentEvidenceRevealMessage").textContent = "";
+  $("#consentEvidenceRevealForm").hidden = true;
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -6070,6 +6186,7 @@ function privacyShow(step) {
   $("#consentDocuments").hidden = step !== "identity";
   $("#consentSettings").hidden = step !== "identity";
   $("#consentAuditLog").hidden = step !== "identity";
+  $("#consentEvidence").hidden = step !== "identity";
   if (step !== "code") privacyClearEnroll();
 }
 
@@ -6105,6 +6222,7 @@ function privacyReset(message = "") {
   resetConsentEmailTransportHistory();
   resetConsentEmailOutboxBanner();
   resetConsentAuditLog();
+  resetConsentEvidence();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -6293,6 +6411,8 @@ function bindPrivacy() {
   });
   $("#consentAuditDetailClose").addEventListener("click", closeConsentAuditDetail);
   $("#consentAuditExportForm").addEventListener("submit", (event) => void submitConsentAuditExport(event));
+  $("#consentEvidenceSearchForm").addEventListener("submit", (event) => void submitConsentEvidenceSearch(event));
+  $("#consentEvidenceRevealForm").addEventListener("submit", (event) => void submitConsentEvidenceReveal(event));
 }
 
 init();

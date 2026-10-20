@@ -2611,3 +2611,47 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio en el contador estricto (T24 sigue abierta — solo una de cinco subtareas
   cerrada). Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande, mismo
   criterio que T23b/TEST-INT).
+
+## Iteración 77 — 2026-10-19 — T24.b: Panel — Evidencia (búsqueda, IP enmascarada, "Revelar IP")
+- **Punto de partida:** `git status` NO estaba limpio: `central-admin-app/app.js`/`index.html`
+  modificados y `tests/admin/consent-evidence.spec.ts` sin trackear, sin commit, de una iteración headless
+  previa interrumpida (no hay registro de ella en este `PROGRESS.md`: ni una entrada "Iteración 77"
+  anterior ni un stash `iter-*-fallida-*`). Paso 1 del protocolo: evaluar esos cambios antes de elegir
+  tarea nueva. La lectura completa del diff (`git diff --stat`/`git diff` de ambos archivos + el test
+  nuevo) mostró una implementación de T24.b (primera subtarea `[ ]` desbloqueada de TASKS.md, backend ya
+  cerrado desde T16.c/T16.d) consistente con el patrón de T24.a/T23b: faltaba solo verificarla contra
+  `gates.sh` y cerrarla.
+- **Verificación → dos hallazgos reales corregidos antes de cerrar (ver detalle completo en TASKS.md,
+  T24.b):**
+  1. **Colisión de accesibilidad:** la etiqueta `<label>Correo` del campo de búsqueda coincidía por
+     subcadena con `getByLabel('Correo')` del formulario de acceso (`privacyEmail`), tumbando ~180 tests
+     ajenos a esta tarea en los dos perfiles por defecto de `panel-e2e` ("strict mode violation: resolved
+     to 2 elements"). Confirmado comparando dos corridas completas de `panel-e2e` con el mismo conjunto
+     exacto de fallos. Un primer intento de renombrar a "Correo del titular" NO bastó (sigue conteniendo
+     la subcadena "correo"; `getByLabel` no es coincidencia exacta por defecto). Corregido con "Dirección
+     de contacto del titular", mismo criterio ya usado por `#consentEmailChangeNewEmail` (T23.b) para
+     evitar la misma colisión.
+  2. **Un "Sin resultados" inventado tras un error real:** el camino de error de
+     `submitConsentEvidenceSearch` llamaba a `renderConsentEvidenceRows()`, que siempre pinta una fila
+     "Sin resultados para esa búsqueda." cuando la lista está vacía — una afirmación que no se sabe si es
+     cierta cuando lo que falló fue la llamada, no la búsqueda. Corregido limpiando `innerHTML = ""`
+     directamente en el camino de error, mismo criterio que `loadConsentAuditLog` (T24.a) ya usa para
+     `#consentAuditRows`.
+- **Cambios (sobre los ya presentes al empezar la iteración):** `central-admin-app/index.html` (etiqueta
+  del campo de correo); `central-admin-app/app.js` (camino de error de `submitConsentEvidenceSearch`);
+  `loop-consentimiento/TASKS.md` (T24.b `[x]`, con el detalle completo de ambos hallazgos); este archivo.
+- **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea consume `GET
+  /evidence`/`POST /evidence/reveal-ip`, ya cerrados y probados contra el modelo de datos real en T16.c/
+  T16.d — sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar.
+- **Gates:** `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` OK
+  (lint 14 = línea base); `--only "sql-ciclo-de-vida sql-guest-limit"` OK; `--only "panel-e2e"`: FAIL dos
+  veces (un hallazgo cada vez, ver arriba), OK a la tercera (502s, 16 casos nuevos de
+  `consent-evidence.spec.ts` incluidos, perfiles por defecto). Iteración 77, no múltiplo de 5:
+  `GATES_FULL=1` no obligatorio esta vez. `db-reset`/`e2e-local` SKIP opt-in, sin cambios de migraciones.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. Dentro de T24 siguen `[ ]` T24.c (expediente), T24.d
+  (Solicitudes con semáforo) y T24.e (Verificar integridad + tests de regresión cruzada), ya desbloqueadas.
+  Sigue pendiente de verificación humana la corrida de `GATES_FULL=1` (documentada desde la iteración 75).
+- Porcentaje: sin cambio en el contador estricto (T24 sigue abierta — dos de cinco subtareas cerradas).
+  Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande, mismo criterio que
+  T23b/TEST-INT).

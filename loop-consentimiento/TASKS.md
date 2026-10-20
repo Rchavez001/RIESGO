@@ -888,7 +888,52 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
       no-opcionales OK, `panel-e2e` con los 16 casos nuevos incluidos; `db-reset`/`e2e-local` SKIP opt-in,
       sin cambios de migraciones; iteración 76, no múltiplo de 5, `GATES_FULL=1` no obligatorio esta vez).
-  - [ ] **T24.b — Panel: Evidencia — búsqueda por correo/user_id, historial con IP enmascarada, "Revelar IP" con motivo** (REQ-17)
+  - [x] **T24.b — Panel: Evidencia — búsqueda por correo/user_id, historial con IP enmascarada, "Revelar IP" con motivo** (REQ-17) (hecha 2026-10-19, iteración 77)
+    - **Estado:** cerrada. `#consentEvidence` (nuevo, visible a los tres roles — `GET /evidence` es
+      `PRIVACY_ROLES`, T16.c): búsqueda por exactamente uno de correo/user_id (validado en el cliente
+      antes de llamar al backend, mismo criterio que `EvidenceSearchSchema`), tabla con historial de
+      `consent_records` con `ip_masked`; "Revelar IP real" (`POST /evidence/reveal-ip`, ADMIN_ONLY,
+      T16.d.1) con motivo obligatorio, oculto para editor/auditor con el mismo candado
+      `consentSettingsCanEdit` que `#consentEmailChange`/T23b.a (sin una bandera nueva). Sin resultados
+      (ningún usuario con ese correo, o sin historial) usa el mismo mensaje único, sin distinguir el
+      motivo (REQ-17). Una nueva búsqueda vuelve a enmascarar (nunca conserva `ip` revelada de la
+      búsqueda anterior).
+    - **Hallazgo real cerrado durante la verificación (colisión de accesibilidad, no un defecto del
+      backend):** la primera versión usó la etiqueta `<label>Correo` para el campo de búsqueda. Playwright
+      `getByLabel('Correo')` hace coincidencia por subcadena (no exacta), así que
+      `locator('#consent').getByLabel('Correo')` —usado por `privacy-login.spec.ts` y otros specs para el
+      campo de acceso— empezó a resolver a 2 elementos ("strict mode violation"), tumbando ~180 tests
+      ajenos a esta tarea en los perfiles `desktop-chrome`/`pixel-7-chrome` (confirmado comparando dos
+      corridas completas de `panel-e2e`: la lista de fallos era idéntica a los specs que usan
+      `getByLabel('Correo')`, no a los de evidencia). No basta con un texto "más específico" que aún
+      contenga la subcadena "correo" (se probó "Correo del titular" primero y seguía colisionando).
+      Corregido con "Dirección de contacto del titular" (sin la subcadena "correo"), mismo criterio ya
+      usado por `#consentEmailChangeNewEmail` ("Nueva dirección de contacto de privacidad", T23.b) — ninguna
+      otra etiqueta dentro de `#consent` contiene "correo" salvo la del login.
+    - **Segundo hallazgo (de la propia prueba, no del backend):** el caso "error del backend al buscar"
+      esperaba `#consentEvidenceRows tr` con 0 filas, pero `submitConsentEvidenceSearch` llamaba a
+      `renderConsentEvidenceRows()` también en el camino de error, que siempre pinta una fila
+      "Sin resultados para esa búsqueda." cuando `consentEvidenceItems` está vacío — una afirmación que no
+      se sabe si es cierta tras un error. Corregido limpiando `innerHTML = ""` directamente en el camino de
+      error (sin pasar por el render), mismo criterio que `loadConsentAuditLog` (T24.a) con
+      `#consentAuditRows`.
+    - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea consume
+      `GET /evidence`/`POST /evidence/reveal-ip`, ya cerrados y probados contra el modelo de datos real en
+      T16.c/T16.d — sin ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar.
+    - **Pruebas añadidas:** `tests/admin/consent-evidence.spec.ts` (nuevo, 16 casos): los tres roles ven la
+      sección sin pedir nada hasta que se busca; buscar por correo/por user_id manda el parámetro correcto
+      con la sesión aal2 y muestra la IP enmascarada; escribir correo y user_id a la vez, o ninguno, no
+      llama al backend; sin resultados → mensaje único; error del backend → mensaje legible, tabla vacía
+      (sin "Sin resultados"); `privacy_admin` ve "Revelar IP" tras una búsqueda con resultados, editor/
+      auditor no; revelar sin motivo no llama al backend; revelar con motivo manda `user_id`+`reason`,
+      sustituye la IP enmascarada por la real y oculta el formulario; error al revelar deja el motivo
+      escrito; una nueva búsqueda vuelve a enmascarar y muestra "Revelar IP" otra vez; cerrar sesión limpia
+      todo.
+    - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
+      no-opcionales OK, `panel-e2e` con los 16 casos nuevos incluidos tras los dos hallazgos corregidos
+      arriba; `db-reset`/`e2e-local` SKIP opt-in, sin cambios de migraciones; iteración 77, no múltiplo de
+      5, `GATES_FULL=1` no obligatorio esta vez — sigue pendiente de verificación humana desde la
+      iteración 75).
   - [ ] **T24.c — Panel: Evidencia — exportar expediente de un titular (JSON y PDF)** (REQ-17)
   - [ ] **T24.d — Panel: Solicitudes — tabla con semáforo (vigente / ≤3 días / vencida) y cambio de estado con nota** (REQ-11, REQ-16)
   - [ ] **T24.e — Panel: botón "Verificar integridad" (`verify-chains`) + tests E2E de regresión cruzada** (REQ-18)
