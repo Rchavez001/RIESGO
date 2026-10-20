@@ -791,12 +791,34 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
         escritura nueva en la BD.
       - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
         (`panel-e2e` incluido; `db-reset`/`e2e-local` SKIP opt-in como siempre).
-    - [ ] **T23b.c — Panel: banner "Correo no configurado / con errores" + reenviar avisos pendientes** (REQ-21 f)
-      - `GET /email-outbox` (conteo + items) y `POST /email-outbox/resend` (`ADMIN_ONLY`). Banner en la
-        cabecera de la sección "Consentimiento informado" con el contador y botón de reenvío. **Alcance
-        reducido frente al texto original de T23b:** "visible… en la pestaña Solicitudes" se descarta por
-        ahora — T24 (Bitácora, Evidencia y Solicitudes) todavía no existe; cuando se cree, esa tarea debe
-        añadir el mismo banner ahí, reutilizando el mismo endpoint.
+    - [x] **T23b.c — Panel: banner "Correo no configurado / con errores" + reenviar avisos pendientes** (REQ-21 f) (hecha 2026-10-19)
+      - **Estado:** cerrada. `GET /email-outbox` (conteo + items) y `POST /email-outbox/resend` (`ADMIN_ONLY`,
+        ambas ya existían desde T12.d.3) consumidas desde un banner nuevo `#consentEmailOutboxBanner` en la
+        cabecera de la sección "Consentimiento informado" (antes del bloque de login, visible solo tras
+        `loadConsentEmailOutbox()`, que a su vez solo se llama si `consentSettingsCanEdit` — mismo candado
+        ADMIN_ONLY que `#consentEmailTransport`; para editor/auditor nunca se consulta el endpoint y el
+        banner queda en su `hidden` del HTML). Oculto si `count === 0`; con pendientes muestra el contador
+        (singular/plural) y el botón `#consentEmailOutboxResendButton`. Al reenviar, muestra
+        `Reenviados <sent> de <attempted> (fallidos: <failed>, omitidos: <skipped>)` y recarga el contador
+        (`loadConsentEmailOutbox()` de nuevo) para reflejar cuántos quedan. `400 email_transport_not_configured`
+        → mensaje legible sin ocultar el banner. `resetConsentEmailOutboxBanner()` se invoca junto con el
+        resto de `privacyReset()` al cerrar sesión. **Alcance reducido frente al texto original de T23b:**
+        "visible… en la pestaña Solicitudes" se descarta por ahora — T24 (Bitácora, Evidencia y Solicitudes)
+        todavía no existe; cuando se cree, esa tarea debe añadir el mismo banner ahí, reutilizando el mismo
+        endpoint.
+      - **Tests (`tests/admin/consent-email-transport.spec.ts`, 8 nuevos bajo "T23b.c"):** sin pendientes el
+        banner queda oculto; con pendientes muestra el contador (singular y plural); reenviar llama al
+        endpoint con la sesión aal2 y, si ya no quedan pendientes, oculta el banner; fallo parcial deja el
+        banner visible con el contador actualizado y el resumen en el mensaje; sin transporte configurado
+        muestra el mensaje legible sin ocultar el banner; rol editor/auditor nunca ve el banner aunque haya
+        pendientes (ni siquiera se consulta el endpoint); cerrar sesión oculta el banner y limpia el mensaje.
+      - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** ambos endpoints y su
+        efecto en `email_outbox`/`admin_audit_log` ya están cerrados y probados contra Postgres real desde
+        T12.d.3 (`handler_test.ts`) y TEST-INT; esta subtarea es solo el consumo del panel, sin ninguna
+        escritura nueva en la BD.
+      - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo: 9 puertas no-opcionales OK
+        (`panel-e2e` incluido, 536/536 en verde en los 2 perfiles por defecto; `db-reset`/`e2e-local` SKIP
+        opt-in como siempre).
     - [ ] **T23b.d — Panel: historial de versiones de transporte (sin contraseñas)** (REQ-21 b)
       - Mismo patrón que T23.c (`GET /settings/history`): si `email_outbox`/`email-transport` necesitan un
         endpoint de historial nuevo en `admin-consent`, crearlo aquí (hoy no existe ninguno; `GET

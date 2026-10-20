@@ -1184,6 +1184,18 @@
               <p class="muted">Este módulo no usa el acceso compartido de la consola. Cada administrador entra con su propia cuenta y un código de verificación en dos pasos, y cada acción queda registrada a su nombre.</p>
             </div>
           </div>
+
+          <!-- T23b.c (REQ-21 f): banner "Correo no configurado / con errores" con el contador de avisos
+               pendientes (`email_outbox`, 079) y botón de reenvío. `GET/POST /email-outbox` exigen
+               `privacy_admin` (ADMIN_ONLY, mismo candado que `#consentEmailTransport`): solo se consulta
+               y se muestra para ese rol. -->
+          <div id="consentEmailOutboxBanner" class="tpot-demo-banner" role="alert" hidden>
+            <strong>Correo no configurado / con errores.</strong>
+            <span id="consentEmailOutboxCount"></span>
+            <button id="consentEmailOutboxResendButton" class="btn secondary small" type="button">Reenviar avisos pendientes</button>
+            <p id="consentEmailOutboxMessage" class="muted"></p>
+          </div>
+
           <article class="card privacy-access">
             <p id="privacyMessage" class="privacy-message" role="alert"></p>
 

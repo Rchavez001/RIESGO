@@ -2422,3 +2422,53 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   de avisos pendientes) y T23b.d (historial de versiones de transporte), ambas desbloqueadas.
 - Porcentaje: sin cambio en el contador estricto (T23b es una tarea sin numeración de las 28 originales,
   igual que TEST-INT). Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande).
+
+## Iteración 74 — 2026-10-19 — T23b.c: Panel — banner "Correo no configurado / con errores" + reenviar avisos pendientes
+- **Punto de partida:** `git status` limpio; `git log` confirma T23b.b cerrada (`3c781ce`). Primera tarea
+  `[ ]` desbloqueada en TASKS.md: T23b.c (el backend `GET /email-outbox`/`POST /email-outbox/resend` ya
+  existía completo desde T12.d.3/iteración 38, sin cambios de backend necesarios para esta subtarea).
+- **Cambios:**
+  - `central-admin-app/index.html`: `#consentEmailOutboxBanner` (`role="alert"`, `hidden` por defecto) en
+    la cabecera de la sección "Consentimiento informado" (antes del bloque de login/identidad, para que
+    sea visible en cuanto la sesión del admin se verifica), con `#consentEmailOutboxCount`, el botón
+    `#consentEmailOutboxResendButton` y `#consentEmailOutboxMessage`.
+  - `central-admin-app/app.js`: `CONSENT_EMAIL_OUTBOX_ERRORS`/`consentEmailOutboxErrorMessage` (mapea
+    `email_transport_not_configured`, reutiliza `PRIVACY_ERRORS`); `fillConsentEmailOutboxBanner(count)`
+    oculta el banner si `count === 0`, si no escribe el contador en singular/plural;
+    `resetConsentEmailOutboxBanner()` lo oculta y limpia el mensaje (enganchado en `privacyReset`, mismo
+    patrón que el resto de la sección); `loadConsentEmailOutbox()` solo llama a `GET /email-outbox` si
+    `consentSettingsCanEdit` es `true` — mismo candado ADMIN_ONLY que `#consentEmailTransport`: para
+    editor/auditor el endpoint nunca se consulta y el banner se queda en su `hidden` del HTML, sin
+    necesitar ningún chequeo de rol adicional en el propio banner. `resendConsentEmailOutbox()` llama a
+    `POST /email-outbox/resend`, escribe `Reenviados <sent> de <attempted> (fallidos: <failed>, omitidos:
+    <skipped>).` y recarga el contador (`loadConsentEmailOutbox()` de nuevo) para reflejar cuántos quedan
+    tras el reenvío; un fallo HTTP (`400 email_transport_not_configured`) muestra el mensaje mapeado sin
+    ocultar el banner. Listener nuevo en `bindPrivacy`; llamada nueva en `privacyVerify` junto con
+    `loadConsentEmailTransport()`.
+  - `loop-consentimiento/TASKS.md`: T23b.c `[x]`.
+- **Pruebas añadidas:** `tests/admin/consent-email-transport.spec.ts` (8 casos nuevos bajo "T23b.c", más
+  las rutas mock `GET /fn/admin-consent/email-outbox` y `POST /fn/admin-consent/email-outbox/resend` en
+  `setup()`, con un contador mutable para simular el antes/después del reenvío): sin pendientes el banner
+  queda oculto; con pendientes muestra el contador (singular y plural); reenviar llama al endpoint con la
+  sesión aal2 y, si ya no quedan pendientes, oculta el banner; un fallo parcial (`sent < attempted`) deja
+  el banner visible con el contador actualizado y el resumen en el mensaje; sin transporte configurado
+  muestra el mensaje legible sin ocultar el banner; rol editor nunca ve el banner aunque haya pendientes
+  (ni siquiera se consulta el endpoint — se verifica solo con el estado del DOM, no interceptando la red,
+  porque el punto a probar es justamente que no se llama); cerrar sesión oculta el banner y limpia el
+  mensaje.
+- **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** ambos endpoints y su efecto
+  en `email_outbox`/`admin_audit_log` ya están cerrados y probados contra Postgres real desde T12.d.3
+  (`handler_test.ts`, mecánica de cola) y T13.c/TEST-INT (`dsr_request_types_and_outbox.sql`, filas reales
+  de `email_outbox` encoladas por `request-data-subject-right`); esta subtarea es solo el consumo del
+  panel, sin ninguna escritura nueva en la BD.
+- **Gates:** `bash .claude/loops/consentimiento/gates.sh --only "typecheck-frontend lint-frontend
+  unit-frontend panel-unit deno-check deno-test"` OK (lint 14 = línea base); `--only "sql-ciclo-de-vida
+  sql-guest-limit"` OK; `--only "panel-e2e"` OK, 394 passed incluidos los 16 casos nuevos (8 × 2 perfiles
+  por defecto). Iteración 74, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta vez. `db-reset`/
+  `e2e-local` SKIP opt-in, sin cambios de migraciones.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. Dentro de la misma división sigue `[ ]` T23b.d
+  (historial de versiones de transporte), ya desbloqueada; cierra la división completa de T23b junto con
+  T23b.a/b/c ya hechas.
+- Porcentaje: sin cambio en el contador estricto (T23b sigue sin numeración de las 28 originales, igual
+  que TEST-INT). Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande).

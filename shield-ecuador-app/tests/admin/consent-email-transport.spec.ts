@@ -44,6 +44,10 @@ type Opts = {
   saveBody?: unknown
   testStatus?: number
   testBody?: unknown
+  outboxCount?: number
+  outboxCountAfterResend?: number
+  resendStatus?: number
+  resendBody?: unknown
 }
 type Seen = { url: string; method: string; session: string | undefined; body: string | null }
 
@@ -51,6 +55,7 @@ async function setup(page: Page, o: Opts = {}) {
   const seen: Seen[] = []
   const roles = o.roles ?? ['privacy_admin']
   const transport = o.transport === undefined ? null : o.transport
+  let outboxCount = o.outboxCount ?? 0
   await page.route('**/api/privacy/**', async (route) => {
     const req = route.request()
     const url = new URL(req.url())
@@ -89,6 +94,15 @@ async function setup(page: Page, o: Opts = {}) {
     if (path === '/fn/admin-consent/email-transport/test' && req.method() === 'POST') {
       if (o.testStatus && o.testStatus !== 200) return json(o.testStatus, o.testBody ?? { error: 'rate_limited' })
       return json(200, o.testBody ?? { success: true, error_code: null })
+    }
+    if (path === '/fn/admin-consent/email-outbox' && req.method() === 'GET') {
+      return json(200, { count: outboxCount, items: [] })
+    }
+    if (path === '/fn/admin-consent/email-outbox/resend' && req.method() === 'POST') {
+      if (o.resendStatus && o.resendStatus !== 200) return json(o.resendStatus, o.resendBody ?? { error: 'email_transport_not_configured' })
+      const attempted = outboxCount
+      outboxCount = o.outboxCountAfterResend ?? 0
+      return json(200, o.resendBody ?? { attempted, sent: attempted, skipped: 0, failed: 0 })
     }
     return json(404, { error: 'not_found' })
   })
@@ -324,5 +338,73 @@ test.describe('T23b.b · Botón "Enviar correo de prueba" + último resultado', 
     await openConsentAsIdentity(page)
     await expect(page.locator('#consentEmailTransport')).toBeHidden()
     await expect(page.locator('#consentEmailTransportTestButton')).toBeHidden()
+  })
+})
+
+test.describe('T23b.c · Banner "Correo no configurado / con errores" + reenviar pendientes', () => {
+  test.beforeEach(async ({}, info) => { test.skip(info.project.name !== 'desktop-chrome', 'servidor: una sola vez') })
+
+  test('sin avisos pendientes: el banner permanece oculto', async ({ page }) => {
+    await setup(page, { outboxCount: 0 })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeHidden()
+  })
+
+  test('con avisos pendientes: el banner muestra el contador', async ({ page }) => {
+    await setup(page, { outboxCount: 2 })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeVisible()
+    await expect(page.locator('#consentEmailOutboxCount')).toContainText('2 avisos pendientes')
+  })
+
+  test('un solo aviso pendiente: singular', async ({ page }) => {
+    await setup(page, { outboxCount: 1 })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailOutboxCount')).toContainText('1 aviso pendiente')
+  })
+
+  test('reenviar: llama al endpoint con la sesión aal2 y, si ya no quedan pendientes, oculta el banner', async ({ page }) => {
+    const { seen } = await setup(page, { outboxCount: 2, outboxCountAfterResend: 0 })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeVisible()
+    await page.locator('#consentEmailOutboxResendButton').click()
+
+    await expect(page.locator('#consentEmailOutboxMessage')).toContainText('Reenviados 2 de 2')
+    const call = seen.find((s) => s.url === '/fn/admin-consent/email-outbox/resend' && s.method === 'POST')!
+    expect(call.session).toBe(AAL2_TOKEN)
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeHidden()
+  })
+
+  test('reenviar con fallo parcial: el banner sigue visible con el contador actualizado', async ({ page }) => {
+    await setup(page, { outboxCount: 3, outboxCountAfterResend: 1, resendBody: { attempted: 3, sent: 2, skipped: 0, failed: 1 } })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentEmailOutboxResendButton').click()
+    await expect(page.locator('#consentEmailOutboxMessage')).toContainText('Reenviados 2 de 3')
+    await expect(page.locator('#consentEmailOutboxMessage')).toContainText('fallidos: 1')
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeVisible()
+    await expect(page.locator('#consentEmailOutboxCount')).toContainText('1 aviso pendiente')
+  })
+
+  test('reenviar sin transporte configurado: mensaje legible, el banner sigue visible', async ({ page }) => {
+    await setup(page, { outboxCount: 1, resendStatus: 400, resendBody: { error: 'email_transport_not_configured' } })
+    await openConsentAsIdentity(page)
+    await page.locator('#consentEmailOutboxResendButton').click()
+    await expect(page.locator('#consentEmailOutboxMessage')).toContainText('guárdalo primero')
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeVisible()
+  })
+
+  test('rol solo editor/auditor: el banner nunca se muestra aunque haya pendientes', async ({ page }) => {
+    await setup(page, { roles: ['privacy_editor'], outboxCount: 5 })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeHidden()
+  })
+
+  test('cerrar sesión oculta el banner y limpia el mensaje', async ({ page }) => {
+    await setup(page, { outboxCount: 2 })
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeVisible()
+    await page.locator('#privacyLogout').click()
+    await expect(page.locator('#consentEmailOutboxBanner')).toBeHidden()
+    await expect(page.locator('#consentEmailOutboxMessage')).toHaveText('')
   })
 })

@@ -5699,6 +5699,57 @@ async function submitConsentEmailTransport(event) {
   $("#consentEmailTransportMessage").textContent = "Transporte de correo guardado.";
 }
 
+// T23b.c (REQ-21 f): banner "Correo no configurado / con errores" + reenviar avisos pendientes
+// (`email_outbox`, 079). `GET/POST /email-outbox` exigen `privacy_admin` (ADMIN_ONLY, mismo candado
+// que `#consentEmailTransport`): se reutiliza `consentSettingsCanEdit`.
+const CONSENT_EMAIL_OUTBOX_ERRORS = {
+  ...PRIVACY_ERRORS,
+  email_transport_not_configured: "No hay transporte de correo configurado todavía: guárdalo primero.",
+};
+
+function consentEmailOutboxErrorMessage(code) {
+  return CONSENT_EMAIL_OUTBOX_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+function fillConsentEmailOutboxBanner(count) {
+  $("#consentEmailOutboxBanner").hidden = count === 0;
+  $("#consentEmailOutboxCount").textContent = count === 1
+    ? "1 aviso pendiente de enviar."
+    : `${count} avisos pendientes de enviar.`;
+}
+
+function resetConsentEmailOutboxBanner() {
+  $("#consentEmailOutboxBanner").hidden = true;
+  $("#consentEmailOutboxCount").textContent = "";
+  $("#consentEmailOutboxMessage").textContent = "";
+}
+
+async function loadConsentEmailOutbox() {
+  if (!consentSettingsCanEdit) return;
+  const res = await privacyCall("/fn/admin-consent/email-outbox", { session: privacyFlow.token, method: "GET" });
+  if (res.status !== 200) return;
+  fillConsentEmailOutboxBanner(res.data?.count ?? 0);
+}
+
+async function resendConsentEmailOutbox() {
+  if (!consentSettingsCanEdit) return;
+  const button = $("#consentEmailOutboxResendButton");
+  button.disabled = true;
+  $("#consentEmailOutboxMessage").textContent = "Reenviando…";
+  try {
+    const res = await privacyCall("/fn/admin-consent/email-outbox/resend", { session: privacyFlow.token });
+    if (res.status !== 200) {
+      $("#consentEmailOutboxMessage").textContent = consentEmailOutboxErrorMessage(res.data?.error);
+      return;
+    }
+    const { attempted = 0, sent = 0, skipped = 0, failed = 0 } = res.data || {};
+    $("#consentEmailOutboxMessage").textContent = `Reenviados ${sent} de ${attempted} (fallidos: ${failed}, omitidos: ${skipped}).`;
+    await loadConsentEmailOutbox();
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -5753,6 +5804,7 @@ function privacyReset(message = "") {
   resetConsentEmailChangeForm();
   $("#consentEmailTransport").hidden = true;
   resetConsentEmailTransportForm();
+  resetConsentEmailOutboxBanner();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -5848,6 +5900,7 @@ async function privacyVerify(event) {
   void loadConsentSettings();
   void loadConsentSettingsHistory();
   void loadConsentEmailTransport();
+  void loadConsentEmailOutbox();
 }
 
 async function privacyLogout(message = "") {
@@ -5869,6 +5922,7 @@ function bindPrivacy() {
   $("#consentEmailTransportForm").addEventListener("submit", submitConsentEmailTransport);
   $("#consentEmailTransportMode").addEventListener("change", toggleConsentEmailTransportSmtpFields);
   $("#consentEmailTransportTestButton").addEventListener("click", () => void sendConsentEmailTransportTest());
+  $("#consentEmailOutboxResendButton").addEventListener("click", () => void resendConsentEmailOutbox());
   $("#consentDocsRefresh").addEventListener("click", () => void loadConsentDocuments());
   $("#consentSettingsHistoryRefresh").addEventListener("click", () => void loadConsentSettingsHistory());
   $("#consentDocsRows").addEventListener("click", (event) => {
