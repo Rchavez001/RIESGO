@@ -17,6 +17,7 @@ import { KataExamPage as DevKata } from './screens/KataExamPage'
 import { LeaderboardPage } from './screens/LeaderboardPage'
 import { ProfilePage } from './screens/ProfilePage'
 import { PrivacyPage } from './screens/PrivacyPage'
+import { ReconsentGate } from './components/ReconsentGate'
 import { SenseiConsultPage } from './screens/SenseiConsultPage'
 import { ResetPasswordPage } from './screens/ResetPasswordPage'
 import { AuthCallbackPage } from './screens/AuthCallbackPage'
@@ -66,28 +67,32 @@ function ProtectedShell() {
 
   if (userProfile?.role === 'admin') {
     return (
-      <AdminShell
-        userName={userProfile.full_name ?? ''}
-        userEmail={user.email ?? ''}
-        onSignOut={() => void signOut()}
-      >
-        <Outlet />
-      </AdminShell>
+      <ReconsentGate>
+        <AdminShell
+          userName={userProfile.full_name ?? ''}
+          userEmail={user.email ?? ''}
+          onSignOut={() => void signOut()}
+        >
+          <Outlet />
+        </AdminShell>
+      </ReconsentGate>
     )
   }
 
   return (
-    <DojoShell
-      userName={userProfile?.full_name ?? user.email ?? 'Guerrero'}
-      belt={belt}
-      xp={xp}
-      isAdmin={false}
-      onSignOut={() => void signOut()}
-      onOpenChallenge={() => setShowChallenge(true)}
-    >
-      <Outlet />
-      {showChallenge && <SenseiChallengeModal onClose={() => setShowChallenge(false)} />}
-    </DojoShell>
+    <ReconsentGate>
+      <DojoShell
+        userName={userProfile?.full_name ?? user.email ?? 'Guerrero'}
+        belt={belt}
+        xp={xp}
+        isAdmin={false}
+        onSignOut={() => void signOut()}
+        onOpenChallenge={() => setShowChallenge(true)}
+      >
+        <Outlet />
+        {showChallenge && <SenseiChallengeModal onClose={() => setShowChallenge(false)} />}
+      </DojoShell>
+    </ReconsentGate>
   )
 }
 

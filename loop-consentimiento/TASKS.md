@@ -1150,7 +1150,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     solo la división de tareas y el enlace/ruta de navegación, que SÍ se pueden retomar del stash en T19.a
     (la ruta y el enlace no rompen nada mientras no se haga `pop`: el stash no se ha tocado).
 
-- [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07)
+- [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07) ⛔ BLOQUEADA (D-16, Paso 2B)
   - **Paso 1 — completado (2026-10-20, iteración 84):** inventario estático (sin tocar producción ni
     código) en PROGRESS.md. Conclusión: SÍ guarda datos (`learning_progress`, fila real por sesión
     anónima vía `learning_state`/`learning_answer`, 076) → aplica **Opción B** de D-12. `security_events`/
@@ -1168,10 +1168,19 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Paso 3 — comprobación de release:** una puerta o lista en T99 que verifique `enable_anonymous_sign_ins = false` en la configuración que se despliega mientras 2A/2B no estén cerradas.
   - Depende de T04 (rutas y `auth-guard`) para el paso 1; los pasos 2A/2B dependen del esquema de T06 y del aviso publicado (`secure-register-user` ya escribe la evidencia del registro).
 
-- [ ] **T20 — Re-consentimiento al iniciar sesión** (REQ-09)
+- [x] **T20 — Re-consentimiento al iniciar sesión** (REQ-09) (hecha 2026-10-20, iteración 85)
   - **Estado real (2026-09-29, reconciliación):** Sin iniciar. Depende del modelo de `requires_reconsent` en `consent_documents` (ya existe la columna, T06) y de T19 (pantalla donde mostrarlo).
   - **Tests E2E:** publicar v1.1 con reconsent → siguiente login muestra aviso; aceptar continúa;
     rechazar la obligatoria solo permite baja o cerrar sesión.
+  - **Implementado:** `frontend/src/components/ReconsentGate.tsx`, envuelve `AdminShell`/`DojoShell` dentro
+    de `ProtectedShell` (`App.tsx`). Compara `my_consent_state` de la finalidad obligatoria contra la
+    versión publicada vigente (`get-consent-notice`); si `requires_reconsent=true` y la versión no coincide,
+    muestra el aviso completo (reutiliza `renderConsentMarkdown`) y llama a `submit-consent` (ya existente,
+    T11) al aceptar. Rechazar bloquea el contenido y solo ofrece "Cerrar sesión" o "Solicitar baja de mi
+    cuenta" (`request-data-subject-right`, un clic, sin formulario). Los invitados (sesión anónima) no
+    disparan la comprobación. Pruebas unitarias (RTL) en `ReconsentGate.test.tsx`, 8 casos — no hay prueba
+    E2E Playwright nueva (ver "Desviaciones" en PROGRESS.md, iteración 85: `tests/frontend/*.spec.ts` no
+    está enganchado a `gates.sh`, igual que el resto de esa suite).
 
 ## Fase 6 · Migración, documentación y cierre
 

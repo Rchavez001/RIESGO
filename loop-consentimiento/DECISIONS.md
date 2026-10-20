@@ -204,3 +204,47 @@ se cambia de librería SMTP.
 Nota (Claude, 2026-10-05): condición (3) verificada contra Postgres real en TEST-INT.e (iteración 39,
 `supabase/tests/consent/email_transport_test_audit.sql`): la fila de `admin_audit_log` de `send_test_email` lleva
 `smtp_host`/`resolved_ip` y `verify_audit_chain()` sigue íntegra. Esta condición ya no bloquea T99.
+
+### D-16 — Cómo registrar evidencia de un invitado (Paso 2B de T19b/D-12) sin fila en `public.users`  [ABIERTA]
+Contexto (T19b, iteración 85, 2026-10-20): D-12 ya decidió (Opción B, confirmada por el inventario de la
+Iteración 84) que un invitado que SÍ guarda datos (`learning_progress`) necesita un aviso breve antes de
+`signInAnonymously()`, registrado "como evidencia con la finalidad `invitado_basico`". Al investigar cómo
+implementarlo (paso 3 del protocolo, antes de escribir código) aparecieron dos obstáculos reales en el
+esquema y la seguridad actuales, ninguno decidido por D-12:
+1. `consent_records.channel` tiene un `CHECK` cerrado a 5 valores (`registro`, `reconsentimiento`,
+   `mi_privacidad`, `correo`, `admin`; `073_consent_module_foundation.sql:133`) — ninguno describe "antes
+   de crear una sesión de invitado". `user_id` SÍ es nullable (`REFERENCES public.users(id) ON DELETE SET
+   NULL`), así que no hace falta perfil en `public.users`, pero toda fila exige un
+   `document_id`/`document_version`/`settings_version` de un `consent_documents` PUBLICADO — es decir,
+   `invitado_basico` solo puede ser una finalidad más dentro de una nueva versión del aviso PRINCIPAL
+   (publicada por un admin vía T14, con motivo y cuatro ojos), no un documento/aviso aparte.
+2. `_shared/auth-guard.ts:94` (`requireUser`) rechaza HOY con 403 `anonymous_session` cualquier sesión
+   anónima en cualquier función del módulo. Escribir la evidencia del aviso breve necesita una sesión real
+   (antes o justo después de `signInAnonymously()`) que SÍ sea anónima — osea, una excepción explícita a
+   esa regla para un único endpoint nuevo y una única finalidad. `INV-SEC` (P2, "revisar RLS/RPC que
+   aceptan `authenticated` sin excluir `is_anonymous`") ya identificó ampliar la superficie accesible a
+   sesiones anónimas como una clase de riesgo a vigilar en este mismo repo — esto sería exactamente eso,
+   aunque acotado a un solo propósito.
+Opciones:
+A) Nuevo valor de `channel` (p. ej. `'invitado'`) vía migración que reemplace el `CHECK` (no se edita la
+   073; migración siguiente disponible), y una función/endpoint nueva y estrecha (no reutilizar
+   `submit-consent` genérico) que: (i) exige una sesión anónima real (variante de `auth-guard.ts` que
+   acepte SOLO `is_anonymous=true` para ESTE endpoint, nunca al revés) y (ii) solo permite
+   `purpose_code='invitado_basico'`, `channel='invitado'` — cualquier otro valor se rechaza. El `handler`
+   verificaría que la finalidad exista en el documento vigente con `required=false` (o un flag propio) y
+   que no sea otra finalidad distinta.
+B) No tocar `consent_records`/`channel` en absoluto: usar una tabla nueva, separada, solo para la
+   aceptación del aviso breve de invitados (sin cadena de hash, sin las garantías de `verify_consent_chain`)
+   — más simple de implementar y no toca el `CHECK` de 073, pero fragmenta la evidencia del módulo en dos
+   sitios con garantías distintas (una con cadena íntegra, otra sin ella) para lo que D-12 ya llamó
+   "evidencia".
+C) No perseguir evidencia individual del aviso breve: loggear solo un conteo agregado (cuántos invitados
+   vieron el aviso) sin fila por persona. Más simple y evita por completo el problema de `channel`/
+   `auth-guard.ts`, pero no deja rastro de que UNA sesión concreta aceptó — más débil que lo que D-12 pidió
+   ("registrado como evidencia").
+Recomendación técnica: A. Mantiene una sola tabla de evidencia con una sola cadena de integridad (lo que
+`verify_consent_chain()`/T16.f ya verifican) y acota la excepción de `auth-guard.ts` a un endpoint nuevo,
+estrecho, de un solo propósito — no relaja el rechazo de anónimos en ningún endpoint existente. El costo es
+una migración más (nuevo `channel`) y una función nueva pequeña, no una reescritura de nada existente.
+Tareas bloqueadas: T19b (Paso 2B y, en cascada, su Paso 3).
+Decisión:

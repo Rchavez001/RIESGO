@@ -3085,3 +3085,119 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   legal (D-07).
 - Porcentaje: sin cambio (T19b no se cierra, solo su Paso 1; 22 de 28 = 78,6 % estricto, sin cambio
   ponderado).
+
+## Iteración 85 — 2026-10-20 — T20 (re-consentimiento al iniciar sesión): gate de frontend, sin bloquear T19b
+
+- **Punto de partida:** `git status` limpio. Primera tarea `[ ]` desbloqueada en orden es T19b (Paso 1
+  completado en la Iteración 84; pendiente Paso 2B). Antes de escribir código para 2B, se investigó el
+  esquema real (`073_consent_module_foundation.sql`): `consent_records.user_id` es NULLABLE (`REFERENCES
+  public.users(id) ON DELETE SET NULL`), así que una fila de evidencia SIN perfil en `public.users` es
+  posible (no hay violación de FK) — pero `channel` tiene un `CHECK` cerrado a 5 valores (`registro`,
+  `reconsentimiento`, `mi_privacidad`, `correo`, `admin`; ninguno sirve para "invitado") y toda fila exige
+  un `document_id`/`document_version`/`settings_version` de un `consent_documents` PUBLICADO — es decir,
+  la finalidad `invitado_basico` solo puede vivir dentro de una nueva versión del aviso principal (no un
+  aviso aparte), que un admin tendría que publicar con el flujo de T14 (motivo + cuatro ojos). Además,
+  `_shared/auth-guard.ts:94` rechaza HOY cualquier sesión anónima en cualquier función del módulo: escribir
+  esa evidencia exige una excepción explícita a esa regla para una sesión SIN usuario todavía, justo el
+  tipo de ampliación de superficie "authenticated sin excluir is_anonymous" que `INV-SEC` (P2) ya identificó
+  como clase de riesgo a vigilar en este mismo repo. Son dos decisiones de diseño con peso de seguridad
+  real (nuevo valor de `channel` + bitácora de integridad, y una excepción nueva al rechazo de anónimos en
+  `auth-guard.ts`), no un detalle de implementación — se añadió **D-16** en `DECISIONS.md` con las opciones
+  y la recomendación técnica, sin decidirla (ABIERTA). T19b queda así bloqueada por D-16 en su Paso 2B
+  (Paso 1 se mantiene cerrado; Paso 3 sigue pendiente de 2B). No se tocó el bloqueo humano existente de
+  D-12 — D-16 es una pregunta nueva sobre CÓMO implementar lo que D-12 ya decidió, no una reapertura de esa
+  decisión.
+- Con T19b bloqueada por una decisión ABIERTA, se pasó a la siguiente tarea `[ ]` desbloqueada en orden:
+  **T20 — Re-consentimiento al iniciar sesión** (REQ-09). Sus dependencias (columna `requires_reconsent`
+  en `consent_documents`, T06; pantalla T19) ya están `[x]`. El backend (`submit-consent`, T11;
+  `requires_reconsent` en `get-consent-notice`, T09) ya estaba completo y probado — confirmado leyendo
+  `submit-consent/index.ts` completo antes de escribir nada: ya rechaza con 409 `reconsent_not_required`
+  si el aviso vigente no pide reconsentimiento, con 409 `notice_changed` si el aviso cambió entre cargar y
+  enviar, y con 400 `missing_required_consent` si la finalidad obligatoria no viene `granted`. T20 era
+  puramente de frontend: faltaba el punto de entrada que detectara la necesidad de reconsentir al llegar
+  a cualquier ruta protegida y lo mostrara antes que el resto de la app.
+- **Cambios:**
+  - `frontend/src/components/ReconsentGate.tsx` (nuevo): envuelve el contenido de `ProtectedShell`
+    (`App.tsx`). Al montar (una vez por `user.id`), si la sesión es anónima (invitado) pasa directo sin
+    ninguna llamada de red — un invitado nunca tuvo evidencia de `registro_aprendizaje` que reconsentir;
+    eso es asunto de T19b/D-16, no de esta tarea. Si no, carga `get-consent-notice` y `my_consent_state`
+    en paralelo; si `requires_reconsent` es `false`, o la finalidad obligatoria ya tiene una fila con
+    `document_version` igual a la versión vigente, pasa directo. Si no, muestra el aviso completo
+    (reutiliza `renderConsentMarkdown`, igual que `RegisterScreen`) con las finalidades: las opcionales
+    se precargan con la decisión actual del usuario (NO todas desmarcadas como en el registro — reconsentir
+    un aviso reescrito no debe borrar en silencio un opt-in que ya existía). "Acepto y continúo" llama a
+    `submit-consent` con todas las decisiones y, si tiene éxito, deja pasar; si el servidor responde
+    `notice_changed`, relanza la comprobación en vez de fallar. "No acepto" bloquea el contenido
+    (ni `AdminShell` ni `DojoShell` llegan a montarse: `ReconsentGate` decide qué renderizar antes de que
+    React invoque esos componentes) y solo ofrece "Cerrar sesión" (`useAuth().signOut`) o "Solicitar baja
+    de mi cuenta" (un clic a `request-data-subject-right` con `request_type: 'baja'`, sin formulario —
+    REQ-09 solo exige que esa sea la única acción disponible, no un formulario completo). Si la
+    comprobación inicial falla por un error de red/servidor (no por una decisión real), **falla abierto**
+    (pasa el contenido): bloquear toda la app por un error transitorio de un endpoint de solo lectura sería
+    peor que el riesgo que evita — documentado como decisión de diseño, no un descuido.
+  - `frontend/src/App.tsx`: `ProtectedShell` envuelve `AdminShell`/`DojoShell` (ambas ramas) en
+    `<ReconsentGate>`, antes del `<Outlet/>` — ni el panel ni el dashboard del dojo renderizan mientras el
+    gate esté pendiente o bloqueado.
+  - `frontend/src/components/ReconsentGate.test.tsx` (nuevo, RTL): 8 casos — sin `requires_reconsent` pasa
+    directo; con `requires_reconsent` pero evidencia ya en la versión vigente pasa directo; con evidencia
+    de una versión anterior muestra el aviso y bloquea el contenido (con la opcional ya otorgada antes
+    precargada marcada); un invitado nunca dispara ninguna llamada (`mockInvoke`/`mockConsentSelect` sin
+    invocar); aceptar llama a `submit-consent` con el body exacto esperado y muestra el contenido tras el
+    éxito; "Acepto y continúo" deshabilitado mientras la obligatoria esté desmarcada, con el motivo
+    anunciado; rechazar bloquea el contenido y ofrece solo baja/cerrar sesión (cerrar sesión llama a
+    `signOut`); en el bloqueo, solicitar la baja llama a `request-data-subject-right` y muestra el número
+    de caso. Mock de `./CyberBushido` (no de `react-router-dom`) para evitar el mismo problema de
+    resolución de módulos que ya documentan `RegisterScreen.test.tsx`/`PrivacyPage.test.tsx` (CyberBushido
+    importa `react-router-dom`, que el runner de `react-scripts test` de este repo no resuelve).
+  - `loop-consentimiento/DECISIONS.md`: **D-16** (nueva, ABIERTA) — cómo registrar evidencia de un
+    invitado sin fila en `public.users` (nuevo valor de `channel`, vía qué función, y la excepción a
+    `auth-guard.ts` para una sesión anónima). Bloquea T19b (Paso 2B y, en cascada, Paso 3).
+  - `loop-consentimiento/TASKS.md`: T20 `[x]`, con el resumen de lo implementado; T19b anotada como
+    bloqueada por D-16 en su Paso 2B (Paso 1 sigue `completado`, el checkbox general sigue `[ ]`).
+  - Este archivo.
+- **Pruebas añadidas:** `ReconsentGate.test.tsx` (8 casos, ver arriba). Verificadas rojo→verde de forma
+  indirecta: la primera corrida de `unit-frontend` (antes de añadir el mock de `CyberBushido`) falló por
+  la razón correcta y esperada — `Cannot find module 'react-router/dom'` al importar `CyberBushido.tsx`
+  desde el archivo nuevo —, confirmando que el test realmente se ejecutaba contra el componente real antes
+  de aplicar el mismo arreglo que ya usan `RegisterScreen.test.tsx`/`PrivacyPage.test.tsx`. No hay escritura
+  nueva en BD (`submit-consent`/`request-data-subject-right` ya estaban cubiertos contra Postgres real por
+  T11/T13), así que no aplica la regla de "toda escritura necesita una prueba contra Postgres real" — esta
+  tarea es pura orquestación de frontend sobre endpoints ya probados.
+- **Gates (en grupos, en primer plano, cada uno por debajo de los 600000 ms):**
+  `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` OK (lint 14 =
+  línea base); `--only "sql-ciclo-de-vida sql-guest-limit"` OK (sin cambios de migraciones, corrida de
+  confirmación); `--only "panel-e2e"` OK (447s, perfiles por defecto `desktop-chrome`+`pixel-7-chrome`).
+  - **Iteración 85, múltiplo de 5 → `GATES_FULL=1` (7 perfiles) es obligatoria (paso 6 de PROMPT.md), pero
+    no se pudo completar esta sesión:** mismo bloqueo documentado desde la Iteración 75 (confirmado de
+    nuevo en las Iteraciones 80/82/83) — `panel-e2e` con los 7 perfiles mide ~1416-1430s (Iteración 50),
+    por encima del límite de 600000 ms (10 min) de una sola llamada a Bash, y `--full` es todo-o-nada. Las
+    REGLAS DURAS prohíben forzarlo en segundo plano para esquivar ese límite. **Queda pendiente de una
+    corrida humana** (fuera de una sesión headless de un solo comando) de
+    `bash .claude/loops/consentimiento/gates.sh --full` antes de que T99 la necesite de verdad — no
+    bloquea el cierre de T20, cuyos propios criterios de aceptación (gates.sh por defecto, 9 puertas
+    no-opcionales) ya están en verde.
+- Desviaciones de SPEC: ninguna sobre REQ-09 en sí. Una desviación menor sobre el criterio literal de
+  TASKS.md ("Tests E2E"): no se escribió una prueba Playwright en `tests/frontend/` (donde vive
+  `register.spec.ts`, la convención existente para flujos de la app) porque esa suite **no está enganchada
+  a `gates.sh`** (confirmado con `grep` sobre el script: ni `playwright.frontend.config.ts` ni
+  `tests/frontend/` aparecen en ninguna puerta) — una prueba ahí no se verificaría en ninguna iteración
+  futura del loop, a diferencia de las pruebas RTL de `unit-frontend`, que sí se corren siempre. Las 8
+  pruebas RTL cubren los mismos caminos que pedía el criterio (aviso al reconsentir, aceptar continúa,
+  rechazar solo deja baja/cerrar sesión) contra el componente real, con los endpoints de backend ya
+  probados por separado (T11/T13). Anotado aquí en vez de forzar una prueba que quedaría huérfana de
+  verificación automática.
+- Riesgos / pendientes detectados: (1) la corrida de `GATES_FULL=1` sigue pendiente de verificación humana,
+  acumulándose sin resolver desde la Iteración 75 (ver arriba); (2) **D-16 (nueva)** bloquea T19b en su
+  Paso 2B — requiere decisión humana sobre el valor de `channel` nuevo y la excepción a `auth-guard.ts`
+  para sesiones anónimas antes de poder escribir esa migración/endpoint; (3) `App.tsx` es uno de los
+  archivos que `wip/ux-redesign` también modifica (Fase 5, nota de la Iteración 81) — el cambio de esta
+  iteración (envolver ambas ramas de `ProtectedShell` en `ReconsentGate`) es un riesgo de conflicto de
+  fusión a vigilar cuando esa rama se integre, no algo que haya que resolver ahora. Siguiente tarea
+  desbloqueada en TASKS.md tras esta: T25 (depende de T19, ya cerrada, y de 074/075 aplicadas — su propio
+  texto prohíbe escribirla/ejecutarla como iteración normal del loop sin ventana de release) o, si T25 se
+  salta por esa restricción, T98/T99 (documentación/verificación final, con requisitos propios aún
+  pendientes: T03-prod/T03-sec vía D-08, GATES_FULL humano, D-16).
+- Porcentaje: estricto 23 de 28 = **82,1 %** (antes 22/28 = 78,6 %; T20 se cierra como tarea completa).
+  Ponderado: sin recalcular de forma rigurosa desde hace varias iteraciones (el seguimiento numérico de
+  "puntos/2800" quedó desactualizado tras los cierres de T21-T24/T19 sin registrar el salto exacto cada
+  vez) — no se inventa un número de continuidad falsa aquí; el conteo estricto (23/28) es la cifra fiable.
