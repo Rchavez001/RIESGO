@@ -1,0 +1,4 @@
+# scripts/demo-local.sh embeds `node <<'NODE_EOF' … NODE_EOF` heredocs: a CRLF line ending on the
+# NODE_EOF terminator (what `core.autocrlf=true` would introduce on a fresh Windows checkout) stops
+# bash from recognizing the end of the heredoc. Force LF so the script runs the same on every machine.
+scripts/*.sh text eol=lf
