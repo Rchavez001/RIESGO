@@ -205,7 +205,7 @@ Nota (Claude, 2026-10-05): condición (3) verificada contra Postgres real en TES
 `supabase/tests/consent/email_transport_test_audit.sql`): la fila de `admin_audit_log` de `send_test_email` lleva
 `smtp_host`/`resolved_ip` y `verify_audit_chain()` sigue íntegra. Esta condición ya no bloquea T99.
 
-### D-16 — Cómo registrar evidencia de un invitado (Paso 2B de T19b/D-12) sin fila en `public.users`  [ABIERTA]
+### D-16 — Cómo registrar evidencia de un invitado (Paso 2B de T19b/D-12) sin fila en `public.users`  [DECIDIDA 2026-10-20]
 Contexto (T19b, iteración 85, 2026-10-20): D-12 ya decidió (Opción B, confirmada por el inventario de la
 Iteración 84) que un invitado que SÍ guarda datos (`learning_progress`) necesita un aviso breve antes de
 `signInAnonymously()`, registrado "como evidencia con la finalidad `invitado_basico`". Al investigar cómo
@@ -247,4 +247,7 @@ Recomendación técnica: A. Mantiene una sola tabla de evidencia con una sola ca
 estrecho, de un solo propósito — no relaja el rechazo de anónimos en ningún endpoint existente. El costo es
 una migración más (nuevo `channel`) y una función nueva pequeña, no una reescritura de nada existente.
 Tareas bloqueadas: T19b (Paso 2B y, en cascada, su Paso 3).
-Decisión:
+Decisión: Opción A. Nuevo valor `channel='invitado'` vía migración siguiente disponible (sin tocar
+073) y una función/endpoint nueva y estrecha que exige sesión anónima real (variante acotada de
+`auth-guard.ts` solo para este endpoint) y solo acepta `purpose_code='invitado_basico'`,
+`channel='invitado'`. Una sola tabla de evidencia con una sola cadena de integridad.

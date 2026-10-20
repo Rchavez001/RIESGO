@@ -1150,7 +1150,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     solo la división de tareas y el enlace/ruta de navegación, que SÍ se pueden retomar del stash en T19.a
     (la ruta y el enlace no rompen nada mientras no se haga `pop`: el stash no se ha tocado).
 
-- [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07) ⛔ BLOQUEADA (D-16, Paso 2B)
+- [ ] **T19b — Invitados (sesión anónima): inventario, y aviso breve si guardan datos** (D-12, REQ-06, REQ-07) — D-16 decidida (Opción A, 2026-10-20): desbloqueada
   - **Paso 1 — completado (2026-10-20, iteración 84):** inventario estático (sin tocar producción ni
     código) en PROGRESS.md. Conclusión: SÍ guarda datos (`learning_progress`, fila real por sesión
     anónima vía `learning_state`/`learning_answer`, 076) → aplica **Opción B** de D-12. `security_events`/
