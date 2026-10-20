@@ -2854,3 +2854,61 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   `wip/ux-redesign` (integrarla, rehacerla, o descartarla) antes de construir el aviso breve de invitado.
 - Porcentaje: sin cambio (22 de 28 = 78,6 % estricto; ponderado sin cambio) — esta iteración fue
   investigación/documentación, no cerró ninguna tarea ni subtarea numerada.
+
+## Iteración 82 — 2026-10-20 — T19.a (pantalla "Mi privacidad": estado por finalidad + otorgar/revocar opcionales)
+- **Punto de partida:** `git status` limpio. Primera tarea `[ ]` desbloqueada tras la Iteración 81: T19.a.
+  T11 (`update-my-consent`) y T13 (cierre de cuenta, no usado aquí) ya cerradas; vista `my_consent_state`
+  (073) ya filtra por `auth.uid()` y ya excluye ip/ua (confirmado leyendo la migración antes de codificar:
+  `SELECT DISTINCT ON (purpose_code) id, document_id, document_version, purpose_code, decision, channel,
+  server_ts … WHERE user_id = auth.uid()`, `GRANT SELECT … TO authenticated` — ninguna columna que ocultar
+  en el cliente, tal como anotaba la división de T19 en TASKS.md).
+- **Cambios:**
+  - `shield-ecuador-app/frontend/src/screens/PrivacyPage.tsx` (nuevo): carga en paralelo el catálogo de
+    finalidades (`get-consent-notice`, ya público) y el estado propio (`supabase.from('my_consent_state')
+    .select(...)`, con el JWT del usuario — sin service role, la RLS de la vista ya filtra). La finalidad
+    obligatoria (`registro_aprendizaje`) se muestra en un `<div>` de solo lectura, sin `<input>`; las
+    opcionales en un `<label>` con checkbox: un clic llama a `update-my-consent` con `grant`/`revoke` según
+    el estado actual (sin paso de "guardar", sin motivo — REQ-08) y, solo si la respuesta es 2xx, vuelve a
+    leer `my_consent_state` para pintar la versión/fecha reales — si falla, no se toca `consentByCode` (el
+    checkbox no cambia) y se muestra `role="alert"` con un mensaje sin tecnicismos. Estados: "Activa"/
+    "Inactiva" (con versión y fecha de `my_consent_state`) o "Sin decisión" (ninguna fila para ese código).
+  - `shield-ecuador-app/frontend/src/App.tsx`: ruta `/privacidad` (dentro de `ProtectedShell`, junto a
+    `/perfil`).
+  - `shield-ecuador-app/frontend/src/components/CyberBushido.tsx`: enlace "Mi privacidad" (icono
+    `ShieldCheck`) en el nav de `DojoShell`, junto a "Perfil" — mismo lugar que proponía el `git stash`
+    `wip-T19-mi-privacidad-diseno-viejo` (no se hizo `pop`: el stash sigue intacto; solo se retomó la
+    idea de ubicación, reescrita a mano contra el archivo actual).
+  - **Sin cambios de CSS:** `.consent-purposes`/`.consent-purpose-option`/`.consent-purpose-option small`
+    (ya existían para `RegisterScreen`, `small { display: block }`) alcanzan para las dos líneas de meta
+    (descripción + estado) sin añadir clases nuevas — las `.privacy-purpose-*` que proponía el stash no
+    hacían falta.
+  - `shield-ecuador-app/frontend/src/screens/PrivacyPage.test.tsx` (nuevo, 5 casos, mismo patrón que
+    `RegisterScreen.test.tsx`/`LearningFlow.test.tsx`: `../lib/supabase` mockeado con `functions.invoke` +
+    `from().select()`, `../components/CyberBushido` mockeado a un `SectionHeader` mínimo): los tres estados
+    (activa/inactiva/sin decisión) con versión y fecha; la obligatoria nunca expone un `checkbox`; clic en
+    una opcional llama a `update-my-consent` con `purpose_code`/`action` correctos y refresca tras la
+    respuesta (checkbox pasa a sin marcar); un fallo del backend no cambia el checkbox mostrado y pinta
+    `role="alert"` sin tecnicismos, sin volver a leer `my_consent_state`; sin aviso publicado se muestra el
+    error en vez de una pantalla a medias.
+  - `loop-consentimiento/TASKS.md`: T19.a `[x]`.
+- **Por qué no hace falta ninguna prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea no agrega
+  ningún `INSERT`/`UPDATE`/`DELETE` nuevo — solo lee `my_consent_state` (RLS/vista ya cubierta desde T07) y
+  llama a `update-my-consent` (T11, ya con su propia cobertura de escritura). Sin migraciones.
+  `PLAN_PRODUCCION_RELEASE.md` sin cambios (nada nuevo que desplegar).
+- **Gates (en grupos, en primer plano, cada uno por debajo de los 600000 ms):**
+  `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` — primera
+  corrida con `unit-frontend` en rojo: `PrivacyPage.test.tsx` fallaba por un regex demasiado amplio
+  (`/Activa · versión 1\.0 ·.*2026/` coincidía con DOS filas, `registro_aprendizaje` y `novedades`, ambas
+  "Activa" y del mismo año) — corregido a incluir el día exacto de cada fecha en el regex; repetido en
+  verde. `--only "sql-ciclo-de-vida sql-guest-limit"` OK (sin cambios de SQL, corrida igual por protocolo).
+  `--only "panel-e2e"` OK (448s, perfiles por defecto `desktop-chrome`+`pixel-7-chrome`; esta tarea no toca
+  `central-admin-app`, pero se corrió igual). Iteración 82, no múltiplo de 5: `GATES_FULL=1` no es
+  obligatoria esta vez. `db-reset`/`e2e-local` SKIP opt-in, sin cambios de migraciones.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. El `git stash` `wip-T19-mi-privacidad-diseno-viejo` sigue
+  intacto (no se tocó; solo se reescribió a mano la idea de ubicación del enlace de nav, ya que el stash
+  apunta a un `App.tsx`/`CyberBushido.tsx` desactualizados). Siguiente tarea desbloqueada: **T19.b**
+  (formulario de solicitud de derechos desde la cuenta, REQ-10) — puede arrancar sin más investigación
+  previa; después de T19.b, revisar T20 (re-consentimiento al iniciar sesión, REQ-09), que depende de T19.
+- Porcentaje: estricto sin cambio (T19.a es subtarea de T19, que no tiene numeración propia entre las 28 —
+  mismo criterio que T24.a-e; 22 de 28 = 78,6 %). Ponderado sin cambio por el mismo motivo.

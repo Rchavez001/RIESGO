@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Bot, CheckCircle2, Home, ListChecks, LogOut, Menu, Play, Swords, Trophy, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
+import { Bot, CheckCircle2, Home, ListChecks, LogOut, Menu, Play, ShieldCheck, Swords, Trophy, User, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { beltPath, BeltLevel, KataStatus } from '../data/ciberDojo'
 import { supabase } from '../lib/supabase'
 import { useDojoAudio } from '../contexts/DojoAudioContext'
@@ -495,6 +495,7 @@ export function DojoShell({
     { to: '/campeonato', label: 'Campeonato', short: 'Torneo', icon: Trophy },
     { to: '/personajes', label: 'Personajes del dojo', icon: Swords },
     { to: '/perfil', label: 'Perfil', icon: User },
+    { to: '/privacidad', label: 'Mi privacidad', icon: ShieldCheck },
     // /admin is not a route of this SPA: it is proxied to the admin app by static-server, so it needs a real navigation.
     ...(isAdmin ? [{ to: '/admin/', label: 'Admin', icon: Wrench, external: true }] : []),
   ]

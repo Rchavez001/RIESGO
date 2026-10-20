@@ -16,6 +16,7 @@ import { KataExamPage } from './screens/KataExamPage'
 import { KataExamPage as DevKata } from './screens/KataExamPage'
 import { LeaderboardPage } from './screens/LeaderboardPage'
 import { ProfilePage } from './screens/ProfilePage'
+import { PrivacyPage } from './screens/PrivacyPage'
 import { SenseiConsultPage } from './screens/SenseiConsultPage'
 import { ResetPasswordPage } from './screens/ResetPasswordPage'
 import { AuthCallbackPage } from './screens/AuthCallbackPage'
@@ -153,6 +154,7 @@ function AppRoutes() {
           <Route path="/escaner" element={<PageTransition><React.Suspense fallback={<LoadingScreen />}><VulnScannerPage /></React.Suspense></PageTransition>} />
           <Route path="/ranking" element={<PageTransition><LeaderboardPage /></PageTransition>} />
           <Route path="/perfil" element={<PageTransition><ProfilePage /></PageTransition>} />
+          <Route path="/privacidad" element={<PageTransition><PrivacyPage /></PageTransition>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

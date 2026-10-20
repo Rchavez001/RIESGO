@@ -1112,7 +1112,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     de solo estado + interruptores de un clic (REQ-08, sin formulario) con otra más grande — formulario de
     solicitud de derechos con tipo, número de caso y fecha límite (REQ-10) —; se parte en dos, mismo
     patrón que T12.d/T15/T16.
-  - [ ] **T19.a — Pantalla "Mi privacidad": estado por finalidad + otorgar/revocar opcionales con un clic** (REQ-08)
+  - [x] **T19.a — Pantalla "Mi privacidad": estado por finalidad + otorgar/revocar opcionales con un clic** (REQ-08)
     - Estado vigente de cada finalidad (versión aceptada, fecha) leído de `my_consent_state` (073: ya
       filtra por `auth.uid()` y ya excluye ip/ua — ninguna columna que ocultar en el cliente); catálogo
       de finalidades (código/etiqueta/descripción/obligatoria) de `get-consent-notice` (ya público,
