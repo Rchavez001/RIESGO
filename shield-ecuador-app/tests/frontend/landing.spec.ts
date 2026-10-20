@@ -73,4 +73,23 @@ test.describe('landing /', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.locator('.cinema-sensei-video-btn')).toBeVisible()
   })
+
+  // T19b Paso 2B (D-12 opción B, D-16 opción A): "sin el aviso breve no se crea la sesión
+  // anónima" — probado aquí como que ningún llamado de red sale hasta que el invitado confirma.
+  test('Probar sin cuenta: muestra el aviso breve PROVISIONAL antes de crear la sesión anónima', async ({ page }) => {
+    let signupCalled = false
+    await page.route('**/auth/v1/signup', r => { signupCalled = true; return r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }) })
+    await page.route('**/functions/v1/accept-guest-notice', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }))
+
+    await page.getByRole('link', { name: /probar sin cuenta/i }).first().click()
+    const dialog = page.getByRole('dialog', { name: /antes de continuar sin cuenta/i })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText(/pendiente de validación legal/i)).toBeVisible()
+    await expect(dialog.getByRole('link', { name: /leer el aviso completo de privacidad/i })).toHaveAttribute('href', '/privacidad')
+    expect(signupCalled).toBe(false)
+
+    await dialog.getByRole('button', { name: /cancelar/i }).click()
+    await expect(dialog).toBeHidden()
+    expect(signupCalled).toBe(false)
+  })
 })

@@ -1,4 +1,4 @@
-# Plan de release único — migraciones pendientes (074–082) a producción
+# Plan de release único — migraciones pendientes (074–083) a producción
 
 **Estado: GUARDADO, NO SE EJECUTA POR SEPARADO.** Decisión del responsable: esto se aplicará en **un único release** junto con las
 funciones, el frontend y el aviso ya publicado. No se aplican por su cuenta antes de tiempo. Proyecto `wbbcjiqzbzswxsmwjqlw`.
@@ -24,9 +24,10 @@ y a las secciones 3/4/6, en el mismo commit que crea la migración. Este documen
 | 7 | `080_publish_consent_document_atomic.sql` | 073 (tabla `consent_documents`), 077 (restricción diferible) | Nueva función `publish_consent_document()`: retira la vigente + publica el borrador + bitácora en UNA transacción real (con candado consultivo `pg_advisory_xact_lock`), con rol `privacy_admin`/`aal2`/motivo/"cuatro ojos" verificados DENTRO de la función. Arregla T14 (`admin-consent`): publicar con dos llamadas `UPDATE` sueltas violaba SIEMPRE la restricción diferible de 077 en cuanto ya había una versión publicada — verificado contra Postgres real antes de esta migración, ver PROGRESS.md. No toca filas existentes | La función existe y solo la ejecuta `service_role`; publicar con una vigente existente funciona (antes fallaba siempre); dos publicaciones simultáneas dejan exactamente una vigente (prueba de concurrencia en `gates.sh`) |
 | 8 | `081_fix_digest_schema_qualification.sql` | 073 (las 4 funciones que corrige) | `CREATE OR REPLACE` de `consent_records_chain_trigger`/`verify_consent_chain`/`admin_audit_log_chain_trigger`/`verify_audit_chain`: califican `extensions.digest(...)` en vez de `digest(...)` a secas. Arregla un defecto preexistente de 073 (ya en prod): en Supabase real pgcrypto vive en `extensions`, no en `public`; cualquier función `SECURITY DEFINER ... SET search_path = public` que dispare estos triggers (`unlink_user_consent_evidence` 074, `update_data_subject_request_status` 078, `publish_consent_document` 080, y las que vengan) fallaba con `function digest(text, unknown) does not exist` — confirmado también en `update_data_subject_request_status`, ya desplegable, no solo en 080. Sin este arreglo, 080 (y en la práctica cualquier acción administrativa que mute `consent_records`/`admin_audit_log` desde una función con `search_path` acotado) falla en producción. No toca filas existentes, solo `CREATE OR REPLACE FUNCTION` | `verify_consent_chain()`/`verify_audit_chain()` siguen dando vacío; una llamada real a `update_data_subject_request_status()` o `publish_consent_document()` ya no da `function digest(text, unknown) does not exist` |
 | 9 | `082_confirm_privacy_email_change_atomic.sql` | 073 (`privacy_email_verifications`/`admin_audit_log`), 075 (vista `privacy_settings_current`, trigger de versión siguiente) | Nueva función `confirm_privacy_email_change()` (T15.a, REQ-14/15): marca la verificación de correo como confirmada + inserta la siguiente versión de `privacy_settings` con el correo nuevo + bitácora, en UNA transacción real (mismo patrón que 080: dos llamadas PostgREST sueltas desde `admin-consent` no serían atómicas entre sí). Rol `privacy_admin`/`aal2` verificados DENTRO de la función, igual que 080. El incremento de `attempts` por código incorrecto NO vive en esta función (lo hace `admin-consent` con un UPDATE de una sola fila, antes de llamarla) — ver cabecera de la migración. No toca filas existentes | La función existe y solo la ejecuta `service_role`; confirmar con el código correcto marca la verificación Y crea la versión nueva en la misma llamada; un hash que no coincide, una verificación vencida/inexistente/ya confirmada, o un actor sin rol `privacy_admin`/`aal2`, no mutan nada (prueba en `gates.sh`, `privacy_email_change_confirm.sql`) |
+| 10 | `083_guest_consent_notice_and_session_expiry.sql` | 073 (`consent_records.channel` CHECK, sin editar la 073) | T19b Paso 2B (D-16 Opción A): el CHECK de `channel` admite `'invitado'` (DROP+ADD CONSTRAINT); nueva función `cleanup_expired_guest_sessions()` que borra `auth.users` con `is_anonymous = true` y más de 24h de antigüedad (cascada a `learning_progress`/`learning_attempts`; `consent_records.user_id` ya queda NULL para estas filas desde que se insertan — no cambia nada en ellas); agenda esa limpieza por hora con `pg_cron` SOLO si la extensión existe en el proyecto (en el hospedado sí, por 037/038; en un Postgres sin pg_cron el `DO` block no hace nada). No toca filas existentes | El CHECK acepta `'invitado'` y sigue rechazando cualquier otro valor; la función existe y la ejecuta `service_role`; `cron.schedule('cleanup-guest-sessions-hourly', ...)` aparece en `cron.job` (panel hospedado) |
 
-**Orden de aplicación: 074 → 075 → 076 → 077 → 078 → 079 → 080 → 081 → 082.** Es el orden en que `supabase db push` las aplica automáticamente
-(por número de archivo); no hay forma de empujar 077/078/079/080/081/082 sin arrastrar 076, que ya ocupa ese número en la carpeta. 076 no es del
+**Orden de aplicación: 074 → 075 → 076 → 077 → 078 → 079 → 080 → 081 → 082 → 083.** Es el orden en que `supabase db push` las aplica automáticamente
+(por número de archivo); no hay forma de empujar 077/078/079/080/081/082/083 sin arrastrar 076, que ya ocupa ese número en la carpeta. 076 no es del
 módulo de consentimiento, pero viaja en el mismo `push` porque le tocó ese hueco; es segura por su cuenta (`CREATE OR REPLACE`, no toca datos,
 sin guarda de precondición) y no depende de ni bloquea a las demás.
 **081 es la más urgente de aplicar en cuanto se abra la ventana de release**: sin ella, `update_data_subject_request_status()` (078, ya
@@ -51,10 +52,16 @@ cerrada) también falla contra producción real en cuanto alguien la llame — n
   antes y después (ver sección 4).
 - 082: ver tabla arriba. Función nueva; no toca filas existentes. Nadie la llama todavía desde producción (las rutas de `admin-consent`
   que la usarán, T15.b/c, aún no existen): aplicar 082 no cambia el comportamiento de ninguna función ya desplegada.
-- **No toca** `users`, `auth`, ni ninguna tabla que use la app hoy. Las funciones desplegadas (`secure-register-user` v18 y el resto) no
-  leen ninguna de estas tablas: siguen funcionando igual (076 sí las usa, pero solo endurece una regla ya vigente en el frontend).
-- **Fuera de esta ventana**: `get-consent-notice`, la nueva `secure-register-user` y el frontend del módulo de consentimiento.
-  Dependen de que haya un aviso publicado y de medir T03; desplegarlos antes dejaría sin registro a todos (ver "Ventana siguiente").
+- 083: ver tabla arriba. **Sí toca** `auth.users` (la función de limpieza, programada por hora): borra sesiones anónimas de más de
+  24h. No toca ninguna cuenta con `is_anonymous = false`. Mientras `accept-guest-notice`/el frontend del modo invitado no estén
+  desplegados (ver "Fuera de esta ventana" abajo), no habrá sesiones anónimas nuevas que limpiar — el job corre pero no encuentra
+  nada hasta que el resto del release del modo invitado también se despliegue.
+- **No toca** `users`, ni ninguna tabla que use la app hoy fuera de lo ya dicho para 083. Las funciones desplegadas (`secure-register-user`
+  v18 y el resto) no leen ninguna de estas tablas: siguen funcionando igual (076 sí las usa, pero solo endurece una regla ya vigente en el frontend).
+- **Fuera de esta ventana**: `get-consent-notice`, la nueva `secure-register-user`, `accept-guest-notice` (T19b Paso 2B) y el
+  frontend del módulo de consentimiento (incluido el modo invitado y su aviso breve). Dependen de que haya un aviso publicado y de
+  medir T03; desplegarlos antes dejaría sin registro a todos (ver "Ventana siguiente"). Mientras `accept-guest-notice` no esté
+  desplegada, `enable_anonymous_sign_ins` sigue sin activarse en producción (D-12, T19b Paso 3 en T99).
   076 no tiene esta dependencia y podría, en principio, desplegarse antes por separado si la persona responsable lo pide; se deja
   agrupada aquí porque no hay urgencia y separar el `push` no reduce riesgo.
 
@@ -63,9 +70,10 @@ cerrada) también falla contra producción real en cuanto alguien la llame — n
 - [ ] Disco local con al menos 2 GB libres (el 100 % de `C:` ya causó un incidente).
 
 ## 1. Comprobaciones de solo lectura (SQL Editor del panel, o `psql` al pooler)
-Las guardas de 074/075 abortan solas si esto no se cumple, pero conviene verlo antes. 076, 077, 078 y 079 no tienen guardas de
+Las guardas de 074/075 abortan solas si esto no se cumple, pero conviene verlo antes. 076, 077, 078, 079 y 083 no tienen guardas de
 precondición (076 es un `CREATE OR REPLACE` puro; 077 no falla por datos existentes, solo cambia el comportamiento futuro de un
-`UPDATE` que retire una versión publicada; 078 y 079 crean objetos nuevos y no tocan filas existentes).
+`UPDATE` que retire una versión publicada; 078 y 079 crean objetos nuevos y no tocan filas existentes; 083 ampliá un CHECK que ya
+solo permitía los 5 valores anteriores, así que ninguna fila existente puede violarlo).
 ```sql
 -- 074 aborta si consent_records ya tiene evidencia (no reescribe hashes).
 select 'consent_records'          as tabla, count(*) from public.consent_records
@@ -121,10 +129,11 @@ supabase db push
 # 079_email_transport_and_outbox.sql,
 # 080_publish_consent_document_atomic.sql,
 # 081_fix_digest_schema_qualification.sql,
-# 082_confirm_privacy_email_change_atomic.sql. Si lista algo más o menos: PARAR.
+# 082_confirm_privacy_email_change_atomic.sql,
+# 083_guest_consent_notice_and_session_expiry.sql. Si lista algo más o menos: PARAR.
 ```
 Cada migración corre en su propia transacción. Si falla una, las anteriores ya aplicadas quedan así (074 y 075 son seguras por sí
-solas; 076-082 también, al ser aditivas). Si falla una guarda, no se cambia nada de esa migración en particular.
+solas; 076-083 también, al ser aditivas). Si falla una guarda, no se cambia nada de esa migración en particular.
 
 ## 4. Verificación posterior (solo lectura)
 ```sql
@@ -169,7 +178,7 @@ select has_function_privilege('service_role', 'public.confirm_privacy_email_chan
        has_function_privilege('anon', 'public.confirm_privacy_email_change(uuid,text,uuid,text,text,text)', 'EXECUTE');   -- t | f | f
 ```
 ```bash
-supabase migration list        # 074-082 en local y remoto
+supabase migration list        # 074-083 en local y remoto
 ```
 ```sql
 -- 076 (nuevo): la función lleva el código de error estable
@@ -190,6 +199,20 @@ select count(*) from public.email_transport_tests; -- 0 (nadie ha probado el tra
 ```
 079 no tiene prueba funcional de envío real pendiente para este release: ninguna función desplegada escribe todavía en estas tres
 tablas (T12.c/T12.d, que sí lo harán, no están hechas). Solo se verifica que el esquema y los permisos quedaron como se espera.
+
+```sql
+-- 083 (nuevo): el CHECK admite 'invitado' y sigue rechazando cualquier otro valor; la función existe
+select conname, pg_get_constraintdef(oid) from pg_constraint
+  where conname = 'consent_records_channel_check';   -- debe incluir 'invitado' en la lista
+select has_function_privilege('service_role', 'public.cleanup_expired_guest_sessions()', 'EXECUTE');   -- t
+-- Solo en el proyecto hospedado (pg_cron real): confirmar que el job quedó agendado
+select jobname, schedule from cron.job where jobname = 'cleanup-guest-sessions-hourly';   -- 1 fila | '0 * * * *'
+select count(*) from auth.users where is_anonymous;   -- 0 esperado: nadie ha usado el modo invitado todavía en esta ventana
+```
+083 no tiene prueba funcional de limpieza real pendiente para este release: mientras `accept-guest-notice`/el frontend del modo
+invitado no se despliegan (fuera de esta ventana, ver arriba), no hay sesiones anónimas que la limpieza pueda encontrar. Queda
+como verificación manual pendiente para la ventana siguiente, cuando el modo invitado ya esté desplegado: crear una sesión
+anónima de prueba, adelantar 25h (o esperar), y confirmar que `cleanup_expired_guest_sessions()` la borra sin tocar cuentas reales.
 
 Desde fuera, con la clave anon de la app: `GET /rest/v1/privacy_settings_current` debe dar "permission denied"; `GET /rest/v1/consent_documents`
 debe dar `[]`. Y comprobar que el login y el registro actuales siguen funcionando (registro de prueba con la versión vigente de la app).
@@ -236,6 +259,12 @@ no se revierte: se corrige hacia delante. Con la tabla vacía:
   public.confirm_privacy_email_change(uuid,text,uuid,text,text,text);`. Si ya se usó para confirmar un cambio real, revertir no deshace
   esa confirmación (la versión nueva de `privacy_settings` sigue siendo la vigente); no hay pérdida de datos, solo se relaja de vuelta a
   lo que había antes (nada: la función no existía).
+- **083:** `SELECT cron.unschedule('cleanup-guest-sessions-hourly');` (solo si la extensión está presente) y volver al CHECK anterior
+  de `channel` (`DROP CONSTRAINT consent_records_channel_check; ADD CONSTRAINT ... CHECK (channel IN ('registro',
+  'reconsentimiento', 'mi_privacidad', 'correo', 'admin'))`) **solo si ninguna fila usa `channel = 'invitado'` todavía** — si ya hay
+  evidencia de invitado real, no se revierte el CHECK (perdería filas existentes o las dejaría inconsistentes): se corrige hacia
+  delante. `DROP FUNCTION public.cleanup_expired_guest_sessions();` es trivial en cualquier caso (no borra nada por sí sola, solo
+  deja de poder ejecutarse); no vuelve a dar de alta ninguna sesión anónima ya borrada.
 No la preparo hasta que la pidas: no se espera usarla.
 
 ## Orden del release único (todo o nada)
@@ -244,8 +273,8 @@ están completos (D-07); (2) T03 medido y la cabecera de IP de confianza decidid
 verificado (sección 2); (4) `gates.sh` en verde sobre la rama del release; (5) PR revisado.
 
 1. Secretos (los crea la persona responsable, nunca el loop): `LOOKUP_HMAC_KEY_B64` (ya existe), `TRUSTED_PROXY_HOPS` si aplica.
-2. `supabase link --project-ref wbbcjiqzbzswxsmwjqlw`, luego `supabase db push` → 074 + 075 + 076 + 077 + 078 + 079 + 080 + 081 + 082 (secciones 1–4 de este plan), y `supabase unlink` al terminar de verificar (no dejar esta máquina vinculada a producción entre sesiones).
-3. `supabase functions deploy` de `get-consent-notice` y `secure-register-user` (y el resto de funciones del módulo que lleguen en el release).
+2. `supabase link --project-ref wbbcjiqzbzswxsmwjqlw`, luego `supabase db push` → 074 + 075 + 076 + 077 + 078 + 079 + 080 + 081 + 082 + 083 (secciones 1–4 de este plan), y `supabase unlink` al terminar de verificar (no dejar esta máquina vinculada a producción entre sesiones).
+3. `supabase functions deploy` de `get-consent-notice`, `secure-register-user`, `accept-guest-notice` (T19b Paso 2B — solo si el modo invitado entra en este release; si no, se despliega aparte junto con `enable_anonymous_sign_ins = true`) y el resto de funciones del módulo que lleguen en el release.
 4. Publicar el aviso v1.0 con los datos reales (sin marcadores sin resolver). En este punto, hacer la prueba funcional pendiente
    de 077 (sección 4): con un segundo borrador listo, retirar v1.0 sin reemplazo debe fallar; retirar y publicar el reemplazo en
    la misma operación debe funcionar.

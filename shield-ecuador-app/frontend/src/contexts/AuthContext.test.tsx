@@ -6,6 +6,8 @@ const mockSignInWithPassword = jest.fn()
 const mockSignInWithOtp = jest.fn()
 const mockVerifyOtp = jest.fn()
 const mockInvoke = jest.fn()
+const mockSignInAnonymously = jest.fn()
+const mockSignOut = jest.fn()
 const mockGetSession = jest.fn().mockResolvedValue({ data: { session: null } })
 const mockOnAuthStateChange = jest.fn().mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } })
 
@@ -17,6 +19,8 @@ jest.mock('../lib/supabase', () => ({
       signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
       signInWithOtp: (...args: unknown[]) => mockSignInWithOtp(...args),
       verifyOtp: (...args: unknown[]) => mockVerifyOtp(...args),
+      signInAnonymously: (...args: unknown[]) => mockSignInAnonymously(...args),
+      signOut: (...args: unknown[]) => mockSignOut(...args),
     },
     functions: { invoke: (...args: unknown[]) => mockInvoke(...args) },
   },
@@ -153,4 +157,41 @@ test('verifyCode surfaces a rejected/expired code as a thrown error', async () =
   await waitFor(() => expect(getCtx()).toBeTruthy())
 
   await expect(getCtx().verifyCode('usuario@empresa.com', '000000')).rejects.toThrow(/expired|invalid/i)
+})
+
+// T19b Paso 2B (D-12 opción B, D-16 opción A): continueAsGuest ya no es solo signInAnonymously.
+test('continueAsGuest: crea la sesión anónima y registra la evidencia del aviso breve (accept-guest-notice)', async () => {
+  mockSignInAnonymously.mockResolvedValue({ error: null })
+  mockInvoke.mockResolvedValue({ data: { purpose_code: 'invitado_basico' }, error: null })
+
+  const getCtx = mountAuth()
+  await waitFor(() => expect(getCtx()).toBeTruthy())
+
+  await getCtx().continueAsGuest()
+
+  expect(mockSignInAnonymously).toHaveBeenCalledTimes(1)
+  expect(mockInvoke).toHaveBeenCalledWith('accept-guest-notice', { method: 'POST' })
+  expect(mockSignOut).not.toHaveBeenCalled()
+})
+
+test('continueAsGuest: si falla signInAnonymously, nunca llama a accept-guest-notice', async () => {
+  mockSignInAnonymously.mockResolvedValue({ error: new Error('red caída') })
+
+  const getCtx = mountAuth()
+  await waitFor(() => expect(getCtx()).toBeTruthy())
+
+  await expect(getCtx().continueAsGuest()).rejects.toThrow(/red caída/i)
+  expect(mockInvoke).not.toHaveBeenCalled()
+})
+
+test('continueAsGuest: si accept-guest-notice falla, deshace la sesión anónima (signOut) y relanza el error', async () => {
+  mockSignInAnonymously.mockResolvedValue({ error: null })
+  mockInvoke.mockResolvedValue({ data: null, error: new Error('rate_limited') })
+  mockSignOut.mockResolvedValue({ error: null })
+
+  const getCtx = mountAuth()
+  await waitFor(() => expect(getCtx()).toBeTruthy())
+
+  await expect(getCtx().continueAsGuest()).rejects.toThrow(/rate_limited/i)
+  expect(mockSignOut).toHaveBeenCalledTimes(1)
 })

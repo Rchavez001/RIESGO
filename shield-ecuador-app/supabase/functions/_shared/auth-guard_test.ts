@@ -11,7 +11,7 @@ import {
   type JWTPayload,
   type KeyLike,
 } from 'https://deno.land/x/jose@v5.9.6/index.ts'
-import { AuthError, requireRole, requireUser, type AuthGuardOptions, type VerifiedUser } from './auth-guard.ts'
+import { AuthError, requireAnonymousGuest, requireRole, requireUser, type AuthGuardOptions, type VerifiedUser } from './auth-guard.ts'
 
 const KID = 'test-key-1'
 const USER_ID = '6f1c2b1e-8a4d-4c3e-9b2a-1d2e3f4a5b6c'
@@ -205,6 +205,31 @@ Deno.test('lista de roles vacía o rol desconocido → error de programación, n
     () => requireRole(req(`Bearer ${token}`), ['admin' as any], options(['privacy_admin'])),
     TypeError,
   )
+})
+
+// ── requireAnonymousGuest (T19b Paso 2B / D-16): lo opuesto de requireUser ──────────────────────────────────────────────
+
+Deno.test('requireAnonymousGuest: sesión anónima real → identidad del sub verificado, sin email', async () => {
+  const token = await sign({ ...baseClaims(), is_anonymous: true, email: undefined })
+  const user = await requireAnonymousGuest(req(`Bearer ${token}`), options())
+  assertEquals([user.userId, user.email], [USER_ID, null])
+})
+
+Deno.test('requireAnonymousGuest: sesión NO anónima (usuario normal) → 403 not_anonymous_session', async () => {
+  const token = await sign(baseClaims())
+  await expectAuthError(() => requireAnonymousGuest(req(`Bearer ${token}`), options()), 403, 'not_anonymous_session')
+})
+
+Deno.test('requireAnonymousGuest: mismas verificaciones criptográficas que requireUser (firma alterada → 401 invalid_token)', async () => {
+  const token = await sign({ ...baseClaims(), is_anonymous: true })
+  const [h, p, s] = token.split('.')
+  const flipped = s[0] === 'A' ? 'B' + s.slice(1) : 'A' + s.slice(1)
+  await expectAuthError(() => requireAnonymousGuest(req(`Bearer ${h}.${p}.${flipped}`), options()), 401, 'invalid_token')
+})
+
+Deno.test('requireAnonymousGuest: service_role no es una sesión de invitado → 401 not_user_token', async () => {
+  const token = await sign({ ...baseClaims(), role: 'service_role', is_anonymous: true })
+  await expectAuthError(() => requireAnonymousGuest(req(`Bearer ${token}`), options()), 401, 'not_user_token')
 })
 
 // ── H01: sin decodificación de JWT sin verificar en el módulo ─────────────────────────────────────────────────────────

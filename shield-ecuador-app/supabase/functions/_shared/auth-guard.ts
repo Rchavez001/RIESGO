@@ -38,7 +38,7 @@ export interface AuthGuardOptions {
 
 export type AuthErrorCode =
   | 'missing_token' | 'invalid_token' | 'token_expired' | 'not_user_token'
-  | 'anonymous_session' | 'mfa_required' | 'forbidden' | 'role_lookup_failed' | 'auth_unavailable'
+  | 'anonymous_session' | 'not_anonymous_session' | 'mfa_required' | 'forbidden' | 'role_lookup_failed' | 'auth_unavailable'
 
 /** Error con estado HTTP. El `code` es estable y apto para el cliente: no incluye el token ni detalles de la verificación. */
 export class AuthError extends Error {
@@ -71,7 +71,7 @@ function bearerToken(req: Request): string {
   return token
 }
 
-export async function requireUser(req: Request, opts: AuthGuardOptions = {}): Promise<VerifiedUser> {
+async function verifyUserToken(req: Request, opts: AuthGuardOptions): Promise<{ claims: JWTPayload & { sub: string }; token: string }> {
   const token = bearerToken(req)
 
   let claims: JWTPayload
@@ -91,6 +91,11 @@ export async function requireUser(req: Request, opts: AuthGuardOptions = {}): Pr
   // A partir de aquí los claims están verificados.
   if (claims.role !== 'authenticated') throw new AuthError(401, 'not_user_token')
   if (typeof claims.sub !== 'string' || !UUID_RE.test(claims.sub)) throw new AuthError(401, 'invalid_token')
+  return { claims: claims as JWTPayload & { sub: string }, token }
+}
+
+export async function requireUser(req: Request, opts: AuthGuardOptions = {}): Promise<VerifiedUser> {
+  const { claims, token } = await verifyUserToken(req, opts)
   if (claims.is_anonymous === true) throw new AuthError(403, 'anonymous_session')
 
   return {
@@ -99,6 +104,18 @@ export async function requireUser(req: Request, opts: AuthGuardOptions = {}): Pr
     jwt: token,
     claims,
   }
+}
+
+// T19b Paso 2B / D-16 (opción A): variante ESTRECHA solo para `accept-guest-notice`. Acepta
+// ÚNICAMENTE sesiones anónimas reales (is_anonymous = true) — lo opuesto de requireUser — para
+// registrar la evidencia del aviso breve de invitado antes de que exista cualquier perfil en
+// `public.users`. Nunca usarla para aceptar una sesión normal: no verifica `aal`/rol alguno más
+// allá de la firma del JWT, porque un invitado no tiene ninguno.
+export async function requireAnonymousGuest(req: Request, opts: AuthGuardOptions = {}): Promise<VerifiedUser> {
+  const { claims, token } = await verifyUserToken(req, opts)
+  if (claims.is_anonymous !== true) throw new AuthError(403, 'not_anonymous_session')
+
+  return { userId: claims.sub.toLowerCase(), email: null, jwt: token, claims }
 }
 
 /** Roles del usuario en `admin_roles`, consultados CON SU PROPIO JWT: la política RLS solo le deja ver sus filas. */

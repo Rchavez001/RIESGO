@@ -23,13 +23,18 @@ export function parsePurposes(raw: unknown): Purpose[] {
 
 export interface ConsentEvidenceInput {
   userId: string
+  // T19b Paso 2B: un invitado (sesión anónima) no tiene fila en public.users, que es lo que
+  // user_id de verdad referencia (FK) — guardarlo ahí violaría la FK, no solo "perdería el
+  // vínculo" al borrar. `userId` sigue usándose para el HMAC/AAD (user_ref_hmac, la referencia
+  // estable de esta fila) tanto si se guarda como si no.
+  storeUserId?: boolean
   documentId: string
   documentVersion: string
   renderedSha256: string
   settingsVersion: number
   purposeCode: string
   decision: 'granted' | 'denied' | 'revoked'
-  channel: 'reconsentimiento' | 'mi_privacidad'
+  channel: 'reconsentimiento' | 'mi_privacidad' | 'invitado'
   ip: string
   userAgent: string
   keyVersion: number
@@ -50,7 +55,7 @@ export async function insertConsentEvidenceRow(
   const uaHmac = input.userAgent ? await hmacLookup(input.userAgent, 'LOOKUP_HMAC_KEY_B64') : null
 
   const { error } = await supabase.from('consent_records').insert({
-    user_id: input.userId,
+    user_id: input.storeUserId === false ? null : input.userId,
     user_ref_hmac: userRefHmac,
     document_id: input.documentId,
     document_version: input.documentVersion,

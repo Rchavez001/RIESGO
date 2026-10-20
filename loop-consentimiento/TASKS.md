@@ -1157,8 +1157,29 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     `admin_audit_log` no los toca ningún camino de invitado; `ask-sensei`/`vuln-scanner-ai` rechazan
     `is_anonymous` antes de llamar a cualquier proveedor de IA (hallazgo aparte, independiente de
     `is_anonymous`: `generate-recommendations` no comprueba identidad alguna — ver PROGRESS.md,
-    "pendientes detectados"). Sigue pendiente: Paso 2B (aviso breve + finalidad `invitado_basico`,
-    texto a validar por la persona responsable) y Paso 3 (comprobación en T99).
+    "pendientes detectados").
+  - **Paso 2B — completado (2026-10-20, iteración 88, D-16 Opción A):** migración 083 (`channel`
+    admite `'invitado'`, sin tocar la 073; `cleanup_expired_guest_sessions()` borra sesiones
+    anónimas de más de 24h — agendada con `pg_cron` solo si la extensión existe, para no romper
+    `sql-ciclo-de-vida`); `_shared/auth-guard.ts` (`requireAnonymousGuest`, lo opuesto de
+    `requireUser`, solo para este endpoint); función nueva `accept-guest-notice` (exige sesión
+    anónima real, inserta `consent_records` con `purpose_code='invitado_basico'`,
+    `channel='invitado'`, `user_id = NULL` — un invitado no tiene fila en `public.users`, y
+    guardar su `auth.uid()` ahí violaría la FK; `user_ref_hmac` sigue sirviendo de referencia
+    estable); `GuestNoticeModal.tsx` (TEXTO PROVISIONAL marcado "[PENDIENTE DE VALIDACIÓN
+    LEGAL]", con enlace a `/privacidad`), llamado desde `CinematicLandingPage.tsx` y
+    `CinematicPublicShell.tsx` antes de `continueAsGuest()`; `AuthContext.continueAsGuest()` ahora
+    llama a `accept-guest-notice` justo después de `signInAnonymously()` y deshace la sesión
+    (`signOut`) si falla. `invitado_basico` NO se agregó a `consent_documents.purposes`: es una
+    finalidad propia de este endpoint (verificada en código, no en el documento), para no aparecer
+    como casilla opcional en `RegisterScreen`/`ReconsentGate`. Pruebas: `auth-guard_test.ts`
+    (positivo + 3 negativos de `requireAnonymousGuest`), `accept-guest-notice/index_test.ts` (7
+    casos contra un fake Supabase real), SQL (`guest_notice_and_session_expiry.sql`: channel
+    inválido rechazado, `user_id` NULL, `cleanup_expired_guest_sessions()` borra solo la sesión
+    vencida y conserva la evidencia y las cadenas), `AuthContext.test.tsx` (3 casos de
+    `continueAsGuest`), `GuestNoticeModal.test.tsx` (4 casos), `landing.spec.ts` (clic real: el
+    aviso aparece y ningún `signup`/`accept-guest-notice` sale hasta confirmar). `gates.sh`
+    completo (incluido `panel-e2e`) OK. Sigue pendiente: Paso 3 (comprobación en T99).
   - **Estado real (2026-09-29, reconciliación):** Solo diseño e investigación (iteración 7, INV-SEC de la iteración 9). El paso 1 (inventario formal en PROGRESS.md con archivos y consultas) no se ha escrito como tal — lo más cercano es el hallazgo de INV-SEC sobre el RPC `learning_state`. Pasos 2A/2B/3 sin empezar.
   - **Decisión D-12 (2026-09-28):** primero inventariar; luego A o B según el resultado; mientras no esté implementado y probado, **`enable_anonymous_sign_ins` debe estar desactivado en producción** (opción C) y el modo invitado **no entra en el release**.
   - **Paso 1 — inventario (sin cambiar código):** qué guarda hoy un usuario con `is_anonymous = true`: filas por tabla y columna (`users`, `learning_state`, puntajes, respuestas), `security_events`, `admin_audit_log`, logs con IP, funciones que aceptan sesión anónima, y si alguna manda datos a un proveedor de IA. Documentarlo en `PROGRESS.md` con archivos y consultas de solo lectura (las que toquen producción las ejecuta la persona responsable). Puntos de partida: `frontend/src/components/GuestRegisterPrompt.tsx` (sin versionar), `App.tsx` (`isGuest`), `CinematicPublicShell.tsx`, `DojoDetailPage.tsx`, `supabase/config.toml` (`enable_anonymous_sign_ins`), migración 058 (`learning_state_guest_fix`, sin versionar).

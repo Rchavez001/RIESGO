@@ -203,9 +203,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // learning_overview RPC already treats a missing profile as belt rank 0,
   // which is exactly "only the first dojo unlocked". GuestGate (App.tsx) is
   // what stops this session from reaching anything past that.
+  //
+  // T19b Paso 2B (D-12 opción B, D-16 opción A): el caller (GuestNoticeModal) ya mostró el
+  // aviso breve antes de llamar aquí. accept-guest-notice registra esa evidencia justo después
+  // de crear la sesión (necesita un JWT anónimo real para verificarse) — si falla, se deshace la
+  // sesión: "sin el aviso breve no se crea la sesión anónima" se cumple siempre, no solo cuando
+  // el usuario ve el diálogo.
   async function continueAsGuest() {
     const { error } = await supabase.auth.signInAnonymously()
     if (error) throw error
+    const { error: noticeError } = await supabase.functions.invoke('accept-guest-notice', { method: 'POST' })
+    if (noticeError) {
+      await supabase.auth.signOut()
+      throw noticeError
+    }
   }
 
   return (

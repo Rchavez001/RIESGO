@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePwaInstallPrompt } from '../hooks/usePwaInstallPrompt'
 import { CinematicPublicShell } from '../components/CinematicPublicShell'
 import { SenseiVideoModal } from '../components/SenseiVideoModal'
+import { GuestNoticeModal } from '../components/GuestNoticeModal'
 import { BeltBadge } from '../components/CyberBushido'
 import { DoggoArt } from '../components/DojoCompanion'
 import { beltPath } from '../data/ciberDojo'
@@ -13,6 +14,7 @@ export function LandingPage() {
   const { user, continueAsGuest } = useAuth()
   const navigate = useNavigate()
   const [guestLoading, setGuestLoading] = useState(false)
+  const [guestNoticeOpen, setGuestNoticeOpen] = useState(false)
   const [videoOpen, setVideoOpen] = useState(false)
   const videoTrigger = useRef<HTMLButtonElement>(null)
   const closeVideo = React.useCallback(() => setVideoOpen(false), [])
@@ -20,10 +22,15 @@ export function LandingPage() {
 
   // "Probar sin cuenta" opens a real (anonymous) Supabase session instead of
   // the old standalone demo page — GuestGate in App.tsx is what keeps that
-  // session limited to the first dojo.
-  async function handleTryWithoutAccount(e: React.MouseEvent) {
+  // session limited to the first dojo. T19b Paso 2B: shows the brief guest
+  // notice first; confirmGuestNotice is what actually creates the session.
+  function handleTryWithoutAccount(e: React.MouseEvent) {
     e.preventDefault()
     if (user || guestLoading) { navigate('/dojos'); return }
+    setGuestNoticeOpen(true)
+  }
+
+  async function confirmGuestNotice() {
     setGuestLoading(true)
     try {
       await continueAsGuest()
@@ -33,6 +40,7 @@ export function LandingPage() {
       navigate('/registro')
     } finally {
       setGuestLoading(false)
+      setGuestNoticeOpen(false)
     }
   }
   const video = useRef<HTMLVideoElement>(null)
@@ -113,6 +121,7 @@ export function LandingPage() {
       <div className="cinema-sensei-caption"><strong>Primero, respira.</strong><span>DESPUÉS, VERIFICA.</span></div>
     </section>
     {videoOpen && <SenseiVideoModal onClose={closeVideo} onTryGuest={handleTryWithoutAccount} returnFocusTo={videoTrigger} />}
+    {guestNoticeOpen && <GuestNoticeModal onConfirm={() => void confirmGuestNotice()} onClose={() => setGuestNoticeOpen(false)} loading={guestLoading} />}
     <div className="cinema-container">
       <section className="cinema-belt-path"><div><span className="cinema-eyebrow">TU CAMINO EMPIEZA AQUÍ</span><h2>Un cinturón a la vez.</h2></div><div className="cinema-belts">{beltPath.map(b => <Link key={b.level} to="/dojos" onClick={handleTryWithoutAccount} aria-label={`Explorar cinturón ${b.label}`}><BeltBadge level={b.level} showKanji={false} size="lg" /></Link>)}</div></section>
       <section className="doggo-feature"><DoggoArt /><div><span className="cinema-eyebrow">CONOCE A TU COMPAÑERO ESPECIAL</span><h2>DoggoTeka.<br /><em>De tu lado, siempre.</em></h2><p>Nuestra mascota te acompaña a aprender sin miedo a equivocarte. Un hábito pequeño hoy puede ayudarte a evitar un engaño mañana.</p><Link className="cinema-text-link" to="/personajes/doggoteka">Conoce su historia y sus defensas ↗</Link></div></section>

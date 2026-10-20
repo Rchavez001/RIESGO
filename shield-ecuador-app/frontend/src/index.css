@@ -1139,6 +1139,7 @@ code { font-family: var(--font-mono); }
   outline: none;
 }
 .form-error { border: 1px solid var(--border-red); color: #ff9aa3; background: var(--katana-red-dim); padding: 10px; margin-bottom: 14px; }
+.guest-notice-flag { border: 1px solid var(--border-red); color: #ff9aa3; background: var(--katana-red-dim); padding: 6px 10px; margin-bottom: 10px; font-weight: 700; letter-spacing: .02em; }
 .form-success { border: 1px solid rgba(0, 240, 255, .24); color: var(--text-primary); background: rgba(0, 240, 255, .08); padding: 10px; margin-top: 8px; }
 .neon-button.disabled,
 .neon-button:disabled {

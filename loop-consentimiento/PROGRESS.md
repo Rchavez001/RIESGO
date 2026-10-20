@@ -3322,3 +3322,50 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   sigue pendiente de corrida humana; (3) D-08 sigue `ABIERTA`; (4) T19b Paso 2B ya desbloqueada por D-16 pero
   sin implementar todavía (siguiente tarea de esta misma sesión).
 - Porcentaje: sin cambio (la fusión UX no cierra ninguna de las 28 tareas del conteo estricto).
+
+## Iteración 89 — 2026-10-20 — T19b Paso 2B (aviso breve de invitado, D-16 Opción A)
+- **Cambios:** `supabase/migrations/083_guest_consent_notice_and_session_expiry.sql` (CHECK de
+  `channel` admite `'invitado'`; `cleanup_expired_guest_sessions()`, agendada con `pg_cron` solo si
+  la extensión existe); `supabase/tests/consent/prereqs.sql` (`auth.users` ganó `is_anonymous`/
+  `created_at`, que el `auth.users` real de Supabase ya tiene — sin esto `CREATE FUNCTION` de la
+  083 fallaría en el Postgres efímero de `gates.sh`, mismo motivo que D-13 con `is_admin()`);
+  `_shared/auth-guard.ts` (`requireAnonymousGuest`, refactor de `requireUser` en `verifyUserToken`
+  compartido); `_shared/consent-write.ts` (`ConsentEvidenceInput.storeUserId`: un invitado no
+  tiene fila en `public.users`, que es lo que `user_id` referencia por FK — guardar su
+  `auth.uid()` ahí habría violado la FK en cuanto se probara contra Postgres real, no solo
+  "perdido el vínculo" al borrar; encontrado escribiendo la prueba SQL, antes de cerrar la tarea);
+  función nueva `supabase/functions/accept-guest-notice/`; `supabase/config.toml`
+  (`[functions.accept-guest-notice]`); `frontend/src/components/GuestNoticeModal.tsx` (TEXTO
+  PROVISIONAL marcado "[PENDIENTE DE VALIDACIÓN LEGAL]"); `AuthContext.continueAsGuest()` (llama a
+  `accept-guest-notice` tras `signInAnonymously()`, deshace la sesión si falla);
+  `CinematicLandingPage.tsx`/`CinematicPublicShell.tsx` (muestran el modal antes de crear la
+  sesión); `index.css` (`.guest-notice-flag`); `loop-consentimiento/PLAN_PRODUCCION_RELEASE.md`
+  (083 añadida a la tabla resumen, orden de aplicación, verificación y reversa, en este mismo
+  commit, como exige `PROMPT.md`); `TASKS.md` (T19b Paso 2B, resumen de lo hecho).
+  - **Decisión de diseño no pedida explícitamente, documentada aquí:** `invitado_basico` NO se
+    agregó a `consent_documents.purposes` (el JSONB que `RegisterScreen`/`ReconsentGate` recorren
+    para pintar casillas): habría aparecido como finalidad opcional al registrarse, ajena a esa
+    pantalla. Es una finalidad propia de `accept-guest-notice` (constante en código), validada ahí
+    mismo — el endpoint sigue atando la evidencia al documento vigente (`document_id`/`version`)
+    para que `verify_consent_chain()` y el resto del esquema de evidencia no cambien.
+- **Pruebas añadidas:** `auth-guard_test.ts` (+4: positivo y 3 negativos de `requireAnonymousGuest`);
+  `accept-guest-notice/index_test.ts` (7, función real contra fake Supabase); SQL
+  `guest_notice_and_session_expiry.sql` (CHECK rechaza valores fuera de lista, fila con `user_id`
+  NULL, `cleanup_expired_guest_sessions()` borra solo la sesión vencida y conserva evidencia y
+  cadenas); `AuthContext.test.tsx` (+3: éxito, fallo de `signInAnonymously` nunca llama al aviso,
+  fallo del aviso deshace la sesión); `GuestNoticeModal.test.tsx` (4); `landing.spec.ts` (+1, clic
+  real de extremo a extremo: el aviso aparece con el texto provisional antes de cualquier llamada
+  de red, y Cancelar no crea nada).
+- **Gates:** puertas rápidas (`typecheck-frontend lint-frontend unit-frontend panel-unit
+  deno-check deno-test`) OK; `sql-ciclo-de-vida sql-guest-limit` OK; `panel-e2e` (perfiles por
+  defecto) OK (455s). `GATES_FULL=1` sigue pendiente de corrida humana (sin cambios respecto a la
+  Iteración 88).
+- Desviaciones de SPEC: ninguna — T19b ya cubría este diseño en TASKS.md; la decisión de no tocar
+  `consent_documents.purposes` es una decisión de implementación, no una desviación de REQ/SEC.
+- Riesgos / pendientes detectados: (1) T19b Paso 3 (comprobación en T99 de que
+  `enable_anonymous_sign_ins` sigue `false` en lo que se despliega) sigue sin hacerse; (2)
+  `accept-guest-notice` no se incluye en el release de 074–083 (ver `PLAN_PRODUCCION_RELEASE.md`,
+  "Fuera de esta ventana") hasta que el modo invitado completo se despliegue; (3) mismos pendientes
+  sin cambios: `GATES_FULL=1` humano, D-08, `tests/proposal.visual.cjs` roto.
+- Porcentaje: T19b sigue sin marcarse `[x]` en el conteo estricto (falta su Paso 3); sin cambio en
+  23/28 = **82,1 %**.

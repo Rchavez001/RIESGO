@@ -427,3 +427,10 @@ verify_jwt = true
 # action to attribute (H08 does not apply) and no reason to require a JWT the caller cannot have yet.
 [functions.get-consent-notice]
 verify_jwt = false
+
+# Consent module (T19b Paso 2B, D-16): el gateway sigue verificando el JWT — este endpoint
+# necesita una sesión real, solo que ANÓNIMA (`_shared/auth-guard.ts: requireAnonymousGuest`,
+# la única excepción al rechazo de `is_anonymous` del resto del módulo). Explícito para que no
+# se desactive por error ni se confunda con get-consent-notice (que no exige token alguno).
+[functions.accept-guest-notice]
+verify_jwt = true
