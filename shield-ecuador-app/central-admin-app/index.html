@@ -1678,6 +1678,21 @@
               </div>
             </form>
             <p id="consentEvidenceRevealMessage" class="muted" role="status" aria-live="polite"></p>
+
+            <div class="section-toolbar compact">
+              <h3>Exportar expediente del titular</h3>
+            </div>
+            <form id="consentEvidenceExportForm" class="form-grid compact" novalidate hidden>
+              <label>
+                Motivo de la exportación
+                <input id="consentEvidenceExportReason" type="text" maxlength="2000" required />
+              </label>
+              <div class="modal-actions">
+                <button id="consentEvidenceExportJsonButton" class="btn secondary" type="button">Exportar JSON</button>
+                <button id="consentEvidenceExportPdfButton" class="btn secondary" type="button">Exportar PDF</button>
+              </div>
+            </form>
+            <p id="consentEvidenceExportMessage" class="muted" role="status" aria-live="polite"></p>
           </article>
         </section>
       </main>

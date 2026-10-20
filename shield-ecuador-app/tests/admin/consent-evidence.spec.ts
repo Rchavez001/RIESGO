@@ -50,12 +50,23 @@ const SETTINGS = {
   four_eyes_publish: true,
 }
 
+const DOSSIER = {
+  user_id: TITULAR_ID,
+  generated_at: '2026-10-19T12:00:00.000Z',
+  consent_history: MASKED_ITEMS,
+  data_subject_requests: [],
+}
+
 type Opts = {
   roles?: string[]
   searchStatus?: number
   searchBody?: unknown
   revealStatus?: number
   revealBody?: unknown
+  exportJsonStatus?: number
+  exportJsonBody?: unknown
+  exportPdfStatus?: number
+  exportPdfBody?: unknown
 }
 type Seen = { url: string; method: string; session: string | undefined; body: string | null }
 
@@ -86,6 +97,14 @@ async function setup(page: Page, o: Opts = {}) {
     if (url.pathname.endsWith('/evidence/reveal-ip') && req.method() === 'POST') {
       if (o.revealStatus && o.revealStatus !== 200) return json(o.revealStatus, o.revealBody ?? { error: 'reason_required' })
       return json(200, { user_id: TITULAR_ID, items: REVEALED_ITEMS })
+    }
+    if (url.pathname.endsWith('/evidence/export.json') && req.method() === 'GET') {
+      if (o.exportJsonStatus && o.exportJsonStatus !== 200) return json(o.exportJsonStatus, o.exportJsonBody ?? { error: 'reason_required' })
+      return route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify(DOSSIER) })
+    }
+    if (url.pathname.endsWith('/evidence/export.pdf') && req.method() === 'GET') {
+      if (o.exportPdfStatus && o.exportPdfStatus !== 200) return json(o.exportPdfStatus, o.exportPdfBody ?? { error: 'reason_required' })
+      return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-FAKE' })
     }
     return json(404, { error: 'not_found' })
   })
@@ -250,5 +269,111 @@ test.describe('T24.b · Evidencia de consentimiento', () => {
     await expect(page.locator('#consentEvidenceEmail')).toHaveValue('')
     await expect(page.locator('#consentEvidenceRows')).toBeEmpty()
     await expect(page.locator('#consentEvidenceRevealForm')).toBeHidden()
+  })
+})
+
+// T24.c (REQ-17): exportar el expediente de un titular, JSON y PDF (GET /evidence/export.json|export.pdf,
+// ADMIN_ONLY, T16.d.2). No depende de "Revelar IP" (el expediente exportado lleva la IP enmascarada, igual
+// que GET /evidence): solo depende de un `user_id` real tras una búsqueda y del mismo candado ADMIN_ONLY.
+test.describe('T24.c · Exportar expediente del titular', () => {
+  test.beforeEach(async ({}, info) => { test.skip(info.project.name !== 'desktop-chrome', 'servidor: una sola vez') })
+
+  test('privacy_admin: tras una búsqueda con resultados ve "Exportar expediente"', async ({ page }) => {
+    await setup(page, { roles: ['privacy_admin'] })
+    await openConsentAsIdentity(page)
+    await searchByEmail(page)
+    await expect(page.locator('#consentEvidenceExportForm')).toBeVisible()
+  })
+
+  for (const role of ['privacy_editor', 'privacy_auditor']) {
+    test(`rol ${role}: tras una búsqueda con resultados NO ve "Exportar expediente"`, async ({ page }) => {
+      await setup(page, { roles: [role] })
+      await openConsentAsIdentity(page)
+      await searchByEmail(page)
+      await expect(page.locator('#consentEvidenceExportForm')).toBeHidden()
+    })
+  }
+
+  test('sin una búsqueda previa: el formulario de exportación está oculto', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await expect(page.locator('#consentEvidenceExportForm')).toBeHidden()
+  })
+
+  test('exportar JSON sin motivo: no llama al backend', async ({ page }) => {
+    const { seen } = await setup(page)
+    await openConsentAsIdentity(page)
+    await searchByEmail(page)
+    await page.locator('#consentEvidenceExportJsonButton').click()
+    await expect(page.locator('#consentEvidenceExportMessage')).toContainText('motivo es obligatorio')
+    expect(seen.some((s) => s.url.includes('/evidence/export.json'))).toBe(false)
+  })
+
+  test('exportar PDF sin motivo: no llama al backend', async ({ page }) => {
+    const { seen } = await setup(page)
+    await openConsentAsIdentity(page)
+    await searchByEmail(page)
+    await page.locator('#consentEvidenceExportPdfButton').click()
+    await expect(page.locator('#consentEvidenceExportMessage')).toContainText('motivo es obligatorio')
+    expect(seen.some((s) => s.url.includes('/evidence/export.pdf'))).toBe(false)
+  })
+
+  test('exportar JSON con motivo: descarga real con user_id y reason en el query', async ({ page }) => {
+    const { seen } = await setup(page)
+    await openConsentAsIdentity(page)
+    await searchByEmail(page)
+    await page.locator('#consentEvidenceExportReason').fill('Solicitud de acceso')
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#consentEvidenceExportJsonButton').click(),
+    ])
+    expect(download.suggestedFilename()).toBe('expediente-titular.json')
+    await expect(page.locator('#consentEvidenceExportMessage')).toContainText('descargada')
+
+    const call = seen.find((s) => s.url.includes('/evidence/export.json'))!
+    expect(call.session).toBe(AAL2_TOKEN)
+    expect(call.url).toContain(`user_id=${TITULAR_ID}`)
+    expect(call.url).toContain(`reason=${encodeURIComponent('Solicitud de acceso')}`)
+  })
+
+  test('exportar PDF con motivo: descarga real con user_id y reason en el query', async ({ page }) => {
+    const { seen } = await setup(page)
+    await openConsentAsIdentity(page)
+    await searchByEmail(page)
+    await page.locator('#consentEvidenceExportReason').fill('Solicitud de acceso')
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#consentEvidenceExportPdfButton').click(),
+    ])
+    expect(download.suggestedFilename()).toBe('expediente-titular.pdf')
+    await expect(page.locator('#consentEvidenceExportMessage')).toContainText('descargada')
+
+    const call = seen.find((s) => s.url.includes('/evidence/export.pdf'))!
+    expect(call.session).toBe(AAL2_TOKEN)
+    expect(call.url).toContain(`user_id=${TITULAR_ID}`)
+    expect(call.url).toContain(`reason=${encodeURIComponent('Solicitud de acceso')}`)
+  })
+
+  test('error del backend al exportar (reason_required): mensaje legible, el motivo escrito no se pierde', async ({ page }) => {
+    await setup(page, { exportJsonStatus: 400, exportJsonBody: { error: 'reason_required' } })
+    await openConsentAsIdentity(page)
+    await searchByEmail(page)
+    await page.locator('#consentEvidenceExportReason').fill('motivo')
+    await page.locator('#consentEvidenceExportJsonButton').click()
+    await expect(page.locator('#consentEvidenceExportMessage')).toContainText('motivo es obligatorio')
+    await expect(page.locator('#consentEvidenceExportReason')).toHaveValue('motivo')
+  })
+
+  test('cerrar sesión limpia el motivo y el mensaje, y oculta "Exportar expediente"', async ({ page }) => {
+    await setup(page)
+    await openConsentAsIdentity(page)
+    await searchByEmail(page)
+    await page.locator('#consentEvidenceExportReason').fill('motivo')
+    await page.locator('#privacyLogout').click()
+    await expect(page.locator('#consentEvidenceExportForm')).toBeHidden()
+    await expect(page.locator('#consentEvidenceExportReason')).toHaveValue('')
+    await expect(page.locator('#consentEvidenceExportMessage')).toBeEmpty()
   })
 })

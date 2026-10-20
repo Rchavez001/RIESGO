@@ -2655,3 +2655,44 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio en el contador estricto (T24 sigue abierta — dos de cinco subtareas cerradas).
   Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande, mismo criterio que
   T23b/TEST-INT).
+
+## Iteración 78 — 2026-10-20 — T24.c (panel: exportar expediente de un titular, JSON y PDF)
+- **Punto de partida:** `git status` limpio, sin WIP pendiente. Primera tarea `[ ]` desbloqueada de
+  `TASKS.md`: T24.c (backend ya cerrado desde T16.d.2 — `GET /evidence/export.json`/`GET
+  /evidence/export.pdf`, ADMIN_ONLY, con bitácora `evidence.export_dossier`; esta subtarea es solo el
+  panel que lo consume, mismo patrón que T24.a/T24.b).
+- **Cambios:** `central-admin-app/index.html` (`#consentEvidenceExportForm` dentro de `#consentEvidence`:
+  motivo + botones `type="button"` "Exportar JSON"/"Exportar PDF"); `central-admin-app/app.js`
+  (`privacyCallDownload`, nuevo — mismo criterio que `privacyCallText`/T24.a pero leyendo
+  `response.blob()` para respuestas binarias en vez de texto; `downloadBlob`, genérico; `renderConsent
+  EvidenceRows` ahora también decide la visibilidad de `#consentEvidenceExportForm`
+  (`consentSettingsCanEdit && consentEvidenceUserId`, sin exigir `!consentEvidenceRevealed` — el
+  expediente exportado lleva la IP enmascarada igual que `GET /evidence`, no depende de haber revelado
+  la IP primero); `submitConsentEvidenceSearch` limpia/oculta el formulario de exportación en el camino
+  de error, igual que ya hacía con el de "Revelar IP"; `resetConsentEvidence` lo limpia al cerrar sesión;
+  dos listeners nuevos para los botones); `tests/admin/consent-evidence.spec.ts` (nuevo bloque
+  `test.describe('T24.c …')`, 10 casos); `loop-consentimiento/TASKS.md` (T24.c `[x]`, con el detalle
+  completo).
+- **Decisión de diseño:** el motivo de exportación es un campo propio
+  (`#consentEvidenceExportReason`), separado del de "Revelar IP" — son dos acciones distintas con su
+  propia fila de bitácora (`evidence.reveal_ip` vs. `evidence.export_dossier`, T16.d.1/T16.d.2), así que
+  no tenía sentido compartir el mismo input.
+- **Pruebas añadidas:** `tests/admin/consent-evidence.spec.ts`, bajo "T24.c": `privacy_admin` ve el
+  formulario de exportación tras una búsqueda con resultados, editor/auditor no; sin búsqueda previa el
+  formulario queda oculto; exportar JSON/PDF sin motivo no llama al backend; exportar JSON con motivo
+  dispara una descarga real (`page.waitForEvent('download')`, `expediente-titular.json`) con
+  `user_id`+`reason` en el query; exportar PDF con motivo, igual (`expediente-titular.pdf`); error del
+  backend (`reason_required`) deja el motivo escrito con un mensaje legible; cerrar sesión limpia el
+  motivo, el mensaje y oculta el formulario.
+- **Gates:** `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` OK
+  (lint 14 = línea base); `--only "sql-ciclo-de-vida sql-guest-limit"` OK; `--only "panel-e2e"` OK (448s,
+  los 10 casos nuevos de `consent-evidence.spec.ts`/T24.c incluidos, perfiles por defecto, sin tocar
+  ningún test existente). Iteración 78, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta vez.
+  `db-reset`/`e2e-local` SKIP opt-in, sin cambios de migraciones.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. Dentro de T24 siguen `[ ]` T24.d (Solicitudes con
+  semáforo) y T24.e (Verificar integridad + tests de regresión cruzada), ya desbloqueadas. Sigue
+  pendiente de verificación humana la corrida de `GATES_FULL=1` (documentada desde la iteración 75).
+- Porcentaje: sin cambio en el contador estricto (T24 sigue abierta — tres de cinco subtareas cerradas).
+  Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande, mismo criterio que
+  T23b/TEST-INT/T24.a/T24.b).

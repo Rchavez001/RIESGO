@@ -6067,6 +6067,10 @@ function renderConsentEvidenceRows() {
     `).join("");
   }
   $("#consentEvidenceRevealForm").hidden = !(consentSettingsCanEdit && consentEvidenceUserId && !consentEvidenceRevealed);
+  // T24.c: "Exportar expediente" no depende de "Revelar IP" (el expediente exportado lleva la IP
+  // enmascarada, igual que `GET /evidence` — ver T16.d.2); solo depende de tener un `user_id` real y del
+  // mismo candado ADMIN_ONLY que "Revelar IP".
+  $("#consentEvidenceExportForm").hidden = !(consentSettingsCanEdit && consentEvidenceUserId);
 }
 
 // Exactamente uno de correo/user_id (mismo criterio que `EvidenceSearchSchema`, admin-consent/handler.ts):
@@ -6095,6 +6099,9 @@ async function submitConsentEvidenceSearch(event) {
     consentEvidenceRevealed = false;
     $("#consentEvidenceRows").innerHTML = "";
     $("#consentEvidenceRevealForm").hidden = true;
+    $("#consentEvidenceExportForm").hidden = true;
+    $("#consentEvidenceExportReason").value = "";
+    $("#consentEvidenceExportMessage").textContent = "";
     $("#consentEvidenceMessage").textContent = consentEvidenceErrorMessage(res.data?.error);
     return;
   }
@@ -6104,6 +6111,8 @@ async function submitConsentEvidenceSearch(event) {
   $("#consentEvidenceMessage").textContent = "";
   $("#consentEvidenceRevealReason").value = "";
   $("#consentEvidenceRevealMessage").textContent = "";
+  $("#consentEvidenceExportReason").value = "";
+  $("#consentEvidenceExportMessage").textContent = "";
   renderConsentEvidenceRows();
 }
 
@@ -6141,6 +6150,61 @@ function resetConsentEvidence() {
   $("#consentEvidenceRevealReason").value = "";
   $("#consentEvidenceRevealMessage").textContent = "";
   $("#consentEvidenceRevealForm").hidden = true;
+  $("#consentEvidenceExportReason").value = "";
+  $("#consentEvidenceExportMessage").textContent = "";
+  $("#consentEvidenceExportForm").hidden = true;
+}
+
+// T24.c (REQ-17): exportar el expediente del titular en JSON o PDF (`GET /evidence/export.json|export.pdf`,
+// ADMIN_ONLY, T16.d.2). Ambas rutas devuelven el archivo como respuesta binaria (no JSON envuelto en
+// `{data}`), así que necesitan su propio helper de descarga en vez de `privacyCall` — un error HTTP de
+// estas rutas (p. ej. 400 `reason_required`) sigue llegando como JSON, nunca como el archivo, igual que
+// `privacyCallText` (T24.a) ya distingue para el CSV.
+async function privacyCallDownload(path, { session, expectedType } = {}) {
+  const headers = {};
+  if (session) headers["X-Admin-Session"] = session;
+  try {
+    const response = await fetch(`/api/privacy${path}`, { method: "GET", headers });
+    const contentType = response.headers.get("content-type") || "";
+    if (response.status === 200 && contentType.includes(expectedType)) {
+      const blob = await response.blob();
+      return { status: response.status, blob, ok: true };
+    }
+    const data = await response.json().catch(() => null);
+    return { status: response.status, data, ok: false };
+  } catch {
+    return { status: 0, data: null, ok: false };
+  }
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+async function submitConsentEvidenceExport(format) {
+  if (!consentEvidenceUserId) return;
+  const reason = $("#consentEvidenceExportReason").value.trim();
+  if (!reason) {
+    $("#consentEvidenceExportMessage").textContent = "El motivo es obligatorio para exportar el expediente.";
+    return;
+  }
+  const query = `?user_id=${encodeURIComponent(consentEvidenceUserId)}&reason=${encodeURIComponent(reason)}`;
+  const isPdf = format === "pdf";
+  const path = `/fn/admin-consent/evidence/export.${isPdf ? "pdf" : "json"}${query}`;
+  const res = await privacyCallDownload(path, { session: privacyFlow.token, expectedType: isPdf ? "application/pdf" : "application/json" });
+  if (!res.ok) {
+    $("#consentEvidenceExportMessage").textContent = consentEvidenceErrorMessage(res.data?.error);
+    return;
+  }
+  downloadBlob(res.blob, `expediente-titular.${isPdf ? "pdf" : "json"}`);
+  $("#consentEvidenceExportMessage").textContent = "Exportación descargada.";
 }
 
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
@@ -6413,6 +6477,8 @@ function bindPrivacy() {
   $("#consentAuditExportForm").addEventListener("submit", (event) => void submitConsentAuditExport(event));
   $("#consentEvidenceSearchForm").addEventListener("submit", (event) => void submitConsentEvidenceSearch(event));
   $("#consentEvidenceRevealForm").addEventListener("submit", (event) => void submitConsentEvidenceReveal(event));
+  $("#consentEvidenceExportJsonButton").addEventListener("click", () => void submitConsentEvidenceExport("json"));
+  $("#consentEvidenceExportPdfButton").addEventListener("click", () => void submitConsentEvidenceExport("pdf"));
 }
 
 init();

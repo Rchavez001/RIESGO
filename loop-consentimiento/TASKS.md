@@ -934,7 +934,36 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       arriba; `db-reset`/`e2e-local` SKIP opt-in, sin cambios de migraciones; iteración 77, no múltiplo de
       5, `GATES_FULL=1` no obligatorio esta vez — sigue pendiente de verificación humana desde la
       iteración 75).
-  - [ ] **T24.c — Panel: Evidencia — exportar expediente de un titular (JSON y PDF)** (REQ-17)
+  - [x] **T24.c — Panel: Evidencia — exportar expediente de un titular (JSON y PDF)** (REQ-17) (hecha 2026-10-20, iteración 78)
+    - **Estado:** cerrada. `#consentEvidenceExportForm` (nuevo, dentro de `#consentEvidence`): motivo
+      obligatorio + dos botones `type="button"` ("Exportar JSON"/"Exportar PDF", consumen `GET
+      /evidence/export.json`/`GET /evidence/export.pdf`, ADMIN_ONLY, T16.d.2, sin cambios de backend).
+      Visible solo con `consentSettingsCanEdit && consentEvidenceUserId` (mismo candado ADMIN_ONLY que
+      "Revelar IP", T16.d.1 — pero sin exigir `!consentEvidenceRevealed`: el expediente exportado lleva la
+      IP enmascarada igual que `GET /evidence`, T16.d.2, así que no depende de haber revelado la IP
+      primero). `privacyCallDownload` (nuevo, mismo criterio que `privacyCallText` de T24.a pero para
+      respuestas binarias con `response.blob()`: un error HTTP de estas rutas sigue llegando como JSON,
+      nunca como el archivo, así que el tipo de contenido de la respuesta decide cómo leerla) +
+      `downloadBlob` (genérico: URL de objeto + `<a download>` sintético, mismo patrón que la descarga de
+      CSV de T24.a). `submitConsentEvidenceExport(format)` valida el motivo en el cliente antes de llamar
+      al backend (no gasta una llamada en un 400 previsible) y descarga `expediente-titular.json` o
+      `expediente-titular.pdf`. El motivo de exportación es un campo propio (`#consentEvidenceExportReason`),
+      independiente del motivo de "Revelar IP": son dos acciones distintas con su propia bitácora
+      (`evidence.reveal_ip` vs. `evidence.export_dossier`).
+    - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta subtarea consume
+      `GET /evidence/export.json`/`GET /evidence/export.pdf`, ya cerrados y probados en T16.d.2 (incluida
+      la fila de bitácora `evidence.export_dossier`, ya cubierta por las pruebas append-only de T08) — sin
+      ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar; el panel es solo el consumo.
+    - **Pruebas añadidas:** `tests/admin/consent-evidence.spec.ts` (10 nuevos bajo "T24.c"): `privacy_admin`
+      ve el formulario de exportación tras una búsqueda con resultados, editor/auditor no; sin búsqueda
+      previa el formulario queda oculto; exportar JSON/PDF sin motivo no llama al backend (2 pruebas);
+      exportar JSON con motivo dispara una descarga real (`page.waitForEvent('download')`) con
+      `user_id`+`reason` en el query; exportar PDF con motivo, igual; error del backend (`reason_required`)
+      deja el motivo escrito con un mensaje legible; cerrar sesión limpia el motivo, el mensaje y oculta el
+      formulario.
+    - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
+      no-opcionales OK, `panel-e2e` con los 10 casos nuevos incluidos; `db-reset`/`e2e-local` SKIP opt-in,
+      sin cambios de migraciones; iteración 78, no múltiplo de 5, `GATES_FULL=1` no obligatorio esta vez).
   - [ ] **T24.d — Panel: Solicitudes — tabla con semáforo (vigente / ≤3 días / vencida) y cambio de estado con nota** (REQ-11, REQ-16)
   - [ ] **T24.e — Panel: botón "Verificar integridad" (`verify-chains`) + tests E2E de regresión cruzada** (REQ-18)
     - **Tests E2E del panel (cierre de T24):** editor no ve botón Publicar; auditor no ve "Revelar IP";
