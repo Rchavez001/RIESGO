@@ -1694,6 +1694,75 @@
             </form>
             <p id="consentEvidenceExportMessage" class="muted" role="status" aria-live="polite"></p>
           </article>
+
+          <article id="consentRequests" class="card" hidden>
+            <div class="section-toolbar compact">
+              <h2>Solicitudes de derechos</h2>
+            </div>
+            <form id="consentRequestsFilterForm" class="form-grid compact" novalidate>
+              <label>
+                Estado
+                <select id="consentRequestsStatus">
+                  <option value="">Todos</option>
+                  <option value="recibida">Recibida</option>
+                  <option value="requiere_aclaracion">Requiere aclaración</option>
+                  <option value="en_proceso">En proceso</option>
+                  <option value="atendida">Atendida</option>
+                  <option value="rechazada_con_motivo">Rechazada con motivo</option>
+                </select>
+              </label>
+              <div class="modal-actions">
+                <button class="btn primary" type="submit">Filtrar</button>
+                <button id="consentRequestsClear" class="btn secondary" type="button">Limpiar filtro</button>
+              </div>
+            </form>
+            <p id="consentRequestsMessage" class="privacy-message" role="alert"></p>
+            <div class="table-scroll">
+              <table class="data-table">
+                <caption class="sr-only">Solicitudes de derechos de los titulares</caption>
+                <thead><tr><th>Caso</th><th>Tipo</th><th>Canal</th><th>Estado</th><th>Plazo</th><th>Recibida</th><th>Resuelta</th><th></th></tr></thead>
+                <tbody id="consentRequestsRows"></tbody>
+              </table>
+            </div>
+            <div class="section-toolbar compact">
+              <p id="consentRequestsPageInfo" class="muted"></p>
+              <div>
+                <button id="consentRequestsPrev" class="btn secondary small" type="button">Anterior</button>
+                <button id="consentRequestsNext" class="btn secondary small" type="button">Siguiente</button>
+              </div>
+            </div>
+
+            <div id="consentRequestsStatusView" class="card" hidden>
+              <div class="section-toolbar compact">
+                <h3>Cambiar estado — <span id="consentRequestsStatusCaseNumber"></span></h3>
+                <button id="consentRequestsStatusClose" class="btn secondary small" type="button">Cerrar</button>
+              </div>
+              <form id="consentRequestsStatusForm" class="form-grid compact" novalidate>
+                <label>
+                  Nuevo estado
+                  <select id="consentRequestsNewStatus" required>
+                    <option value="recibida">Recibida</option>
+                    <option value="requiere_aclaracion">Requiere aclaración</option>
+                    <option value="en_proceso">En proceso</option>
+                    <option value="atendida">Atendida</option>
+                    <option value="rechazada_con_motivo">Rechazada con motivo</option>
+                  </select>
+                </label>
+                <label>
+                  Nota de resolución (interna, opcional)
+                  <textarea id="consentRequestsResolutionNote" maxlength="5000"></textarea>
+                </label>
+                <label>
+                  Motivo (obligatorio solo al rechazar)
+                  <input id="consentRequestsStatusReason" type="text" maxlength="2000" />
+                </label>
+                <div class="modal-actions">
+                  <button class="btn primary" type="submit">Guardar estado</button>
+                </div>
+              </form>
+              <p id="consentRequestsStatusMessage" class="muted" role="status" aria-live="polite"></p>
+            </div>
+          </article>
         </section>
       </main>
     </div>

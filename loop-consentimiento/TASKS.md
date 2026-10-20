@@ -964,7 +964,45 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
       no-opcionales OK, `panel-e2e` con los 10 casos nuevos incluidos; `db-reset`/`e2e-local` SKIP opt-in,
       sin cambios de migraciones; iteración 78, no múltiplo de 5, `GATES_FULL=1` no obligatorio esta vez).
-  - [ ] **T24.d — Panel: Solicitudes — tabla con semáforo (vigente / ≤3 días / vencida) y cambio de estado con nota** (REQ-11, REQ-16)
+  - [x] **T24.d — Panel: Solicitudes — tabla con semáforo (vigente / ≤3 días / vencida) y cambio de estado con nota** (REQ-11, REQ-16) (hecha 2026-10-20, iteración 79)
+    - **Estado:** cerrada. `#consentRequests` (nuevo, visible a los tres roles del módulo — `GET /requests`
+      es `PRIVACY_ROLES`, T16.e, mismo candado que `#consentAuditLog`/`#consentEvidence`): filtro por
+      `status` (select con los cinco valores del `CHECK` + "Todos"), paginación `limit=50` fija con
+      "Anterior"/"Siguiente" (mismo patrón exacto que T24.a: deshabilitados en los extremos, calculados
+      desde `total` real, nunca contando filas en el cliente). Cada fila muestra `case_number`, `request_
+      type`, `channel`, `status`, el semáforo (`renderConsentRequestsSemaphore`: badge verde "Vigente"/
+      amarillo "Por vencer (≤3 días)"/rojo "Vencida", reutilizando las clases `.badge.ai/.audit/.danger` ya
+      existentes; "—" sin badge para los dos estados terminales, que el backend ya devuelve como `semaphore:
+      null`), `received_at`/`resolved_at`. "Cambiar estado" por fila, visible solo cuando `consentDocsCanEdit`
+      es verdadero — se reutiliza esa misma bandera (privacy_editor + privacy_admin, calculada en
+      `privacyVerify` para T21.c.1) en vez de crear una nueva, porque `POST /requests/{id}/status` exige
+      exactamente ese mismo conjunto de roles (`EDITOR_ROLES`, T16.e).
+    - **Panel "Cambiar estado":** `#consentRequestsStatusView` (card dentro de la sección, mismo patrón que
+      `#consentAuditDetailView`/T24.a): precarga el estado actual del caso, `select` con los cinco valores,
+      nota de resolución opcional (textarea, nunca sale en el expediente del titular — T16.d.2 ya la
+      excluye) y motivo (obligatorio solo al elegir `rechazada_con_motivo`, validado en el cliente antes de
+      llamar, mismo criterio que el 400 `reason_required_for_rejection` del backend). Al guardar con éxito
+      cierra el panel y recarga el listado completo (en vez de parchear la fila a mano) — más simple y
+      evita que el semáforo quede desincronizado si el `due_at` cambió de lado del servidor.
+    - **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea consume
+      `GET /requests`/`POST /requests/{id}/status`, ya cerrados y probados contra Postgres real en
+      `data_subject_requests_lifecycle.sql` (T08) — la RPC `update_data_subject_request_status` (078) ya
+      tiene su propia cobertura de escritura real; el panel es solo el consumo, sin ningún
+      `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar.
+    - **Pruebas añadidas:** `tests/admin/consent-requests.spec.ts` (nuevo, 17 casos): los tres roles ven la
+      sección y cargan el listado al entrar; cada fila muestra caso/tipo/canal/estado/semáforo/fechas
+      correctos (incluida la fila terminal con "—"); sin casos → mensaje explícito; error del backend →
+      mensaje legible, tabla vacía; filtrar por estado manda `status` con la sesión aal2; limpiar filtro
+      vuelve a "Todos" y pide sin `status`; paginación ("Siguiente" pide `offset=50`, "Anterior"
+      deshabilitado en la primera página); admin/editor ven "Cambiar estado", auditor no; el botón abre el
+      panel con el caso y estado correctos precargados; pasar a "rechazada_con_motivo" sin motivo no llama
+      al backend; cambiar estado con nota+motivo manda el body exacto (`new_status`/`resolution_note`/
+      `reason`), cierra el panel y recarga el listado; error del backend al cambiar estado deja el panel
+      abierto con un mensaje legible; cerrar el panel limpia su contenido; cerrar sesión limpia filtro,
+      tabla y panel.
+    - **Aceptación:** `bash .claude/loops/consentimiento/gates.sh` completo en verde (9 puertas
+      no-opcionales OK, `panel-e2e` con los 17 casos nuevos incluidos; `db-reset`/`e2e-local` SKIP opt-in,
+      sin cambios de migraciones; iteración 79, no múltiplo de 5, `GATES_FULL=1` no obligatorio esta vez).
   - [ ] **T24.e — Panel: botón "Verificar integridad" (`verify-chains`) + tests E2E de regresión cruzada** (REQ-18)
     - **Tests E2E del panel (cierre de T24):** editor no ve botón Publicar; auditor no ve "Revelar IP";
       cada acción aparece en bitácora.

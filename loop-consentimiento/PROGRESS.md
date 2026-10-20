@@ -2696,3 +2696,42 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
 - Porcentaje: sin cambio en el contador estricto (T24 sigue abierta — tres de cinco subtareas cerradas).
   Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande, mismo criterio que
   T23b/TEST-INT/T24.a/T24.b).
+
+## Iteración 79 — 2026-10-20 — T24.d (panel: Solicitudes — tabla con semáforo y cambio de estado con nota)
+- **Punto de partida:** `git status` limpio, sin WIP pendiente. Primera tarea `[ ]` desbloqueada de
+  `TASKS.md`: T24.d (backend ya cerrado desde T16.e, iteración 59 — `GET /requests?status=&limit=&offset=`,
+  PRIVACY_ROLES, con semáforo calculado por el backend; `POST /requests/{id}/status`, EDITOR_ROLES; esta
+  subtarea es solo el panel que lo consume, mismo patrón que T24.a/T24.b/T24.c).
+- **Cambios:** `central-admin-app/index.html` (`#consentRequests`, nuevo: filtro por `status` + tabla con
+  columna de semáforo + paginación, mismo patrón que `#consentAuditLog`/T24.a; `#consentRequestsStatusView`,
+  panel de cambio de estado con select de los cinco estados, nota de resolución opcional y motivo
+  condicional); `central-admin-app/app.js` (bloque T24.d completo: `buildConsentRequestsQuery`,
+  `renderConsentRequestsSemaphore`/`renderConsentRequestsRows`, `loadConsentRequests`,
+  filtro/paginación/apertura-cierre del panel, `submitConsentRequestsStatus`, `resetConsentRequests`;
+  wiring en `privacyShow`/`privacyReset`/`privacyVerify`/`bindPrivacy`); `tests/admin/consent-requests.spec.ts`
+  (nuevo, 17 casos); `loop-consentimiento/TASKS.md` (T24.d `[x]`, con el detalle completo).
+- **Decisión de diseño:** "Cambiar estado" reutiliza `consentDocsCanEdit` (privacy_editor + privacy_admin,
+  ya calculado en `privacyVerify` para T21.c.1) en vez de una bandera nueva — es exactamente el mismo
+  conjunto de roles que `EDITOR_ROLES` exige para `POST /requests/{id}/status` (T16.e). El semáforo
+  reutiliza las clases CSS `.badge.ai/.audit/.danger` ya existentes (verde/amarillo/rojo) sin tocar
+  `styles.css`; los estados terminales (`semaphore: null` del backend) se muestran como "—" sin badge, para
+  no inventar una urgencia que no aplica a un caso ya cerrado. Al guardar un cambio de estado con éxito, el
+  panel recarga el listado completo en vez de parchear la fila localmente — evita que el semáforo (que
+  depende de `due_at` y del reloj del servidor) quede desincronizado.
+- **Por qué no hace falta una prueba SQL nueva (regla de TEST-INT/PROMPT.md):** esta tarea consume
+  `GET /requests`/`POST /requests/{id}/status`, ya cerrados y probados contra Postgres real en T08/T16.e
+  (la RPC `update_data_subject_request_status`, 078, ya tiene su propia cobertura de escritura real) — sin
+  ningún `INSERT`/`UPDATE`/`DELETE` nuevo que un fake pudiera ocultar; el panel es solo el consumo.
+- **Pruebas añadidas:** `tests/admin/consent-requests.spec.ts` (17 casos) — ver detalle en TASKS.md/T24.d.
+- **Gates:** `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` OK
+  (lint 14 = línea base); `--only "sql-ciclo-de-vida sql-guest-limit"` OK; `--only "panel-e2e"` OK (465s,
+  los 17 casos nuevos de `consent-requests.spec.ts`/T24.d incluidos, perfiles por defecto, sin tocar ningún
+  test existente). Iteración 79, no múltiplo de 5: `GATES_FULL=1` no obligatorio esta vez. `db-reset`/
+  `e2e-local` SKIP opt-in, sin cambios de migraciones.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: ninguno nuevo. Dentro de T24 solo queda `[ ]` T24.e (botón "Verificar
+  integridad" + tests E2E de regresión cruzada, cierre de T24), ya desbloqueada. Sigue pendiente de
+  verificación humana la corrida de `GATES_FULL=1` (documentada desde la iteración 75).
+- Porcentaje: sin cambio en el contador estricto (T24 sigue abierta — cuatro de cinco subtareas cerradas).
+  Ponderado: sin recalcular esta iteración (subtarea parcial de una tarea más grande, mismo criterio que
+  T23b/TEST-INT/T24.a/T24.b/T24.c).

@@ -6207,6 +6207,177 @@ async function submitConsentEvidenceExport(format) {
   $("#consentEvidenceExportMessage").textContent = "Exportación descargada.";
 }
 
+// T24.d (REQ-11, REQ-16): Solicitudes de derechos. `GET /requests` (PRIVACY_ROLES, T16.e) es visible a los
+// tres roles, mismo candado que `#consentAuditLog`/`#consentEvidence`; "Cambiar estado" (`POST
+// /requests/{id}/status`, EDITOR_ROLES: privacy_editor + privacy_admin, nunca auditor) reusa
+// `consentDocsCanEdit` tal cual — es exactamente el mismo conjunto de roles que ya gatea "Crear
+// borrador"/"Editar" en T21.c.1, sin necesitar una bandera nueva.
+const CONSENT_REQUESTS_ERRORS = {
+  ...PRIVACY_ERRORS,
+  invalid_input: "Revisa el estado o los filtros: hay un valor que no se reconoce.",
+  reason_required_for_rejection: "El motivo es obligatorio para rechazar una solicitud.",
+  not_found: "La solicitud ya no existe. Actualiza el listado.",
+};
+
+function consentRequestsErrorMessage(code) {
+  return CONSENT_REQUESTS_ERRORS[code] || "No se pudo completar la acción. Inténtalo de nuevo.";
+}
+
+let consentRequestsFilter = { status: "" };
+const CONSENT_REQUESTS_LIMIT = 50;
+let consentRequestsOffset = 0;
+let consentRequestsTotal = 0;
+let consentRequestsItems = [];
+// Caso abierto en el panel "Cambiar estado"; `null` cuando el panel está cerrado.
+let consentRequestsStatusTarget = null;
+
+function buildConsentRequestsQuery(extra = {}) {
+  const params = { ...consentRequestsFilter, ...extra };
+  const parts = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    parts.push(`${key}=${encodeURIComponent(value)}`);
+  }
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+// Mismos tres valores no nulos que `DsrSemaphore` (admin-consent/handler.ts, REQ-11); `null` (estados
+// terminales) se muestra como "—", sin badge, porque un caso cerrado no tiene presión de plazo.
+const CONSENT_REQUESTS_SEMAPHORE_LABEL = { vigente: "Vigente", por_vencer: "Por vencer (≤3 días)", vencida: "Vencida" };
+const CONSENT_REQUESTS_SEMAPHORE_BADGE = { vigente: "ai", por_vencer: "audit", vencida: "danger" };
+
+function renderConsentRequestsSemaphore(semaphore) {
+  if (!semaphore) return "—";
+  return `<span class="badge ${CONSENT_REQUESTS_SEMAPHORE_BADGE[semaphore]}">${esc(CONSENT_REQUESTS_SEMAPHORE_LABEL[semaphore])}</span>`;
+}
+
+function renderConsentRequestsRows() {
+  const rows = $("#consentRequestsRows");
+  if (consentRequestsItems.length === 0) {
+    rows.innerHTML = `<tr><td colspan="8" class="muted">Sin solicitudes para el filtro seleccionado.</td></tr>`;
+  } else {
+    rows.innerHTML = consentRequestsItems.map((row) => `
+      <tr>
+        <td>${esc(row.case_number)}</td>
+        <td>${esc(row.request_type)}</td>
+        <td>${esc(row.channel)}</td>
+        <td>${esc(row.status)}</td>
+        <td>${renderConsentRequestsSemaphore(row.semaphore)}</td>
+        <td>${esc(new Date(row.received_at).toLocaleString("es-EC"))}</td>
+        <td>${row.resolved_at ? esc(new Date(row.resolved_at).toLocaleString("es-EC")) : "—"}</td>
+        <td>${consentDocsCanEdit ? `<button type="button" class="btn secondary small" data-request-status-id="${esc(row.id)}">Cambiar estado</button>` : ""}</td>
+      </tr>
+    `).join("");
+  }
+  const from = consentRequestsTotal === 0 ? 0 : consentRequestsOffset + 1;
+  const to = consentRequestsOffset + consentRequestsItems.length;
+  $("#consentRequestsPageInfo").textContent = `Mostrando ${from}-${to} de ${consentRequestsTotal}`;
+  $("#consentRequestsPrev").disabled = consentRequestsOffset === 0;
+  $("#consentRequestsNext").disabled = to >= consentRequestsTotal;
+}
+
+async function loadConsentRequests() {
+  const query = buildConsentRequestsQuery({ limit: CONSENT_REQUESTS_LIMIT, offset: consentRequestsOffset });
+  const res = await privacyCall(`/fn/admin-consent/requests${query}`, { session: privacyFlow.token, method: "GET" });
+  if (res.status === 200 && res.data && Array.isArray(res.data.items)) {
+    consentRequestsItems = res.data.items;
+    consentRequestsTotal = res.data.total || 0;
+    $("#consentRequestsMessage").textContent = "";
+    renderConsentRequestsRows();
+    return;
+  }
+  // Error: no se sabe cuántos casos hay realmente, así que la tabla queda vacía (sin el mensaje "Sin
+  // solicitudes", que afirmaría algo que no se sabe) y solo se muestra el motivo del fallo.
+  consentRequestsItems = [];
+  consentRequestsTotal = 0;
+  $("#consentRequestsRows").innerHTML = "";
+  $("#consentRequestsPageInfo").textContent = "";
+  $("#consentRequestsMessage").textContent = consentRequestsErrorMessage(res.data?.error);
+}
+
+function submitConsentRequestsFilter(event) {
+  event.preventDefault();
+  consentRequestsFilter = { status: $("#consentRequestsStatus").value };
+  consentRequestsOffset = 0;
+  void loadConsentRequests();
+}
+
+function clearConsentRequestsFilter() {
+  $("#consentRequestsStatus").value = "";
+  consentRequestsFilter = { status: "" };
+  consentRequestsOffset = 0;
+  void loadConsentRequests();
+}
+
+function consentRequestsPrev() {
+  consentRequestsOffset = Math.max(0, consentRequestsOffset - CONSENT_REQUESTS_LIMIT);
+  void loadConsentRequests();
+}
+
+function consentRequestsNext() {
+  consentRequestsOffset += CONSENT_REQUESTS_LIMIT;
+  void loadConsentRequests();
+}
+
+function openConsentRequestsStatus(row) {
+  consentRequestsStatusTarget = row;
+  $("#consentRequestsStatusCaseNumber").textContent = row.case_number;
+  $("#consentRequestsNewStatus").value = row.status;
+  $("#consentRequestsResolutionNote").value = "";
+  $("#consentRequestsStatusReason").value = "";
+  $("#consentRequestsStatusMessage").textContent = "";
+  $("#consentRequestsStatusView").hidden = false;
+}
+
+function closeConsentRequestsStatus() {
+  consentRequestsStatusTarget = null;
+  $("#consentRequestsStatusView").hidden = true;
+  $("#consentRequestsStatusCaseNumber").textContent = "";
+  $("#consentRequestsResolutionNote").value = "";
+  $("#consentRequestsStatusReason").value = "";
+  $("#consentRequestsStatusMessage").textContent = "";
+}
+
+// `reason` solo es obligatorio al pasar a `rechazada_con_motivo` (mismo criterio que el backend,
+// `UpdateDsrStatusBodySchema`/T16.e) — validado en el cliente antes de llamar para no gastar una llamada
+// en un 400 previsible, igual que el resto de formularios con motivo obligatorio del módulo.
+async function submitConsentRequestsStatus(event) {
+  event.preventDefault();
+  if (!consentRequestsStatusTarget) return;
+  const newStatus = $("#consentRequestsNewStatus").value;
+  const resolutionNote = $("#consentRequestsResolutionNote").value.trim();
+  const reason = $("#consentRequestsStatusReason").value.trim();
+  if (newStatus === "rechazada_con_motivo" && !reason) {
+    $("#consentRequestsStatusMessage").textContent = "El motivo es obligatorio para rechazar una solicitud.";
+    return;
+  }
+  const body = { new_status: newStatus };
+  if (resolutionNote) body.resolution_note = resolutionNote;
+  if (reason) body.reason = reason;
+  const res = await privacyCall(`/fn/admin-consent/requests/${consentRequestsStatusTarget.id}/status`, {
+    session: privacyFlow.token,
+    body,
+  });
+  if (res.status !== 200) {
+    $("#consentRequestsStatusMessage").textContent = consentRequestsErrorMessage(res.data?.error);
+    return;
+  }
+  closeConsentRequestsStatus();
+  await loadConsentRequests();
+}
+
+function resetConsentRequests() {
+  consentRequestsFilter = { status: "" };
+  consentRequestsOffset = 0;
+  consentRequestsTotal = 0;
+  consentRequestsItems = [];
+  $("#consentRequestsStatus").value = "";
+  $("#consentRequestsRows").innerHTML = "";
+  $("#consentRequestsPageInfo").textContent = "";
+  $("#consentRequestsMessage").textContent = "";
+  closeConsentRequestsStatus();
+}
+
 async function privacyCall(path, { session, body, method = "POST" } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (session) headers["X-Admin-Session"] = session;
@@ -6251,6 +6422,7 @@ function privacyShow(step) {
   $("#consentSettings").hidden = step !== "identity";
   $("#consentAuditLog").hidden = step !== "identity";
   $("#consentEvidence").hidden = step !== "identity";
+  $("#consentRequests").hidden = step !== "identity";
   if (step !== "code") privacyClearEnroll();
 }
 
@@ -6287,6 +6459,7 @@ function privacyReset(message = "") {
   resetConsentEmailOutboxBanner();
   resetConsentAuditLog();
   resetConsentEvidence();
+  resetConsentRequests();
   privacyShow("login");
   privacyMessage(message);
 }
@@ -6386,6 +6559,8 @@ async function privacyVerify(event) {
   void loadConsentEmailOutbox();
   // T24.a: los tres roles del módulo ven la bitácora, a diferencia de las secciones ADMIN_ONLY de arriba.
   void loadConsentAuditLog();
+  // T24.d: los tres roles ven el listado de solicitudes; solo editor/admin ven "Cambiar estado" (arriba).
+  void loadConsentRequests();
 }
 
 async function privacyLogout(message = "") {
@@ -6479,6 +6654,19 @@ function bindPrivacy() {
   $("#consentEvidenceRevealForm").addEventListener("submit", (event) => void submitConsentEvidenceReveal(event));
   $("#consentEvidenceExportJsonButton").addEventListener("click", () => void submitConsentEvidenceExport("json"));
   $("#consentEvidenceExportPdfButton").addEventListener("click", () => void submitConsentEvidenceExport("pdf"));
+  $("#consentRequestsFilterForm").addEventListener("submit", submitConsentRequestsFilter);
+  $("#consentRequestsClear").addEventListener("click", clearConsentRequestsFilter);
+  $("#consentRequestsPrev").addEventListener("click", consentRequestsPrev);
+  $("#consentRequestsNext").addEventListener("click", consentRequestsNext);
+  $("#consentRequestsRows").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-request-status-id]");
+    if (!button) return;
+    const row = consentRequestsItems.find((r) => r.id === button.dataset.requestStatusId);
+    if (!row) return;
+    openConsentRequestsStatus(row);
+  });
+  $("#consentRequestsStatusForm").addEventListener("submit", (event) => void submitConsentRequestsStatus(event));
+  $("#consentRequestsStatusClose").addEventListener("click", closeConsentRequestsStatus);
 }
 
 init();
