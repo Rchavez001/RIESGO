@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Loader } from 'lucide-react'
-import { SectionHeader } from '../components/CyberBushido'
+import { NeonButton, SectionHeader } from '../components/CyberBushido'
 import { supabase } from '../lib/supabase'
+import { getSupabaseFunctionError } from '../lib/supabaseFunctionError'
 
 interface ConsentPurpose {
   code: string
@@ -18,6 +19,26 @@ interface ConsentState {
 
 type Status = 'loading' | 'ready' | 'unavailable'
 
+// T19.b/REQ-10: mismos 9 valores que `REQUEST_TYPES` en
+// supabase/functions/request-data-subject-right/handler.ts (no se puede importar: ese
+// archivo corre en Deno, este bundle en el navegador) y mismas etiquetas que
+// `REQUEST_TYPE_LABELS` en supabase/functions/_shared/email/templates.ts (duplicado por el
+// mismo motivo, no por error).
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  baja: 'Baja de la cuenta',
+  acceso: 'Acceso a mis datos personales',
+  rectificacion: 'Rectificación de datos',
+  eliminacion: 'Eliminación de datos',
+  oposicion: 'Oposición al tratamiento',
+  suspension: 'Suspensión del tratamiento',
+  portabilidad: 'Portabilidad de mis datos',
+  revocacion: 'Revocación del consentimiento',
+  decision_automatizada: 'Revisión de una decisión automatizada',
+}
+const REQUEST_TYPES = Object.keys(REQUEST_TYPE_LABELS)
+
+type DsrStatus = 'idle' | 'sending' | 'sent' | 'error'
+
 // REQ-08: "Mi privacidad" shows the current status per purpose (granted/inactive/no decision yet,
 // with version and date) and lets the user grant/revoke OPTIONAL purposes with one click — no
 // "save" step, no justification required. The required purpose (registro_aprendizaje) is read-only
@@ -28,6 +49,12 @@ export function PrivacyPage() {
   const [consentByCode, setConsentByCode] = useState<Record<string, ConsentState>>({})
   const [savingCode, setSavingCode] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  const [requestType, setRequestType] = useState('')
+  const [requestDetails, setRequestDetails] = useState('')
+  const [dsrStatus, setDsrStatus] = useState<DsrStatus>('idle')
+  const [dsrError, setDsrError] = useState('')
+  const [dsrResult, setDsrResult] = useState<{ case_number: string; due_at: string } | null>(null)
 
   const loadConsentState = useCallback(async () => {
     const { data, error: stateError } = await supabase
@@ -84,6 +111,53 @@ export function PrivacyPage() {
     return `${label} · versión ${state.document_version} · ${date}`
   }
 
+  // REQ-10/T19.b: códigos que request-data-subject-right ya define, sin tecnicismos (mismo
+  // criterio que RegisterScreen con secure-register-user). `invalid_input`/`forbidden` no
+  // deberían darse nunca desde este formulario (el <select> ya restringe request_type a
+  // REQUEST_TYPES y el usuario viene autenticado), pero se cubren igual por si el servidor
+  // cambia antes que este cliente.
+  function friendlyDsrError(code: string | undefined): string {
+    switch (code) {
+      case 'rate_limited':
+        return 'Ya enviaste varias solicitudes en poco tiempo. Espera unos minutos e inténtalo de nuevo.'
+      case 'RATE_LIMIT_UNAVAILABLE':
+      case 'settings_unavailable':
+        return 'No podemos procesar tu solicitud en este momento. Inténtalo de nuevo en unos minutos.'
+      case 'missing_client_ip':
+        return 'No pudimos identificar tu conexión. Inténtalo de nuevo en un momento.'
+      default:
+        return 'No pudimos enviar tu solicitud. Inténtalo de nuevo en un momento.'
+    }
+  }
+
+  async function submitDsr(e: React.FormEvent) {
+    e.preventDefault()
+    if (!REQUEST_TYPES.includes(requestType)) return
+    setDsrStatus('sending')
+    setDsrError('')
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('request-data-subject-right', {
+        body: { request_type: requestType, details: requestDetails.trim() || undefined },
+      })
+      if (invokeError) {
+        const { code } = await getSupabaseFunctionError(invokeError, 'No pudimos enviar tu solicitud. Inténtalo de nuevo en un momento.')
+        setDsrError(friendlyDsrError(code))
+        setDsrStatus('error')
+        return
+      }
+      if (!data || typeof data.case_number !== 'string' || typeof data.due_at !== 'string') {
+        setDsrError(friendlyDsrError(undefined))
+        setDsrStatus('error')
+        return
+      }
+      setDsrResult({ case_number: data.case_number, due_at: data.due_at })
+      setDsrStatus('sent')
+    } catch {
+      setDsrError(friendlyDsrError(undefined))
+      setDsrStatus('error')
+    }
+  }
+
   return (
     <div className="privacy-page">
       <SectionHeader eyebrow="TUS DATOS, TU DECISIÓN" title="Mi privacidad" kanji="盾" />
@@ -101,6 +175,7 @@ export function PrivacyPage() {
       )}
 
       {status === 'ready' && (
+        <>
         <section className="glass-panel p-6">
           <fieldset className="consent-purposes">
             <legend>Finalidades para las que autorizas el uso de tus datos</legend>
@@ -133,6 +208,52 @@ export function PrivacyPage() {
 
           {error && <div className="form-error" role="alert">{error}</div>}
         </section>
+
+        <section className="glass-panel p-6">
+          <h2>Solicitar un derecho sobre mis datos (baja y demás)</h2>
+          {dsrStatus === 'sent' && dsrResult ? (
+            <p role="status">
+              Recibimos tu solicitud. Número de caso <strong>{dsrResult.case_number}</strong>, con respuesta
+              antes del {new Date(dsrResult.due_at).toLocaleDateString('es-EC', { year: 'numeric', month: 'long', day: 'numeric' })}.
+            </p>
+          ) : (
+            <form onSubmit={(e) => void submitDsr(e)}>
+              <div className="field">
+                <label htmlFor="dsr-type">TIPO DE SOLICITUD</label>
+                <select
+                  id="dsr-type"
+                  value={requestType}
+                  onChange={(e) => setRequestType(e.target.value)}
+                  required
+                >
+                  <option value="">Seleccione...</option>
+                  {REQUEST_TYPES.map((code) => (
+                    <option key={code} value={code}>{REQUEST_TYPE_LABELS[code]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor="dsr-details">DETALLE (OPCIONAL)</label>
+                <textarea
+                  id="dsr-details"
+                  value={requestDetails}
+                  onChange={(e) => setRequestDetails(e.target.value)}
+                  maxLength={4000}
+                  rows={4}
+                />
+              </div>
+
+              {dsrStatus === 'error' && <div className="form-error" role="alert">{dsrError}</div>}
+
+              <NeonButton type="submit" color="gold" variant="outline" disabled={!requestType || dsrStatus === 'sending'}>
+                {dsrStatus === 'sending' ? <Loader className="animate-spin" size={16} /> : null}
+                Enviar solicitud
+              </NeonButton>
+            </form>
+          )}
+        </section>
+        </>
       )}
     </div>
   )

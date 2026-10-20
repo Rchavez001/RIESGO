@@ -1104,10 +1104,9 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - Accesibilidad (REQ-06/REQ-12): casillas con `label` asociado (ya existía), navegación por teclado y foco
     visible (ya existía), mensajes de estado anunciados con `aria-live="polite"` (nuevo en esta iteración).
 
-- [ ] **T19 — "Mi privacidad" en la cuenta** (REQ-08, REQ-10)
-  - **Estado real (2026-10-20, iteración 81; ya no bloqueada por `wip/ux-redesign`, ver nota de Fase 5):**
-    Sin empezar la implementación. T11 (`update-my-consent`) y T13 (`request-data-subject-right`), de las
-    que depende, **ya están cerradas**.
+- [x] **T19 — "Mi privacidad" en la cuenta** (REQ-08, REQ-10)
+  - **Estado real (2026-10-20, iteración 83): cerrada con T19.a + T19.b.** T11 (`update-my-consent`) y
+    T13 (`request-data-subject-right`), de las que depende, ya estaban cerradas.
   - **División (ya redactada en `git stash` `wip-T19-mi-privacidad-diseno-viejo`, confirmada vigente esta
     iteración — T11/T13 siguen cerradas, nada cambió desde que se escribió): la tarea mezcla una pantalla
     de solo estado + interruptores de un clic (REQ-08, sin formulario) con otra más grande — formulario de
@@ -1128,7 +1127,7 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       refresca el estado tras la respuesta; la obligatoria nunca expone un control para desactivarla;
       un fallo del backend no cambia el estado mostrado y avisa sin tecnicismos; ningún campo de
       ip/ua llega nunca al cliente (ya lo garantiza la vista, no hace falta filtrarlo).
-  - [ ] **T19.b — Formulario de solicitud de derechos (baja y demás) desde la cuenta** (REQ-10)
+  - [x] **T19.b — Formulario de solicitud de derechos (baja y demás) desde la cuenta** (REQ-10)
     - Formulario con `request_type` (los 9 valores de T13: `REQUEST_TYPES`) + detalle opcional, que llama
       a `request-data-subject-right` (ya cerrado, T13) y muestra el número de caso y la fecha límite de
       la respuesta (`case_number`, `due_at`). Mapear los códigos de error ya definidos por la función
@@ -1137,7 +1136,10 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - **Aceptación:** enviar el formulario muestra el número de caso y la fecha límite; un tipo fuera de
       la lista no llega a enviarse (validado en el cliente, además del `invalid_input` del servidor);
       errores de cuota/transporte se comunican sin tecnicismos; no se pide ni se muestra IP.
-  - **Tests E2E (ambas subtareas):** revocar publicidad en un clic; solicitar baja muestra número de caso.
+  - **Tests (ambas subtareas, `unit-frontend`/Jest — `gates.sh` no corre el Playwright de `tests/frontend/`,
+    mismo criterio que T19.a):** revocar publicidad en un clic (T19.a); enviar la solicitud de baja muestra
+    número de caso y fecha límite, tipos fuera de lista bloqueados en el cliente, errores de cuota/transporte
+    sin tecnicismos, ningún campo de IP en el cuerpo enviado (T19.b).
   - **Nota (WIP, verificada esta iteración):** el `git stash` `wip-T19-mi-privacidad-diseno-viejo` solo
     contiene esta división de `TASKS.md` + una ruta `/privacidad` sin componente en `App.tsx` + un enlace
     de navegación en `CyberBushido.tsx` + CSS (`.privacy-purpose-*`) en `index.css` — **no** contiene

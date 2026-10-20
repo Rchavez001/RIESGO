@@ -2912,3 +2912,77 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   previa; después de T19.b, revisar T20 (re-consentimiento al iniciar sesión, REQ-09), que depende de T19.
 - Porcentaje: estricto sin cambio (T19.a es subtarea de T19, que no tiene numeración propia entre las 28 —
   mismo criterio que T24.a-e; 22 de 28 = 78,6 %). Ponderado sin cambio por el mismo motivo.
+
+## Iteración 83 — 2026-10-20 — T19.b (formulario de solicitud de derechos desde la cuenta), cierra T19
+
+- **Punto de partida:** `git status` limpio. Primera tarea `[ ]` desbloqueada tras la Iteración 82: T19.b.
+  T13 (`request-data-subject-right`) ya cerrada; leído `handler.ts`/`index.ts` completos antes de tocar
+  nada: `REQUEST_TYPES` (9 valores), los códigos de error que ya define (`rate_limited`, 429;
+  `RATE_LIMIT_UNAVAILABLE`, 503; `missing_client_ip`, 400; `settings_unavailable`, 503; `invalid_input`,
+  400; `forbidden`, 403), y que la IP del cuerpo nunca se usa (el servidor la toma de
+  `getClientIp(req)`, no de `body.ip` — nada que el cliente deba ni pueda enviar).
+- **Cambios:**
+  - `shield-ecuador-app/frontend/src/screens/PrivacyPage.tsx`: segunda sección en la misma pantalla "Mi
+    privacidad" (mismo `glass-panel`, debajo de las finalidades de T19.a). `REQUEST_TYPE_LABELS`/
+    `REQUEST_TYPES` locales (duplicado deliberado de `REQUEST_TYPES` en `handler.ts` y
+    `REQUEST_TYPE_LABELS` en `_shared/email/templates.ts`: el backend corre en Deno, este bundle en el
+    navegador, no hay import posible entre los dos). `<select>` con los 9 tipos (sin opción libre:
+    cualquier valor fuera de la lista queda bloqueado en el cliente, además del `invalid_input` del
+    servidor) + `<textarea>` de detalle opcional (maxLength 4000, igual que el `z.string().max(4000)`
+    del servidor) + `NeonButton` deshabilitado sin tipo elegido o mientras envía. Al enviar, llama a
+    `request-data-subject-right` con `{ request_type, details }` — nunca un campo `ip` — y muestra
+    número de caso + fecha límite (`toLocaleDateString('es-EC', …)`, mismo formato que T19.a) en vez del
+    formulario. `friendlyDsrError()` mapea los 4 códigos documentados arriba a mensajes sin tecnicismos
+    (mismo criterio que `RegisterScreen`); cualquier otro código/fallo cae al mensaje genérico.
+  - `shield-ecuador-app/frontend/src/lib/supabaseFunctionError.ts` (nuevo): extraído de la función
+    `getSupabaseFunctionError` que ya vivía privada en `AuthContext.tsx` (parsea `.code`/`.message` del
+    cuerpo JSON de un error 4xx/5xx de `supabase.functions.invoke`, con fallback a `.context.text()` y
+    luego a `error.message`) — la necesitaba también `PrivacyPage.tsx` para mapear los códigos de
+    `request-data-subject-right`, y duplicar esa lógica (regex de identificador, dos niveles de
+    `try/catch`) en vez de reusarla habría sido el tipo de duplicación que puede divergir con el tiempo.
+    Único cambio de comportamiento: el mensaje de fallback pasa de fijo ("No se pudo completar el
+    registro…") a un parámetro (`fallback: string`) que cada llamador define — mismo valor que antes en
+    `AuthContext.tsx`, mensaje propio de DSR en `PrivacyPage.tsx`.
+  - `shield-ecuador-app/frontend/src/contexts/AuthContext.tsx`: importa `getSupabaseFunctionError` desde
+    el nuevo módulo en vez de definirla localmente; `signUp` le pasa el mismo mensaje de fallback que
+    tenía antes. Sin cambios de comportamiento (`AuthContext.test.tsx` sigue en verde sin tocarlo).
+  - `shield-ecuador-app/frontend/src/lib/supabaseFunctionError.test.ts` (nuevo, 6 casos): extrae
+    código+mensaje del cuerpo JSON; sin `.message` en el cuerpo usa el código como mensaje y NO fija
+    `.code` (no es un identificador simple, tiene espacios); si `context.json()` falla cae a
+    `context.text()`; sin `context` usa `error.message`; con un `Error` nativo usa su `.message`; sin
+    nada reconocible usa el `fallback` dado por el llamador.
+  - `shield-ecuador-app/frontend/src/screens/PrivacyPage.test.tsx`: mock de `../components/CyberBushido`
+    ganó `NeonButton` (antes solo `SectionHeader` — sin él, `unit-frontend` fallaba con "Element type is
+    invalid… expected a string… but got: undefined" en cuanto el componente importó `NeonButton`, visto
+    en rojo antes de corregirlo, ver Gates). 4 casos nuevos: enviar el formulario con un tipo válido
+    muestra número de caso y fecha límite, con el cuerpo exacto `{ request_type, details }` (sin `ip`,
+    verificado explícitamente); el `<select>` solo ofrece los 9 tipos válidos y el botón queda
+    deshabilitado sin elegir uno (nada se envía al intentar enviarlo así); un error `rate_limited` se
+    muestra sin tecnicismos; un error `settings_unavailable` se muestra sin tecnicismos y SIN el texto
+    crudo del servidor (`settings_unavailable`/"edge function" no aparecen en el `role="alert"`).
+  - `loop-consentimiento/TASKS.md`: T19.b `[x]`; T19 `[x]` (cierra con T19.a + T19.b); nota de "Tests"
+    de T19 corregida (apuntaba a Playwright/"E2E"; los únicos tests de T19.a/T19.b viven en
+    `unit-frontend`/Jest — `gates.sh` no corre `tests/frontend/*.spec.ts`, solo `playwright.admin.config.ts`
+    contra `central-admin-app`, que no toca `PrivacyPage`).
+- **Por qué no hace falta ninguna prueba SQL ni migración nueva (regla de TEST-INT/PROMPT.md):** esta
+  tarea no agrega ningún `INSERT`/`UPDATE`/`DELETE` nuevo — llama a `request-data-subject-right` (T13, ya
+  cerrada con su propia cobertura de escritura contra Postgres real). `PLAN_PRODUCCION_RELEASE.md` sin
+  cambios.
+- **Gates (en grupos, en primer plano, cada uno por debajo de los 600000 ms):**
+  `--only "typecheck-frontend lint-frontend unit-frontend panel-unit deno-check deno-test"` — primera
+  corrida con `unit-frontend` en ROJO (ver el mock de `NeonButton` arriba: 8 de 113 tests fallando, todos
+  en `PrivacyPage.test.tsx`, "Element type is invalid"); corregido el mock, repetido en verde (OK, 9s).
+  `--only "sql-ciclo-de-vida sql-guest-limit"` OK (sin cambios de SQL, corrida igual por protocolo).
+  `--only "panel-e2e"` OK (457s, perfiles por defecto `desktop-chrome`+`pixel-7-chrome`; esta tarea no
+  toca `central-admin-app`, se corrió igual). Iteración 83, no múltiplo de 5: `GATES_FULL=1` no es
+  obligatoria esta vez. `db-reset`/`e2e-local` SKIP opt-in, sin cambios de migraciones.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: la corrida de `GATES_FULL=1` sigue pendiente de verificación humana
+  desde la Iteración 75 (sin cambio esta iteración, ver Iteraciones 75/79/80). **T19 queda completo**
+  (T19.a + T19.b). Siguiente tarea desbloqueada en TASKS.md: T19b (invitados/sesión anónima, D-12) sigue
+  genuinamente pendiente de que la persona responsable decida qué hacer con `wip/ux-redesign` (no
+  confundir con T19.b, ya cerrada aquí — el nombre parecido entre "T19.b" y "T19b" es preexistente en
+  TASKS.md, no introducido por esta iteración); después de esa, T20 (re-consentimiento al iniciar sesión,
+  REQ-09), que depende de T19 y ya puede arrancar.
+- Porcentaje: estricto sin cambio (T19.b es subtarea de T19, que no tiene numeración propia entre las 28
+  — mismo criterio que T19.a/T24.a-e; 22 de 28 = 78,6 %). Ponderado sin cambio por el mismo motivo.

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase, UserProfile } from '../lib/supabase'
+import { getSupabaseFunctionError } from '../lib/supabaseFunctionError'
 import type { User } from '@supabase/supabase-js'
 
 // What the visitor decided on the consent screen (RegisterScreen), carried
@@ -177,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       // 4xx answers (409 notice_changed, 403 age_gate_failed…) arrive here, not in `data`.
-      const { message, code } = await getSupabaseFunctionError(error)
+      const { message, code } = await getSupabaseFunctionError(error, 'No se pudo completar el registro. Verifica los datos e intenta nuevamente.')
       throw Object.assign(new Error(message), { code })
     }
     if (data?.error) {
@@ -216,30 +217,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-// `code` is only set when the server's `error` is a machine identifier (notice_changed…),
-// never for the Spanish sentences older responses put there.
-async function getSupabaseFunctionError(error: unknown): Promise<{ message: string; code?: string }> {
-  if (typeof error === 'object' && error !== null) {
-    const candidate = error as { message?: unknown; context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }
-    try {
-      const json = await candidate.context?.json?.()
-      if (typeof json === 'object' && json !== null && 'error' in json) {
-        const { error: serverError, message } = json as { error: unknown; message?: unknown }
-        const code = typeof serverError === 'string' && /^[A-Za-z_]+$/.test(serverError) ? serverError : undefined
-        return { message: typeof message === 'string' ? message : String(serverError), code }
-      }
-    } catch {
-      try {
-        const text = await candidate.context?.text?.()
-        if (text) return { message: text }
-      } catch {}
-    }
-    if (typeof candidate.message === 'string' && candidate.message) return { message: candidate.message }
-  }
-  if (error instanceof Error && error.message) return { message: error.message }
-  return { message: 'No se pudo completar el registro. Verifica los datos e intenta nuevamente.' }
 }
 
 export function useAuth() {

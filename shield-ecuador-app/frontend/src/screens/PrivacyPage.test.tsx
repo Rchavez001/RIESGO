@@ -5,6 +5,7 @@ import { PrivacyPage } from './PrivacyPage'
 
 jest.mock('../components/CyberBushido', () => ({
   SectionHeader: ({ title }: any) => <h1>{title}</h1>,
+  NeonButton: ({ children, ...props }: any) => <button {...props}>{children}</button>,
 }))
 
 const mockInvoke = jest.fn()
@@ -110,4 +111,91 @@ test('sin aviso disponible, se muestra un error en vez de datos a medias', async
   render(<PrivacyPage />)
 
   expect(await screen.findByRole('alert')).toHaveTextContent(/no podemos mostrar tu información de privacidad/i)
+})
+
+// T19.b/REQ-10: formulario de solicitud de derechos (baja y demás) desde la cuenta.
+describe('solicitud de derechos (T19.b)', () => {
+  test('enviar el formulario muestra el número de caso y la fecha límite, sin enviar ningún campo de IP', async () => {
+    mockInvoke.mockImplementation((name: string) => {
+      if (name === 'get-consent-notice') return Promise.resolve({ data: NOTICE, error: null })
+      if (name === 'request-data-subject-right') {
+        return Promise.resolve({ data: { case_number: 'CASO-2026-0042', due_at: '2026-11-04T12:00:00Z' }, error: null })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    await renderReady()
+    await userEvent.selectOptions(screen.getByLabelText(/tipo de solicitud/i), 'baja')
+    await userEvent.type(screen.getByLabelText(/detalle/i), 'Quiero dar de baja mi cuenta.')
+    await userEvent.click(screen.getByRole('button', { name: /enviar solicitud/i }))
+
+    expect(mockInvoke).toHaveBeenCalledWith('request-data-subject-right', {
+      body: { request_type: 'baja', details: 'Quiero dar de baja mi cuenta.' },
+    })
+    const invokedBody = mockInvoke.mock.calls.find((call) => call[0] === 'request-data-subject-right')?.[1]?.body
+    expect(invokedBody).not.toHaveProperty('ip')
+
+    expect(await screen.findByText(/CASO-2026-0042/)).toBeInTheDocument()
+    expect(screen.getByText(/4 de noviembre de 2026/)).toBeInTheDocument()
+    expect(screen.queryByText(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)).not.toBeInTheDocument()
+  })
+
+  test('el formulario solo ofrece los 9 tipos válidos y no se puede enviar sin elegir uno', async () => {
+    mockInvoke.mockImplementation((name: string) => {
+      if (name === 'get-consent-notice') return Promise.resolve({ data: NOTICE, error: null })
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    await renderReady()
+    const select = screen.getByLabelText(/tipo de solicitud/i) as HTMLSelectElement
+    const offeredTypes = Array.from(select.options).map((option) => option.value).filter(Boolean)
+    expect(offeredTypes).toEqual([
+      'baja', 'acceso', 'rectificacion', 'eliminacion', 'oposicion',
+      'suspension', 'portabilidad', 'revocacion', 'decision_automatizada',
+    ])
+    expect(screen.getByRole('button', { name: /enviar solicitud/i })).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: /enviar solicitud/i }))
+    expect(mockInvoke).not.toHaveBeenCalledWith('request-data-subject-right', expect.anything())
+  })
+
+  test('un error de cuota se comunica sin tecnicismos', async () => {
+    mockInvoke.mockImplementation((name: string) => {
+      if (name === 'get-consent-notice') return Promise.resolve({ data: NOTICE, error: null })
+      if (name === 'request-data-subject-right') {
+        return Promise.resolve({
+          data: null,
+          error: { message: 'Edge Function returned a non-2xx status code', context: { json: async () => ({ error: 'rate_limited' }) } },
+        })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    await renderReady()
+    await userEvent.selectOptions(screen.getByLabelText(/tipo de solicitud/i), 'acceso')
+    await userEvent.click(screen.getByRole('button', { name: /enviar solicitud/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/espera unos minutos/i)
+  })
+
+  test('un error de transporte/configuración se comunica sin tecnicismos', async () => {
+    mockInvoke.mockImplementation((name: string) => {
+      if (name === 'get-consent-notice') return Promise.resolve({ data: NOTICE, error: null })
+      if (name === 'request-data-subject-right') {
+        return Promise.resolve({
+          data: null,
+          error: { message: 'Edge Function returned a non-2xx status code', context: { json: async () => ({ error: 'settings_unavailable' }) } },
+        })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    await renderReady()
+    await userEvent.selectOptions(screen.getByLabelText(/tipo de solicitud/i), 'acceso')
+    await userEvent.click(screen.getByRole('button', { name: /enviar solicitud/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/inténtalo de nuevo en unos minutos/i)
+    expect(alert).not.toHaveTextContent(/settings_unavailable|edge function/i)
+  })
 })
