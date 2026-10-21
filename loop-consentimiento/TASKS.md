@@ -1263,6 +1263,14 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     tocados; checklist de REQ/SEC en `PROGRESS.md` con evidencia (test o archivo) por requisito;
     lista de pendientes para producción (secretos a crear, config de proxy, decisiones abiertas);
     **`enable_anonymous_sign_ins` desactivado en lo que se despliega salvo que T19b esté cerrada (D-12)**; **`frontend` tiene la ruta `/registro`** (ver T-ruta-registro).
+  - **Verificación hecha (2026-10-20, iteración 90, sesión interactiva de preparación de release):**
+    todo lo de arriba se hizo y quedó registrado en `PROGRESS.md` — checklist completo de los 30
+    REQ/SEC con evidencia, `decodeJwtRole`/`console.log` sin hallazgos nuevos, `enable_anonymous_sign_ins`
+    confirmado fuera del release, `/registro` confirmado. **No se marca `[x]` todavía**: según el
+    paso 8 de `PROMPT.md`, T99 cierra cuando TODAS las demás tareas están `[x]` y corrió
+    `GATES_FULL=1` — ninguna de las dos se cumple hoy (T17 sigue `⛔ BLOQUEADA` por D-02;
+    `GATES_FULL=1` sigue pendiente de corrida humana desde la Iteración 75). La lista de
+    pendientes para producción vive en `PROGRESS.md`, Iteración 90.
 
 ---
 

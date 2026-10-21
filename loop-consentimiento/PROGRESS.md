@@ -3369,3 +3369,94 @@ iteraciones 1-29, el estado previo al loop y la narración larga de cada tarea d
   sin cambios: `GATES_FULL=1` humano, D-08, `tests/proposal.visual.cjs` roto.
 - Porcentaje: T19b sigue sin marcarse `[x]` en el conteo estricto (falta su Paso 3); sin cambio en
   23/28 = **82,1 %**.
+
+## Iteración 90 — 2026-10-20 — T99, verificación final (preparación de release, sesión interactiva)
+**Gates:** puertas rápidas + SQL (`typecheck-frontend lint-frontend unit-frontend panel-unit
+deno-check deno-test sql-ciclo-de-vida sql-guest-limit`) OK tras el commit de T19b Paso 2B;
+`panel-e2e` (perfiles por defecto) OK (455s, corrida de la Iteración 89, sin cambios de código
+desde entonces). `GATES_FULL=1` (7 perfiles) sigue sin correr esta sesión: supera el límite de
+10 minutos por comando y está documentado desde la Iteración 75 como corrida humana aparte.
+
+**`decodeJwtRole`:** sin usos nuevos. Los 4 existentes (`championship-draw-round1`,
+`save-app-secret`, `save-provider-key`, `_shared/news-agent-core.ts`) son funciones de la línea
+base (`chore/baseline-produccion`), ninguna tocada por este módulo. `auth-guard_test.ts` sigue
+afirmando que `auth-guard.ts` no lo usa (ni `decodeJwt` ni `atob(`).
+
+**`console.log` con PII:** revisados todos los `console.*` de los archivos que este módulo creó o
+tocó (`git diff main...feature/consentimiento-lopdp`, 42 `.ts` de `supabase/functions` + 18 de
+`frontend/src`, sin contar pruebas). Todos registran solo: nombres de marcador (nunca su valor,
+documentado en `consent-notice.ts`), `error.message`/`error.name` genéricos, o el literal
+`"unknown"`. Ninguno imprime correo, IP, token ni texto cifrado en claro. Observación (no
+regresión de esta sesión, preexistente en todo el repo): `secure-register-user`'s `safeError()` y
+los `console.error('...', error)` de `AuthContext.tsx`/`CinematicLandingPage.tsx`/
+`CinematicPublicShell.tsx` registran `error.message`, que en teoría podría traer un valor si una
+librería subyacente lo incluyera en su mensaje — ningún caso real encontrado hoy, mismo patrón ya
+aceptado en el resto del repo.
+
+**`enable_anonymous_sign_ins`:** sigue `true` solo en `supabase/config.toml` del árbol local (no se
+despliega — confirmado: ninguna sección de `PLAN_PRODUCCION_RELEASE.md` lo incluye en el release de
+074–083; `accept-guest-notice` queda "fuera de esta ventana" hasta que el modo invitado completo se
+despliegue). T19b Paso 3 (una puerta o lista explícita en T99 que lo compruebe) sigue sin
+construirse como automatismo — por ahora esta verificación es manual, en esta misma entrada.
+
+**`/registro` en el frontend:** confirmado en `App.tsx` (ruta `/registro` → `RegisterScreen`,
+sobrevivió la fusión de `wip/ux-redesign` en la Iteración 88 sin duplicarse).
+
+**Checklist REQ/SEC de `SPEC.md` con evidencia** (tarea que la cierra + archivo/prueba principal):
+
+| ID | Evidencia |
+|---|---|
+| REQ-01 | T06 (migración 073, `consent_documents`); T14 (`admin-consent` versiones/publicación, `handler_test.ts`) |
+| REQ-02 | T09 (`get-consent-notice/index_test.ts`, `rendered_sha256`) |
+| REQ-03 | T06 (migración 073, `purposes` JSONB versionado con el documento) |
+| REQ-04 | T07 (migración 073, `consent_records` + cadena); `lifecycle.sql` |
+| REQ-05 | T03 (`_shared/client-ip.ts` + `client-ip_test.ts`); T10 (`secure-register-user`, `consent_ip_spoof_attempt`) |
+| REQ-06 | T18 (`RegisterScreen.tsx` + `RegisterScreen.test.tsx`); T10 backend |
+| REQ-07 | T10 (`secure-register-user/index.ts`, compensación atómica + `index_test.ts`) |
+| REQ-08 | T11 (`update-my-consent/index_test.ts`, un clic, sin IP/UA al usuario) |
+| REQ-09 | T20 (`ReconsentGate.tsx` + `.test.tsx`; fusionada con el modo invitado en la Iteración 88 sin romper el trato "guests skip this check") |
+| REQ-10 | T08 (migración 073, `data_subject_requests`); T13 (`request-data-subject-right/handler_test.ts`) |
+| REQ-11 | T13 (`dueAtIso`, `handler_test.ts`); T16.e/T24.d (semáforo vigente/por_vencer/vencida en el panel) |
+| REQ-12 | T18 (bloqueo de menores de 15, `RegisterScreen.test.tsx`) |
+| REQ-13 | T14/T21–T24 (pestañas del panel: versiones, editor, comparar, publicar/retirar, config, bitácora, solicitudes, evidencia — todas `[x]`) |
+| REQ-14 | T06 (migración 073, `privacy_settings` versionada); T15 |
+| REQ-15 | T15/082 (`confirm_privacy_email_change`, código de 6 dígitos, `admin-consent/handler_test.ts`) |
+| REQ-16 | T08 (migración 073, `admin_audit_log`); T24.a (bitácora, filtros, CSV) |
+| REQ-17 | T16.c/d, T24.b/c (evidencia enmascarada, "Revelar IP" con motivo, exportación JSON/PDF) |
+| REQ-18 | T16.f/T24.e (`verify_consent_chain()`/`verify_audit_chain()`, botón en el panel + `sql-ciclo-de-vida`) |
+| REQ-19 | **SIN HACER** — T17 ⛔ BLOQUEADA por D-02 (plazos de conservación sin decidir) |
+| REQ-20 | **SIN HACER** — misma T17, mismo bloqueo D-02 |
+| REQ-21 | T12 (`_shared/email/*` + sus pruebas); admin-consent correo saliente |
+| SEC-01 | T04 (`auth-guard.ts`, verificación JWKS; `requireAnonymousGuest` añadida hoy, misma verificación criptográfica — `auth-guard_test.ts`) |
+| SEC-02 | T04 (migración 073, `admin_roles`; `has_privacy_role`) |
+| SEC-03 | T05 (login individual admin + TOTP, D-01) |
+| SEC-04 | T02 (`_shared/crypto.ts` + `crypto_test.ts`) |
+| SEC-05 | Verificado hoy: `grep pgp_sym_encrypt` sobre `supabase/migrations/*.sql` → sin resultados |
+| SEC-06 | T07/T08 (REVOKE + trigger append-only; `lifecycle.sql`, sección 2/2b) |
+| SEC-07 | T10/T11 (`checkRateLimit failClosed`; probado en `submit-consent/index_test.ts`, `accept-guest-notice/index_test.ts` hoy) |
+| SEC-08 | T09 (zod en cada función; `consent-render.ts` sanitiza Markdown, límite 100 KB en el CHECK de `content_md`) |
+| SEC-09 | T12 (`_shared/email/templates.ts` + `templates_test.ts`, sin IP ni cifrados en las plantillas) |
+
+**Pendientes reales para producción (sin resolver por esta sesión):**
+1. **D-02 (plazos de conservación) ABIERTA** → bloquea T17 (REQ-19/REQ-20): sin job de retención,
+   sin seudonimización tras baja. Es el único REQ/SEC de los 30 sin ninguna implementación.
+2. **D-07 (responsable legal y datos del aviso) ABIERTA** — el aviso no se puede publicar en
+   producción con marcadores `[por completar]` sin resolver.
+3. **D-08 (cabecera de IP en Supabase hospedado) ABIERTA** — bloquea T03-prod/T03-sec y, con ello,
+   la fiabilidad de REQ-05/SEC-07 en producción (hoy medido solo en local).
+4. **TOTP en producción** para las cuentas de `admin_roles` — no verificado en esta sesión (D-01
+   lo exige para SEC-03; su activación real en el proyecto hospedado es acción de la persona
+   responsable, no del loop).
+5. **`GATES_FULL=1`** (7 perfiles de Playwright) sin correr desde la Iteración 75 — corrida humana
+   pendiente, obligatoria antes de release según `PROMPT.md`.
+6. **Secretos/variables a crear en producción**: `LOOKUP_HMAC_KEY_B64` (ya existe, confirmar),
+   `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION`, `TRUSTED_PROXY_HOPS` (depende de D-08),
+   `resend_api_key` (ya en `app_secrets`, confirmar remitente/dominio verificado por D-05).
+7. **Texto del aviso breve de invitado** (`GuestNoticeModal.tsx`) sigue PROVISIONAL — la persona
+   responsable debe dar el texto definitivo antes de activar el modo invitado en producción.
+8. **`tests/proposal.visual.cjs`** roto (apunta a `/demo/`, ya borrado por la fusión UX) — pendiente
+   de que la persona responsable decida retirarlo o actualizarlo.
+9. **T25 (backfill del consentimiento legacy)** no se ha ejecutado — depende de D-02/D-10 y de la
+   ventana de release (ver `PLAN_RELEASE_COMPLETO.md`).
+10. **REPO-UNIF** (qué repositorio de GitHub es el oficial) sigue sin decidir.
+- Porcentaje: sin cambio, 23/28 = **82,1 %** (T99 es verificación, no cierra tareas nuevas).
