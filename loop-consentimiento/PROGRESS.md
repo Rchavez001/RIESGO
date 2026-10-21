@@ -3460,3 +3460,32 @@ sobrevivió la fusión de `wip/ux-redesign` en la Iteración 88 sin duplicarse).
    ventana de release (ver `PLAN_RELEASE_COMPLETO.md`).
 10. **REPO-UNIF** (qué repositorio de GitHub es el oficial) sigue sin decidir.
 - Porcentaje: sin cambio, 23/28 = **82,1 %** (T99 es verificación, no cierra tareas nuevas).
+
+## Iteración 91 — 2026-10-20 — `PLAN_RELEASE_COMPLETO.md` (runbook completo, solo documentación)
+- **Cambios:** `loop-consentimiento/PLAN_RELEASE_COMPLETO.md` (nuevo). Extiende
+  `PLAN_PRODUCCION_RELEASE.md` (que solo cubre base de datos, 074-083) a los 11 pasos completos del
+  release: requisitos previos (D-07/D-08/D-10/D-02, TOTP, alta de `admin_roles`, secretos),
+  respaldo, link/unlink, migraciones, despliegue de las 6-7 Edge Functions del módulo (lista
+  exacta), despliegue del panel y el frontend en Cloud Run, publicación del aviso 1.0, backfill
+  T25 y verificación posterior — cada paso con `[TÚ]`/`[FALTA]`, comando exacto, verificación y
+  reversa.
+- **Hallazgos durante la redacción (ninguno corregido; son para que la persona responsable decida):**
+  1. **El despliegue real del frontend en Cloud Run es incierto desde el código**:
+     `GUIA_LEVANTAMIENTO_PROYECTO.md` documenta buildpacks (sin `Dockerfile`), pero
+     `frontend/Dockerfile` existe hoy (añadido después, ver REPO-UNIF) y Cloud Build lo preferiría
+     sobre buildpacks si de verdad se usa `gcloud run deploy --source .` — ese `Dockerfile` espera
+     `--build-arg REACT_APP_SUPABASE_URL`/`REACT_APP_SUPABASE_ANON_KEY`, que el comando documentado
+     no pasa. Quedó como pregunta explícita a la persona responsable en la sección 0 del nuevo
+     documento, sin asumir ninguna respuesta.
+  2. **La migración (a) de T25 (D-11, `ip_hmac` nullable para filas legacy) no existe todavía** —
+     ni ella ni el script de backfill (b). El paso 9 del runbook queda marcado como bloqueado hasta
+     que alguien las escriba y las pruebe contra Postgres real; no se escribieron en esta sesión
+     (fuera del alcance de "escribir el plan").
+  3. `admin_roles` nace vacía (a diferencia de `privacy_settings`): no hay autoalta de
+     administradores. El paso 1 del runbook documenta el INSERT manual que hace falta.
+- **Pruebas añadidas:** ninguna — documentación pura, sin código ni migración.
+- **Gates:** no se tocó ningún archivo de código/prueba/migración — no aplica repetir `gates.sh`.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: los 3 hallazgos de arriba, más los ya conocidos en la Iteración
+  90 (D-02/D-07/D-08, TOTP, `GATES_FULL=1` humano, `tests/proposal.visual.cjs`).
+- Porcentaje: sin cambio, 23/28 = **82,1 %**.
