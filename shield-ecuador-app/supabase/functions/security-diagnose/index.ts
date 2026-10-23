@@ -24,6 +24,7 @@ import {
   getStatus,
   jsonResponse,
 } from '../_shared/news-agent-core.ts'
+import { sanitizeEventsForAi } from '../_shared/ai-metadata-allowlist.ts'
 
 const DEFAULT_AGENT_CODE = 'ciber-dojo-news-agent'
 const MAX_EVENTS = 500
@@ -83,7 +84,7 @@ async function handleDiagnose(body: Record<string, unknown>, actor: string) {
     : await configQuery.eq('agent_code', DEFAULT_AGENT_CODE).single()
   if (!config) throw new HttpError('No se encontro la configuracion del agente de IA.', 404)
 
-  const aiPayload = { events, period_start: periodStart, period_end: periodEnd }
+  const aiPayload = { events: sanitizeEventsForAi(events ?? []), period_start: periodStart, period_end: periodEnd }
 
   let chainResult: { content: string; providerKey: string; attempts: ProviderAttempt[] }
   try {

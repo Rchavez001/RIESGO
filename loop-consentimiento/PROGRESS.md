@@ -3555,3 +3555,38 @@ sobrevivió la fusión de `wip/ux-redesign` en la Iteración 88 sin duplicarse).
   `GATES_FULL=1` humano, `tests/proposal.visual.cjs`, ejecución real de T25 pendiente de ventana).
 - Porcentaje: T98.f no es una de las 28 tareas del conteo estricto (es subtarea de T98, fuera del
   contador principal) — sin cambio, 24/28 = **85,7 %**.
+
+## Iteración 94 — 2026-10-23 — AI-LOGS-ALLOWLIST (P2): filtro cerrado de metadata antes de la IA
+- **Origen:** hallazgo propio al escribir `PAQUETE_ASESORIA_LEGAL.md` (sección 8): `security-diagnose`
+  reenvía `security_events.metadata` (contenido libre de quien registra el evento) a un proveedor
+  externo de IA sin ningún filtro — hoy ninguna de las 17 llamadas reales a `logSecurityEvent()`
+  pone ahí un correo, IP o identificador, pero nada a nivel de esquema lo impedía a futuro.
+- **Cambios:** `supabase/functions/_shared/ai-metadata-allowlist.ts` (nuevo):
+  `sanitizeMetadata()`/`sanitizeEventsForAi()`, lista cerrada `['reason', 'name', 'keys']`;
+  cualquier otra clave, y cualquier valor que no sea texto/número/booleano o un arreglo de texto,
+  se descarta. `security-diagnose/index.ts`: `aiPayload.events` ahora pasa por
+  `sanitizeEventsForAi()` antes de construirse. `TASKS.md` (`AI-LOGS-ALLOWLIST` `[x]`).
+  - **Decisión de diseño:** el filtro vive en un módulo compartido aparte de
+    `news-agent-core.ts` (que `security-diagnose` también importa) a propósito — importar
+    `news-agent-core.ts` desde una prueba nueva destapó un defecto preexistente y ajeno
+    (`mammoth@1.8.0` sin export default, nunca antes ejercitado porque `security-diagnose` no
+    tenía ninguna prueba) que `deno-check` no detecta (solo revisa una lista fija de entry points
+    que no incluye esta función) pero `deno-test` sí, al typar el grafo completo de cualquier
+    archivo `*_test.ts` nuevo que lo importe. Aislar el filtro evita arrastrar esa dependencia
+    rota a la prueba de esta tarea, sin tocar el defecto ajeno (fuera de alcance de hoy).
+- **Pruebas añadidas:** `_shared/ai-metadata-allowlist_test.ts` (8 casos): correo/IP descartados;
+  objeto anidado bajo una clave permitida descartado; `reason`/`name`/`keys` pasan íntegros; clave
+  desconocida descartada aunque el valor sea inocente; arreglo con un valor no-texto descarta esa
+  clave entera; `metadata` nulo/no-objeto/arreglo da `{}` sin lanzar; `sanitizeEventsForAi` filtra
+  cada evento de una lista sin tocar el resto de sus columnas, y el JSON resultante nunca contiene
+  el correo ni la IP de prueba. Pruebas unitarias puras (no hay escritura nueva en la base que
+  verificar contra Postgres real).
+- **Gates:** `deno-check`/`deno-test` OK. No se tocó frontend ni SQL: no aplica repetir el resto.
+- Desviaciones de SPEC: ninguna — es un endurecimiento defensivo, no un cambio de REQ/SEC.
+- Riesgos / pendientes detectados: (1) el defecto preexistente de `mammoth@1.8.0` en
+  `news-agent-core.ts` queda documentado pero sin corregir (ajeno a esta tarea; no afecta a
+  ninguna función en producción hoy, solo a `deno-check`/`deno-test` si algo nuevo importa esa
+  cadena); (2) mismos pendientes conocidos sin cambios (D-02/D-07/D-08, TOTP, `GATES_FULL=1`
+  humano, `tests/proposal.visual.cjs`, ejecución real de T25).
+- Porcentaje: `AI-LOGS-ALLOWLIST` no es una de las 28 tareas del conteo estricto (es un hallazgo de
+  seguridad añadido, mismo patrón que `INV-SEC`) — sin cambio, 24/28 = **85,7 %**.

@@ -1364,7 +1364,27 @@ Nombres fuera de la numeración original (`Tnn-extra`, según PROMPT.md). Ojo: *
   - **Falta:** el resto del alcance original (tablas del campeonato, `security_*`, migraciones 030–072) sigue sin revisar.
   - **Hallazgo aparte, sin corregir (fuera del alcance de hoy):** `tests/frontend/kata-exam.spec.ts:82` ya fallaba antes de este cambio (candado de cliente para invitados nunca implementado en código commiteado). No es una regresión de esta tarea; pertenece a T19b/UX-integración.
 
-- [ ] **REPO-UNIF — Decidir qué repositorio de GitHub es el oficial** (RIESGO.git vs CyberDojo.git)
+- [x] **AI-LOGS-ALLOWLIST (P2)** — El agente que interpreta los logs de seguridad debe enviar a la
+  IA solo una lista cerrada de campos permitidos de `metadata`, descartando cualquier otro; prueba
+  que un `metadata` con correo o IP no llega al proveedor. Hoy no hay fuga, pero nada lo impedía a
+  futuro. (hecha 2026-10-23 — hallazgo del paquete para asesoría legal, `PAQUETE_ASESORIA_LEGAL.md`
+  sección 8)
+  - **Hecho:** `supabase/functions/_shared/ai-metadata-allowlist.ts` (nuevo) —
+    `sanitizeMetadata()`/`sanitizeEventsForAi()`, exportadas; filtran cada fila de
+    `security_events` a la lista cerrada `['reason', 'name', 'keys']` (los únicos campos que usan
+    hoy las 17 llamadas reales a `logSecurityEvent()` del repo) antes de construir `aiPayload` en
+    `security-diagnose/index.ts`; cualquier otro campo, y cualquier valor que no sea texto/número/
+    booleano o un arreglo de texto, se descarta (nunca se reenvía, aunque la clave esté en la
+    lista). No toca `ip_hash` ni ningún identificador de usuario: esas columnas ya no estaban en
+    el `SELECT` original. Vive aparte de `news-agent-core.ts` (que `security-diagnose` también
+    importa) para que esta lógica y su prueba no arrastren esa dependencia más pesada.
+  - **Pruebas añadidas:** `_shared/ai-metadata-allowlist_test.ts` (nuevo, 8 casos): `metadata` con
+    `correo`/`ip`/objeto anidado se descarta por completo; `reason`/`name`/`keys` (los 3 usados
+    hoy) pasan íntegros; una clave desconocida se descarta aunque el valor sea inocente; `metadata`
+    nulo/no-objeto/arreglo da `{}` sin lanzar; `sanitizeEventsForAi` aplica el filtro a cada evento
+    de una lista sin tocar `created_at`/`endpoint`/`event_type`/`severity`. Pruebas unitarias
+    puras (sin Postgres real ni mock de la cadena de proveedores de IA): lo que se corrige es el
+    filtrado de datos antes de construir el payload, no una escritura nueva en la base.
   - **Hallazgo (2026-09-28):** `origin` apunta a `https://github.com/Rchavez001/RIESGO.git`, sin las ramas de hoy (el push reportado como hecho no llegó — confirmado con `git ls-remote origin`). Existe además `https://github.com/Rchavez001/CyberDojo.git`, con un `main` propio de **solo 5 commits** ("Initial CyberDojo project import" + 4 parches manuales de despliegue, todos del 1 de septiembre de 2026), **sin ningún ancestro común** con la historia de RIESGO. RIESGO está meses por delante (Centro de Seguridad, campeonato, todo el módulo de consentimiento, lo de hoy); CyberDojo solo tenía dos cosas que RIESGO no tenía: `frontend/Dockerfile` y su parche de build-args — ya copiados a RIESGO (`caa1432`, ver PROGRESS.md).
   - **Antes de tocar CyberDojo.git de cualquier forma (nunca con force-push sin decidir esto primero):** comprobar en la consola de Google Cloud si **Cloud Build → Triggers** o **Cloud Run → `cyberdojo`/`cyberdojo-admin` → Despliegue continuo** están conectados a `CyberDojo.git` (lo más probable, dado que ahí están los únicos `Dockerfile`) o a `RIESGO.git`. Si despliegan desde CyberDojo, cualquier cambio en su `main` (incluido un force-push) dispara un despliegue real.
   - **Decisión pendiente de la persona responsable:** cuál de los dos repositorios sigue existiendo como el oficial, y qué pasa con el otro (se archiva, se borra, se deja como espejo de despliegue). No se ha tocado `CyberDojo.git` de ninguna forma.
