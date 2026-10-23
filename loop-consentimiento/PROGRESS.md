@@ -3590,3 +3590,36 @@ sobrevivió la fusión de `wip/ux-redesign` en la Iteración 88 sin duplicarse).
   humano, `tests/proposal.visual.cjs`, ejecución real de T25).
 - Porcentaje: `AI-LOGS-ALLOWLIST` no es una de las 28 tareas del conteo estricto (es un hallazgo de
   seguridad añadido, mismo patrón que `INV-SEC`) — sin cambio, 24/28 = **85,7 %**.
+
+## Iteración 95 — 2026-10-23 — NEWS-MAMMOTH (P2): corrige el import de mammoth, confirma que era solo de tipos
+- **Origen:** pedido directo de la persona responsable, sobre el hallazgo lateral de la Iteración
+  94 (el import roto de `mammoth@1.8.0` en `news-agent-core.ts`, destapado por la prueba nueva de
+  `AI-LOGS-ALLOWLIST`, no corregido en esa iteración por estar fuera de su alcance).
+- **Verificación pedida ("¿falla en producción?") — NO se pudo hacer desde esta sesión:** no hay
+  acceso a los logs de Edge Functions del panel de Supabase desde aquí. En su lugar, verifiqué en
+  tiempo de ejecución REAL (no solo el tipo): generé un `.docx` mínimo válido (958 bytes, sin
+  datos personales) y corrí `mammoth.extractRawText()` contra él con el import ORIGINAL (antes de
+  tocar nada) usando `deno run` — devolvió el texto esperado sin error. Conclusión: el síntoma era
+  **solo de TypeScript** (`mammoth@1.8.0` declara sus tipos con `export = mammoth`, estilo
+  CommonJS, no `export default` — de ahí `TS1192`); nada indica que la función fallara contra
+  `.docx` reales en producción por este motivo. Queda pendiente que la persona responsable
+  confirme esto mirando los logs reales, como segunda verificación independiente.
+- **Cambios:** `supabase/functions/_shared/news-agent-core.ts` (`import mammoth from '...'` →
+  `import * as mammothModule from '...'` + tipo local mínimo con solo `extractRawText`, que no
+  depende de que el `.d.ts` de esm.sh declare el default export);
+  `supabase/functions/_shared/fixtures/minimal.docx` (nuevo); `TASKS.md` (`NEWS-MAMMOTH` `[x]`).
+  - **Corregido en el camino:** el edit de `TASKS.md` de la Iteración 94 había borrado por error la
+    línea de encabezado de la tarea `REPO-UNIF` (dejó su contenido huérfano debajo de
+    `AI-LOGS-ALLOWLIST`) — detectado al insertar esta tarea justo antes de `REPO-UNIF` y restaurado
+    en el mismo commit.
+- **Pruebas añadidas:** `_shared/news-agent-core_test.ts` (nuevo, 2 casos): `extractTextFromFile`
+  procesa el `.docx` mínimo end-to-end (prueba real de `mammoth.extractRawText`, no solo del
+  tipo) y devuelve el texto esperado; una extensión no soportada da el mensaje de error esperado.
+- **Gates:** `deno-check`/`deno-test` OK.
+- Desviaciones de SPEC: ninguna — es una corrección de tipos/robustez, no un cambio de REQ/SEC.
+- Riesgos / pendientes detectados: (1) falta la confirmación de la persona responsable mirando los
+  logs reales de producción (`run-news-agent`/`quiz-generator`/`import-question-bank`); (2) mismos
+  pendientes conocidos sin cambios (D-02/D-07/D-08, TOTP, `GATES_FULL=1` humano,
+  `tests/proposal.visual.cjs`, ejecución real de T25).
+- Porcentaje: `NEWS-MAMMOTH` no es una de las 28 tareas del conteo estricto — sin cambio, 24/28 =
+  **85,7 %**.

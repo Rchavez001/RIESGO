@@ -1385,6 +1385,39 @@ Nombres fuera de la numeración original (`Tnn-extra`, según PROMPT.md). Ojo: *
     de una lista sin tocar `created_at`/`endpoint`/`event_type`/`severity`. Pruebas unitarias
     puras (sin Postgres real ni mock de la cadena de proveedores de IA): lo que se corrige es el
     filtrado de datos antes de construir el payload, no una escritura nueva en la base.
+
+- [x] **NEWS-MAMMOTH (P2)** — `news-agent-core.ts` importaba `mammoth@1.8.0` con `export default`,
+  que no existe; verificar si el agente de noticias falla en producción al procesar `.docx` y
+  corregir el import con una prueba que procese un `.docx` mínimo. (hecha 2026-10-23 — hallazgo
+  de la Iteración 94, AI-LOGS-ALLOWLIST)
+  - **Verificación de producción: NO LA PUDE HACER** — no tengo acceso a los logs de la función en
+    el panel de Supabase desde esta sesión (ver nota de la persona responsable abajo).
+  - **Lo que sí verifiqué, local, en tiempo de ejecución real (no solo el tipo):** el `.d.ts` de
+    `mammoth@1.8.0` en esm.sh declara `export = mammoth;` (estilo CommonJS), no
+    `export default` — de ahí el error de TypeScript (`TS1192`). Pero en tiempo de ejecución, el
+    `import mammoth from '...'` original SÍ funcionaba (probado con `deno run` contra un `.docx`
+    mínimo generado para esta tarea, antes de tocar el código: devolvió el texto esperado). Es
+    decir: **el síntoma era solo de tipado, no un error de ejecución** — nada indica que la
+    función fallara contra `.docx` reales en producción por este motivo. Aun así, se corrigió el
+    import (ver abajo) para que `deno-check`/`deno-test` dejen de arrastrar el error si algo nuevo
+    importa esta cadena (como pasó con `AI-LOGS-ALLOWLIST`).
+  - **Pendiente de que la persona responsable confirme:** revisar los logs reales de
+    `run-news-agent`/`quiz-generator`/`import-question-bank` en el panel de Supabase (Edge
+    Functions → Logs) buscando errores al procesar `.docx`, para una segunda confirmación
+    independiente de que nunca falló en producción.
+  - **Hecho:** `supabase/functions/_shared/news-agent-core.ts` — `import mammoth from '...'`
+    (default, mal tipado) → `import * as mammothModule from '...'` + un tipo local mínimo con lo
+    único que se usa (`extractRawText`); no depende de que el `.d.ts` de esm.sh declare el export
+    default. `supabase/functions/_shared/fixtures/minimal.docx` (nuevo, 958 bytes): `.docx` válido
+    mínimo generado para esta tarea (sin datos personales), con un único párrafo de texto
+    conocido.
+  - **Pruebas añadidas:** `_shared/news-agent-core_test.ts` (nuevo, 2 casos): `extractTextFromFile`
+    procesa el `.docx` mínimo y devuelve el texto esperado (prueba real de `mammoth.extractRawText`,
+    no solo del tipo); una extensión no soportada da el mensaje de error esperado, no un fallo
+    silencioso.
+  - **Gates:** `deno-check`/`deno-test` OK.
+
+- [ ] **REPO-UNIF — Decidir qué repositorio de GitHub es el oficial** (RIESGO.git vs CyberDojo.git)
   - **Hallazgo (2026-09-28):** `origin` apunta a `https://github.com/Rchavez001/RIESGO.git`, sin las ramas de hoy (el push reportado como hecho no llegó — confirmado con `git ls-remote origin`). Existe además `https://github.com/Rchavez001/CyberDojo.git`, con un `main` propio de **solo 5 commits** ("Initial CyberDojo project import" + 4 parches manuales de despliegue, todos del 1 de septiembre de 2026), **sin ningún ancestro común** con la historia de RIESGO. RIESGO está meses por delante (Centro de Seguridad, campeonato, todo el módulo de consentimiento, lo de hoy); CyberDojo solo tenía dos cosas que RIESGO no tenía: `frontend/Dockerfile` y su parche de build-args — ya copiados a RIESGO (`caa1432`, ver PROGRESS.md).
   - **Antes de tocar CyberDojo.git de cualquier forma (nunca con force-push sin decidir esto primero):** comprobar en la consola de Google Cloud si **Cloud Build → Triggers** o **Cloud Run → `cyberdojo`/`cyberdojo-admin` → Despliegue continuo** están conectados a `CyberDojo.git` (lo más probable, dado que ahí están los únicos `Dockerfile`) o a `RIESGO.git`. Si despliegan desde CyberDojo, cualquier cambio en su `main` (incluido un force-push) dispara un despliegue real.
   - **Decisión pendiente de la persona responsable:** cuál de los dos repositorios sigue existiendo como el oficial, y qué pasa con el otro (se archiva, se borra, se deja como espejo de despliegue). No se ha tocado `CyberDojo.git` de ninguna forma.

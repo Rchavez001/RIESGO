@@ -8,7 +8,12 @@
 import { isPrivateIpv4, publicHttpUrlProblem } from './url-guard.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { extractText, getDocumentProxy } from 'https://esm.sh/unpdf@0.11.0'
-import mammoth from 'https://esm.sh/mammoth@1.8.0'
+// NEWS-MAMMOTH: mammoth@1.8.0 declara sus tipos con `export = mammoth` (estilo CommonJS), no
+// `export default` — `import mammoth from '...'` tipaba mal (TS1192) aunque funcionara en
+// tiempo de ejecución (esm.sh sí resuelve el interop real). `import * as` + un tipo local mínimo
+// con lo único que usamos evita depender de que el .d.ts de esm.sh declare el default export.
+import * as mammothModule from 'https://esm.sh/mammoth@1.8.0'
+const mammoth = mammothModule as unknown as { extractRawText: (input: { buffer: Uint8Array }) => Promise<{ value: string }> }
 
 export interface ImageAttachment {
   data: string // base64, no data: prefix
