@@ -3623,3 +3623,41 @@ sobrevivió la fusión de `wip/ux-redesign` en la Iteración 88 sin duplicarse).
   `tests/proposal.visual.cjs`, ejecución real de T25).
 - Porcentaje: `NEWS-MAMMOTH` no es una de las 28 tareas del conteo estricto — sin cambio, 24/28 =
   **85,7 %**.
+
+## Iteración 96 — 2026-10-23 — T98.c/T98.d/T98.e: cierran T98 (documentación completa)
+- **Origen:** pedido directo de la persona responsable ("actualizar de forma completa toda la
+  documentación del proyecto"); acotado con ella a las 3 subtareas de T98 que seguían `[ ]`
+  (aclarado con una pregunta: el alcance posible iba desde solo estas 3 hasta todo el repositorio).
+- **T98.c — `BASE_DE_DATOS.md`, sección 12 nueva** (leída línea por línea `073`-`084`): las 11
+  tablas reales del módulo (`consent_documents`, `consent_records`, `admin_audit_log`,
+  `data_subject_requests` + `data_subject_request_counters`, `privacy_settings` +
+  `privacy_email_verifications`, `admin_roles`, `email_transport_settings`/`_tests`/`_outbox`),
+  sus 3 vistas y ~20 funciones/triggers, con número de migración por cada cambio — mismo nivel de
+  detalle que las secciones 1-9 existentes. Excluye `076` (ajena al módulo) y `081` (no crea
+  tablas, solo recalifica `digest()`). No se amplió el diagrama Mermaid de la sección 11 (fuera de
+  alcance de T98.c; las FK quedaron en prosa en cada tabla).
+- **T98.d — `GUIA_LEVANTAMIENTO_PROYECTO.md`, secciones 9 y 17.** Hallazgo real: la premisa de la
+  tarea ("confirmar que `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION` ya están documentadas") era
+  incorrecta — un `grep` sobre el archivo dio cero coincidencias; solo estaban en
+  `SECURITY_PRIVACY.md` (que explica el porqué, no da el comando). Se documentaron ahí, junto con
+  `SECURITY_EVENTS_HMAC_KEY` (tampoco estaba) y `LOOKUP_HMAC_KEY_B64` (nueva), con el mismo patrón
+  de generación (PowerShell) que ya usa `SECURITY_PRIVACY.md`.
+- **T98.e — `MANUAL_ADMINISTRADOR.md`, sección 14, runbook nuevo de 5 pasos**: desde que llega el
+  aviso al delegado (dos correos independientes, D-06: nunca el correo del titular en el del
+  delegado) hasta cerrar el caso (`atendida`/`rechazada_con_motivo`, motivo obligatorio solo al
+  rechazar), con el semáforo exacto (`vigente` > 3 días, `por_vencer` ≤ 3 días, `vencida` vencido,
+  sin color si el caso ya cerró) verificado contra `computeSemaphore()`/`DSR_DUE_SOON_MS` en
+  `admin-consent/handler.ts` y el cálculo de `due_at` en `request-data-subject-right/handler.ts`.
+- **Cambios:** `BASE_DE_DATOS.md`, `GUIA_LEVANTAMIENTO_PROYECTO.md`, `MANUAL_ADMINISTRADOR.md`
+  (los tres con su nota de fecha/alcance al final, mismo patrón que las secciones anteriores);
+  `TASKS.md` (T98.c/d/e `[x]`; T98 padre `[x]`, con una nota sobre lo que la división de 2026-10-20
+  dejó fuera — `.env.example` y rotación de claves, ninguno de los dos es parte de T98.a-f).
+- **Pruebas añadidas:** ninguna — documentación pura, sin código ni migración.
+- **Gates:** no se tocó ningún archivo de código/prueba/migración — no aplica repetir `gates.sh`.
+- Desviaciones de SPEC: ninguna.
+- Riesgos / pendientes detectados: (1) rotación de claves y `.env.example` de Edge Functions
+  siguen sin procedimiento documentado (ver nota en `TASKS.md`, T98); (2) mismos pendientes
+  conocidos sin cambios (D-02/D-07/D-08, TOTP, `GATES_FULL=1` humano, `tests/proposal.visual.cjs`,
+  ejecución real de T25, confirmación de logs de producción para NEWS-MAMMOTH).
+- Porcentaje: T98 no es una de las 28 tareas del conteo estricto (documentación, no REQ/SEC) — sin
+  cambio, 24/28 = **85,7 %**.

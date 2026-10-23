@@ -450,6 +450,41 @@ Ejemplo:
 supabase secrets set CRON_SECRET=cd_7dd1820bd1424afbb39c5f0fbc4f8f11
 ```
 
+### Secrets de cifrado y HMAC (PII base + modulo de consentimiento LOPDP)
+
+**Verificado el 2026-10-23 (T98.d): esta guia nunca habia documentado estos secrets**, aunque ya
+son obligatorios desde que existe el cifrado de PII de `users` (migracion `012`, ver
+`BASE_DE_DATOS.md`) y ahora tambien los usa el modulo de consentimiento (`supabase/migrations/073`
+en adelante). No estan duplicados en ninguna otra seccion de esta guia — la unica otra referencia
+es `SECURITY_PRIVACY.md`, que explica el porque de cada clave pero no reemplaza esta lista de
+comandos.
+
+```bash
+# PII_ENCRYPTION_KEY_B64 / PII_KEY_VERSION: cifran users.email_encrypted, full_name_encrypted, etc.
+# (migracion 012) y, desde la migracion 073, tambien el modulo de consentimiento (_shared/crypto.ts).
+supabase secrets set PII_ENCRYPTION_KEY_B64="<32 bytes aleatorios en base64>" PII_KEY_VERSION="1"
+
+# SECURITY_EVENTS_HMAC_KEY: hashea la IP antes de guardarla en security_audit_events
+# (migracion 012) y en security_events de la linea base.
+supabase secrets set SECURITY_EVENTS_HMAC_KEY="<32 bytes aleatorios en base64, distintos de PII_ENCRYPTION_KEY_B64>"
+
+# LOOKUP_HMAC_KEY_B64: NUEVA (T25/D-11) — exclusiva del modulo de consentimiento. HMAC de user_id
+# (user_ref_hmac), de IP/user-agent de evidencia, y del backfill de consentimiento legacy.
+# Debe ser distinta de PII_ENCRYPTION_KEY_B64 (H15: nunca la misma clave para cifrar y para HMAC).
+supabase secrets set LOOKUP_HMAC_KEY_B64="<32 bytes aleatorios en base64, distintos de las dos anteriores>"
+```
+
+Generar cada clave (PowerShell, una vez por clave — nunca reusar el mismo valor entre dos de
+ellas):
+
+```powershell
+$rng = [Security.Cryptography.RNGCryptoServiceProvider]::Create()
+$bytes = New-Object byte[] 32
+$rng.GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
+$rng.Dispose()
+```
+
 Verifica secrets:
 
 ```bash
@@ -803,7 +838,15 @@ DEEPSEEK_API_KEY
 KIMI_API_KEY
 ANTHROPIC_API_KEY
 CRON_SECRET
+PII_ENCRYPTION_KEY_B64
+PII_KEY_VERSION
+SECURITY_EVENTS_HMAC_KEY
+LOOKUP_HMAC_KEY_B64
 ```
+
+Las ultimas 4 se generan y se configuran con los comandos de la seccion 9 ("Secrets de cifrado y
+HMAC"). `LOOKUP_HMAC_KEY_B64` es exclusiva del modulo de consentimiento (T25/D-11); las otras 3 ya
+las necesitaba el cifrado de PII de `users` desde antes de ese modulo.
 
 ## 18. Probar produccion despues del despliegue
 

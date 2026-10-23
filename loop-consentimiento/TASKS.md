@@ -1238,8 +1238,9 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
   - **Tests obligatorios:** dry-run no escribe nada (cliente falso sin llamadas de INSERT); `--apply` dos veces inserta lo mismo que una; el `user_ref_hmac` coincide con `hmacLookup(user_id)` del registro; sin IP ni agente; quien tiene `authorized = false` no recibe fila; el documento legacy nunca queda `published`; sin la variable de la clave el script aborta con mensaje claro sin imprimir nada secreto.
   - **Orden:** después de T19 (necesita `requires_reconsent`) y de 074/075 aplicadas (la 074 aborta si ya hay filas de evidencia).
 
-- [ ] **T98 — Documentación** (H14)
-  - **Estado real (2026-09-28):** PARCIAL. Hecho: `PROGRESS.md`, `PLAN_PRODUCCION_RELEASE.md` (release único, con respaldo; renombrado desde `PLAN_PRODUCCION_074_075.md` en la iteración 20 al cubrir 074–077), `diag/README.md`. Falta: `SECURITY_PRIVACY.md`, manual administrativo, `BASE_DE_DATOS.md`, `.env.example`, rotación de claves, runbook de bajas, lista para legal.
+- [x] **T98 — Documentación** (H14) (las 6 subtareas de la división, a-f, están `[x]` — ver detalle abajo; completada 2026-10-23)
+  - **Estado real (2026-09-28, histórico):** PARCIAL. Hecho: `PROGRESS.md`, `PLAN_PRODUCCION_RELEASE.md` (release único, con respaldo; renombrado desde `PLAN_PRODUCCION_074_075.md` en la iteración 20 al cubrir 074–077), `diag/README.md`. Falta: `SECURITY_PRIVACY.md`, manual administrativo, `BASE_DE_DATOS.md`, `.env.example`, rotación de claves, runbook de bajas, lista para legal.
+  - **Nota (2026-10-23):** la división en 6 subtareas (a-f, ver abajo) no incluyó una subtarea para `.env.example` — no existe ningún `supabase/functions/.env.example` en el repo (solo `frontend/.env.example` y `central-admin-app/.env.example`, para variables de cliente, ajenas a los secretos de Edge Functions del módulo). Los secretos quedaron documentados en `GUIA_LEVANTAMIENTO_PROYECTO.md` (T98.d) en vez de en un `.env.example` que no existe; "rotación de claves" tampoco se dividió en una subtarea propia y sigue sin un procedimiento documentado — si se necesita, es trabajo nuevo, no parte de T98.a-f.
   - Incluir el correo saliente (REQ-21): configuración, rotación de la contraseña SMTP, qué hacer con el banner de avisos pendientes; y la mención de Resend (transferencia internacional) en el aviso.
   - Actualizar `SECURITY_PRIVACY.md`, manual administrativo (sección nueva con capturas o pasos),
     `BASE_DE_DATOS.md`, `.env.example`; procedimiento de rotación de claves; runbook de atención
@@ -1269,16 +1270,31 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
       - **Aceptación:** mismo criterio que T98.a — sin afirmar "cumple LOPDP"/"cumple ISO 42001"; cada paso
         trazable a un elemento real de `central-admin-app/index.html`/`app.js` (IDs e campos citados), sin
         inventar pasos que el código no tiene.
-    - [ ] **T98.c — `BASE_DE_DATOS.md`: tablas del módulo** (073-081: `consent_documents`, `consent_records`,
+    - [x] **T98.c — `BASE_DE_DATOS.md`: tablas del módulo** (073-081: `consent_documents`, `consent_records`,
       `admin_audit_log`, `data_subject_requests`, `privacy_settings`, `email_transport_settings`/
       `email_transport_tests`/`email_outbox`, `admin_roles`, `privacy_email_verifications`), mismo nivel de
       detalle y verificación contra el código que la sección 1-9 existente (cita el número de migración).
-    - [ ] **T98.d — Secretos de entorno del módulo** (`LOOKUP_HMAC_KEY_B64`: generación y `supabase secrets set`,
+      (hecha 2026-10-23) — **Sección 12 nueva** en `BASE_DE_DATOS.md`, leyendo línea por línea 073-084
+      (incluye además las tablas no mencionadas en el enunciado que sí existen: `data_subject_request_counters`
+      y `privacy_email_verifications` ya estaban listadas; se cubrieron las 11 tablas reales del módulo, sus
+      3 vistas y sus ~20 funciones/triggers, con número de migración por cambio, igual que el resto del
+      documento). Nota añadida: 076 y 081 quedaron excluidas del alcance (ajena al módulo / no crea tablas).
+    - [x] **T98.d — Secretos de entorno del módulo** (`LOOKUP_HMAC_KEY_B64`: generación y `supabase secrets set`,
       en `GUIA_LEVANTAMIENTO_PROYECTO.md`, mismo patrón que las demás claves ya documentadas ahí; confirmar que
       `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION` ya documentadas cubren también este módulo, sin duplicarlas)
-    - [ ] **T98.e — Runbook de atención de solicitudes de derechos/baja** (REQ-10, REQ-11: cómo un
+      (hecha 2026-10-23) — **Hallazgo real durante la verificación: la premisa de la tarea era incorrecta.**
+      `PII_ENCRYPTION_KEY_B64`/`PII_KEY_VERSION` **no** estaban documentadas en `GUIA_LEVANTAMIENTO_PROYECTO.md`
+      (confirmado con `grep`, cero coincidencias) — solo en `SECURITY_PRIVACY.md`, que explica el porqué pero
+      no da el comando operativo. Se documentaron ahí, junto con `SECURITY_EVENTS_HMAC_KEY` (tampoco estaba) y
+      `LOOKUP_HMAC_KEY_B64` (nueva, exclusiva del módulo), en la sección 9 ("Secrets de cifrado y HMAC") y en
+      la lista de la sección 17, sin tocar ninguna otra sección.
+    - [x] **T98.e — Runbook de atención de solicitudes de derechos/baja** (REQ-10, REQ-11: cómo un
       `privacy_editor`/`privacy_admin` atiende un caso desde que llega el aviso al delegado hasta
-      `atendida`/`rechazada_con_motivo`, con los plazos del semáforo)
+      `atendida`/`rechazada_con_motivo`, con los plazos del semáforo) (hecha 2026-10-23) — nuevo bloque
+      dentro de la sección 14 de `MANUAL_ADMINISTRADOR.md` (después de "Solicitudes de derechos"), 5 pasos
+      verificados contra `request-data-subject-right/handler.ts` (aviso al delegado y acuse al titular,
+      cálculo de `due_at`) y `admin-consent/handler.ts` (`computeSemaphore`: `DSR_DUE_SOON_MS` = 3 días;
+      `DSR_STATUSES`; `reason` obligatorio solo al rechazar).
     - [x] **T98.f — Lista de pendientes para el área legal antes de publicar** (D-02 plazos de conservación,
       D-07 datos del responsable/delegado, confirmación de D-10 sobre el consentimiento legacy) (hecha 2026-10-22)
       - **Hecho:** `loop-consentimiento/PAQUETE_ASESORIA_LEGAL.md` — lenguaje no técnico, pensado para

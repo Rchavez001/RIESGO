@@ -124,10 +124,31 @@ Quién puede hacer qué, confirmado en `app.js` (no es un supuesto de diseño, s
 
 **Solicitudes de derechos (`consentRequests`):** lista filtrable por estado (recibida / requiere aclaración / en proceso / atendida / rechazada con motivo), con número de caso, tipo, canal, estado, plazo y fechas. "Cambiar estado" abre un formulario con el nuevo estado, una nota de resolución interna opcional y un motivo que solo es obligatorio al rechazar.
 
+**Runbook: atender un caso de derechos o baja, paso a paso** (REQ-10, REQ-11; `privacy_editor` o `privacy_admin` — `privacy_auditor` solo puede leer, no cambiar el estado; verificado contra `request-data-subject-right/handler.ts` y `admin-consent/handler.ts` el 2026-10-23, T98.e):
+
+1. **Llega el aviso al delegado.** Cuando alguien envía una solicitud desde "Mi privacidad" (o el equipo la registra manualmente tras recibirla por correo), el sistema calcula de inmediato la fecha límite (`due_at = fecha de recepción + response_days`, hoy 15 días calendario por defecto — D-03) y envía **dos correos independientes**, cada uno por su cuenta (que uno falle no impide el otro ni impide que el caso quede registrado):
+   - Al **correo de privacidad vigente** (el delegado): número de caso, tipo de solicitud y fecha límite — **nunca** el correo del titular ni ningún dato cifrado (D-06).
+   - Al **titular**: acuse de recibido con su número de caso y la misma fecha límite.
+   - Si el transporte de correo no está configurado o falla al enviar, el caso se registra igual y el aviso queda en la cola de reintentos (`email_outbox` — ver el banner "Correo no configurado / con errores" de la sección "Correo saliente" arriba).
+2. **El delegado revisa el caso en el panel**, pestaña "Solicitudes de derechos". Lo encuentra por número de caso, tipo o estado.
+   - Si hace falta más información para tramitarlo formalmente, se contacta al titular **por fuera del sistema** (correo directo) y se cambia el estado a **`requiere_aclaracion`** — esto NO detiene el plazo ni cambia `due_at`; el semáforo sigue corriendo contra la fecha límite original.
+   - Si ya se está trabajando el caso (verificación de identidad, búsqueda de los datos, etc.), se cambia a **`en_proceso`**. Ninguno de estos dos cambios pide nota ni motivo obligatorios (ambos son opcionales en el formulario).
+3. **El semáforo de la lista** (columna junto al plazo) avisa la urgencia sin que nadie tenga que calcular fechas a mano — se recalcula en cada carga de la lista, comparando `due_at` contra la hora actual:
+   - 🟢 **`vigente`** — quedan más de 3 días.
+   - 🟡 **`por_vencer`** — quedan 3 días o menos (y todavía no venció).
+   - 🔴 **`vencida`** — ya pasó la fecha límite y el caso sigue abierto.
+   - Sin color (`null`) — el caso ya está cerrado (`atendida` o `rechazada_con_motivo`): un caso cerrado no tiene presión de plazo, nunca se le asigna un color.
+4. **Se resuelve el caso**, con "Cambiar estado":
+   - **`atendida`** — se atendió la solicitud (se entregaron los datos, se corrigieron, se eliminó la cuenta, se aplicó la revocación, etc., según `request_type`). La nota de resolución interna es opcional; no hace falta motivo.
+   - **`rechazada_con_motivo`** — se rechaza la solicitud. El motivo **es obligatorio** aquí (el backend lo exige: sin motivo, el cambio de estado falla con `reason_required_for_rejection`); la nota de resolución sigue siendo opcional.
+   - Cualquiera de los dos cambios queda registrado en `admin_audit_log` con el actor, el estado anterior y el nuevo — visible en la pestaña "Bitácora administrativa".
+   - **Una vez en `atendida` o `rechazada_con_motivo`, el caso queda cerrado**: sigue visible en la lista (con su historial), pero ya no tiene semáforo. No existe, hoy, una vía para reabrir un caso cerrado desde el panel — si hiciera falta corregir algo después de cerrarlo, se documenta aparte (nota de resolución de un caso nuevo, o según decida la persona responsable).
+5. **Si una baja (`request_type = 'baja'`) termina en `atendida`**: la cuenta y sus datos personales se eliminan/anonimizan según corresponda, pero la evidencia de consentimiento de esa persona **no se borra** — queda desvinculada de su identidad (`user_id → NULL`, vía `unlink_user_consent_evidence()`, REQ-20) y seudonimizada por `user_ref_hmac`. Los plazos de conservación de esa evidencia seudonimizada siguen pendientes de decisión legal (D-02) — ver `BASE_DE_DATOS.md`, sección 12, `privacy_settings.evidence_retention_days`.
+
 **Verificación de integridad (`consentVerifyChains`):** un solo botón, "Verificar integridad", que ejecuta `verify_consent_chain()` y `verify_audit_chain()` contra la base y muestra el resultado (íntegra, o el primer eslabón roto si algo falla).
 
 **Nota de alcance:** esta sección documenta los pasos del panel tal como existen en el código al 2026-10-20 (`admin-consent`, `central-admin-app`). No afirma que el módulo "cumple LOPDP" ni "cumple ISO 42001" — implementa controles alineados con esos marcos; varias piezas (plazos de conservación definitivos, datos reales del responsable/delegado, medición de la cabecera de IP en el entorno hospedado) siguen pendientes de decisión humana o de confirmación legal antes de publicarse en producción (ver `loop-consentimiento/DECISIONS.md`).
 
 ---
 
-*Documento reescrito el 2026-09-08 a partir de la lectura completa de `central-admin-app/index.html` (665 líneas) y `central-admin-app/app.js` (2216 líneas). Reemplaza la versión anterior, que describía funcionalidades de campañas y navegación desactualizadas y no distinguía entre paneles reales y de maqueta. Sección 14 (Consentimiento informado) añadida el 2026-10-20 (T98.b), a partir de la lectura de la sección `#consent` de `index.html` (1179-1774) y los candados de rol reales en `app.js`.*
+*Documento reescrito el 2026-09-08 a partir de la lectura completa de `central-admin-app/index.html` (665 líneas) y `central-admin-app/app.js` (2216 líneas). Reemplaza la versión anterior, que describía funcionalidades de campañas y navegación desactualizadas y no distinguía entre paneles reales y de maqueta. Sección 14 (Consentimiento informado) añadida el 2026-10-20 (T98.b), a partir de la lectura de la sección `#consent` de `index.html` (1179-1774) y los candados de rol reales en `app.js`. Runbook de solicitudes de derechos/baja dentro de la sección 14 añadido el 2026-10-23 (T98.e), a partir de la lectura de `request-data-subject-right/handler.ts` y `admin-consent/handler.ts` (semáforo `computeSemaphore`, estados `DSR_STATUSES`, cálculo de `due_at`).*

@@ -17,6 +17,7 @@ Motor: PostgreSQL (Supabase). Extensiones usadas: `uuid-ossp`, `pgcrypto` [001].
 9. Funciones
 10. Hallazgos sobre RLS (tablas sin política de escritura o sin RLS)
 11. Diagrama entidad-relación
+12. Módulo de Consentimiento Informado (LOPDP)
 
 ---
 
@@ -644,3 +645,237 @@ Notas sobre el diagrama:
 *Documento generado el 2026-09-08 a partir de la lectura línea por línea de `supabase/migrations/001_initial_schema.sql` a `021_campaign_impressions_sector.sql`. Cualquier cambio de esquema posterior a estas 21 migraciones no está reflejado aquí.*
 
 RLS: habilitado [004]. Admin gestiona todo [004].
+
+---
+
+## 12. Módulo de Consentimiento Informado (LOPDP)
+
+Añadido el 2026-10-23 (T98.c), leyendo línea por línea `supabase/migrations/073_consent_module_foundation.sql` a `084_consent_records_legacy_ip_hmac_nullable.sql`. Mismo criterio que el resto del documento: solo lo verificado en el código, con el número de migración entre corchetes. No incluye la migración `076_learning_guest_limit.sql` (toca `learning_answer`/`learning_start_exam` de la línea base, ajena a este módulo — ver `loop-consentimiento/TASKS.md`, INV-SEC) ni la `081_fix_digest_schema_qualification.sql` (no crea ni altera ninguna tabla: solo recalifica `digest()` dentro de triggers/funciones ya listados abajo).
+
+### `consent_documents` [073, alterada en 077]
+
+El aviso de privacidad versionado (REQ-01/02/03).
+
+- `id UUID PK DEFAULT gen_random_uuid()`
+- `version TEXT UNIQUE NOT NULL`
+- `title TEXT NOT NULL`
+- `content_md TEXT NOT NULL` CHECK (`char_length(content_md) <= 100000`)
+- `content_sha256 TEXT NOT NULL`
+- `purposes JSONB NOT NULL` — arreglo de finalidades (`code`, `label`, `description`, `required`, `order`)
+- `status TEXT NOT NULL` CHECK (`draft, published, retired`)
+- `requires_reconsent BOOLEAN NOT NULL DEFAULT false`
+- `change_summary TEXT`
+- `based_on_id UUID FK -> consent_documents(id)` — de qué versión se clonó el borrador
+- `created_by UUID NOT NULL FK -> users(id)`, `created_at TIMESTAMPTZ DEFAULT now()`
+- `updated_by UUID FK -> users(id)`, `updated_at TIMESTAMPTZ`
+- `published_by UUID FK -> users(id)`, `published_at TIMESTAMPTZ`
+- `retired_by UUID FK -> users(id)`, `retired_at TIMESTAMPTZ`
+
+Índice único parcial `consent_documents_one_published` sobre `status` WHERE `status='published'` — solo una versión publicada a la vez [073].
+
+Trigger `consent_documents_immutable` [073] (`BEFORE UPDATE`): una vez que `status` deja de ser `draft`, bloquea cualquier cambio a `content_md`/`purposes`/`version`/`title`/`content_sha256` — hay que clonar un borrador nuevo, nunca editar una versión publicada o retirada.
+
+Trigger de restricción diferible `consent_documents_no_gap_on_retire` [077] (`CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED`, solo dispara en la transición `published → retired`): al final de la transacción exige que exista alguna fila `published` — permite retirar y publicar el reemplazo en la misma transacción (en cualquier orden), pero no deja el módulo sin aviso vigente.
+
+RLS: habilitado [073]. Público (incluido `anon`) ve solo las filas `published` [073]; `REVOKE INSERT, UPDATE, DELETE ... FROM authenticated, anon` — toda escritura es vía `service_role`, nunca directo del cliente.
+
+### `consent_records` [073, alterada en 074 y 084]
+
+Evidencia de consentimiento, append-only con cadena de hash (REQ-04).
+
+- `id BIGINT PK GENERATED ALWAYS AS IDENTITY`
+- `user_id UUID FK -> users(id) ON DELETE NO ACTION` [la FK original de 073 era `ON DELETE SET NULL`; 074 la cambió a `NO ACTION` porque ese `SET NULL` implícito disparaba el propio trigger append-only y una baja con evidencia no se podía atender — la desvinculación real ahora la hace `unlink_user_consent_evidence()`]. Nulo para evidencia de invitado (083) y legacy (084).
+- `user_ref_hmac TEXT NOT NULL` — `HMAC(user_id, LOOKUP_HMAC_KEY_B64)`; referencia estable aunque `user_id` quede `NULL`
+- `document_id UUID NOT NULL FK -> consent_documents(id)`, `document_version TEXT NOT NULL`
+- `rendered_sha256 TEXT NOT NULL`, `settings_version INT NOT NULL`
+- `purpose_code TEXT NOT NULL`
+- `decision TEXT NOT NULL` CHECK (`granted, denied, revoked`)
+- `channel TEXT NOT NULL` CHECK (`registro, reconsentimiento, mi_privacidad, correo, admin` [073], `+ invitado` [083])
+- `ip_ciphertext JSONB`, `ip_hmac TEXT` [nulable desde 073 por tipo de columna, pero con `NOT NULL` real hasta 084] — ver CHECK abajo
+- `ua_ciphertext JSONB`, `ua_hmac TEXT`
+- `key_version INT NOT NULL`
+- `server_ts TIMESTAMPTZ NOT NULL DEFAULT now()`
+- `prev_hash TEXT`, `row_hash TEXT NOT NULL` — cadena de hash, ver función `verify_consent_chain()` abajo
+
+CHECK `consent_records_ip_hmac_legacy_check` [084]: `ip_hmac IS NOT NULL OR document_version LIKE 'legacy-%'` — toda fila nueva sigue exigiendo IP; solo el backfill de consentimiento legacy (T25) puede quedar sin ella.
+
+Índices: `consent_records_user_purpose(user_id, purpose_code, server_ts DESC)`, `consent_records_ip_hmac(ip_hmac)`, `consent_records_user_ref_hmac(user_ref_hmac)` [073].
+
+Canonicalización del hash (`consent_record_canonical`) [073, redefinida en 074]: desde 074 excluye `row_hash`, `user_id`, `ip_ciphertext` y `ua_ciphertext` — exactamente las columnas que una baja (`unlink_user_consent_evidence`) o una futura retención (REQ-19, aún sin implementar — ver `loop-consentimiento/TASKS.md`, T17) ponen en `NULL`; si el hash las cubriera, cada baja/retención rompería `verify_consent_chain()`.
+
+Trigger `consent_records_chain` [073] (`BEFORE INSERT`): calcula `prev_hash`/`row_hash` encadenando con la fila anterior (candado consultivo `pg_advisory_xact_lock` para que inserciones concurrentes no generen dos cadenas válidas en paralelo).
+
+Trigger `consent_records_append_only` → función `block_consent_records_mutation` [073, reescrita en 074]: bloquea todo `UPDATE`/`DELETE` salvo con la bandera de sesión `app.allow_evidence_mutation = 'on'`; desde 074, incluso con la bandera activa solo puede cambiar `user_id`, `ip_ciphertext` y `ua_ciphertext`, y únicamente hacia `NULL` (nunca a otro valor, nunca el resto de columnas). Confirmado contra Postgres real (no solo leído en el código): un intento de `DELETE`/`UPDATE` directo, incluso como `service_role`, falla con este mensaje — probado en la sesión que preparó T25 (ver `loop-consentimiento/PROGRESS.md`, Iteración 92).
+
+RLS: habilitado [073]. Usuario ve sus propias filas, pero el `GRANT SELECT` está acotado a columnas (`id, user_id, document_id, document_version, purpose_code, decision, channel, server_ts` — nunca `ip_ciphertext`/`ip_hmac`/`ua_ciphertext`/`ua_hmac`, ni siquiera cifrados) [073]. `REVOKE ALL ... FROM authenticated, anon` de base; toda escritura es `service_role`.
+
+### `admin_audit_log` [073, alterada en 074]
+
+Bitácora administrativa, append-only con cadena de hash (REQ-16).
+
+- `id BIGINT PK GENERATED ALWAYS AS IDENTITY`
+- `actor_id UUID FK -> users(id) ON DELETE NO ACTION` [igual que `consent_records.user_id`: 073 tenía `ON DELETE SET NULL`, 074 lo cambió a `NO ACTION` por el mismo motivo — borrar a un admin con historial fallaba por el trigger append-only; un admin con historial se desactiva, no se borra]
+- `actor_email_hmac TEXT NOT NULL`, `actor_role TEXT NOT NULL`
+- `action TEXT NOT NULL`, `entity TEXT NOT NULL`, `entity_id TEXT`
+- `before JSONB`, `after JSONB`, `diff TEXT`, `reason TEXT`
+- `ip_ciphertext JSONB`, `ip_hmac TEXT`, `key_version INT`
+- `created_at TIMESTAMPTZ DEFAULT now()`
+- `prev_hash TEXT`, `row_hash TEXT NOT NULL`
+
+Índices: `admin_audit_log_actor(actor_id, created_at DESC)`, `admin_audit_log_action(action, created_at DESC)` [073].
+
+Misma mecánica que `consent_records`: trigger `admin_audit_log_chain` calcula la cadena de hash [073]; a diferencia de `consent_records`, su trigger append-only (`block_admin_audit_log_mutation`) **no tiene ninguna bandera de excepción** — "no existe ninguna función que pueda modificar una fila existente" [073], ni siquiera para desvincular un actor (coherente con que `actor_id` usa `ON DELETE NO ACTION`, no `SET NULL`).
+
+RLS: habilitado [073]. `REVOKE ALL ... FROM authenticated, anon` — ninguna columna expuesta directo al cliente; se lee solo a través de `admin-consent` (service role, que aplica sus propios candados de rol).
+
+### `data_subject_requests` [073, alterada en 078]
+
+Casos de solicitudes de derechos y bajas (REQ-10/11).
+
+- `id UUID PK DEFAULT gen_random_uuid()`
+- `case_number TEXT UNIQUE NOT NULL` — formato `CD-<año>-<6 dígitos>`, numeración reiniciada cada año [073, generador reescrito en 078: antes era una secuencia global que nunca reiniciaba el número al cambiar de año; ahora usa `data_subject_request_counters(year, last_number)`, una fila por año]
+- `user_id UUID FK -> users(id) ON DELETE SET NULL`
+- `email_ciphertext JSONB`, `email_hmac TEXT NOT NULL`
+- `request_type TEXT NOT NULL` CHECK (`baja, acceso, rectificacion, eliminacion, oposicion, suspension, portabilidad, revocacion, decision_automatizada`) — las 9 finalidades ya estaban completas desde 073, no se amplió después
+- `details_ciphertext JSONB`
+- `channel TEXT NOT NULL` CHECK (`app, correo`)
+- `status TEXT NOT NULL DEFAULT 'recibida'` CHECK (`recibida, requiere_aclaracion, en_proceso, atendida, rechazada_con_motivo`)
+- `routed_to_email TEXT NOT NULL`, `settings_version INT NOT NULL`
+- `received_at TIMESTAMPTZ DEFAULT now()`, `due_at TIMESTAMPTZ NOT NULL`
+- `resolved_at TIMESTAMPTZ`, `resolution_note_ciphertext JSONB`
+- `ip_ciphertext JSONB`, `ip_hmac TEXT`, `key_version INT`
+
+Índices: `data_subject_requests_status_due(status, due_at)`, `data_subject_requests_email_hmac(email_hmac)` [073].
+
+Tabla nueva `data_subject_request_counters(year INT PK, last_number INT DEFAULT 0)` [078] — respalda `next_case_number()` (sección de funciones abajo); `REVOKE ALL ... FROM authenticated, anon`.
+
+Trigger `data_subject_requests_restrict_update` → `block_data_subject_request_mutation` [078]: **073 no daba ninguna vía de `UPDATE`** (`REVOKE ALL`, sin ninguna función); 078 la abre, pero solo a través de `update_data_subject_request_status()` con la bandera `app.allow_case_status_update`, y aun así solo puede cambiar `status`, `resolved_at` y `resolution_note_ciphertext`. `DELETE` sigue bloqueado siempre, con o sin la bandera — "no se puede borrar un caso, solo cambiar su estado".
+
+RLS: habilitado [073]. `REVOKE ALL ... FROM authenticated, anon` — "sin políticas para anon/authenticated a propósito: se crea y se lee solo vía las Edge Functions (service role)... nunca directo del cliente" [073, comentario literal de la migración].
+
+### `privacy_settings` [073, alterada en 075] y `privacy_email_verifications` [075]
+
+Configuración del responsable/delegado, versionada (REQ-14/15).
+
+`privacy_settings`:
+- `id BIGINT PK GENERATED ALWAYS AS IDENTITY`
+- `settings_version INT UNIQUE NOT NULL`
+- `controller_name TEXT`, `controller_address TEXT`, `controller_phone TEXT`
+- `privacy_email TEXT NOT NULL`
+- `dpo_name TEXT`, `dpo_contact TEXT`
+- `unsubscribe_subject TEXT DEFAULT 'Solicitud de baja y eliminación de datos - CiberDojo'`
+- `response_days INT DEFAULT 15` CHECK (1-90)
+- `response_day_type TEXT DEFAULT 'calendario'` CHECK (`calendario, habiles`) — D-03: en uso hoy siempre `calendario`, sin tabla de feriados
+- `ip_retention_days INT DEFAULT 730` CHECK (`>= 0`)
+- `evidence_retention_days INT DEFAULT 1825` CHECK (`>= 0`) — comentario de 073: "D-02: 5 años tras baja atendida"; **ambos plazos de retención siguen siendo solo valores por defecto configurables: D-02 sigue `ABIERTA` en `loop-consentimiento/DECISIONS.md`, pendiente de asesoría legal**
+- `privacy_policy_url TEXT`
+- `four_eyes_publish BOOLEAN DEFAULT false`
+- `created_by UUID NOT NULL FK -> users(id)`, `created_at TIMESTAMPTZ DEFAULT now()`
+
+Columnas que 073 creó y 075 **eliminó** (nunca tuvieron datos, confirmado con una guarda `DO $$ ... RAISE EXCEPTION` que aborta la migración si llegaran a tenerlos): `is_current`, `privacy_email_pending`, `privacy_email_code_hash`, `privacy_email_code_expires_at`. El motivo (comentario de 075): con `is_current` + un índice único, nunca se podía "bajar" la marca de la versión vieja, así que la versión 2 no cabía — la verificación de correo pendiente se movió a su propia tabla.
+
+Trigger `privacy_settings_append_only` [073]: solo `INSERT`, cualquier `UPDATE`/`DELETE` lanza excepción. Trigger `privacy_settings_next_version` → `enforce_next_privacy_settings_version` [075]: la versión nueva debe ser exactamente `MAX(settings_version) + 1` (candado consultivo para dos inserciones simultáneas).
+
+Vista `privacy_settings_current` [075]: `SELECT * ... ORDER BY settings_version DESC LIMIT 1`, `security_invoker = true`; `GRANT SELECT` solo a `service_role`.
+
+`privacy_email_verifications` [075]:
+- `id UUID PK DEFAULT gen_random_uuid()`
+- `new_email TEXT NOT NULL` CHECK (formato de correo, ≤254 caracteres)
+- `code_hash TEXT NOT NULL`, `expires_at TIMESTAMPTZ NOT NULL` CHECK (`expires_at > created_at`)
+- `attempts INT DEFAULT 0` CHECK (0-10)
+- `confirmed_at TIMESTAMPTZ`
+- `requested_by UUID NOT NULL FK -> users(id)`, `created_at TIMESTAMPTZ DEFAULT now()`
+
+Índice `privacy_email_verifications_requester(requested_by, created_at DESC)`. Dos triggers de guarda [075]: `guard_privacy_email_verification_update` (una vez `confirmed_at` no es nulo, la fila ya no cambia; solo pueden subir `attempts` o confirmarse una vez, nunca con el código ya vencido) y `guard_privacy_email_verification_delete` (una verificación confirmada nunca se borra).
+
+RLS de ambas: habilitado [073/075]. `REVOKE ALL ... FROM anon, authenticated` — solo `admin-consent` (service role) las toca.
+
+### `admin_roles` [073]
+
+Identidad y roles individuales del módulo (D-01, SEC-02, H08).
+
+- `user_id UUID NOT NULL FK -> users(id) ON DELETE CASCADE`
+- `role TEXT NOT NULL` CHECK (`privacy_editor, privacy_admin, privacy_auditor`)
+- `granted_by UUID FK -> users(id)`, `granted_at TIMESTAMPTZ DEFAULT now()`
+- `PRIMARY KEY (user_id, role)` — una persona puede tener varios roles, una fila por rol
+
+**Nace vacía**: a diferencia de `privacy_settings`, esta migración no inserta ninguna fila placeholder — no hay ninguna ruta de auto-alta de administradores; alguien con acceso directo a la base debe decidir quién recibe qué rol (ver `loop-consentimiento/PLAN_RELEASE_COMPLETO.md`, paso 1).
+
+RLS: habilitado [073]. Única política: cada persona ve sus propias filas (`auth.uid() = user_id`). `REVOKE INSERT, UPDATE, DELETE ... FROM authenticated, anon` — otorgar un rol exige una sesión con acceso directo a la base (SQL Editor del panel o `psql`), nunca desde el cliente ni desde ninguna Edge Function.
+
+### `email_transport_settings`, `email_transport_tests`, `email_outbox` [079]
+
+Transporte de correo saliente configurable desde el panel (REQ-21, SEC-09, D-05).
+
+`email_transport_settings` — versionada, solo `INSERT` (mismo patrón que `privacy_settings`):
+- `id BIGINT PK GENERATED ALWAYS AS IDENTITY`
+- `transport_version INT UNIQUE NOT NULL`
+- `mode TEXT NOT NULL` CHECK (`resend, smtp`)
+- `from_name TEXT NOT NULL`, `from_email TEXT NOT NULL` CHECK (formato de correo)
+- `smtp_host TEXT`, `smtp_port INT` CHECK (`NULL` o `465`/`2525` — mismo tope que el anti-SSRF de T12.c: 587/25 nunca), `smtp_username TEXT`, `smtp_password_ciphertext JSONB`
+- `created_by UUID NOT NULL FK -> users(id)`, `created_at TIMESTAMPTZ DEFAULT now()`
+- CHECK compuesto: en modo `resend` las 4 columnas `smtp_*` deben ser `NULL`; en modo `smtp`, las 4 son obligatorias — nunca una mezcla a medias
+
+Fila placeholder sembrada en 079: versión 1, modo `resend`, remitente marcado `(placeholder, actualizar)`. Trigger de solo-inserción (`block_email_transport_settings_mutation`) y de versión siguiente (`enforce_next_email_transport_settings_version`), igual mecánica que `privacy_settings`/075. Vista `email_transport_settings_current` (la de mayor `transport_version`), `security_invoker = true`, `GRANT SELECT` solo a `service_role`.
+
+`email_transport_tests` — resultado de cada correo de prueba, append-only, **sin datos sensibles**:
+- `id BIGINT PK GENERATED ALWAYS AS IDENTITY`
+- `transport_version INT NOT NULL FK -> email_transport_settings(transport_version)`
+- `success BOOLEAN NOT NULL`, `error_code TEXT` CHECK (`success OR error_code IS NOT NULL`)
+- `tested_by UUID NOT NULL FK -> users(id)`, `created_at TIMESTAMPTZ DEFAULT now()`
+
+Nunca guarda destinatario ni asunto/cuerpo del correo — solo si funcionó y, si no, un código de error estable (comentario de 079: nunca el mensaje crudo del proveedor, que podría filtrar la contraseña SMTP o cabeceras). Índice `email_transport_tests_version(transport_version, created_at DESC)`. Trigger append-only sin ninguna excepción (`block_email_transport_tests_mutation`) — ni siquiera una función puede modificar una fila existente.
+
+`email_outbox` — avisos pendientes cuando el envío falla (REQ-21f):
+- `id UUID PK DEFAULT gen_random_uuid()`
+- `reference_table TEXT NOT NULL`, `reference_id TEXT NOT NULL` — apunta a la fila de origen (p. ej. `data_subject_requests` + su id); no duplica correo ni datos del titular aquí
+- `status TEXT DEFAULT 'pending'` CHECK (`pending, sent`), `created_at TIMESTAMPTZ DEFAULT now()`, `sent_at TIMESTAMPTZ` CHECK (`(status = 'sent') = (sent_at IS NOT NULL)`)
+
+Índice parcial `email_outbox_pending(created_at) WHERE status = 'pending'`. Trigger `email_outbox_restrict_update` → `block_email_outbox_mutation`: nunca se borra ("no se puede borrar un aviso, solo marcarlo enviado"); la única vía de `UPDATE` es `mark_email_outbox_sent()` con la bandera `app.allow_email_outbox_update`, y solo puede cambiar `status`/`sent_at`.
+
+RLS de las tres: habilitado [079]. `REVOKE ALL ... FROM authenticated, anon` — solo `service_role`.
+
+### Vistas del módulo
+
+| Vista | Migración | Expone | Permisos |
+|---|---|---|---|
+| `my_consent_state` | 073 | Último estado por finalidad del usuario autenticado (`DISTINCT ON purpose_code`), sin `ip`/`ua`, ni cifrados | `security_invoker=true`; `GRANT SELECT TO authenticated` |
+| `privacy_settings_current` | 075 | La fila de `privacy_settings` de mayor `settings_version` | `security_invoker=true`; `GRANT SELECT` solo a `service_role` |
+| `email_transport_settings_current` | 079 | La fila de `email_transport_settings` de mayor `transport_version` (incluye `smtp_password_ciphertext`, cifrada) | `security_invoker=true`; `GRANT SELECT` solo a `service_role` |
+
+### Funciones del módulo
+
+| Función | Migración | Tipo | Propósito |
+|---|---|---|---|
+| `has_privacy_role(required_role TEXT)` | 073 | `SECURITY DEFINER`, callable | `TRUE` si `auth.uid()` tiene esa fila en `admin_roles` |
+| `consent_record_canonical(rec)` | 073, redefinida en 074 | `IMMUTABLE`, usada por la cadena | Serialización determinista para el hash; desde 074 excluye `row_hash`/`user_id`/`ip_ciphertext`/`ua_ciphertext` |
+| `consent_records_chain_trigger()` | 073 | trigger `BEFORE INSERT` | Calcula `prev_hash`/`row_hash` encadenado, con candado consultivo |
+| `block_consent_records_mutation()` | 073, reescrita en 074 | trigger `BEFORE UPDATE OR DELETE` | Append-only; desde 074 la bandera de sesión solo permite poner `user_id`/`ip_ciphertext`/`ua_ciphertext` en `NULL` |
+| `verify_consent_chain()` | 073 | callable (`SELECT * FROM ...`) | Recorre toda la cadena de `consent_records` y devuelve el primer eslabón roto, si lo hay (REQ-18) |
+| `admin_audit_log_chain_trigger()` / `block_admin_audit_log_mutation()` | 073 | triggers | Misma mecánica que arriba, sin ninguna excepción de mutación |
+| `verify_audit_chain()` | 073 | callable | Igual que `verify_consent_chain()`, para `admin_audit_log` (REQ-18) |
+| `next_case_number()` | 073, reescrita en 078 | callable | `CD-<año>-<6 dígitos>`; desde 078 reinicia el contador cada año (`data_subject_request_counters`); antes usaba una secuencia global que nunca reiniciaba |
+| `enforce_next_privacy_settings_version()` | 075 | trigger `BEFORE INSERT` | La versión nueva debe ser `MAX(settings_version)+1`, con candado consultivo |
+| `guard_privacy_email_verification_update()` / `guard_privacy_email_verification_delete()` | 075 | triggers | Una verificación confirmada no cambia ni se borra; los intentos no bajan; no se confirma un código vencido |
+| `unlink_user_consent_evidence(user_id, actor_id, actor_email_hmac, actor_role, reason)` | 074 | `SECURITY DEFINER`, solo `service_role` | REQ-20: pone `user_id = NULL` en toda la evidencia de esa persona (bandera de sesión), registra la operación en `admin_audit_log` con el seudónimo (`user_ref_hmac`), nunca el id |
+| `enforce_consent_document_no_gap_on_retire()` | 077 | constraint trigger diferible | Al COMMIT, exige que siga existiendo una fila `published` tras retirar la vigente |
+| `block_data_subject_request_mutation()` / `update_data_subject_request_status(...)` | 078 | trigger + `SECURITY DEFINER` (solo `service_role`) | Única vía de cambiar `status`/`resolved_at`/`resolution_note_ciphertext` de un caso; `DELETE` bloqueado siempre; registra en `admin_audit_log` |
+| `publish_consent_document(draft_id, actor_id, actor_role, actor_aal, actor_email_hmac, reason)` | 080 | `SECURITY DEFINER`, solo `service_role` | Retira la versión vigente y publica el borrador en UNA transacción (candado consultivo `pg_advisory_xact_lock`); valida `aal2`, rol `privacy_admin` y la regla de "cuatro ojos" (`four_eyes_publish`) dentro de la propia función, no solo en la Edge Function |
+| 4 funciones de cadena recalificadas | 081 | `CREATE OR REPLACE` puro | `consent_records_chain_trigger`/`verify_consent_chain`/`admin_audit_log_chain_trigger`/`verify_audit_chain` pasan a llamar `extensions.digest(...)` calificado — en Supabase real `pgcrypto` vive en `extensions`, no en `public`; sin esto, cualquier función `SECURITY DEFINER ... SET search_path = public` que disparara estos triggers fallaba con `function digest(text, unknown) does not exist` |
+| `confirm_privacy_email_change(verification_id, code_hash, actor_id, actor_role, actor_aal, actor_email_hmac)` | 082 | `SECURITY DEFINER`, solo `service_role` | Confirma el código y, en la misma transacción, inserta la siguiente versión de `privacy_settings` con el correo nuevo; vuelve a comprobar el hash del código como defensa en profundidad |
+| `block_email_transport_settings_mutation()` / `enforce_next_email_transport_settings_version()` | 079 | triggers | Mismo patrón que `privacy_settings`: solo inserción, versión siguiente exacta |
+| `block_email_transport_tests_mutation()` | 079 | trigger | Append-only sin excepción |
+| `block_email_outbox_mutation()` / `mark_email_outbox_sent(outbox_id)` | 079 | trigger + `SECURITY DEFINER` (solo `service_role`) | Única vía de marcar un aviso como `sent`; nunca se borra |
+| `cleanup_expired_guest_sessions()` | 083 | `SECURITY DEFINER`, solo `service_role` | Borra `auth.users` con `is_anonymous=true` y más de 24h de antigüedad (cascada a `learning_progress`/`learning_attempts`); agendada por hora con `pg_cron` solo si la extensión existe en el proyecto |
+
+### Hallazgos de RLS específicos del módulo
+
+A diferencia de las tablas de la línea base (sección 9), **ninguna tabla del módulo quedó sin `ENABLE ROW LEVEL SECURITY`** — las 10 tablas (`consent_documents`, `consent_records`, `admin_audit_log`, `data_subject_requests`, `data_subject_request_counters`, `privacy_settings`, `privacy_email_verifications`, `admin_roles`, `email_transport_settings`, `email_transport_tests`, `email_outbox`) lo tienen desde su propia migración de creación. La única lectura directa del cliente en todo el módulo es: `consent_documents` (público, solo filas `published`), `consent_records` (el propio usuario, columnas acotadas, vía RLS) y `admin_roles` (la propia persona, vía RLS); todo lo demás se lee y escribe exclusivamente a través de las Edge Functions del módulo (`service_role`), que aplican sus propios candados de rol (`requireRole`, `has_privacy_role`) antes de tocar la base.
+
+### Nota sobre el diagrama entidad-relación (sección 11)
+
+El diagrama de la sección 11 no incluye las tablas de este módulo (se generó antes de 073). No se amplió en este trabajo: las relaciones reales del módulo son extensas (casi todas las tablas referencian `users` para `created_by`/`actor_id`/`user_id`, más las FK internas ya listadas arriba columna por columna) y ampliar el diagrama Mermaid existente queda fuera del alcance de T98.c — las FK están documentadas en prosa en cada tabla de esta sección.
+
+---
+
+*Sección 12 añadida el 2026-10-23 a partir de la lectura línea por línea de `supabase/migrations/073_consent_module_foundation.sql` a `084_consent_records_legacy_ip_hmac_nullable.sql`. Cualquier migración del módulo posterior a la 084 no está reflejada aquí.*
