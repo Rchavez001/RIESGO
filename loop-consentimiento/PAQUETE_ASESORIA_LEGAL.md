@@ -30,19 +30,23 @@ evidencia (quién aceptó qué, cuándo, y desde dónde).
 
 **Importante:** este texto tiene espacios marcados `{{así}}` que el sistema completa
 automáticamente con los datos reales antes de mostrarlo (por ejemplo, el nombre del responsable).
-**Varios de esos espacios todavía NO tienen un valor real cargado** — están señalados abajo con
-**[PENDIENTE]**. El sistema técnicamente no permite publicar este aviso mientras queden espacios
-sin completar, así que antes de salir a producción alguien debe llenarlos con los datos reales.
+Varios de esos espacios todavía NO tienen un valor real cargado. El sistema técnicamente no permite
+publicar este aviso mientras queden espacios sin completar, así que antes de salir a producción
+alguien debe llenarlos con los datos reales.
 
-También hay dos párrafos completos marcados como **"texto nuevo, pendiente de que tú lo revises"**
-— estos todavía no están aprobados por nadie del área legal; los escribió el equipo técnico como
-propuesta y necesitan tu revisión antes de quedar definitivos.
+Dentro de la cita de abajo, cada vez que aparece una línea en *cursiva* que empieza con "*Nota
+para asesoría legal: …*", es una aclaración nuestra para ti — **nunca** es texto que la persona
+vaya a leer en la aplicación. El resto (texto normal, sin cursiva) es exactamente lo que verá
+quien se registre.
 
 > ### Consentimiento informado y privacidad
 >
 > **CiberDojo · Información previa al registro**
-> Versión {{version}} · Vigente desde {{fecha_vigencia}} · Ecuador — **[PENDIENTE: la versión y la
-> fecha de vigencia las completa el sistema al publicar]**
+> Versión {{version}} · Vigente desde {{fecha_vigencia}} · Ecuador
+>
+> *Nota para asesoría legal: la versión y la fecha de vigencia las completa el sistema
+> automáticamente al publicar — no son un dato pendiente de decisión, solo un valor que todavía no
+> existe porque el aviso no se ha publicado.*
 >
 > Tu privacidad también es parte de nuestro entrenamiento. Aprende ciberseguridad con información
 > clara sobre tus datos y con control sobre tus decisiones.
@@ -52,11 +56,19 @@ propuesta y necesitan tu revisión antes de quedar definitivos.
 > CiberDojo es una iniciativa educativa sin fines de lucro que acerca la ciberseguridad a personas
 > con distintos niveles de conocimientos tecnológicos.
 >
-> - **Responsable legal:** {{responsable_nombre}} — **[PENDIENTE: falta el nombre real]**
-> - **Domicilio legal:** {{responsable_domicilio}} — **[PENDIENTE: falta la dirección real]**
-> - **Teléfono:** {{responsable_telefono}} — **[PENDIENTE: falta el teléfono real]**
-> - **Correo para privacidad y baja:** {{correo_privacidad}} — **[PENDIENTE: falta el correo real]**
-> - **Delegado de protección de datos:** {{dpo_contacto}} — **[PENDIENTE: falta el contacto real]**
+> *Nota para asesoría legal: la frase "sin fines de lucro" de este párrafo debe validarse contra el
+> modelo económico real del proyecto — ver la sección 9 de este documento, "Contexto del
+> responsable del tratamiento".*
+>
+> - **Responsable legal:** {{responsable_nombre}}
+> - **Domicilio legal:** {{responsable_domicilio}}
+> - **Teléfono:** {{responsable_telefono}}
+> - **Correo para privacidad y baja:** {{correo_privacidad}}
+> - **Delegado de protección de datos:** {{dpo_contacto}}
+>
+> *Nota para asesoría legal: los cinco campos de arriba son marcadores `{{...}}` que hoy NO tienen
+> ningún valor real cargado — el sistema no permite publicar el aviso mientras sigan vacíos. Ver la
+> sección 9 de este documento para el contexto de quién debería aparecer aquí.*
 >
 > #### 2. ¿Qué datos se tratarán y para qué?
 >
@@ -104,21 +116,25 @@ propuesta y necesitan tu revisión antes de quedar definitivos.
 > La política definitiva debe explicar si existen perfiles o decisiones exclusivamente automatizadas,
 > sus efectos y los mecanismos de revisión humana que correspondan.
 >
-> **— Texto nuevo, pendiente de que tú lo revises —**
+> *Nota para asesoría legal: el siguiente párrafo es texto nuevo propuesto por el equipo técnico,
+> todavía no aprobado. Para más contexto sobre el envío de correos a través de Resend, ver la
+> sección 7 de este documento.*
+>
 > Para enviarte confirmaciones, avisos sobre solicitudes de derechos y códigos de verificación,
 > CiberDojo utiliza el proveedor de correo transaccional Resend, con sede en Estados Unidos.
 > Enviarte estos mensajes implica una transferencia internacional de tu dirección de correo
 > electrónico y del contenido del mensaje a ese proveedor, bajo sus garantías contractuales de
 > protección de datos.
-> **(Ver sección 6 de este documento para más contexto sobre este punto.)**
 >
 > #### 5. Conservación y seguridad
 >
 > Los datos de cuenta y aprendizaje se conservarán mientras mantengas tu cuenta y sean necesarios
 > para las finalidades informadas. Tras la baja se eliminarán o anonimizarán los datos que
 > corresponda; cualquier conservación excepcional deberá tener una base legal y un plazo
-> justificado. **[PENDIENTE: los plazos exactos todavía no están decididos — ver sección 4 de este
-> documento]**
+> justificado.
+>
+> *Nota para asesoría legal: los plazos exactos de conservación todavía no están decididos — es
+> una propuesta técnica sin validar, ver la sección 4 de este documento.*
 >
 > CiberDojo deberá mantener medidas técnicas y organizativas de protección, acceso restringido y
 > gestión segura de credenciales. No debe almacenar contraseñas en texto legible ni solicitar que
@@ -144,9 +160,12 @@ propuesta y necesitan tu revisión antes de quedar definitivos.
 > Se verificará tu identidad de manera proporcional y segura. Si hace falta información para
 > tramitar formalmente el derecho, se te indicará cómo completarla. No envíes contraseñas. La
 > eliminación se atenderá en el plazo legal de {{plazo_respuesta_dias}} días de recibida la
-> solicitud (hoy propuesto en 15 días, ver sección 4), conforme al artículo 15 de la LOPDP,
-> considerando las excepciones legales y las reglas aplicables a solicitudes que requieran
-> aclaración.
+> solicitud, conforme al artículo 15 de la LOPDP, considerando las excepciones legales y las reglas
+> aplicables a solicitudes que requieran aclaración.
+>
+> *Nota para asesoría legal: a diferencia de los plazos de la sección 4 (todavía sin validar), este
+> de 15 días calendario SÍ ya está decidido (días calendario, no hábiles — es la opción conservadora,
+> siempre vencen antes que 15 días hábiles) y configurado como valor por defecto del sistema.*
 >
 > La baja implica perder el acceso a la cuenta y al progreso asociado que se elimine. Si algún dato
 > debe conservarse por una obligación legal, se informará la razón y el período aplicable. Puedes
@@ -163,12 +182,19 @@ propuesta y necesitan tu revisión antes de quedar definitivos.
 > entregar o no entregar los datos y puedo consultar la Política de Privacidad completa antes de
 > decidir.
 >
-> **— Texto nuevo, pendiente de que tú lo revises —**
+> *Nota para asesoría legal: la "Política de Privacidad completa" que este párrafo menciona
+> **todavía no está redactada** — hoy no existe ningún documento al que ese enlace pueda apuntar.
+> Este aviso que estás revisando es, por ahora, el único texto de privacidad real de la
+> aplicación.*
+>
+> *Nota para asesoría legal: el siguiente párrafo es texto nuevo propuesto por el equipo técnico,
+> todavía no aprobado. Para más contexto sobre el registro de la IP como evidencia, ver la sección
+> 6 de este documento; el plazo de 730 días (2 años) es la propuesta sin validar de la sección 4.*
+>
 > Para demostrar tu decisión, CiberDojo registrará la fecha y hora, la versión de este aviso, cada
 > autorización que otorgues o rechaces y la dirección IP y el navegador desde los que lo hiciste.
 > Esta información se guarda cifrada, solo puede consultarla personal autorizado de privacidad y la
-> dirección IP se elimina transcurridos {{retencion_ip_dias}} días (hoy propuesto en 730 días/2
-> años, ver sección 4). **(Ver sección 5 de este documento para más contexto sobre este punto.)**
+> dirección IP se elimina transcurridos {{retencion_ip_dias}} días.
 >
 > Las autorizaciones se muestran como casillas separadas y desmarcadas (definidas en las finalidades
 > de esta versión).
@@ -181,11 +207,11 @@ propuesta y necesitan tu revisión antes de quedar definitivos.
 > requieren consentimiento expreso de su representante legal, conforme al artículo 19 del
 > Reglamento.
 >
-> **Decisión ya tomada sobre este punto:** por ahora, si alguien dice tener menos de 15 años, el
-> sistema simplemente **bloquea el registro** y le muestra un mensaje para que un adulto responsable
-> escriba al correo de privacidad. No se guarda la fecha de nacimiento ni ningún otro dato de la
-> persona menor. (Internamente le decimos "Decisión D-04, opción A" — lo mencionamos por si
-> preguntas por el número en otra conversación con el equipo técnico.)
+> *Nota para asesoría legal: sobre este punto ya decidimos, a nivel técnico, bloquear el registro de
+> quien declare tener menos de 15 años y mostrarle un mensaje para que un adulto responsable escriba
+> al correo de privacidad — no se guarda fecha de nacimiento ni ningún otro dato de la persona
+> menor. Ver la pregunta 13 de la sección 10 de este documento: necesitamos que confirmes si esto
+> es suficiente para el artículo 19 del Reglamento.*
 
 **Las tres casillas que la persona debe marcar o dejar sin marcar al registrarse:**
 1. **Registro y aprendizaje** (obligatoria): "Autorizo el tratamiento de los datos estrictamente
@@ -334,32 +360,123 @@ transferencia, y si hace falta algún documento o cláusula adicional con Resend
 
 ---
 
-## 8. Preguntas concretas que necesitamos que respondas
+## 8. Dónde se guardan los datos y quién los procesa
+
+Para que tengas el cuadro completo de "quién toca los datos personales" (más allá de CiberDojo
+como responsable), aquí están los cuatro proveedores externos que participan, con qué hace cada
+uno y si recibe datos personales o no:
+
+| Proveedor | Qué hace | ¿Dónde está? | ¿Recibe datos personales? |
+|---|---|---|---|
+| **Supabase** | Guarda toda la base de datos de la aplicación (cuentas, progreso, evidencia de consentimiento, todo) | Región **us-west-1** (Norte de California, Estados Unidos) | **Sí, todos los datos personales que existen en la aplicación** — es donde vive la base de datos completa |
+| **Google Cloud Run** | Hospeda el sitio web y el panel de administración (el código que la gente visita en el navegador) | Región **us-central1** (Iowa, Estados Unidos) | **Sí** — por ahí pasa cada solicitud que alguien hace desde su navegador, aunque no guarda los datos de forma permanente ahí (eso lo hace Supabase) |
+| **Resend** | Envía los correos automáticos (confirmaciones, avisos de baja, códigos de verificación) — ver sección 7 | Estados Unidos | **Sí** — recibe la dirección de correo de la persona y el contenido de cada mensaje que se le envía |
+| **Proveedores de inteligencia artificial** (OpenAI, Anthropic/Claude, Moonshot/Kimi, DeepSeek, según cuál esté configurado) | Generan contenido educativo y dan respuestas en algunas secciones de la app | Fuera de Ecuador (cada proveedor tiene sus propios países/servidores) | **Depende de la función** — ver el detalle abajo |
+
+**Detalle de qué le llega a cada agente de inteligencia artificial** (esto lo revisamos directamente
+en el código de la aplicación; está marcado como *según revisión del código; pendiente de confirmar
+en la configuración de producción*, porque una revisión de código no sustituye una auditoría formal
+del entorno real):
+- **Buscador de noticias, generador de preguntas a partir de noticias, y revisor de esas
+  preguntas:** trabajan solo con noticias públicas de internet. No reciben ningún dato de ninguna
+  persona usuaria.
+- **"Sensei" (el asistente que responde dudas de ciberseguridad):** recibe únicamente el texto que
+  la persona escribe en su pregunta. No se le envía su nombre, correo ni ningún identificador —
+  pero si la persona decide escribir un dato personal dentro de su propia pregunta (por ejemplo,
+  "mi correo es nombre@ejemplo.com, ¿es seguro?"), eso sí llegaría al proveedor de IA, porque el
+  sistema no revisa ni bloquea el contenido de lo que la persona escribe.
+- **Agente que resume los registros internos de seguridad para el equipo administrativo:** le
+  enviamos una lista de eventos de seguridad con fecha, el nombre del endpoint, el tipo de evento,
+  la severidad y un campo de "metadata" (información adicional variable según el evento). **No** le
+  enviamos la dirección IP de nadie ni el identificador de ningún usuario — esas columnas
+  explícitamente no se incluyen en lo que se le manda a la IA. El campo "metadata" revisado hoy en
+  el código solo contiene códigos internos (por ejemplo, "motivo: límite de intentos superado"),
+  nunca un correo, nombre o IP sin cifrar — pero esto no está garantizado por ningún control
+  automático: es el resultado de revisar cada uno de los 17 lugares del código que escriben ese
+  campo hoy, no una regla que impida agregar un dato personal ahí en el futuro.
+- **Estadísticas compartidas con cualquier proveedor de IA:** siempre son agregadas (totales,
+  promedios), nunca datos de una persona identificable.
+
+**Lo que necesitamos de ti para este punto:** confirmar si Supabase, Google Cloud Run y Resend
+deben tratarse como **transferencias internacionales** y como **encargados del tratamiento**
+(empresas que procesan datos personales por cuenta de CiberDojo, no como un tercero independiente),
+y si hace falta un contrato o cláusula específica con cada uno más allá de sus términos de servicio
+estándar.
+
+---
+
+## 9. Contexto del responsable del tratamiento
+
+Esto no está en el aviso todavía (son justo los campos marcados como pendientes en la sección 2),
+pero te lo explicamos aquí para que tengas el contexto completo antes de decirnos qué poner:
+
+- **CiberDojo es un proyecto educativo cuyos derechos de uso para Ecuador se ceden al club Phycom
+  de la ESPOL** (Escuela Superior Politécnica del Litoral). Quien firma este documento es el autor
+  original de la aplicación y actúa, además, como consultor del proyecto.
+- **Modelo económico:** proyecto educativo cuyos derechos para Ecuador se ceden al club Phycom de
+  la ESPOL; se financia con donaciones y venta de publicidad de auspiciantes dentro de la app, y la
+  utilidad neta se reparte entre el club y el autor.
+- Como se señaló en la sección 2, el aviso actual dice que CiberDojo es una "iniciativa educativa
+  **sin fines de lucro**" — esa frase necesita validarse contra el modelo económico real de arriba
+  (que incluye publicidad pagada y reparto de utilidad), porque podría no ser exacta.
+
+**Lo que necesitamos de ti para este punto:**
+1. Con esta estructura (cesión de derechos a un club universitario, financiamiento con donaciones y
+   publicidad, reparto de utilidad entre el club y el autor), ¿quién debería figurar como
+   "responsable del tratamiento" en el aviso: el club Phycom, el autor a título personal, ambos, o
+   depende de algo que todavía no hemos definido?
+2. ¿La frase "sin fines de lucro" del aviso actual debe cambiarse o eliminarse dado este modelo
+   económico?
+
+---
+
+## 10. Preguntas concretas que necesitamos que respondas
 
 1. Los datos del responsable legal y del delegado de protección de datos (nombre, domicilio,
-   teléfono, correo) — sección 2 de este documento — ¿quién debe aparecer ahí exactamente? ¿La
-   organización, una persona específica, el club que opera la aplicación?
-2. Los dos párrafos marcados "texto nuevo, pendiente de que tú lo revises" (sobre el uso de
+   teléfono, correo) — sección 2 de este documento — ¿quién debe aparecer ahí exactamente, dado el
+   contexto de la sección 9 (cesión de derechos al club Phycom de la ESPOL, rol del autor como
+   consultor)? ¿La organización, una persona específica, el club, o una combinación?
+2. ¿Cuál es la base legal correcta para la cuenta y el tratamiento de datos de aprendizaje: el
+   consentimiento (como está planteado hoy en el aviso) o una relación contractual/de prestación de
+   un servicio educativo? ¿Cambia esto algo de lo que ya construimos?
+3. ¿Es obligatorio, bajo la LOPDP, designar formalmente un delegado de protección de datos para un
+   proyecto de este tamaño y naturaleza, o es opcional?
+4. ¿Este proyecto necesita un registro de actividades de tratamiento, una evaluación de impacto de
+   protección de datos, o un registro ante la Superintendencia de Protección de Datos Personales
+   (SPDP) antes de publicarse?
+5. Los dos párrafos marcados "texto nuevo, pendiente de que tú lo revises" (sobre el uso de
    inteligencia artificial/Resend, y sobre el registro de evidencia con IP) — sección 2, puntos 4 y
    8 — ¿los apruebas tal como están, o necesitan cambios?
-3. Los 4 plazos de conservación de la sección 4 (IP/UA: 2 años: evidencia tras baja: 5 años;
+6. Los 4 plazos de conservación de la sección 4 (IP/UA: 2 años; evidencia tras baja: 5 años;
    bitácora: 5 años; solicitudes: 5 años) — ¿son correctos, o cuáles deberían ser?
-4. ¿Es válido, bajo la LOPDP, tratar el consentimiento antiguo (una sola frase, sin IP, de hace
+7. ¿Es válido, bajo la LOPDP, tratar el consentimiento antiguo (una sola frase, sin IP, de hace
    tiempo) como "historial limitado" y pedirle a todos que acepten el aviso nuevo en su próximo
    inicio de sesión (sección 5), en vez de borrar esas cuentas o tratarlas de otra forma?
-5. El texto provisional del aviso para invitados (sección 3) — ¿qué debería decir exactamente el
+8. El texto provisional del aviso para invitados (sección 3) — ¿qué debería decir exactamente el
    texto definitivo?
-6. ¿Es aceptable guardar la dirección IP cifrada como evidencia de consentimiento, con las
+9. ¿Es aceptable guardar la dirección IP cifrada como evidencia de consentimiento, con las
    condiciones de acceso descritas en la sección 6, o hace falta ajustar algo?
-7. ¿Es aceptable usar Resend (con sede en Estados Unidos) para el correo transaccional de la
-   aplicación bajo las condiciones descritas en la sección 7, y qué debe decir el aviso al
-   respecto?
-8. El bloqueo del registro para menores de 15 años (sección 2, punto 9) — mostrando solo un mensaje
-   para que un adulto escriba al correo de privacidad, sin pedir fecha de nacimiento ni ningún otro
-   dato — ¿es una forma válida de cumplir con el artículo 19 del Reglamento, o hace falta algo más?
-9. ¿Hay algún otro requisito de la LOPDP o su Reglamento que no esté reflejado en el texto del
-   aviso (sección 2) y que debamos agregar antes de publicarlo?
-10. Una vez que respondas las preguntas anteriores, ¿necesitas revisar una versión final del texto
+10. ¿Es aceptable usar Resend (con sede en Estados Unidos) para el correo transaccional de la
+    aplicación bajo las condiciones descritas en la sección 7, y qué debe decir el aviso al
+    respecto?
+11. Para Supabase, Google Cloud Run y Resend (sección 8) — como encargados del tratamiento con
+    transferencia internacional — ¿qué cláusulas mínimas necesitamos tener con cada uno más allá de
+    sus términos de servicio estándar?
+12. ¿Qué procedimiento y plazo debemos seguir para notificar una vulneración de seguridad de datos
+    personales (a la SPDP y/o a las personas afectadas), y a partir de qué tipo de incidente aplica
+    esa obligación?
+13. El bloqueo del registro para menores de 15 años (sección 2, punto 9) — mostrando solo un mensaje
+    para que un adulto escriba al correo de privacidad, sin pedir fecha de nacimiento ni ningún otro
+    dato — ¿es una forma válida de cumplir con el artículo 19 del Reglamento, o hace falta algo más?
+14. La frase "sin fines de lucro" del aviso (sección 2, punto 1) frente al modelo económico real
+    (sección 9: donaciones + publicidad de auspiciantes + reparto de utilidad) — ¿debe cambiarse, y
+    con qué texto?
+15. La "Política de Privacidad completa" que el aviso menciona (sección 2, punto 8) todavía no
+    existe como documento — ¿debemos redactarla antes de publicar el aviso, o puede publicarse el
+    aviso primero y la política completa después?
+16. ¿Hay algún otro requisito de la LOPDP o su Reglamento que no esté reflejado en el texto del
+    aviso (sección 2) y que debamos agregar antes de publicarlo?
+17. Una vez que respondas las preguntas anteriores, ¿necesitas revisar una versión final del texto
     completo antes de que se publique, o con tus respuestas a este documento es suficiente?
 
 ---
