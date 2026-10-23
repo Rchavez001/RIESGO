@@ -1279,8 +1279,16 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
     - [ ] **T98.e — Runbook de atención de solicitudes de derechos/baja** (REQ-10, REQ-11: cómo un
       `privacy_editor`/`privacy_admin` atiende un caso desde que llega el aviso al delegado hasta
       `atendida`/`rechazada_con_motivo`, con los plazos del semáforo)
-    - [ ] **T98.f — Lista de pendientes para el área legal antes de publicar** (D-02 plazos de conservación,
-      D-07 datos del responsable/delegado, confirmación de D-10 sobre el consentimiento legacy)
+    - [x] **T98.f — Lista de pendientes para el área legal antes de publicar** (D-02 plazos de conservación,
+      D-07 datos del responsable/delegado, confirmación de D-10 sobre el consentimiento legacy) (hecha 2026-10-22)
+      - **Hecho:** `loop-consentimiento/PAQUETE_ASESORIA_LEGAL.md` — lenguaje no técnico, pensado para
+        exportar a PDF. Incluye el texto completo del aviso 1.0 (con cada `{{marcador}}` sin resolver
+        señalado `[PENDIENTE]` y los dos párrafos propuestos por el equipo técnico marcados aparte),
+        el texto PROVISIONAL del aviso de invitados, la propuesta de plazos de D-02 (sin validar), la
+        decisión D-10 (reconsentimiento de todos) explicada para que la confirme legal, el porqué del
+        registro de IP como evidencia, la transferencia internacional a Resend, y 10 preguntas
+        numeradas y concretas. No afirma "cumple LOPDP" en ningún punto — todo queda como pregunta
+        abierta hacia asesoría legal.
 
 - [ ] **T99 — Verificación final**
   - `gates.sh` completo en verde; `verify_consent_chain()` y `verify_audit_chain()` OK sobre seed;

@@ -3534,3 +3534,24 @@ sobrevivió la fusión de `wip/ux-redesign` en la Iteración 88 sin duplicarse).
   `created_by`; la prueba de integración crea una temporal solo cuando hace falta); (3) mismos
   pendientes conocidos: D-02/D-07/D-08, TOTP, `GATES_FULL=1` humano, `tests/proposal.visual.cjs`.
 - Porcentaje: T25 pasa a `[x]` → 24/28 = **85,7 %**.
+
+## Iteración 93 — 2026-10-22 — T98.f: paquete para asesoría legal (solo documentación)
+- **Cambios:** `loop-consentimiento/PAQUETE_ASESORIA_LEGAL.md` (nuevo, ~370 líneas). `TASKS.md`
+  (T98.f `[x]`).
+- Contenido, en lenguaje no técnico: texto completo del aviso 1.0 reconstruido tal cual vive en
+  `seed/aviso_consentimiento_v1.0.md` (cada `{{marcador}}` sin resolver señalado `[PENDIENTE]`, los
+  dos párrafos "texto nuevo" del seed marcados aparte como pendientes de revisión legal, no como
+  definitivos); el texto PROVISIONAL de `GuestNoticeModal.tsx` citado tal cual (con su propia marca
+  `[PENDIENTE DE VALIDACIÓN LEGAL]`); la propuesta de plazos de D-02 explicada en una tabla, sin
+  presentarla como decidida; D-10 (reconsentimiento de todos) explicada como pregunta abierta hacia
+  legal, no como hecho consumado; el porqué del registro de IP (REQ-05) y sus condiciones de acceso;
+  la transferencia internacional a Resend (D-05); y una lista de 10 preguntas numeradas y concretas.
+- **Pruebas añadidas:** ninguna — documentación pura.
+- **Gates:** no se tocó ningún archivo de código/prueba/migración — no aplica repetir `gates.sh`.
+- Desviaciones de SPEC: ninguna. Cuidado explícito de no declarar "cumple LOPDP" en ningún punto
+  del documento (regla de Calidad en `PROMPT.md`): cada afirmación legal queda como pregunta hacia
+  asesoría legal, nunca como conclusión del equipo técnico.
+- Riesgos / pendientes detectados: mismos de la Iteración 92, sin cambios (D-02/D-07/D-08, TOTP,
+  `GATES_FULL=1` humano, `tests/proposal.visual.cjs`, ejecución real de T25 pendiente de ventana).
+- Porcentaje: T98.f no es una de las 28 tareas del conteo estricto (es subtarea de T98, fuera del
+  contador principal) — sin cambio, 24/28 = **85,7 %**.
