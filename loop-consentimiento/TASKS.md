@@ -1205,8 +1205,33 @@ en este archivo (antes de empezar a codificar) y ejecuta solo la primera.
 
 ## Fase 6 · Migración, documentación y cierre
 
-- [ ] **T25 — Backfill de consentimientos legacy** (según plan T01; **D-10 y D-11 decididas**)
-  - **Estado real (2026-09-29, reconciliación):** Solo diseño (D-10/D-11 decididas, plan completo en PROGRESS.md iteración 2 y esta tarea). Ni la migración (a) ni el script (b) están escritos — y **no deben** escribirse/ejecutarse como iteración normal del loop: el propio criterio de la tarea dice que el script solo corre dentro de la ventana de release, con OK explícito. Depende de T19 (requires_reconsent) y de que 074/075 estén aplicadas en producción.
+- [x] **T25 — Backfill de consentimientos legacy** (según plan T01; **D-10 y D-11 decididas**) (preparación hecha 2026-10-22, sesión interactiva; EJECUCIÓN contra producción sigue pendiente de la ventana de release)
+  - **Hecho (2026-10-22):** migración `084_consent_records_legacy_ip_hmac_nullable.sql` (a) y su
+    prueba `supabase/tests/consent/legacy_ip_hmac_nullable.sql` — verificadas contra Postgres real
+    (`gates.sh --only sql-ciclo-de-vida`, OK). Script de un solo uso (b)
+    `shield-ecuador-app/scripts/backfill-legacy-consent.cjs` (dry-run por defecto, `--apply`
+    explícito, lotes de 500, idempotente, usa `@supabase/supabase-js` con `SUPABASE_SERVICE_ROLE_KEY`,
+    nunca imprime la clave HMAC ni ningún secreto) con sus pruebas
+    (`backfill-legacy-consent.test.cjs`): 8 con cliente falso (dry-run no escribe, clasificación
+    A/B/C, HMAC determinista, documento legacy siempre `retired`, idempotencia) + 1 de integración
+    contra Postgres real del stack local (`RUN_REAL_PG=1`, confirma fila sin IP/UA, documento
+    `retired`, segunda corrida no duplica). **No forman parte de `gates.sh`** (protegido; D-11 ya
+    dice que este script "nunca se ejecuta como iteración normal del loop") — se corren a mano,
+    documentado en el encabezado de cada archivo.
+  - **Hallazgo real durante la prueba de integración:** `consent_records` es append-only incluso
+    para `service_role` (SEC-06) — ni la propia prueba pudo borrar las filas que insertó; se
+    limpiaron a mano con una sesión `psql` privilegiada (`SET app.allow_evidence_mutation = 'on'`).
+    Confirma que el backfill real será irreversible en producción tal como D-11 ya anticipaba — el
+    dry-run es la única oportunidad de revisar los números antes de que sea permanente. Corregido
+    en `PLAN_RELEASE_COMPLETO.md` paso 9: la nota anterior de "revertir con un DELETE simple" era
+    incorrecta, nunca se había probado contra Postgres real hasta ahora.
+  - **Añadido:** paso 9 de `PLAN_RELEASE_COMPLETO.md` con los comandos exactos, qué verificar y por
+    qué no tiene reversa; migración 084 añadida a `PLAN_PRODUCCION_RELEASE.md` (tabla resumen, orden
+    de aplicación, sección 1/3/4/6, en el mismo commit, como exige `PROMPT.md`).
+  - **Sigue sin hacer (a propósito, nunca desde una sesión de este loop):** ejecutar el script
+    `--apply` contra producción. Eso ocurre solo dentro de la ventana de release, después de
+    074/075 aplicadas, con el OK explícito de la persona responsable (D-11) — ver paso 9.
+  - **Estado real (2026-09-29, reconciliación, histórico):** Solo diseño (D-10/D-11 decididas, plan completo en PROGRESS.md iteración 2 y esta tarea). Ni la migración (a) ni el script (b) estaban escritos — y **no deben** escribirse/ejecutarse como iteración normal del loop: el propio criterio de la tarea dice que el script solo corre dentro de la ventana de release, con OK explícito. Depende de T19 (requires_reconsent) y de que 074/075 estén aplicadas en producción.
   - **Decisiones que aplican:** D-10 = conservar el consentimiento anterior como historial (documento retirado `legacy-2026-06-22`, evidencia limitada: solo fecha) y publicar el aviso 1.0 con `requires_reconsent = true` (T19 lo muestra a todos en su próximo inicio de sesión; **pendiente de confirmación por asesoría legal antes del release**, no bloquea el código). D-11 = ver los dos puntos siguientes.
   - **(a) Migración nueva** (siguiente número libre al momento de hacerla; NO se edita la 073): `ALTER TABLE consent_records ALTER COLUMN ip_hmac DROP NOT NULL` + `CHECK (ip_hmac IS NOT NULL OR document_version LIKE 'legacy-%')`. Las filas nuevas siguen obligadas a tener `ip_hmac`. Debe entrar en la misma ventana de release que 074–077 (añadirla a `PLAN_PRODUCCION_RELEASE.md` cuando exista, en el mismo commit). Prueba SQL en `supabase/tests/consent/` y puerta en `gates.sh`: una fila con `document_version = 'registro-1.0'` y `ip_hmac` nulo **falla**; una `legacy-2026-06-22` sin IP **pasa**; `verify_consent_chain()` sigue sin filas rotas.
   - **(b) Script de un solo uso** (no migración; necesita `LOOKUP_HMAC_KEY_B64`): idempotente, en lotes de 500, **`--dry-run` por defecto** (solo cuenta las poblaciones A/B/C del plan y muestra 3 ids abreviados, sin correos ni IP); solo escribe con `--apply`. La clave HMAC llega **por variable de entorno en esa sesión**: nunca se escribe en archivos ni en logs (el script no imprime variables de entorno ni hace `console.log` de la clave, y sus pruebas lo verifican). **Se ejecuta únicamente dentro del release y con el OK explícito de la persona responsable; jamás en una iteración del loop ni contra producción desde aquí.** Mismo diseño de filas que PROGRESS.md, Iteración 2, §3 (documento legacy `retired`, una fila `registro_aprendizaje` `granted` por persona con `authorized = true`, `server_ts` original, sin IP; nada para quien nunca autorizó ni para las finalidades opcionales).

@@ -2,7 +2,7 @@
 
 **Estado: NO EJECUTADO.** Este documento ordena, en una sola secuencia, todo lo que hace falta para
 llevar el módulo a producción: lo que ya cubría `PLAN_PRODUCCION_RELEASE.md` (solo base de datos,
-migraciones 074–083) más Edge Functions, panel, frontend, publicación del aviso 1.0 y el backfill
+migraciones 074–084) más Edge Functions, panel, frontend, publicación del aviso 1.0 y el backfill
 T25. Nada de esto se ejecuta hasta que la persona responsable lo autorice **paso por paso**: cada
 sección dice explícitamente quién lo ejecuta.
 
@@ -111,14 +111,13 @@ sha256sum ../backup_pre_release_*.sql > ../backup_pre_release.sha256
 cd shield-ecuador-app
 supabase link --project-ref wbbcjiqzbzswxsmwjqlw
 ```
-**Verificar después:** `supabase migration list` muestra `073` en local y remoto, `074`-`083` solo
-en local (si T25 añade su propia migración antes de esta ventana, debe aparecer también aquí — ver
-paso 9).
+**Verificar después:** `supabase migration list` muestra `073` en local y remoto, `074`-`084` solo
+en local — 084 es la migración de T25 (paso 9: `ip_hmac` nullable para filas legacy).
 **Revertir/cerrar:** `supabase unlink` al terminar los pasos que necesitan el CLI vinculado (4 y 5;
 ver el paso 5 para el cierre exacto) — esta máquina no debe quedar vinculada a producción entre
 sesiones.
 
-## 4. `[TÚ]` Aplicar las migraciones 074–083
+## 4. `[TÚ]` Aplicar las migraciones 074–084
 
 Sigue la sección 3 completa de `PLAN_PRODUCCION_RELEASE.md` (comando único, lista exacta esperada,
 cada migración en su propia transacción). Resumen:
@@ -130,7 +129,8 @@ supabase db push
 # 078_data_subject_requests_case_numbers_and_status_update.sql,
 # 079_email_transport_and_outbox.sql, 080_publish_consent_document_atomic.sql,
 # 081_fix_digest_schema_qualification.sql, 082_confirm_privacy_email_change_atomic.sql,
-# 083_guest_consent_notice_and_session_expiry.sql. Si lista algo más o menos: PARAR.
+# 083_guest_consent_notice_and_session_expiry.sql,
+# 084_consent_records_legacy_ip_hmac_nullable.sql. Si lista algo más o menos: PARAR.
 ```
 **Verificar después:** sección 4 completa de `PLAN_PRODUCCION_RELEASE.md` (una consulta por
 migración: `verify_consent_chain()`/`verify_audit_chain()` vacíos, columnas/triggers/funciones
@@ -140,16 +140,13 @@ fuente — ejecutar las de ese documento tal cual.
 mientras `consent_records` siga vacía (si el paso 8 ya publicó el aviso y hay evidencia real, no se
 revierte: se corrige hacia delante).
 
-### `[FALTA]` — bloqueo real para el backfill (T25), antes de que llegues al paso 9
+### `[YA HECHO]` — la migración (a) de T25 ya existe y está probada
 
-La migración (a) de T25 (`ip_hmac` nullable solo para filas `document_version LIKE 'legacy-%'`, D-11
-opción 1-A) **no existe todavía** en `supabase/migrations/` — ni ella ni el script de backfill (b)
-se han escrito (confirmado en esta sesión; `TASKS.md`, T25, sigue `[ ]`). Sin esa migración, el
-backfill del paso 9 fallaría en el primer INSERT (`ip_hmac` sigue `NOT NULL` sin excepción). Si el
-release incluye el backfill, esta migración debe escribirse, probarse contra Postgres real
-(`gates.sh`) y entrar en esta misma ventana (siguiente número libre después de la 083, o el que
-corresponda cuando se escriba) — **no es parte de lo que se preparó en esta sesión**; es trabajo
-pendiente que alguien debe hacer antes de llegar al paso 9.
+`084_consent_records_legacy_ip_hmac_nullable.sql` (`ip_hmac` nullable solo para filas
+`document_version LIKE 'legacy-%'`, D-11 opción 1-A) y su prueba
+(`supabase/tests/consent/legacy_ip_hmac_nullable.sql`) ya están escritas y verificadas contra
+Postgres real (`gates.sh --only sql-ciclo-de-vida`, OK). El paso 9 ya puede ejecutarse en cuanto
+esta migración esté aplicada en producción (parte del `db push` de este mismo paso 4).
 
 ---
 
@@ -270,27 +267,52 @@ listo, retirar la v1.0 sin publicar el reemplazo en la misma operación debe fal
 historial, nunca se borra; si ya hubo evidencia real contra la v1.0, no se "deshace" nada, se
 publica una v1.1 corregida.
 
-## 9. `[TÚ]` Backfill T25 (consentimiento legacy) — SOLO si la migración (a) ya existe (ver bloqueo arriba)
+## 9. `[TÚ]` Backfill T25 (consentimiento legacy)
 
-**Requiere:** D-10/D-11 decididas (ya lo están); migración (a) de T25 aplicada (⛔ no existe
-todavía, ver bloqueo tras el paso 4); `LOOKUP_HMAC_KEY_B64` ya provisionada (paso 0); el script (b)
-escrito, probado y revisado — tampoco existe todavía.
+**Requiere:** D-10/D-11 decididas (ya lo están); migración 084 aplicada (paso 4); `LOOKUP_HMAC_KEY_B64`
+ya provisionada (paso 0); al menos una cuenta con `role = 'admin'` en `public.users` (el script la
+usa como `created_by` del documento legacy — si no existe ninguna todavía, falla con un mensaje
+claro, sin escribir nada).
+
+`scripts/backfill-legacy-consent.cjs` ya está escrito y probado: pruebas con cliente falso (dry-run
+no escribe, clasificación A/B/C, HMAC, documento siempre `retired`) y una prueba de integración
+contra Postgres real del stack local (`RUN_REAL_PG=1 node scripts/backfill-legacy-consent.test.cjs`,
+confirmada en esta sesión — `--apply` dos veces es idempotente, la fila queda sin IP/UA). Esa prueba
+de integración deja residuo permanente en el stack LOCAL (ver el bloque "Revertir" abajo: la
+evidencia es append-only por diseño, ni el script de prueba puede borrarla) — nunca se corre contra
+un proyecto real.
+
 ```bash
-# Variable SOLO en esta sesión de shell, nunca en un archivo:
-export LOOKUP_HMAC_KEY_B64="<el mismo valor provisionado en Supabase>"
-node scripts/backfill-legacy-consent.cjs --dry-run      # cuenta A/B/C, muestra 3 ids abreviados, NO escribe
-# Revisar los números contra lo esperado (cuántas cuentas con data_processing_authorized=true/false
-# existían antes del release) ANTES de continuar.
-node scripts/backfill-legacy-consent.cjs --apply        # recién aquí escribe, en lotes de 500, idempotente
-unset LOOKUP_HMAC_KEY_B64
+cd shield-ecuador-app
+# Variables SOLO en esta sesión de shell, nunca en un archivo ni en un log:
+export SUPABASE_URL="https://wbbcjiqzbzswxsmwjqlw.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="<clave de servicio del proyecto — Settings → API>"
+export LOOKUP_HMAC_KEY_B64="<el mismo valor provisionado en el paso 0>"
+node scripts/backfill-legacy-consent.cjs                 # dry-run (por defecto): cuenta A/B/C, 3 ids abreviados, NO escribe
+# Revisar los números contra el conteo de la sección 1 de PLAN_PRODUCCION_RELEASE.md
+# (cuántas cuentas con data_processing_authorized=true/false existían antes del release) ANTES de continuar.
+node scripts/backfill-legacy-consent.cjs --apply          # recién aquí escribe, en lotes de 500, idempotente
+unset LOOKUP_HMAC_KEY_B64 SUPABASE_SERVICE_ROLE_KEY SUPABASE_URL
 ```
-(La ruta del script es un nombre tentativo — no existe aún; ajustar cuando T25 se escriba.)
-**Verificar después:** `select count(*) from consent_records where document_version like 'legacy-%';`
-coincide con el conteo de personas con `data_processing_authorized = true` antes del release;
-`select * from verify_consent_chain();` sigue vacío; ninguna fila legacy tiene `ip_ciphertext` ni
-`ua_ciphertext`; correr `--apply` una segunda vez no duplica nada (idempotencia).
-**Revertir:** mientras nadie haya aceptado todavía el aviso 1.0 encima de su fila legacy, se puede
-`delete from consent_records where document_version like 'legacy-%';` (con `app.allow_evidence_mutation` no es necesario: son filas nuevas, no mutaciones de las existentes) y recalcular la cadena no aplica porque son las últimas filas insertadas. Si ya hay reconsentimientos reales encima, no se revierte.
+**Verificar después:**
+```sql
+select count(*) from public.consent_records where document_version like 'legacy-%';
+-- coincide con el conteo de personas con data_processing_authorized = true (poblaciones A+B) antes del release
+select * from public.verify_consent_chain();   -- vacío
+select count(*) from public.consent_records where document_version like 'legacy-%' and (ip_ciphertext is not null or ua_ciphertext is not null);  -- 0
+select version, status from public.consent_documents where version like 'legacy-%';  -- siempre 'retired', nunca 'published'
+```
+Correr `node scripts/backfill-legacy-consent.cjs --apply` una segunda vez no debe insertar nada
+nuevo (idempotencia; el propio script lo reporta: "insertadas: 0").
+
+**Revertir:** **no se puede, por diseño, una vez insertado.** `consent_records` es append-only
+(SEC-06): ni siquiera `service_role` puede `UPDATE`/`DELETE` una fila (confirmado hoy contra
+Postgres real al limpiar la prueba de integración local — el intento falla con "append-only: solo
+la función de retención... puede tocar una fila existente"). Por eso el dry-run existe: es la única
+oportunidad real de revisar los números **antes** de que el paso sea irreversible. Si algo salió mal
+después de `--apply`, no se revierte: se corrige hacia delante (p. ej., si una fila quedó con la
+versión incorrecta, se documenta el error y se decide con la persona responsable y, si corresponde,
+asesoría legal, qué hacer con esa evidencia puntual — nunca borrarla en silencio).
 
 ---
 
@@ -324,7 +346,7 @@ escalar de inmediato: significa que una migración o una función ya escribió d
 - `[TÚ]` Confirmar con el equipo/Club que el release quedó estable 24-48h antes de dar por cerrada
   la ventana.
 - `[TÚ]` Actualizar `LAST_MIGRATION_IN_PROD` en `.claude/loops/consentimiento/gates.sh` de `73` a
-  `83` (o al número real aplicado) — así las puertas SQL del loop dejan de tratar 074-083 como
+  `84` (o al número real aplicado) — así las puertas SQL del loop dejan de tratar 074-084 como
   "pendientes" en las corridas futuras. Este archivo está protegido de edición automática; lo hace
   una persona.
 - `[TÚ]` Decidir si T17 (retención, D-02) y T25 (backfill, si no se hizo en este release) quedan

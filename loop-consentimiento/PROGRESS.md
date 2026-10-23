@@ -3489,3 +3489,48 @@ sobrevivió la fusión de `wip/ux-redesign` en la Iteración 88 sin duplicarse).
 - Riesgos / pendientes detectados: los 3 hallazgos de arriba, más los ya conocidos en la Iteración
   90 (D-02/D-07/D-08, TOTP, `GATES_FULL=1` humano, `tests/proposal.visual.cjs`).
 - Porcentaje: sin cambio, 23/28 = **82,1 %**.
+
+## Iteración 92 — 2026-10-22 — T25: migración + script de backfill legacy (preparación, sin ejecutar)
+- **Cambios:** `supabase/migrations/084_consent_records_legacy_ip_hmac_nullable.sql` (D-11
+  opción 1-A: `ip_hmac` nullable solo para `document_version LIKE 'legacy-%'`, sin tocar la 073);
+  `supabase/tests/consent/legacy_ip_hmac_nullable.sql`; `scripts/backfill-legacy-consent.cjs`
+  (dry-run por defecto, `--apply` explícito, lotes de 500, idempotente — clasifica
+  `public.users` en A/B/C según D-10/T01 §2, crea un documento `consent_documents` `legacy-<versión>`
+  SIEMPRE `retired`, inserta una fila `consent_records` por persona de A/B con `channel='registro'`,
+  `purpose_code='registro_aprendizaje'`, `decision='granted'`, sin IP/UA, `settings_version=0`);
+  `scripts/backfill-legacy-consent.test.cjs`; `PLAN_PRODUCCION_RELEASE.md` (084 en la tabla resumen,
+  orden de aplicación y secciones 1/3/4/6, mismo commit que la migración); `PLAN_RELEASE_COMPLETO.md`
+  (paso 9 reescrito con comandos reales); `TASKS.md` (T25 `[x]` para la preparación; ejecución
+  contra producción sigue pendiente de la ventana de release).
+- **Pruebas añadidas:** `legacy_ip_hmac_nullable.sql` (channel/CHECK: fila legacy sin `ip_hmac`
+  permitida, fila NO legacy sin `ip_hmac` rechazada, `verify_consent_chain()` íntegra) — OK contra
+  Postgres real (`gates.sh --only sql-ciclo-de-vida`). `backfill-legacy-consent.test.cjs`: 8 casos
+  con cliente falso (HMAC determinista e igual a un cálculo aparte; abortar sin
+  `LOOKUP_HMAC_KEY_B64` sin imprimir nada que parezca un secreto; clasificación A/B/C; documento
+  siempre `retired`; fila sin IP/UA; dry-run no escribe; `--apply` solo migra A+B; `--apply` dos
+  veces es idempotente) + 1 caso `RUN_REAL_PG=1` contra el Postgres real de `supabase start` local
+  (sembré 2 usuarios de prueba `@example.test` + un admin temporal si hacía falta; corrí `--apply`
+  dos veces; confirmé fila sin IP/UA y documento `retired`; limpié los residuos). Ninguna de las
+  dos suites forma parte de `gates.sh` (protegido; D-11 ya decía que este script "nunca se ejecuta
+  como iteración normal del loop") — se documentó cómo correrlas a mano en el encabezado de cada
+  archivo.
+- **Hallazgo real, no anticipado por el diseño de T01 (iteración 2):** al limpiar la prueba de
+  integración descubrí que `consent_records` es append-only incluso para `service_role` — el
+  intento de `DELETE` de la propia prueba falló con el mismo error que un cliente normal
+  (`"consent_records es append-only..."`), y tuve que limpiar con una sesión `psql` privilegiada
+  (`SET app.allow_evidence_mutation = 'on'`, el mismo escape que usa la función de retención).
+  Esto confirma que el backfill real en producción es **irreversible en la práctica, no solo en
+  teoría**: corregí la sección "Revertir" de `PLAN_RELEASE_COMPLETO.md` paso 9, que antes decía
+  (sin haberlo probado nunca contra Postgres real) que un `DELETE` simple bastaría — era incorrecto.
+- **Gates:** `sql-ciclo-de-vida`/`sql-guest-limit` OK (`gates.sh`, con `psql` ya resuelto en el PATH
+  de esta sesión — ver la tarea anterior sobre `db-reset`/`e2e-local`). No se tocó ningún archivo de
+  `supabase/functions/` ni `frontend/src/`: no aplica repetir deno-check/deno-test/typecheck/lint/
+  unit-frontend/panel-e2e.
+- Desviaciones de SPEC: ninguna — D-10/D-11 ya cubrían este diseño; el hallazgo de append-only es
+  una confirmación del sistema funcionando como se diseñó (SEC-06), no una desviación.
+- Riesgos / pendientes detectados: (1) la EJECUCIÓN real del backfill contra producción sigue sin
+  hacerse, a propósito — requiere la ventana de release y el OK explícito (D-11); (2) sigue sin
+  existir ninguna cuenta `role='admin'` en el stack local persistente (el script la necesita como
+  `created_by`; la prueba de integración crea una temporal solo cuando hace falta); (3) mismos
+  pendientes conocidos: D-02/D-07/D-08, TOTP, `GATES_FULL=1` humano, `tests/proposal.visual.cjs`.
+- Porcentaje: T25 pasa a `[x]` → 24/28 = **85,7 %**.
