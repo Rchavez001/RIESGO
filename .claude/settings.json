@@ -56,6 +56,7 @@
       "Bash(node inspect_sidebar_tmp.mjs)",
       "Bash(powershell -Command \"Stop-Process -Id 52092 -Force -ErrorAction SilentlyContinue\")",
       "Bash(bash .claude/loops/consentimiento/gates.sh:*)",
+      "Bash(bash .claude/loops/docs/gates.sh:*)",
       "Bash(npx tsc:*)",
       "Bash(npx eslint:*)",
       "Bash(npx -y deno@2.9.6 check:*)",
@@ -77,6 +78,10 @@
       "C:\\Users\\APS-EC~1\\AppData\\Local\\Temp\\claude\\c--Users-aps-ecuador-Riesgo\\6ea9345f-47aa-4cf4-96ef-87a6e6cc589f\\scratchpad"
     ],
     "deny": [
+      "Edit(.claude/loops/docs/gates.sh)",
+      "Write(.claude/loops/docs/gates.sh)",
+      "Edit(.claude/loops/docs/headless-settings.json)",
+      "Write(.claude/loops/docs/headless-settings.json)",
       "Read(./.gcloud-config/**)",
       "Read(./**/.gcloud-config/**)",
       "Read(./.deploy/**)",
