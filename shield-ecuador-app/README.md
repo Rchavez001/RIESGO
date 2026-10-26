@@ -34,7 +34,7 @@ fuente de verdad.
 
 | Documento | Propósito | Público |
 |---|---|---|
-| [docs/AI_HANDOFF_CYBER_DOJO.md](docs/AI_HANDOFF_CYBER_DOJO.md) | Traspaso para quien continúe el desarrollo. Desactualizado; pendiente de reescritura breve (tarea `DOCS-08`). | Desarrollador/IA que vaya a tocar código |
+| [docs/AI_HANDOFF_CYBER_DOJO.md](docs/AI_HANDOFF_CYBER_DOJO.md) | Traspaso breve para quien continúe el desarrollo: mapa de qué documento mirar para cada tema, sin repetir su contenido. | Desarrollador/IA que vaya a tocar código / capacitación club Phycom |
 | [docs/APLICACION_CINEMATICA_LOCAL.md](docs/APLICACION_CINEMATICA_LOCAL.md) | Instrucciones de revisión local del rediseño cinematográfico (ya publicado en producción). Pendiente de archivar (tarea `DOCS-11`). | Desarrollador/QA |
 | [docs/BANCO_Y_APRENDIZAJE_CIBERDOJO.md](docs/BANCO_Y_APRENDIZAJE_CIBERDOJO.md) | Acta de publicación del banco de 700 preguntas / 300 casos. | Desarrollador/equipo de contenido |
 | [docs/DIRECCION_VISUAL_REFERENCIAS.md](docs/DIRECCION_VISUAL_REFERENCIAS.md) | Propuesta de dirección de arte del rediseño cinematográfico (ya implementada). Pendiente de archivar (tarea `DOCS-12`). | Diseño/dirección de producto |

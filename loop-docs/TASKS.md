@@ -78,7 +78,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     (línea 30) al estado real. Añade las variables de entorno del módulo de consentimiento.
   - Verificar contra: `supabase/migrations/`, `.env.example` si existe, `SECURITY_PRIVACY.md`.
 
-- [ ] **DOCS-08 — Reescribir `AI_HANDOFF_CYBER_DOJO.md` como traspaso breve**
+- [x] **DOCS-08 — Reescribir `AI_HANDOFF_CYBER_DOJO.md` como traspaso breve**
   - Decisión `DOC-01` (ver `DECISIONS.md`): no se archiva. Se reescribe **breve**, como documento de
     traspaso que enlaza a `ARQUITECTURA_CYBER_DOJO.md`, `BASE_DE_DATOS.md`,
     `DOCUMENTO_FUNCIONALIDADES.md` y `MANUAL_ADMINISTRADOR.md` en vez de repetir su contenido.
@@ -141,6 +141,20 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     Confirmar el JSON de salida exacto y el flujo de aprobación contra el código real de los
     agentes; marcar `[VERIFICAR]` lo que no se pueda confirmar.
   - Prioridad baja — explícitamente la última tarea del backlog.
+
+- [ ] **DOCS-16 — Corregir `ARQUITECTURA_CYBER_DOJO.md` sección 8 (Despliegue): el frontend ya tiene `Dockerfile`**
+  - La sección 8 (reescrita 2026-09-08) afirma que `cyberdojo` (frontend) se construye "por
+    buildpacks de Cloud Build (`gcp-build` script), sin Dockerfile propio". Esto ya no es cierto: el
+    commit `217140f` (2026-09-28) añadió `frontend/Dockerfile` (build multistage `node:20-alpine`
+    que termina en `node static-server.js`). Cloud Build prioriza un `Dockerfile` presente sobre los
+    buildpacks. Hallazgo encontrado al verificar fuentes para DOCS-08 (iteración de este mismo
+    documento, 2026-10-26); no se corrigió ahí porque pertenece a otro documento (una iteración
+    cierra un solo documento/sección).
+  - Verificar contra: `shield-ecuador-app/frontend/Dockerfile` (existencia y contenido real),
+    `git log --follow -- frontend/Dockerfile` (commit `217140f`). Relacionado con `DOC-07` (ABIERTA
+    en `DECISIONS.md`): no se sabe si la revisión activa en Cloud Run ya usa ese `Dockerfile` o una
+    build anterior por buildpacks — mismo `[VERIFICAR]` aplicaría aquí.
+  - Prioridad baja — no afecta el comportamiento descrito (mismo arranque), solo el método de build.
 
 ---
 

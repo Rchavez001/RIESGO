@@ -296,3 +296,53 @@ persona responsable sobre el inventario y el backlog.
   `cp .env.example .env`, legítimamente ausente del repo (gitignored); no es una ruta de código que
   debiera existir en el árbol. Confirmado con `git diff` que la línea no forma parte del cambio de
   esta iteración.
+
+## Iteración 8 — 2026-10-26 — DOCS-08 (`docs/AI_HANDOFF_CYBER_DOJO.md`, reescritura breve)
+- Cambios: `shield-ecuador-app/docs/AI_HANDOFF_CYBER_DOJO.md` — reescrito de ~896 líneas a un
+  traspaso breve (6 secciones): qué es Cyber Dojo (resumen de 4 líneas), un mapa de documentación
+  (tabla "tema → documento → sección exacta") que enlaza a `ARQUITECTURA_CYBER_DOJO.md`,
+  `BASE_DE_DATOS.md`, `DOCUMENTO_FUNCIONALIDADES.md`, `MANUAL_ADMINISTRADOR.md`,
+  `MANUAL_USUARIO_CYBER_DOJO.md`, `SECURITY_PRIVACY.md`, `SETUP.md`/`GUIA_LEVANTAMIENTO_PROYECTO.md`
+  y `docs/SUPABASE_VERIFICATION_QUERIES.sql` en vez de repetir su contenido (decisión `DOC-01`);
+  estado verificado hoy (82 migraciones `001`-`084` con huecos en `023`/`033`, 33 Edge Functions,
+  módulo de consentimiento "implementado, pendiente de despliegue" según `DOC-06`); reglas de
+  seguridad que no cambian; checklist corto "antes de tocar código"; e historial del propio
+  documento (reemplaza la sección 28 vieja). El contenido largo anterior (secciones 1-27 de agosto/
+  septiembre) no se borra del repositorio: queda accesible vía `git log -- docs/AI_HANDOFF_CYBER_DOJO.md`,
+  tal como el propio documento nuevo indica. También: `shield-ecuador-app/README.md` (la fila de
+  este documento en la tabla de `docs/` ya no dice "pendiente de reescritura (DOCS-08)", ahora
+  describe el contenido real); `loop-docs/TASKS.md` (DOCS-08 → `[x]`; nueva tarea `DOCS-16`,
+  prioridad baja, registrando un hallazgo encontrado al verificar fuentes para esta iteración:
+  `ARQUITECTURA_CYBER_DOJO.md` sección 8 sigue afirmando que el frontend se construye "sin
+  Dockerfile propio" cuando `frontend/Dockerfile` existe desde el commit `217140f`
+  (2026-09-28) — no se corrigió aquí porque pertenece a otro documento, una iteración cierra solo
+  un documento/sección).
+- Verificado contra: `shield-ecuador-app/supabase/migrations/` (82 archivos reales, `ls | wc -l`),
+  `shield-ecuador-app/supabase/functions/` (33 carpetas sin `_shared`, `ls | grep -v _shared | wc -l`),
+  encabezados `##`/`###` reales de `ARQUITECTURA_CYBER_DOJO.md` (secciones 5 y 7),
+  `BASE_DE_DATOS.md` (sección 12), `DOCUMENTO_FUNCIONALIDADES.md` (sección 2.6, incluida la línea
+  131 con el `[VERIFICAR]` de despliegue dejado por la Iteración 4 — no se tocó, no es el alcance de
+  esta tarea), `MANUAL_ADMINISTRADOR.md` (sección 14), `MANUAL_USUARIO_CYBER_DOJO.md` (secciones
+  14-16), `SECURITY_PRIVACY.md` (encabezado "Módulo de consentimiento informado (LOPDP)"),
+  `GUIA_LEVANTAMIENTO_PROYECTO.md`/`SETUP.md` (encabezados reales de secciones), `loop-docs/DECISIONS.md`
+  (`DOC-06`, texto exacto de la decisión sobre el estado de despliegue del módulo de consentimiento);
+  `git log --follow -- frontend/Dockerfile` (commit `217140f`, confirma la base de la nueva tarea
+  `DOCS-16`). No se verificó ni se citó `C:\Users\aps-ecuador\Riesgo\DESIGN_REVIEW_CHECKLIST.md`
+  (mencionado por la versión anterior del documento): queda fuera de `shield-ecuador-app/` y fuera
+  de los directorios accesibles desde esta sesión del loop, así que se omitió esa referencia en vez
+  de repetirla sin poder confirmarla.
+- [VERIFICAR] añadidos: ninguno nuevo — el único `[VERIFICAR]` que el documento nuevo hereda
+  (estado de despliegue del módulo de consentimiento) ya tiene decisión registrada en `DOC-06` y se
+  incorporó como hecho decidido, no como pregunta abierta.
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico ya documentado desde la Iteración 0b (resuelve rutas solo desde la raíz
+  del repo, así que `docs/SUPABASE_VERIFICATION_QUERIES.sql`, `frontend/src/App.tsx`,
+  `frontend/Dockerfile`, `central-admin-app/server.js` — todas relativas a `shield-ecuador-app/`,
+  confirmadas reales con `ls shield-ecuador-app/<ruta>` — se marcan como inexistentes; igual que los
+  nombres de rama `docs/iso-y-privacidad` y `feature/consentimiento-lopdp` citados entre backticks;
+  y la frase "service_role key" como término de arquitectura, no un secreto real, mismo patrón de
+  `check_secrets` documentado en las Iteraciones 3-6). Las rutas de `loop-docs/TASKS.md` que el gate
+  marca (`shield-ecuador-app/docs/MODO_INVITADO.md`, `docs/archivo/APLICACION_CINEMATICA_LOCAL.md`,
+  `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md`) son documentos futuros de tareas aún no
+  ejecutadas (`DOCS-10`, `DOCS-11`, `DOCS-13`), ya citados así desde que se escribió el backlog —
+  no son nuevos de esta iteración.
