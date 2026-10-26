@@ -73,7 +73,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   - Verificar contra: `GuestNoticeModal.tsx`, `PrivacyPage.tsx`/ruta `/privacidad` en `App.tsx`,
     `loop-consentimiento/DECISIONS.md` (D-12, D-16 para el estado del modo invitado).
 
-- [ ] **DOCS-07 — Actualizar `SETUP.md` (raíz)**
+- [x] **DOCS-07 — Actualizar `SETUP.md` (raíz)**
   - Corrige "21 migraciones a la fecha de esta revisión" (línea 25) y la lista de migraciones
     (línea 30) al estado real. Añade las variables de entorno del módulo de consentimiento.
   - Verificar contra: `supabase/migrations/`, `.env.example` si existe, `SECURITY_PRIVACY.md`.

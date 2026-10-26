@@ -269,3 +269,30 @@ persona responsable sobre el inventario y el backlog.
   `supabase/migrations/076_learning_guest_limit.sql`, etc. — se marcan como inexistentes. Se
   verificó manualmente con `Read`/`Grep` que cada una de esas rutas existe de verdad bajo
   `shield-ecuador-app/`.
+
+## Iteración 7 — 2026-10-26 — DOCS-07 (`SETUP.md`)
+- Cambios: `shield-ecuador-app/SETUP.md` — "21 migraciones a la fecha de esta revision" corregido a
+  "82 archivos reales... numerados 001 a 084, con huecos en 023 y 033"; la lista abreviada de
+  migraciones (`1.`/`2.`/`3.`/`...`) ahora termina en la migración real más reciente
+  (`084_consent_records_legacy_ip_hmac_nullable.sql`) en vez de `021_campaign_impressions_sector.sql`;
+  añadida una subsección nueva en "PASO 3" con las 4 variables de entorno del módulo de
+  consentimiento que debe recibir `supabase secrets set` (`PII_ENCRYPTION_KEY_B64`,
+  `PII_KEY_VERSION`, `SECURITY_EVENTS_HMAC_KEY`, `LOOKUP_HMAC_KEY_B64`), remitiendo a
+  `GUIA_LEVANTAMIENTO_PROYECTO.md` sección 9 para el detalle de qué cifra o hashea cada una (no se
+  duplicó esa explicación). No se tocó la sección "Deploy Edge Functions" (lista de 14 comandos):
+  no afirma un conteo total explícito y la tarea DOCS-07 no la incluye en su criterio de aceptación
+  — fuera del alcance literal de esta tarea, mismo criterio aplicado en la Iteración 1 (DOCS-01) a
+  las consultas 2-26 de `SUPABASE_VERIFICATION_QUERIES.sql`.
+- Verificado contra: `shield-ecuador-app/supabase/migrations/` (listado real: 82 archivos, `001` a
+  `084`, huecos en `023` y `033`), `shield-ecuador-app/GUIA_LEVANTAMIENTO_PROYECTO.md` sección 9
+  (líneas 537-548: nombres exactos y propósito de las 4 variables, ya verificadas en una iteración
+  previa), `shield-ecuador-app/frontend/.env.example` (confirma `PII_ENCRYPTION_KEY_B64`,
+  `PII_KEY_VERSION`, `PII_MIGRATION_SECRET` ya documentadas ahí como comentario; no se citó
+  `PII_MIGRATION_SECRET` en `SETUP.md` porque no la pide el criterio de aceptación de DOCS-07, que
+  habla del módulo de consentimiento, no de la migración de PII preexistente).
+- [VERIFICAR] añadidos: ninguno.
+- Gates: `scope`, `enlaces`, `secretos`, `markdown` OK. `rutas` reporta FAIL por "frontend/.env"
+  (línea 91, preexistente, no tocada en esta iteración) — es un archivo local creado por
+  `cp .env.example .env`, legítimamente ausente del repo (gitignored); no es una ruta de código que
+  debiera existir en el árbol. Confirmado con `git diff` que la línea no forma parte del cambio de
+  esta iteración.

@@ -22,13 +22,14 @@ supabase start
 supabase link --project-ref TU_PROJECT_REF
 supabase db push
 
-# O en el Dashboard → SQL Editor, ejecutar en orden (21 migraciones a la fecha de esta revision):
+# O en el Dashboard → SQL Editor, ejecutar en orden (82 archivos reales a la fecha de esta
+# revision, numerados 001 a 084, con huecos en 023 y 033):
 # 1. supabase/migrations/001_initial_schema.sql
 # 2. supabase/migrations/002_rls_policies.sql
 # 3. supabase/migrations/003_seed_data.sql
 # ...
-# 21. supabase/migrations/021_campaign_impressions_sector.sql
-# Lista completa y detalle de cada tabla: BASE_DE_DATOS.md
+# ultima: supabase/migrations/084_consent_records_legacy_ip_hmac_nullable.sql
+# Lista completa y detalle de cada tabla: BASE_DE_DATOS.md (seccion 12 para el modulo de consentimiento)
 ```
 
 ### Deploy Edge Functions
@@ -99,6 +100,15 @@ DEEPSEEK_API_KEY=sk-...
 KIMI_API_KEY=sk-...          (opcional, fallback)
 ANTHROPIC_API_KEY=sk-ant-... (opcional, fallback)
 ```
+
+Además, para el módulo de consentimiento (migraciones `073`-`084`):
+```
+PII_ENCRYPTION_KEY_B64=<32 bytes aleatorios en base64>
+PII_KEY_VERSION=1
+SECURITY_EVENTS_HMAC_KEY=<32 bytes aleatorios en base64, distinta de PII_ENCRYPTION_KEY_B64>
+LOOKUP_HMAC_KEY_B64=<32 bytes aleatorios en base64, distinta de las dos anteriores>
+```
+Ver `GUIA_LEVANTAMIENTO_PROYECTO.md` sección 9 para el detalle de qué cifra o hashea cada clave.
 
 ---
 
