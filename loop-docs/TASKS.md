@@ -25,7 +25,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   - Prioridad: la más alta — es herramienta de verificación, no solo texto; su desactualización da
     una falsa sensación de que "todo coincide".
 
-- [ ] **DOCS-02 — Crear el índice general de toda la documentación**
+- [x] **DOCS-02 — Crear el índice general de toda la documentación**
   - Hoy no existe ningún `README.md` en la raíz de `shield-ecuador-app/` (confirmado: solo existe
     `README-centro-de-seguridad.md`, que es de un submódulo específico, no un índice general).
     Crear `shield-ecuador-app/README.md` como índice: tabla con cada `.md` de la raíz (propósito,

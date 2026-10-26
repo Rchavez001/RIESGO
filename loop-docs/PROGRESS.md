@@ -104,3 +104,21 @@ persona responsable sobre el inventario y el backlog.
   real; no se tocaron las consultas 2-26 (fuera del alcance literal de esta tarea, que solo pedía
   ampliar la lista de tablas de la consulta 1).
 - Gates: OK.
+
+## Iteración 2 — 2026-10-26 — DOCS-02 (índice general `shield-ecuador-app/README.md`)
+- Cambios: `shield-ecuador-app/README.md` (nuevo) — tabla de los 9 `.md` de la raíz, tabla de los
+  13 documentos vigentes de `docs/`, tabla separada de los 10 documentos controlados de evaluación/
+  auditoría ISO en `docs/` (23 archivos en total, coincide con el listado real de la carpeta), y
+  una sección sobre `vault/` que remite a su propio índice sin duplicarlo. Incorpora `DOC-04`
+  (menciona `manual-central-admin.html` solo como referencia existente, nunca como entrada
+  editable) y `DOC-05` (`MANUAL_ADMINISTRADOR.md` declarado manual oficial/vigente;
+  `manual-central-admin.html` y `vault/Manual del administrador.md` señalados como no
+  autoritativos).
+- Verificado contra: listado real de `shield-ecuador-app/` (`.md`/`.html` de la raíz),
+  `shield-ecuador-app/docs/` (23 archivos), `shield-ecuador-app/vault/` (confirmado `Índice.md` y
+  `Manual del administrador.md` existen con esos nombres exactos); contenido de `vault/Índice.md`
+  para no duplicar su mapa; `loop-docs/DECISIONS.md` (DOC-04, DOC-05) para el texto exacto de las
+  decisiones ya tomadas.
+- [VERIFICAR] añadidos: ninguno — este índice solo describe la ubicación y propósito de archivos
+  existentes, no afirma comportamiento de código.
+- Gates: OK.
