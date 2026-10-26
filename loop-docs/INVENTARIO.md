@@ -199,6 +199,216 @@ por el propio documento (ninguno de los 13 declara su público explícitamente).
 
 ---
 
+# Ampliación de alcance — 2026-10-26
+
+El usuario aprobó el inventario de arriba y amplió el alcance del loop en tres sentidos: (a) incluir
+los `.md` de la raíz de `shield-ecuador-app/` (no solo `shield-ecuador-app/docs/`); (b) fusionar la
+rama `docs/iso-y-privacidad` a `docs/actualizacion` e inventariar lo que trae; (c) tratar los
+documentos de evaluación/auditoría de esa fusión como documentos controlados. La fusión se hizo sin
+conflictos (`git merge docs/iso-y-privacidad --no-ff`, commit de fusión en esta rama). Metodología
+igual que arriba: fecha de commit, contraste contra código real cuando el documento hace afirmaciones
+verificables.
+
+## 14. `ARQUITECTURA_CYBER_DOJO.md` (raíz)
+
+- **Propósito / público:** arquitectura técnica completa (capas, base de datos, Edge Functions,
+  paneles admin). Público: desarrollador.
+- **Último commit:** 2026-09-09.
+- **Documento controlado:** no.
+- **Contradice el código actual, con evidencia:** dice "14 Edge Functions" (líneas 29, 82, 121, 144).
+  `supabase/functions/` tiene hoy 33 carpetas (sin contar `_shared`) — confirmado con
+  `ls shield-ecuador-app/supabase/functions/`. La sección 5 ("Las 14 Edge Functions y quién las llama
+  realmente") no incluye ninguna de las funciones del módulo de consentimiento ni las del agente de
+  noticias/campeonato/centro de seguridad agregadas después. Línea 165 afirma "ninguna de las 14
+  funciones se invoca desde `central-admin-app`" — ya no es cierto (el panel de consentimiento sí
+  llama `admin-consent` con el JWT del admin, ver `MANUAL_ADMINISTRADOR.md` sección 14).
+- **Qué falta documentar:** el módulo de consentimiento, el centro de seguridad, el campeonato, el
+  agente de noticias y el banco de aprendizaje real — ninguno existía cuando se escribió.
+- **Propuesta:** actualizar (prioridad alta dentro de este grupo: la sección 5 completa necesita
+  reescribirse, no solo un parche puntual).
+
+## 15. `BASE_DE_DATOS.md` (raíz)
+
+- **Propósito / público:** esquema completo de la base de datos, tabla por tabla. Público: desarrollador.
+- **Último commit:** 2026-10-23 (T98 — ya incluye la sección 12 del módulo de consentimiento, 11 tablas `073`-`084`, confirmado en la conversación previa de este mismo trabajo).
+- **Documento controlado:** no.
+- **Contradice el código actual:** ninguna encontrada — es la fuente de verdad ya vigente para el esquema.
+- **Qué falta:** nada de su alcance.
+- **Propuesta:** dejar igual.
+
+## 16. `DOCUMENTO_FUNCIONALIDADES.md` (raíz)
+
+- **Propósito / público:** resumen de requisitos funcionales/no funcionales, con trazabilidad a los
+  documentos especializados. Público: product owner / nueva persona que se incorpore.
+- **Último commit:** 2026-09-09. Su propio pie de página dice: *"Documento reescrito el 2026-09-08...
+  no cubría las migraciones 016-021 ni el panel de administración"* — es decir, ya reconoce su propio
+  corte temporal.
+- **Documento controlado:** no.
+- **Contradice el código actual, con evidencia:** línea 119 dice "Migraciones... numeradas (`001` a
+  `021`)"; hoy hay 82 archivos de migración, hasta `084`. Sección 2.6 ("Cumplimiento y privacidad",
+  líneas 122-125) tiene una sola línea genérica de consentimiento pre-módulo (sin re-consentimiento,
+  modo invitado, derechos ARCO ejercibles desde un panel, TOTP) — no refleja el módulo LOPDP completo
+  (D-01 a D-16).
+- **Qué falta documentar:** módulo de consentimiento, modo invitado, centro de seguridad, campeonato,
+  banco de aprendizaje real, agente de noticias — ninguno existía en 016-021.
+- **Propuesta:** actualizar.
+
+## 17. `GUIA_LEVANTAMIENTO_PROYECTO.md` (raíz)
+
+- **Propósito / público:** guía paso a paso para levantar el proyecto desde cero (migraciones, Edge
+  Functions, variables de entorno). Público: desarrollador nuevo / quien reconstruya el entorno.
+- **Último commit:** 2026-10-23 (T98) — **pero el commit no corrigió esto:** sigue diciendo "21
+  migraciones, `001` a `021` a la fecha de esta revisión" (línea 22) y "14 Edge Functions de Supabase"
+  (línea 23), y la lista de "Orden esperado" (línea 211) tampoco llega a la `082`. Esto confirma que
+  la fecha de commit de un archivo no basta para asumirlo vigente — el T98 tocó otra sección de este
+  mismo archivo sin actualizar estas dos líneas.
+- **Documento controlado:** no.
+- **Contradice el código actual, con evidencia:** ver arriba (21 vs. 82 migraciones, 14 vs. 33 Edge
+  Functions). No menciona las variables de entorno nuevas del módulo de consentimiento (claves de
+  cifrado, secreto TOTP, HMAC de IP).
+- **Qué falta documentar:** pasos de arranque del módulo de consentimiento (variables de entorno,
+  migraciones `073`-`084`, enrolamiento TOTP del primer admin).
+- **Propuesta:** actualizar.
+
+## 18. `MANUAL_ADMINISTRADOR.md` (raíz)
+
+- **Propósito / público:** manual de las secciones del panel `central-admin-app`. Público: quien
+  administre la consola (hoy, el club Phycom).
+- **Último commit:** 2026-10-23 (T98.b) — incluye una sección 14 completa y detallada sobre el panel
+  de consentimiento (TOTP, roles `privacy_editor`/`privacy_admin`/`privacy_auditor`, reconsentimiento,
+  evidencia, exportación de expediente), verificada línea por línea contra `central-admin-app/app.js`
+  e `index.html`.
+- **Documento controlado:** no.
+- **Contradice el código actual:** ninguna encontrada.
+- **Qué falta:** nada de su alcance propio. **Hallazgo de solapamiento** (no es una contradicción,
+  es una duplicación de fuente): la fusión de `docs/iso-y-privacidad` trajo `vault/Manual del
+  administrador.md`, que apunta a un tercer documento, `manual-central-admin.html` (raíz, HTML
+  autocontenido, 565 líneas), como "el manual completo de las 15 secciones". Hoy hay **tres**
+  documentos que pretenden ser "el manual del administrador" (este archivo, el HTML, y el stub del
+  vault) sin que ninguno diga explícitamente cuál es la fuente de verdad. Registrado como decisión
+  abierta `DOC-05` en `DECISIONS.md` — no se resuelve en esta Fase 0.
+- **Propuesta:** dejar igual (su propio contenido está correcto); resolver el solapamiento con
+  `manual-central-admin.html` es aparte (`DOC-05`).
+
+## 19. `MANUAL_USUARIO_CYBER_DOJO.md` (raíz)
+
+- **Propósito / público:** manual de usuario final, pantalla por pantalla, con texto real citado de
+  la UI. Público: usuario final / quien capacite a usuarios.
+- **Último commit:** 2026-09-09.
+- **Documento controlado:** no.
+- **Contradice el código actual:** no se encontró una afirmación falsa en lo que cubre (es cuidadoso:
+  p. ej. aclara que el correo de contacto ARCO es personal, no corporativo, "tal como está en el
+  código, no una inferencia"). El problema es de **omisión completa**: no menciona el aviso de
+  re-consentimiento al iniciar sesión (`T20`/REQ-09), el modo invitado (`GuestNoticeModal`, tope de 10
+  preguntas), ni la página `/privacidad` donde el usuario ejerce sus derechos ARCO — temas que hoy
+  son parte central de la experiencia de un usuario nuevo.
+- **Qué falta documentar:** re-consentimiento, modo invitado, página `/privacidad` desde la
+  perspectiva del usuario final.
+- **Propuesta:** actualizar.
+
+## 20. `SECURITY_PRIVACY.md` (raíz)
+
+- **Propósito / público:** documento de seguridad y privacidad de la implementación. Público:
+  auditor/desarrollador de seguridad.
+- **Último commit:** 2026-10-20 (T98.a) — 5 menciones de "consentimiento", ya cubre el módulo LOPDP.
+- **Documento controlado:** no (no tiene tabla de control de versiones; podría considerarse candidato
+  a volverse uno, pero esa es una decisión de gobierno de documentos, no de esta Fase 0).
+- **Contradice el código actual:** ninguna encontrada.
+- **Qué falta:** nada de su alcance detectado en esta revisión rápida.
+- **Propuesta:** dejar igual.
+
+## 21. `SETUP.md` (raíz)
+
+- **Propósito / público:** guía corta de instalación/arranque local. Público: desarrollador nuevo.
+- **Último commit:** 2026-09-09.
+- **Documento controlado:** no.
+- **Contradice el código actual, con evidencia:** línea 25 dice "21 migraciones a la fecha de esta
+  revisión" y lista hasta la `021` (línea 30); hoy hay 82, hasta la `084`. No menciona ninguna
+  variable de entorno del módulo de consentimiento.
+- **Qué falta documentar:** variables de entorno y migraciones del módulo de consentimiento.
+- **Propuesta:** actualizar.
+
+## 22. `README-centro-de-seguridad.md` (raíz, nuevo por la fusión)
+
+- **Propósito / público:** runbook técnico del submódulo "Centro de Seguridad" del panel admin
+  (requisitos RF-01 a RF-08 y dónde vive cada pieza). Público: desarrollador/seguridad.
+- **Último commit:** el de la fusión (contenido trae su propio corte temporal de la rama
+  `docs/iso-y-privacidad`, sin fecha explícita en el encabezado).
+- **Documento controlado:** no (es un runbook técnico, no una evaluación formal).
+- **Contradice el código actual:** no verificado línea por línea en esta Fase 0 (son 8 requisitos con
+  rutas de código citadas; verificarlos uno por uno es trabajo de iteración, no de inventario).
+- **Qué falta:** verificación puntual de las rutas citadas en la tabla RF-01..RF-08.
+- **Propuesta:** dejar igual por ahora; si una iteración encuentra una ruta que ya no existe, se marca
+  `[VERIFICAR]` o se corrige puntualmente.
+
+## 23. `manual-central-admin.html` (raíz, nuevo por la fusión) — ⚠️ alcance ambiguo
+
+- **Propósito / público:** manual visual completo (HTML autocontenido, con estilos) de las 15
+  secciones de `central-admin-app`. Público: club Phycom / quien administre la consola.
+- **No es un `.md`.** El alcance ampliado que aprobó el usuario dice literalmente "los `.md` de la
+  raíz de `shield-ecuador-app`" — este archivo es `.html`. Es claramente documentación (no código:
+  no se ejecuta, es una página estática de referencia), pero no calza en la letra de la instrucción.
+  Registrado como decisión abierta `DOC-04` en `DECISIONS.md`: ¿se incluye en el alcance del loop
+  (puede editarse/reemplazarse en iteraciones futuras) o se deja fuera (solo lectura, como los PDF/PNG)?
+- **Propuesta:** sin decidir (`DOC-04`). Mientras no se decida, **el loop no lo toca** (el `gates.sh`
+  de alcance no lo incluye en la lista de rutas permitidas).
+
+## 24-30. Documentos controlados de evaluación/auditoría (fusión de `docs/iso-y-privacidad`)
+
+Siete artefactos, todos en `shield-ecuador-app/docs/`, tratados como **documentos controlados**
+(evaluación/auditoría formal con fecha y versión declaradas). Por regla dura del loop, ninguno se
+reescribe directamente: cualquier cambio futuro debe ir como propuesta nueva en `loop-docs/propuestas/`,
+con su propia tabla de control de versiones y marcada "pendiente de aprobación".
+
+- **`EVALUACION_ISO_42001_TR_24368_CIBERDOJO.md` / `.html` / `.docx`** — mismo documento en tres
+  formatos (428 líneas la versión `.md`). Encabezado declara **Fecha: 26 de septiembre de 2026 ·
+  Versión: 1.0 · Estado: diagnóstico técnico para revisión de dirección**. Dictamen: alineación
+  parcial con ISO/IEC 42001 e ISO/IEC TR 24368, no conformidad integral. El propio documento aclara
+  que sus prioridades y responsables "son propuestas; no constituyen compromisos aprobados" — ya se
+  declara a sí mismo como no definitivo.
+  - **No se verificó línea por línea en esta Fase 0** (es un informe de 428 líneas con hallazgos
+    técnicos puntuales; confirmarlos todos es trabajo de iteración, no de inventario).
+  - **Propuesta:** dejar igual (documento controlado, versión 1.0 vigente); cualquier actualización
+    futura (p. ej. si se cierran brechas que el informe señala) va como propuesta nueva versionada.
+- **`ISO_CIBERDOJO_INVENTARIO.csv`** — inventario de archivos revisados para esa evaluación (327
+  filas: archivo, bytes, sha256, alcance de revisión). Es un artefacto de evidencia, no un texto
+  descriptivo — quedará desactualizado en cuanto cambie cualquier archivo que liste, lo cual es
+  normal y esperado para este tipo de documento (es una foto fija del momento de la evaluación).
+  - **Propuesta:** dejar igual (es evidencia histórica de la evaluación v1.0, no un documento vivo).
+- **`Informe_Seguridad_CiberDojo_.pdf`, `Informe_Profesional_Seguridad_CiberDojo_2026.pdf`,
+  `"Informe de Auditoría de Seguridad - CiberDojo.pdf"`, `"Análisis de vulnerabilidades — CiberDojo.pdf"`,
+  `"Cumplimiento OWASP Top 10 — CiberDojo.pdf"`, `OWASP_Top10_Review_Paper_EDITED.docx`** — seis
+  informes de seguridad/auditoría en PDF/DOCX (binarios, no editables por el loop en ningún caso).
+  - **Propuesta:** dejar igual — son entregables finales de una revisión puntual; una actualización
+    implicaría un informe nuevo, no una edición del existente.
+
+## 31. `shield-ecuador-app/vault/` — notas de Obsidian (8 archivos, fusión de `docs/iso-y-privacidad`)
+
+- **Propósito / público:** base de conocimiento interna del club (`Índice.md`,
+  `Arquitectura/Visión general.md`, `Arquitectura/Autenticación y modo invitado.md`,
+  `Decisiones/Registro de decisiones.md`, `Manual del administrador.md` (stub, ver hallazgo del
+  documento 18), `Módulos/Agente de noticias.md`, `Módulos/Campeonato.md`, `Módulos/Centro de
+  Seguridad.md`). Público: desarrollador del club Phycom, para no repetir investigación ya hecha.
+- **Último commit:** el de la fusión; contenido interno referencia decisiones de septiembre 2026
+  (modo invitado por sesión anónima, 17 de septiembre).
+- **Documentos controlados:** no — son notas informales de orientación, no evaluaciones formales.
+- **Contradice el código actual:** no se encontró ninguna contradicción en la revisión rápida — de
+  hecho, estas notas están **más al día que varios documentos "oficiales"** de la raíz (mencionan el
+  fallback OTP de login, el modo invitado vía sesión anónima, el campeonato con límite de tiempo
+  verificado en servidor — todo vigente).
+- **Qué falta:** nada evidente; no cubren el módulo de consentimiento LOPDP (anterior a su fecha).
+- **Propuesta:** dejar igual. Si se usan como fuente para `GUIA_OPERACION_CLUB.md` (documento nuevo
+  pedido por el usuario), citarlas como referencia en vez de duplicar su contenido.
+
+## 32. `shield-ecuador-app/scripts/export_iso_review.py` — fuera de alcance (no es documentación)
+
+- Script Python usado para generar el inventario/evidencia de la evaluación ISO (lee archivos, calcula
+  hashes, exporta CSV/HTML). Es **código**, no documentación: el `gates.sh` del loop no lo incluye en
+  su lista de rutas permitidas y ninguna tarea de este loop debe tocarlo. Mencionado aquí solo para
+  que quede registrado que la fusión lo trajo.
+
+---
+
 ## Resumen de propuestas
 
 | # | Documento | Propuesta |
@@ -216,22 +426,43 @@ por el propio documento (ninguno de los 13 declara su público explícitamente).
 | 11 | `TPOT_AI_AGENT.md` | Dejar igual |
 | 12 | `TPOT_DEPLOYMENT_CHECKLIST.md` | Dejar igual |
 | 13 | `TPOT_INTEGRATION.md` | Dejar igual |
+| 14 | `ARQUITECTURA_CYBER_DOJO.md` (raíz) | Actualizar |
+| 15 | `BASE_DE_DATOS.md` (raíz) | Dejar igual |
+| 16 | `DOCUMENTO_FUNCIONALIDADES.md` (raíz) | Actualizar |
+| 17 | `GUIA_LEVANTAMIENTO_PROYECTO.md` (raíz) | Actualizar |
+| 18 | `MANUAL_ADMINISTRADOR.md` (raíz) | Dejar igual (ver solapamiento `DOC-05`) |
+| 19 | `MANUAL_USUARIO_CYBER_DOJO.md` (raíz) | Actualizar |
+| 20 | `SECURITY_PRIVACY.md` (raíz) | Dejar igual |
+| 21 | `SETUP.md` (raíz) | Actualizar |
+| 22 | `README-centro-de-seguridad.md` (raíz) | Dejar igual (verificación puntual pendiente) |
+| 23 | `manual-central-admin.html` (raíz) | ⚠️ alcance sin decidir (`DOC-04`) |
+| 24-30 | Evaluación ISO 42001/TR 24368, inventario CSV, 6 informes PDF/DOCX | Documentos controlados — dejar igual, cambios futuros solo como propuesta versionada |
+| 31 | `vault/` (8 notas) | Dejar igual |
+| 32 | `scripts/export_iso_review.py` | Fuera de alcance (código, no documentación) |
 
 ## Documentos que faltan y deberían existir
 
-1. **Reemplazo del documento 1** (si se archiva): un documento de traspaso/arquitectura vigente que
-   mencione el módulo de consentimiento, el modo invitado y el estado real de Edge Functions —
-   podría ser la actualización del propio documento 1, o fusionarlo con `ARQUITECTURA_CYBER_DOJO.md`
-   (raíz). Decisión humana, no de esta Fase 0.
-2. **Doc técnico del modo invitado** (sesión anónima, `GuestNoticeModal`, `accept-guest-notice`,
-   `cleanup_expired_guest_sessions`): hoy solo existe disperso en `loop-consentimiento/TASKS.md` y
-   comentarios de código; no hay un documento de referencia único, ni en `docs/` ni en la raíz.
-3. **Verificación SQL actualizada** (si no se opta por reescribir el documento 10): una versión que
-   cubra las tablas de aprendizaje, campañas y consentimiento.
-4. **Nota sobre `docs/iso-y-privacidad`**: ningún documento de `docs/` menciona que existe una rama
-   separada con la evaluación ISO 42001 real, sin fusionar. Si el objetivo final es tener "toda la
-   documentación" en un solo lugar, esa fusión (o al menos una referencia) falta.
+1. **Reemplazo del documento 1** — **decidido por el usuario (2026-10-26):** actualizar
+   `AI_HANDOFF_CYBER_DOJO.md` como documento de traspaso **breve**, que enlace a los documentos
+   especializados en vez de repetirlos; servirá para capacitar al club Phycom. Ver `DECISIONS.md`
+   `DOC-01` (decidida) y `loop-docs/TASKS.md`.
+2. **Doc técnico del modo invitado** — **decidido:** nuevo `shield-ecuador-app/docs/MODO_INVITADO.md`.
+3. **Verificación SQL actualizada** — **decidido:** primera tarea del backlog (mayor impacto práctico).
+4. **Nota sobre `docs/iso-y-privacidad`** — **resuelto por fusión** (2026-10-26): la rama ya se
+   fusionó a `docs/actualizacion`; los documentos 24-31 son el resultado. Ya no falta una nota sobre
+   una rama separada — en su lugar, el nuevo `README.md` debe indexarlos como documentos controlados.
+5. **Índice general de toda la documentación** — **decidido:** nuevo índice (ver `DECISIONS.md`
+   para la ambigüedad sobre su ubicación exacta: no existe hoy ningún `README.md` en la raíz de
+   `shield-ecuador-app/`, solo `README-centro-de-seguridad.md`, que es de un submódulo específico).
+6. **Guía de operación para el club Phycom** — **decidido:** nuevo
+   `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md` (qué hace cada parte, cómo se despliega, qué
+   revisar a diario) — puede apoyarse en `vault/` (documento 31) como fuente, sin duplicarla.
 
 ---
 
-*Inventario generado el 2026-10-24 en la rama `docs/actualizacion` (worktree `C:\Users\aps-ecuador\Riesgo-docs`), a partir de la lectura de los 13 archivos de `shield-ecuador-app/docs/` y contraste puntual contra `App.tsx`, `central-admin-app/*.js`, `BASE_DE_DATOS.md` y `supabase/migrations/`. Ningún documento fue editado.*
+*Inventario generado el 2026-10-24 (13 archivos de `shield-ecuador-app/docs/`) y ampliado el
+2026-10-26 (8 `.md` de la raíz de `shield-ecuador-app/` + fusión de `docs/iso-y-privacidad`: 2
+archivos nuevos en la raíz, 7 documentos controlados, 8 notas de vault, 1 script fuera de alcance),
+en la rama `docs/actualizacion` (worktree `C:\Users\aps-ecuador\Riesgo-docs`). Contraste puntual
+contra `App.tsx`, `central-admin-app/*.js`, `BASE_DE_DATOS.md` y `supabase/migrations/` (82 archivos,
+hasta `084`) y `supabase/functions/` (33 carpetas sin contar `_shared`). Ningún documento fue editado.*
