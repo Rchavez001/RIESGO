@@ -502,3 +502,48 @@ persona responsable sobre el inventario y el backlog.
   `feature/consentimiento-lopdp` son nombres de rama citados entre backticks, mismo falso positivo
   documentado desde la Iteración 0b/4; la frase "service_role key"/"service_role" en la sección 1 es
   el mismo término de arquitectura, no un secreto real, ya aceptado en las Iteraciones 3-9).
+
+## Iteración 14 — 2026-10-26 — DOCS-14 (propuesta de actualización — evaluación ISO 42001, documento controlado)
+
+- Cambios: `loop-docs/propuestas/PROPUESTA-ISO-42001-2026-10-26.md` (nuevo) — propuesta de
+  actualización parcial del hallazgo H08 ("Administración con atribución y privilegios
+  insuficientemente separados") de `shield-ecuador-app/docs/EVALUACION_ISO_42001_TR_24368_CIBERDOJO.md`
+  (v1.0, 2026-09-26, documento controlado, no editado directamente). Propone una nota de seguimiento
+  (no un reemplazo) que aclare que, para el alcance específico del módulo de consentimiento
+  (rutas `admin-consent`, tablas `consent_*`/`privacy_*`/`admin_roles`/`admin_audit`/`data_subject_*`),
+  la brecha ya tiene un control alternativo desde el 2026-09-30 (login individual con Supabase Auth +
+  TOTP, JWT propio en vez de `service_role`, roles `privacy_editor`/`privacy_admin`/`privacy_auditor`
+  desde `admin_roles`), mientras el resto del panel (T-Pot, dojos, campañas, centro de seguridad,
+  agente de noticias) sigue sin cambios — H08 no se cierra, solo se actualiza parcialmente. También
+  se re-verificó H01 (autorización privilegiada en `requireAdminOrScheduler`/`decodeJwtRole` sin
+  verificación de firma, con `verify_jwt = false` para 4 funciones en `config.toml`): no cambió nada
+  desde el 2026-09-26, así que no se propone ninguna actualización para H01. `loop-docs/TASKS.md`
+  (`DOCS-14` → `[x]`). No se tocó el documento controlado original ni su `.docx`/`.html`.
+- Verificado contra: `shield-ecuador-app/supabase/functions/_shared/news-agent-core.ts` (función
+  `requireAdminOrScheduler`/`decodeJwtRole`, sin cambios desde el commit `b2185b7`, 2026-09-21 —
+  anterior a la evaluación), `shield-ecuador-app/supabase/config.toml` líneas 399-436 (`verify_jwt`
+  por función, sin cambios desde el commit `6f186b6`, 2026-09-28; confirmado con
+  `git log --oneline -L 399,417:supabase/config.toml` que ninguna línea se tocó después), `git log
+  --oneline --follow -- supabase/functions/_shared/news-agent-core.ts` y `git show b2185b7` (comentario
+  de justificación de `decodeJwtRole` ya presente desde la creación del archivo, antes de la
+  evaluación), `shield-ecuador-app/central-admin-app/server.js` líneas 1-40 (comentarios explícitos
+  que citan H08 y D-01 para justificar por qué el proxy con `service_role` excluye las rutas del
+  módulo de consentimiento), `git log --oneline` (commits `07e19ac`, `39cc447`, `ac45ddb` — todos
+  2026-09-30, `514024b` 2026-10-20 — todos posteriores al 2026-09-26; `07e19ac` cita literalmente
+  `[SEC-03, H08]` en el mensaje de commit), `loop-consentimiento/DECISIONS.md` decisión `D-01`
+  (contexto literal cita H08, decisión: login individual + TOTP), `loop-docs/PROGRESS.md` Iteración 9
+  (DOCS-09, confirmación previa de `privacyLoginForm`/`privacyEnroll` en `central-admin-app/app.js`
+  líneas 6455-6629).
+- [VERIFICAR] añadidos: ninguno — la propuesta solo documenta cambios ya confirmados contra commits y
+  código reales; no se dejó ninguna afirmación sin fuente.
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico documentado desde la Iteración 0b: `check_code_paths` resuelve rutas solo
+  desde la raíz del repo (`docs/EVALUACION_ISO_42001_TR_24368_CIBERDOJO.md`, `central-admin-app/app.js`
+  citados en la propuesta nueva existen de verdad bajo `shield-ecuador-app/`, confirmado con `ls`); y
+  `check_secrets` marca `CENTRAL_ADMIN_USER`/`CENTRAL_ADMIN_PASSWORD`/`service_role` como posibles
+  secretos por coincidencia de patrón — son nombres de variable de entorno y de rol, nunca un valor
+  real, mismo patrón ya aceptado en las Iteraciones 3-9 para el mismo término. Las rutas preexistentes
+  de `TASKS.md` que vuelve a marcar el gate (`docs/iso-y-privacidad`, `central-admin-app/app.js`,
+  `frontend/Dockerfile`, `supabase/functions/run-news-agent/index.ts`,
+  `supabase/migrations/040_...sql`/`044_...sql`, `docs/GUIA_OPERACION_CLUB.md`) son las mismas ya
+  documentadas como falsos positivos desde iteraciones anteriores, no nuevas de esta iteración.

@@ -125,7 +125,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     `INVENTARIO.md` punto 31) como fuente, citándolas en vez de duplicar su contenido.
   - Ejecutar después de DOCS-08 (el traspaso breve) para poder enlazarlo desde ahí si tiene sentido.
 
-- [ ] **DOCS-14 — Propuesta de actualización de la evaluación ISO 42001 (documento controlado)**
+- [x] **DOCS-14 — Propuesta de actualización de la evaluación ISO 42001 (documento controlado)**
   - La evaluación (`EVALUACION_ISO_42001_TR_24368_CIBERDOJO.md`, v1.0, 2026-09-26) **no se edita
     directamente**. Si al verificar sus hallazgos contra el código actual (p. ej. el punto sobre
     autorización privilegiada inconsistente, o las brechas de gobierno de IA) se encuentra que algo
