@@ -587,3 +587,30 @@ persona responsable sobre el inventario y el backlog.
   patrón de limitación del heurístico documentado desde la Iteración 0b (`check_code_paths` resuelve
   rutas solo desde la raíz del repo); confirmado con `ls shield-ecuador-app/central-admin-app/tpotService.js`
   que el archivo existe de verdad.
+
+## Iteración 16 — 2026-10-26 — DOCS-16 (`ARQUITECTURA_CYBER_DOJO.md`, secciones 3.1 y 8)
+
+- Cambios: `shield-ecuador-app/ARQUITECTURA_CYBER_DOJO.md` — corregidas las dos afirmaciones que
+  decían que `frontend/` no tenía `Dockerfile` propio y se desplegaba solo por buildpacks de Cloud
+  Build: sección 3.1 (línea 74, hook `gcp-build`) y sección 8 (línea 232, resumen de despliegue).
+  Ambas se corrigieron juntas, aunque la tarea solo mencionaba la sección 8, porque son la misma
+  afirmación técnica repetida dos veces en el mismo documento — corregir solo una habría dejado una
+  contradicción interna (sección 3.1 diciendo "sin Dockerfile" y sección 8 diciendo lo contrario).
+  Añadido `[VERIFICAR]` en la sección 8 sobre si la revisión activa hoy en Cloud Run ya usa ese
+  Dockerfile o una build anterior por buildpacks, remitiendo a `DOC-07` (sigue ABIERTA, sin decidir
+  por esta iteración). Añadida una nota de actualización al pie (no se tocaron las notas previas de
+  2026-09-08 ni la de la Iteración 3). `loop-docs/TASKS.md` (`DOCS-16` → `[x]`).
+- Verificado contra: `shield-ecuador-app/frontend/Dockerfile` (contenido real: build multistage
+  `node:20-alpine` que termina en `node static-server.js`), `git log --follow -- frontend/Dockerfile`
+  (commit `217140f`, único commit, confirma la fecha 2026-09-28 ya citada en la propia tarea
+  `DOCS-16` de `TASKS.md`).
+- [VERIFICAR] añadidos: ninguno nuevo — el `[VERIFICAR]` de `DOC-07` ya existía desde la Iteración 5;
+  esta iteración solo lo referenció desde el nuevo texto de la sección 8 en vez de duplicar la
+  pregunta.
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico documentado desde la Iteración 0b (`check_code_paths` resuelve rutas
+  solo desde la raíz del repo, así que `frontend/Dockerfile`, `central-admin-app/Dockerfile`,
+  `frontend/package.json`, etc. — todas relativas a `shield-ecuador-app/`, confirmadas reales con
+  `ls shield-ecuador-app/<ruta>` — se marcan como inexistentes; y la frase "service_role key" en las
+  líneas 31 y 226, preexistentes y no tocadas en esta iteración, coincide con el patrón de
+  `check_secrets` sin ser un secreto real, mismo caso aceptado desde la Iteración 3).

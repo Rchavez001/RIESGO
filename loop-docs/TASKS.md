@@ -142,7 +142,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     agentes; marcar `[VERIFICAR]` lo que no se pueda confirmar.
   - Prioridad baja — explícitamente la última tarea del backlog.
 
-- [ ] **DOCS-16 — Corregir `ARQUITECTURA_CYBER_DOJO.md` sección 8 (Despliegue): el frontend ya tiene `Dockerfile`**
+- [x] **DOCS-16 — Corregir `ARQUITECTURA_CYBER_DOJO.md` sección 8 (Despliegue): el frontend ya tiene `Dockerfile`**
   - La sección 8 (reescrita 2026-09-08) afirma que `cyberdojo` (frontend) se construye "por
     buildpacks de Cloud Build (`gcp-build` script), sin Dockerfile propio". Esto ya no es cierto: el
     commit `217140f` (2026-09-28) añadió `frontend/Dockerfile` (build multistage `node:20-alpine`

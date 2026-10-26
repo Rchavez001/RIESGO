@@ -71,7 +71,7 @@ En su lugar, `DashboardOrAdminRedirect` (en `App.tsx`) usa `window.location.href
 | react-scripts (dev, CRA) | 5.0.1 |
 | tailwindcss (dev) | ^4.2.4 |
 
-Scripts relevantes: `start` ejecuta `node static-server.js` (servidor de producción); `start:dev` ejecuta `react-scripts start` (desarrollo); `build` ejecuta `react-scripts build`; `gcp-build` ejecuta `npm run build` — este último es el hook que usan los **buildpacks de Google Cloud Run** cuando se despliega con `gcloud run deploy --source .` sin Dockerfile propio (no existe ningún `Dockerfile` en `frontend/`, verificado).
+Scripts relevantes: `start` ejecuta `node static-server.js` (servidor de producción); `start:dev` ejecuta `react-scripts start` (desarrollo); `build` ejecuta `react-scripts build`; `gcp-build` ejecuta `npm run build` — este hook servía para los **buildpacks de Google Cloud Run** cuando `frontend/` no tenía Dockerfile propio. Desde el commit `217140f` (2026-09-28) existe `frontend/Dockerfile` (build multistage `node:20-alpine` que termina en `node static-server.js`), y Cloud Build prioriza ese Dockerfile sobre los buildpacks en cualquier despliegue nuevo (ver sección 8).
 
 ### 3.2 Admin (`central-admin-app/package.json`)
 
@@ -229,7 +229,7 @@ El detalle funcional de cada panel (qué hace un admin en cada uno, campos, fluj
 ## 8. Despliegue
 
 Ambos servicios corren en **Google Cloud Run**, proyecto `polar-plate-499719-r1`, región `us-central1`:
-- `cyberdojo` (frontend) — build por buildpacks de Cloud Build (`gcp-build` script), sin Dockerfile propio.
+- `cyberdojo` (frontend) — tiene **Dockerfile propio** (`frontend/Dockerfile`, añadido en el commit `217140f` del 2026-09-28: build multistage `node:20-alpine` que termina en `node static-server.js`, igual que hacían los buildpacks). Cloud Build prioriza un `Dockerfile` presente sobre los buildpacks, así que cualquier despliegue nuevo (`gcloud run deploy --source .`) usa ese `Dockerfile`. `[VERIFICAR]` no se confirmó si la revisión actualmente activa en Cloud Run se desplegó antes o después del 2026-09-28 (buildpacks vs. este Dockerfile) — ver `DOC-07` en `loop-docs/DECISIONS.md`; el comportamiento resultante (build y arranque) es el mismo en ambos casos.
 - `cyberdojo-admin` (panel) — build por Dockerfile propio (`central-admin-app/Dockerfile`, `node:20-alpine`).
 
 No se encontró evidencia en el repositorio de un pipeline de CI/CD (GitHub Actions, Cloud Build triggers automáticos u otro) — los despliegues verificados en este proyecto se hicieron con `gcloud run deploy` manual. Si existe un pipeline automatizado fuera del repositorio (por ejemplo, un trigger de Cloud Build configurado directamente en la consola de GCP y no versionado como YAML en el repo), no es visible desde el código fuente y debe confirmarse directamente en la consola de Google Cloud si el auditor lo requiere — este documento no lo afirma ni lo descarta por no tener forma de verificarlo desde el código.
@@ -239,3 +239,5 @@ No se encontró evidencia en el repositorio de un pipeline de CI/CD (GitHub Acti
 *Documento reescrito el 2026-09-08 a partir de lectura directa de `frontend/package.json`, `frontend/src/App.tsx`, `frontend/static-server.js`, `central-admin-app/package.json`, `central-admin-app/Dockerfile`, `central-admin-app/index.html`, listados de archivos reales de `frontend/src/` y `supabase/functions/`, y `git remote -v`. Reemplaza la versión anterior, que contenía afirmaciones no verificadas o directamente falsas (ver introducción).*
 
 *Sección 5 (Edge Functions) actualizada el 2026-10-26: el conteo pasó de 14 a 33 carpetas reales en `supabase/functions/`, y se corrigió la afirmación de que ninguna se invoca desde `central-admin-app` — varios módulos añadidos después del 2026-09-08 (preguntas, agente de noticias, centro de seguridad, campeonato, consentimiento) sí la invocan directamente.*
+
+*Secciones 3.1 y 8 actualizadas el 2026-10-26: `frontend/` sí tiene `Dockerfile` propio desde el commit `217140f` (2026-09-28); ya no se construye solo por buildpacks de Cloud Build. Queda `[VERIFICAR]` si la revisión activa hoy en Cloud Run ya usa ese Dockerfile (ver `DOC-07` en `loop-docs/DECISIONS.md`).*
