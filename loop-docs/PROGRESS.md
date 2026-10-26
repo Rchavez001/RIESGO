@@ -614,3 +614,50 @@ persona responsable sobre el inventario y el backlog.
   `ls shield-ecuador-app/<ruta>` — se marcan como inexistentes; y la frase "service_role key" en las
   líneas 31 y 226, preexistentes y no tocadas en esta iteración, coincide con el patrón de
   `check_secrets` sin ser un secreto real, mismo caso aceptado desde la Iteración 3).
+
+## Iteración 17 — 2026-10-26 — DOCS-17 (`MANUAL_ADMINISTRADOR.md`, panel "Agente noticias")
+
+- Cambios: `shield-ecuador-app/MANUAL_ADMINISTRADOR.md` — fila "Agente noticias" de la tabla de
+  hallazgos y sección 5 reescritas: ya no describen `runNewsAgent()` como una simulación sin IA
+  real con plantillas de texto fijo que sobrescribía preguntas activas. Ahora documentan el flujo
+  real de tres pasos contra la Edge Function `run-news-agent` (`prepare`/`complete`), la llamada
+  real a `puter.ai.chat()` (modelo `gpt-5.6-luna`) en el modo manual, el modo automático por
+  `pg_cron` (`dispatch_news_agent()`, migración `040`, acción `scheduled` con `runProviderChain`),
+  que todo el contenido generado se inserta siempre como `active=false`/`audit_status='pending'`
+  en la tabla real `questions` (nunca sobrescribe ni activa nada existente), la aprobación humana
+  obligatoria (`reviewNewsGenerated()`) y la sincronización posterior a `learning_items` (migración
+  `044`). Nota añadida al pie del documento (no se tocaron las notas previas de 2026-09-08/
+  2026-10-20/2026-10-23). `loop-docs/TASKS.md` (`DOCS-17` → `[x]`; nueva tarea `DOCS-18`, prioridad
+  baja, registrando un hallazgo encontrado al verificar fuentes para esta iteración: la fila
+  "Alertas IA" y la sección 6 de `MANUAL_ADMINISTRADOR.md` siguen atribuyendo el contenido de la
+  tabla `alerts` al agente de noticias — código antiguo que ya no existe — cuando en realidad hoy
+  la llena `run-incident-investigator`, un agente distinto; no se corrigió aquí porque es una
+  afirmación distinta sobre otra fila/sección del mismo documento).
+- Verificado contra: `shield-ecuador-app/central-admin-app/app.js` (`runNewsAgent()` líneas
+  1552-1555, `ensurePuter()` líneas 1560-1572, `executeNewsAgent()` líneas 1574-1634 completas,
+  `loadNewsGeneratedFromSupabase()`/`renderNewsGeneratedReport()`/`reviewNewsGenerated()` líneas
+  1471-1531; confirmado con `grep` que `generatedKatas`/`topicForIndex`/`answerForIndex` ya no
+  existen en el archivo), `shield-ecuador-app/supabase/functions/run-news-agent/index.ts` completo
+  (comentario de cabecera líneas 1-22, acciones `prepare`/`complete`/`scheduled` líneas 45-61),
+  `shield-ecuador-app/supabase/functions/_shared/news-agent-core.ts` líneas 427-494
+  (`insertGeneratedContent()`: preguntas y casos de kata insertados en `questions` con
+  `active:false`/`audit_status:'pending'`), `shield-ecuador-app/supabase/migrations/040_news_agent_pg_cron_dispatcher.sql`
+  (`dispatch_news_agent()`, `cron.schedule` completo), `shield-ecuador-app/supabase/migrations/007_central_admin_ciber_dojo.sql`
+  (confirma que `cyber_dojo_generated_katas` existe como tabla real pero ningún Edge Function la
+  usa), `git log --oneline -S "saveNewsAlertToSupabase" -- central-admin-app/app.js` (commits
+  `ab309ca`/`9dc536e`, confirma que esa función existía en el código antiguo y ya no está en el
+  actual), `grep -r "from('alerts')"` sobre `supabase/functions/` (confirma que
+  `run-incident-investigator` escribe en `alerts`, no `run-news-agent`).
+- [VERIFICAR] añadidos: ninguno — todo lo escrito se confirmó directamente contra el código citado;
+  el hallazgo sobre "Alertas IA" se registró como tarea nueva (`DOCS-18`), no como `[VERIFICAR]` en
+  el texto, porque requiere su propia verificación y corrección fuera del alcance de esta tarea.
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico documentado desde la Iteración 0b (`check_code_paths` resuelve rutas
+  solo desde la raíz del repo, así que `central-admin-app/app.js`, `supabase/functions/run-news-agent/index.ts`,
+  `supabase/functions/run-incident-investigator/index.ts`, `supabase/migrations/040_...sql`/`044_...sql`,
+  `frontend/Dockerfile`, `docs/GUIA_OPERACION_CLUB.md`, `central-admin-app/index.html`,
+  `request-data-subject-right/handler.ts`, `admin-consent/handler.ts` — todas relativas a
+  `shield-ecuador-app/`, confirmadas reales con `ls shield-ecuador-app/<ruta>` — se marcan como
+  inexistentes; y "service_role" en la línea 106 (preexistente, sección 14, no tocada en esta
+  iteración) es el mismo término de rol/arquitectura, no un secreto real, ya aceptado desde la
+  Iteración 3).

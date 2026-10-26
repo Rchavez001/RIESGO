@@ -156,7 +156,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     build anterior por buildpacks — mismo `[VERIFICAR]` aplicaría aquí.
   - Prioridad baja — no afecta el comportamiento descrito (mismo arranque), solo el método de build.
 
-- [ ] **DOCS-17 — Corregir `MANUAL_ADMINISTRADOR.md`: el panel "Agente noticias" ya no es una simulación**
+- [x] **DOCS-17 — Corregir `MANUAL_ADMINISTRADOR.md`: el panel "Agente noticias" ya no es una simulación**
   - La tabla "Hallazgo central de este manual" (fila "Agente noticias") y la sección 5 afirman que
     `runNewsAgent()` "no llama a ningún proveedor de IA real ni a ninguna Edge Function" y que genera
     texto con una plantilla fija en JavaScript. Esto describe el código **anterior** al commit
@@ -181,6 +181,31 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   - Prioridad baja — no es información de seguridad crítica, pero sí cambia la recomendación
     operativa real del manual (un administrador que confíe en la nota actual podría no revisar la
     cola de contenido pendiente, pensando que el botón no hace nada real).
+
+- [ ] **DOCS-18 — Corregir `MANUAL_ADMINISTRADOR.md`: la fila "Alertas IA" y la sección 6 atribuyen
+  el contenido de la tabla `alerts` al agente de noticias, pero esa tabla la llena otro agente**
+  - La fila "Alertas IA" de la tabla de hallazgos dice que su contenido viene "del simulador de
+    arriba" (la fila "Agente noticias"), y la sección 6 dice "Lectura de las alertas guardadas
+    (incluyendo las generadas por el simulador del punto 5)". Esto ya era parcialmente cierto en el
+    código antiguo (`saveNewsAlertToSupabase()` existía en `central-admin-app/app.js` desde el commit
+    `ab309ca`, 2026-09-20) pero esa función **ya no existe** en el código actual (confirmado:
+    `grep -r saveNewsAlertToSupabase` no encuentra nada) y el `run-news-agent` real (ver `DOCS-17`) no
+    escribe nada en la tabla `alerts`. Quien sí escribe en `alerts` hoy es la Edge Function
+    `run-incident-investigator` (`supabase/functions/run-incident-investigator/index.ts`, confirmado
+    con `grep -r "from('alerts')"`), un agente distinto del agente de noticias. La fila/sección deben
+    corregirse para reflejar que "Alertas IA" lee alertas generadas por el investigador de incidentes,
+    no por el agente de noticias.
+  - Hallazgo encontrado al verificar fuentes para `DOCS-17` (`MANUAL_ADMINISTRADOR.md` sección 5,
+    2026-10-26); no se corrigió ahí porque es una afirmación distinta (de qué agente viene el
+    contenido de `alerts`, no si el agente de noticias usa IA real) sobre otra fila/sección del mismo
+    documento — una iteración cierra solo un documento/sección.
+  - Verificar contra: `shield-ecuador-app/supabase/functions/run-incident-investigator/index.ts`
+    (qué escribe en `alerts` y con qué `source_agent`), `shield-ecuador-app/central-admin-app/app.js`
+    (confirmar que no hay ninguna escritura a `alerts` desde el flujo del agente de noticias),
+    `shield-ecuador-app/supabase/migrations/001_initial_schema.sql` (definición real de la tabla
+    `alerts`).
+  - Prioridad baja — es una corrección de atribución, no cambia ninguna recomendación operativa de
+    seguridad.
 
 ---
 
