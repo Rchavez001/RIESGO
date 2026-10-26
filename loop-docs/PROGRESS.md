@@ -453,3 +453,52 @@ persona responsable sobre el inventario y el backlog.
   `central-admin-app/app.js`, `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md`, `frontend/Dockerfile`
   en `loop-docs/TASKS.md`) son preexistentes, no tocadas en esta iteración — mismo patrón registrado
   desde la Iteración 0b.
+
+## Iteración 13 — 2026-10-26 — DOCS-13 (documento nuevo `docs/GUIA_OPERACION_CLUB.md`)
+- Cambios: `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md` (nuevo) — guía de operación para el club
+  Phycom: qué hace cada parte del sistema (frontend/Cloud Run `cyberdojo`, central-admin-app/Cloud
+  Run `cyberdojo-admin`, Supabase), cómo se despliega (ambos servicios ya tienen `Dockerfile` propio
+  hoy, comandos `gcloud run deploy` reales), y qué revisar con regularidad (agente de noticias con
+  cola de revisión `audit_status='pending'`, Centro de Seguridad con sus tres cron jobs, Sensei IA,
+  Inteligencia de Amenazas/T-Pot, consentimiento informado condicionado a `DOC-06`, y qué paneles
+  maqueta no sirven como fuente diaria). `shield-ecuador-app/README.md` (fila nueva para
+  `docs/GUIA_OPERACION_CLUB.md` en la tabla 2.1, orden alfabético entre `Ficha-DoggoTeka.png` y
+  `MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md`). `loop-docs/TASKS.md` (`DOCS-13` → `[x]`; nueva tarea
+  `DOCS-17`, prioridad baja, registrando un hallazgo encontrado al verificar fuentes para esta
+  iteración: `MANUAL_ADMINISTRADOR.md` describe el panel "Agente noticias" como una simulación sin
+  IA real, pero el código actual sí llama a un proveedor de IA real y a la Edge Function
+  `run-news-agent` en ambos modos — no se corrigió ahí porque pertenece a otro documento).
+- Verificado contra: `shield-ecuador-app/vault/Arquitectura/Visión general.md` (piezas del sistema,
+  solo como punto de partida, no como fuente final), `shield-ecuador-app/GUIA_LEVANTAMIENTO_PROYECTO.md`
+  (líneas 12, 764, 797-800, 851, 918, 928, 944, 1233-1241 — nombres reales de servicio Cloud Run,
+  confirmación de que ambos `Dockerfile` existen hoy), `shield-ecuador-app/frontend/Dockerfile` y
+  `shield-ecuador-app/central-admin-app/Dockerfile` (existencia real), `shield-ecuador-app/central-admin-app/app.js`
+  (`executeNewsAgent()`/`ensurePuter()` líneas 1552-1660, `newsAgentActive`/`newsAgentTime`/`agent_configs`
+  líneas 920-960, `loadNewsGeneratedFromSupabase()`/`renderNewsGeneratedReport()`/`reviewNewsGenerated()`
+  líneas 1471-1535), `shield-ecuador-app/central-admin-app/index.html` (líneas 392-404, el bloque
+  "Reporte: preguntas y katas generadas" vive dentro de la sección `newsAgent`, no en una pestaña
+  aparte; líneas 33-48, lista real de 16 `data-panel` del nav), `shield-ecuador-app/supabase/functions/run-news-agent/index.ts`
+  (comentario de cabecera sobre `audit_status='pending'`, acciones `prepare`/`complete`/`scheduled`,
+  uso de `runProviderChain` en la acción `scheduled`), `shield-ecuador-app/supabase/migrations/040_news_agent_pg_cron_dispatcher.sql`
+  (`dispatch_news_agent()` completo, cron cada minuto), `supabase/migrations/044_sync_news_questions_to_learning_items.sql`
+  (sincronización a `learning_items` solo si `audit_status='approved'`), `supabase/migrations/055_security_center_jobs.sql`
+  (los tres `cron.schedule` reales: alerta cada 15 min, diagnóstico semanal lunes 08:00 UTC, EASM
+  mensual día 1 09:00 UTC), `MANUAL_ADMINISTRADOR.md` (tabla "Hallazgo central", secciones 5 y 14,
+  para contrastar qué paneles son reales y detectar la desactualización de la sección 5), `git log
+  --oneline -S "puter.ai.chat" -- central-admin-app/app.js` (commit `ab309ca`, 2026-09-20, anterior
+  a los dos últimos commits que tocaron `MANUAL_ADMINISTRADOR.md`: `2525ddc` 2026-10-20 y `6a2cf62`
+  2026-10-23 — confirma que el manual tuvo oportunidad de reflejar el cambio y no lo hizo),
+  `shield-ecuador-app/supabase/migrations/013_tpot_integration.sql` (columna real `base_url` de
+  `tpot_integration_settings`), `loop-docs/DECISIONS.md` (`DOC-06`, `DOC-07`, texto exacto citado).
+- [VERIFICAR] añadidos: ninguno — todo lo escrito en el documento nuevo se confirmó directamente
+  contra el código/migraciones citados arriba; la única afirmación condicional (módulo de
+  consentimiento) se marcó explícitamente como "aplica solo cuando el módulo esté desplegado",
+  citando la decisión `DOC-06` ya tomada, no como un hecho actual.
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico documentado desde la Iteración 0b (`check_code_paths` resuelve rutas
+  solo desde la raíz del repo, así que las citas relativas a `shield-ecuador-app/` del documento
+  nuevo y de la tarea `DOCS-17` recién añadida a `TASKS.md` — confirmadas una por una con `ls` antes
+  de este commit — se marcan como inexistentes; `docs/iso-y-privacidad` y
+  `feature/consentimiento-lopdp` son nombres de rama citados entre backticks, mismo falso positivo
+  documentado desde la Iteración 0b/4; la frase "service_role key"/"service_role" en la sección 1 es
+  el mismo término de arquitectura, no un secreto real, ya aceptado en las Iteraciones 3-9).

@@ -39,6 +39,7 @@ fuente de verdad.
 | [docs/FICHA_DOGGOTEKA.md](docs/FICHA_DOGGOTEKA.md) | Ficha de personaje/diseño de la mascota DoggoTeka. | Diseño de contenido/narrativa |
 | docs/Ficha-DoggoTeka.pdf | Versión imprimible de la ficha anterior. | Mismo público |
 | docs/Ficha-DoggoTeka.png | Captura de la ficha anterior. | Mismo público |
+| [docs/GUIA_OPERACION_CLUB.md](docs/GUIA_OPERACION_CLUB.md) | Guía de operación para el club Phycom: qué hace cada parte del sistema, cómo se despliega y qué revisar con regularidad (panel admin, agente de noticias, Centro de Seguridad). | Club Phycom (operación diaria) |
 | [docs/MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md](docs/MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md) | Manual de seguridad de la implementación completa (frontend, Supabase, Central Admin). | Auditor de seguridad / desarrollador |
 | [docs/MODO_INVITADO.md](docs/MODO_INVITADO.md) | Modo "Probar sin cuenta": qué guarda, aviso breve, evidencia registrada, tope de 10 preguntas y caducidad de la sesión anónima. | Desarrollador/auditor de privacidad |
 | [docs/MANUAL_TECNICO_SENSOR_TPOT.md](docs/MANUAL_TECNICO_SENSOR_TPOT.md) | Manual técnico del sensor T-Pot (honeypot) y su propósito. | Desarrollador/seguridad que opere T-Pot |

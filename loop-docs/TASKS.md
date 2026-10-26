@@ -117,7 +117,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   - Decisión `DOC-03`: igual que DOCS-11 — mover a `shield-ecuador-app/docs/archivo/`, mismo aviso
     "Documento histórico, no vigente desde 2026-10-26". Actualizar el índice (DOCS-02).
 
-- [ ] **DOCS-13 — Documento nuevo: `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md`**
+- [x] **DOCS-13 — Documento nuevo: `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md`**
   - Para el club Phycom: qué hace cada parte del sistema (frontend, central-admin-app, Supabase),
     cómo se despliega (Cloud Run, revisiones), y qué revisar a diario (panel admin, alertas del
     centro de seguridad, estado de agentes de IA).
@@ -155,6 +155,32 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     en `DECISIONS.md`): no se sabe si la revisión activa en Cloud Run ya usa ese `Dockerfile` o una
     build anterior por buildpacks — mismo `[VERIFICAR]` aplicaría aquí.
   - Prioridad baja — no afecta el comportamiento descrito (mismo arranque), solo el método de build.
+
+- [ ] **DOCS-17 — Corregir `MANUAL_ADMINISTRADOR.md`: el panel "Agente noticias" ya no es una simulación**
+  - La tabla "Hallazgo central de este manual" (fila "Agente noticias") y la sección 5 afirman que
+    `runNewsAgent()` "no llama a ningún proveedor de IA real ni a ninguna Edge Function" y que genera
+    texto con una plantilla fija en JavaScript. Esto describe el código **anterior** al commit
+    `ab309ca` (2026-09-20, *"estado desplegado de la consola admin (Centro de Seguridad, Campeonato,
+    proxy de funciones) antes de la auditoría A0–A15"*), posterior a la fecha de redacción de ese
+    manual. El código actual (`central-admin-app/app.js`, `executeNewsAgent()`/`ensurePuter()`) sí
+    llama a un proveedor de IA real vía Puter.js (`puter.ai.chat`, modelo `gpt-5.6-luna`) en el modo
+    manual, y a la Edge Function real `run-news-agent` (acciones `prepare`/`complete`/`scheduled`,
+    `supabase/functions/run-news-agent/index.ts`) en ambos modos (manual y automático vía
+    `dispatch_news_agent()`, `supabase/migrations/040_news_agent_pg_cron_dispatcher.sql`). Todo el
+    contenido generado se guarda como `audit_status='pending'` y requiere aprobación manual
+    (`reviewNewsGenerated()`) antes de sincronizarse a `learning_items`
+    (`supabase/migrations/044_sync_news_questions_to_learning_items.sql`) — no es un "contenido
+    simulado que se guarda como si fuera real", es contenido real generado por IA pendiente de
+    revisión humana. Hallazgo encontrado al verificar fuentes para `DOCS-13`
+    (`docs/GUIA_OPERACION_CLUB.md`, 2026-10-26); no se corrigió ahí porque pertenece a otro documento.
+  - Verificar contra: `shield-ecuador-app/central-admin-app/app.js` (funciones citadas arriba),
+    `shield-ecuador-app/supabase/functions/run-news-agent/index.ts`,
+    `shield-ecuador-app/supabase/migrations/040_news_agent_pg_cron_dispatcher.sql` y `044_...sql`,
+    `git log --oneline -S "puter.ai.chat" -- central-admin-app/app.js` (commit `ab309ca`,
+    2026-09-20).
+  - Prioridad baja — no es información de seguridad crítica, pero sí cambia la recomendación
+    operativa real del manual (un administrador que confíe en la nota actual podría no revisar la
+    cola de contenido pendiente, pensando que el botón no hace nada real).
 
 ---
 
