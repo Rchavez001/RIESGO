@@ -46,7 +46,7 @@ Decisión: igual que DOC-02 — mover a `shield-ecuador-app/docs/archivo/` con e
 "Documento histórico, no vigente desde <fecha>" (el usuario unificó el tratamiento de ambos
 documentos de rediseño cinematográfico: archivo, no permanencia marcada in situ).
 
-### DOC-04 — ¿`manual-central-admin.html` entra en el alcance del loop?  [ABIERTA]
+### DOC-04 — ¿`manual-central-admin.html` entra en el alcance del loop?  [DECIDIDA 2026-10-26]
 Contexto: la fusión de `docs/iso-y-privacidad` trajo `shield-ecuador-app/manual-central-admin.html`
 (565 líneas, manual visual completo de las 15 secciones del panel admin). El alcance ampliado que
 aprobó el usuario dice literalmente "los `.md` de la raíz" — este archivo es `.html`, no calza en la
@@ -56,11 +56,12 @@ Opciones: A) Incluirlo en el alcance del loop (se puede editar en iteraciones fu
 del documento 6-7).
 Recomendación: ninguna — depende de si el HTML autocontenido sigue siendo el formato elegido para
 este manual o si conviene migrarlo a `.md` en algún momento (eso sí sería una tarea del loop).
-Tareas bloqueadas: ninguna todavía — el `gates.sh` no lo incluye en rutas permitidas hasta que se
-decida.
-Decisión:
+Tareas bloqueadas: ninguna.
+Decisión: B — queda fuera del alcance del loop por ahora (solo lectura, igual que los PDF/PNG). El
+`gates.sh` y el `PROMPT.md` ya lo reflejan así desde que se diseñó el alcance ampliado (no hace
+falta tocarlos de nuevo). Puede reabrirse esta decisión más adelante si se decide migrarlo a `.md`.
 
-### DOC-05 — Tres documentos distintos se llaman "manual del administrador"  [ABIERTA]
+### DOC-05 — Tres documentos distintos se llaman "manual del administrador"  [DECIDIDA 2026-10-26]
 Contexto: `shield-ecuador-app/MANUAL_ADMINISTRADOR.md` (raíz, actualizado T98.b con la sección 14 de
 consentimiento), `shield-ecuador-app/manual-central-admin.html` (HTML autocontenido, ver DOC-04), y
 `shield-ecuador-app/vault/Manual del administrador.md` (stub que apunta al HTML como "el manual
@@ -72,8 +73,12 @@ el club) y reducir `MANUAL_ADMINISTRADOR.md` a un resumen técnico. C) Dejar los
 nuevo índice (`README.md`) aclare el propósito de cada uno sin fusionarlos.
 Recomendación: C a corto plazo (no implica reescribir nada ahora) — fusionar de verdad (A o B) es
 trabajo mayor que amerita su propia decisión, no una tarea de rutina del loop.
-Tareas bloqueadas: ninguna todavía.
-Decisión:
+Tareas bloqueadas: DOCS-02 (el índice general debe reflejar esta decisión al redactarse).
+Decisión: A — `shield-ecuador-app/MANUAL_ADMINISTRADOR.md` es el manual oficial/vigente. El índice
+general (`README.md`, DOCS-02) debe listar `manual-central-admin.html` y
+`vault/Manual del administrador.md` indicando explícitamente que no son la fuente de verdad y
+remitiendo a `MANUAL_ADMINISTRADOR.md`. No se fusionan ni se reescriben en esta ronda — la decisión
+es solo sobre cuál es la referencia vigente, no sobre eliminar los otros dos.
 
 ---
 

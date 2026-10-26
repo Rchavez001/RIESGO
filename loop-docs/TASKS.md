@@ -35,8 +35,11 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     duplicar su índice propio, `vault/Índice.md`).
   - Debe mantenerse sincronizado cada vez que una tarea posterior cambie la estructura de archivos
     (lo exige `PROMPT.md`) — en particular DOCS-08, DOCS-10, DOCS-11, DOCS-12, DOCS-13 lo tocarán.
-  - Nota de alcance: no incluir `manual-central-admin.html` como entrada editable (solo mencionarlo
-    como referencia existente) hasta que se resuelva `DOC-04` en `DECISIONS.md`.
+  - Decisión `DOC-04`: `manual-central-admin.html` se menciona solo como referencia existente, nunca
+    como entrada editable (queda fuera del alcance del loop).
+  - Decisión `DOC-05`: `MANUAL_ADMINISTRADOR.md` es el manual oficial/vigente. El índice debe listar
+    `manual-central-admin.html` y `vault/Manual del administrador.md` indicando explícitamente que
+    no son la fuente de verdad y remitiendo a `MANUAL_ADMINISTRADOR.md`.
 
 - [ ] **DOCS-03 — Actualizar `ARQUITECTURA_CYBER_DOJO.md` (raíz)**
   - Corrige el conteo de Edge Functions: dice "14" (líneas 29, 82, 121, 144); hoy hay 33 carpetas en
@@ -153,6 +156,6 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   `ISO_CIBERDOJO_INVENTARIO.csv`, 6 informes PDF/DOCX): sin tarea salvo DOCS-14 (propuesta, no
   edición directa).
 - `shield-ecuador-app/scripts/export_iso_review.py`: fuera de alcance, es código.
-- `manual-central-admin.html`: sin tarea hasta que se decida `DOC-04`.
-- Resolver el solapamiento de los tres "manual del administrador" (`DOC-05`): sin tarea hasta que se
-  decida; el índice (DOCS-02) solo los lista, no los fusiona.
+- `manual-central-admin.html`: decidido (`DOC-04`) — fuera del alcance del loop, solo lectura.
+- Los tres "manual del administrador" (`DOC-05`): decidido — `MANUAL_ADMINISTRADOR.md` es el
+  oficial; DOCS-02 lo refleja en el índice. No se fusionan ni se reescriben los otros dos.

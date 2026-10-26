@@ -63,3 +63,19 @@ persona responsable sobre el inventario y el backlog.
   cuanto se commitea (las iteraciones normales nunca pueden editarlo, está en `headless-settings.json`).
 - Pendiente para la persona responsable: revisar `TASKS.md` final y el diff de `run-loop.sh`; decidir
   DOC-04 y DOC-05 (no bloquean ninguna tarea todavía); dar el OK antes de ejecutar cualquier tarea.
+
+## Iteración 0c — 2026-10-26 — Fase 0 (cierre: DOC-04/DOC-05 decididas, OK al plan)
+- La persona responsable dio el OK al plan completo y decidió las dos preguntas abiertas que
+  quedaban: `DOC-04` (`manual-central-admin.html` queda fuera del alcance del loop, solo lectura) y
+  `DOC-05` (`MANUAL_ADMINISTRADOR.md` es el manual oficial/vigente; el índice listará los otros dos
+  indicando eso, sin fusionarlos).
+- Cambios: `loop-docs/DECISIONS.md` (DOC-04 y DOC-05 → DECIDIDA, con el texto exacto de la decisión);
+  `loop-docs/TASKS.md` (DOCS-02 incorpora ambas decisiones como parte de su criterio de aceptación;
+  cierre "Fuera de alcance" actualizado — ya no quedan preguntas de alcance sin decidir).
+- Con esto, **las cinco decisiones de Fase 0 (DOC-01 a DOC-05) están todas cerradas** y ninguna
+  tarea de `TASKS.md` queda `⛔ BLOQUEADA`. Fase 0 interactiva terminada.
+- Pendiente para la persona responsable: commitear (o pedir que se commitee) el diff de
+  `.claude/loops/consentimiento/run-loop.sh` — sigue sin commitear, a propósito, desde la Iteración 0.
+  A partir de ahí, la primera iteración real es responsabilidad de quien decida lanzar
+  `LOOP=docs bash .claude/loops/consentimiento/run-loop.sh` (headless, fuera de esta sesión
+  interactiva).
