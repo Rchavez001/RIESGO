@@ -2,6 +2,23 @@
 
 Adaptación del material proporcionado, versión 3.0.0, 9 de septiembre de 2026.
 
+## Corrección de sesgo de longitud — 22 de septiembre de 2026
+
+Se detectó que, en 526 de las 1.000 preguntas y casos del banco (`public.learning_items`), la opción correcta era notablemente más larga o más detallada que las tres incorrectas — una pista de redacción que permite adivinar la respuesta sin saber el tema (regla conocida de escritura de preguntas de opción múltiple: mantener todas las opciones con extensión y nivel de detalle similares).
+
+Se corrigió con un agente de IA dedicado (`learning-item-rebalancer`, invocado por la función `fix-learning-item-balance`) que reescribe **solo los tres distractores** de cada pregunta señalada, dándoles el mismo nivel de detalle y precisión que ya tenía la opción correcta, sin volverlos absurdos ni genéricos. El texto y el índice de la respuesta correcta se verificaron sin cambios en cada escritura: si la IA llegaba a tocarlos, esa pregunta se rechazaba en vez de guardarse mal (esto ocurrió en 3 de 526 casos, resueltos en un reintento individual).
+
+Resultado, verificado directamente contra la base de datos en producción:
+
+| | Antes | Después |
+| --- | --- | --- |
+| Preguntas/casos con el sesgo (proporción correcta/incorrectas ≥ 1.5) | 526 de 1.000 | **0 de 1.000** |
+| Proporción promedio en todo el banco | 1.75 | 1.06 |
+
+No se tocó el enunciado de ninguna pregunta, ni las explicaciones, ni la dificultad, ni la asignación por cinturón — solo el texto de las opciones incorrectas de las preguntas señaladas. Esta corrección es puntual (ya se aplicó y no vuelve a correr sola); si se agrega contenido nuevo al banco en el futuro, conviene volver a auditarlo con el mismo criterio antes de publicarlo.
+
+La misma regla (y otras ocho de buenas prácticas para preguntas de opción múltiple: evitar "todas/ninguna de las anteriores", distractores creíbles, sin dobles negativos, no repetir siempre la posición de la correcta, entre otras) ya está incorporada en los agentes de IA que generan preguntas nuevas para el banco de apoyo del Sensei (`public.questions`, un sistema distinto de `learning_items`) — ver `supabase/migrations/069_question_answer_length_parity.sql` a `071_question_moodle_rules.sql` y la sección 10 y 28 de `docs/AI_HANDOFF_CYBER_DOJO.md`. Esos agentes no generan contenido para `learning_items`; si en el futuro se decide que sí lo hagan, hay que confirmar que seguirían aplicando estas mismas reglas.
+
 ## Publicación en línea — 9 de septiembre de 2026
 
 Publicado por solicitud del usuario en [ciberDojo](https://cyberdojo-61855290194.us-central1.run.app/dojos). Cloud Run sirve el 100 % del tráfico con la revisión `cyberdojo-00057-gip` del proyecto `polar-plate-499719-r1`, región `us-central1`. Se conserva la revisión anterior `cyberdojo-00056-wbz`.

@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual Central Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#0a0e17; --surface:#111827; --surface-2:#161f30; --line:#233047; --line-soft:#1a2438;
+    --ink:#e7ecf5; --muted:#8fa0bb; --muted-2:#5f7292;
+    --accent:#22d3ee; --accent-ink:#04222a;
+    --warn:#f2b544; --warn-bg:rgba(242,181,68,.1); --warn-line:rgba(242,181,68,.35);
+    --danger:#ef5a6f; --danger-bg:rgba(239,90,111,.1); --danger-line:rgba(239,90,111,.35);
+    --ok:#39d6a0;
+    --code-bg:#0d1420;
+    --shadow:0 20px 50px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+    font-size:15.5px; line-height:1.6;
+  }
+  h1,h2,h3,h4{font-family:"Rajdhani","IBM Plex Sans",sans-serif; font-weight:700; text-wrap:balance; margin:0;}
+  code, .kbd{
+    font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.88em;
+    background:var(--code-bg); border:1px solid var(--line-soft); border-radius:4px;
+    padding:.05em .38em; color:#a8c8ff;
+  }
+  a{color:var(--accent);}
+  .wrap{display:grid; grid-template-columns:260px minmax(0,1fr); gap:0; max-width:1180px; margin:0 auto;}
+  @media (max-width:860px){ .wrap{display:block;} }
+
+  .toc{
+    position:sticky; top:0; align-self:start; height:100dvh; overflow-y:auto;
+    padding:22px 16px 40px; border-right:1px solid var(--line-soft);
+  }
+  @media (max-width:860px){ .toc{position:relative; height:auto; border-right:0; border-bottom:1px solid var(--line-soft); padding:18px 16px;} }
+  .toc-brand{display:flex; align-items:center; gap:10px; margin-bottom:18px;}
+  .toc-brand .mark{
+    width:34px; height:34px; border-radius:8px; background:linear-gradient(145deg,var(--accent),#0891b2);
+    display:grid; place-items:center; color:#04222a; font-weight:800; font-family:"Rajdhani",sans-serif; font-size:18px;
+    flex:none;
+  }
+  .toc-brand strong{display:block; font-size:14px; letter-spacing:.02em;}
+  .toc-brand span{display:block; font-size:11.5px; color:var(--muted-2); letter-spacing:.08em; text-transform:uppercase;}
+  .toc-search{
+    width:100%; margin-bottom:14px; padding:9px 11px; border-radius:7px; border:1px solid var(--line);
+    background:var(--surface); color:var(--ink); font:inherit; font-size:13.5px;
+  }
+  .toc-search:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .toc ol{list-style:none; margin:0; padding:0; counter-reset:sec;}
+  .toc li{counter-increment:sec;}
+  .toc a{
+    display:flex; gap:8px; align-items:baseline; padding:6px 8px; border-radius:6px;
+    text-decoration:none; color:var(--muted); font-size:13.5px;
+  }
+  .toc a:hover, .toc a:focus-visible{background:var(--surface); color:var(--ink);}
+  .toc a::before{
+    content:counter(sec); font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted-2);
+    min-width:1.4em;
+  }
+  .toc li[hidden]{display:none;}
+
+  main{padding:34px clamp(16px,4vw,48px) 80px;}
+  .intro-eyebrow{
+    font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:10px;
+  }
+  .intro h1{font-size:clamp(30px,4.2vw,42px); line-height:1.05; margin-bottom:10px;}
+  .intro p.lede{color:var(--muted); font-size:17px; max-width:62ch; margin:0 0 26px;}
+
+  .callout{
+    border:1px solid var(--warn-line); background:var(--warn-bg); border-radius:10px;
+    padding:18px 20px; margin:0 0 40px;
+  }
+  .callout h3{font-size:16px; color:var(--warn); display:flex; align-items:center; gap:8px; margin-bottom:10px;}
+  .callout h3 svg{flex:none;}
+  .callout ul{margin:0; padding-left:1.15em;}
+  .callout li{margin-bottom:7px; color:var(--ink);}
+  .callout li:last-child{margin-bottom:0;}
+  .callout b{color:var(--warn);}
+
+  section.sec{
+    border-top:1px solid var(--line-soft); padding:36px 0; scroll-margin-top:20px;
+  }
+  section.sec:first-of-type{border-top:none;}
+  .sec-head{display:flex; align-items:baseline; gap:12px; margin-bottom:6px; flex-wrap:wrap;}
+  .sec-num{font-family:"IBM Plex Mono",monospace; color:var(--muted-2); font-size:14px;}
+  .sec-head h2{font-size:24px;}
+  .sec-panel-id{color:var(--muted-2); font-size:13px;}
+  .sec-what{color:var(--muted); max-width:70ch; margin:10px 0 20px; font-size:15.5px;}
+
+  .subhead{
+    font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted-2); margin:22px 0 10px;
+  }
+  .sec ul{margin:0; padding-left:1.2em;}
+  .sec ul li{margin-bottom:8px;}
+  .sec ol{margin:0; padding-left:1.3em;}
+  .sec ol li{margin-bottom:8px;}
+
+  .warn-box{
+    border:1px solid var(--danger-line); background:var(--danger-bg); border-radius:9px;
+    padding:14px 16px; margin-top:10px;
+  }
+  .warn-box ul{padding-left:1.1em;}
+  .warn-box li{color:var(--ink); margin-bottom:8px;}
+  .warn-box li:last-child{margin-bottom:0;}
+  .warn-box li::marker{color:var(--danger);}
+
+  .badge-real, .badge-local{
+    display:inline-flex; align-items:center; gap:5px; font-family:"IBM Plex Mono",monospace;
+    font-size:11px; letter-spacing:.04em; padding:3px 9px; border-radius:999px; margin-left:6px;
+    vertical-align:middle; text-transform:uppercase;
+  }
+  .badge-real{background:rgba(57,214,160,.12); color:var(--ok); border:1px solid rgba(57,214,160,.35);}
+  .badge-local{background:rgba(143,160,187,.12); color:var(--muted); border:1px solid var(--line);}
+
+  footer{border-top:1px solid var(--line-soft); padding:26px clamp(16px,4vw,48px) 50px; color:var(--muted-2); font-size:13px;}
+
+  ::selection{background:rgba(34,211,238,.28);}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <nav class="toc" aria-label="Contenido">
+    <div class="toc-brand">
+      <span class="mark">道</span>
+      <div><strong>Ciber Dojo</strong><span>Central Admin</span></div>
+    </div>
+    <input class="toc-search" id="tocSearch" type="search" placeholder="Buscar seccion..." autocomplete="off" />
+    <ol id="tocList">
+      <li><a href="#s0">Antes de empezar</a></li>
+      <li><a href="#s1">Resumen</a></li>
+      <li><a href="#s2">Dojos y progreso</a></li>
+      <li><a href="#s3">Preguntas</a></li>
+      <li><a href="#s4">IA y auditoria</a></li>
+      <li><a href="#s5">Agente noticias</a></li>
+      <li><a href="#s6">Alertas IA</a></li>
+      <li><a href="#s7">Sensei IA</a></li>
+      <li><a href="#s8">Inteligencia de Amenazas</a></li>
+      <li><a href="#s9">Preguntas abiertas</a></li>
+      <li><a href="#s10">Campeonato</a></li>
+      <li><a href="#s11">Centro de Seguridad</a></li>
+      <li><a href="#s12">Usuarios</a></li>
+      <li><a href="#s13">Ocupaciones</a></li>
+      <li><a href="#s14">Propaganda</a></li>
+      <li><a href="#s15">Reportes</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div class="intro">
+      <div class="intro-eyebrow">Manual del panel &middot; Uso interno del club</div>
+      <h1>Manual Central Admin</h1>
+      <p class="lede">Guia completa de las 15 secciones de la consola administrativa de Ciber Dojo: que hace cada boton, como usarlo, y — lo mas importante — que partes son reales y cuales son maquetas de demostracion.</p>
+    </div>
+
+    <div class="callout">
+      <h3>&#9888; Leer antes de tocar nada</h3>
+      <ul>
+        <li><b>No todo lo que parece guardar, guarda de verdad.</b> Varias secciones estan marcadas en la propia pantalla como <code>[Modo local / Borrador]</code> o <code>[Modo local / Maqueta]</code>: los cambios ahi solo quedan en el navegador de quien los hizo (Dojos y progreso, las instrucciones de IA, Preguntas abiertas, y toda la seccion Usuarios).</li>
+        <li><b>"Guardar preguntas" activa la pregunta para los estudiantes de inmediato</b>, sin importar que "Estado" hayas elegido en el desplegable — ese campo es solo informativo.</li>
+        <li><b>"Generar plan 50 preguntas" sobreescribe el banco completo del dojo sin pedir confirmacion.</b> Si ya habia preguntas reales, se pierden.</li>
+        <li>Los botones superiores <b>"Guardar borrador"</b> y <b>"Publicar configuracion" hacen exactamente lo mismo</b> (guardar en el navegador local) — el segundo no publica nada en Supabase pese al nombre.</li>
+        <li>El acceso es una <b>sola contrasena compartida por todo el club</b> (HTTP Basic Auth) — no hay usuarios individuales, asi que no queda registro de quien hizo cada cambio salvo donde se indique lo contrario.</li>
+      </ul>
+    </div>
+
+    <section class="sec" id="s0">
+      <div class="sec-head"><span class="sec-num">00</span><h2>Antes de empezar</h2></div>
+      <div class="subhead">Iniciar y cerrar sesion</div>
+      <p>El panel no tiene pantalla de login propia: el navegador pide usuario y contrasena mediante HTTP Basic Auth (un solo par de credenciales para todo el club, guardado como variables de entorno del servidor). Si el servidor no tiene esas credenciales configuradas, toda la consola responde con un error 503.</p>
+      <div class="warn-box">
+        <ul>
+          <li>Como es una sola cuenta compartida, <b>no hay forma de saber que persona del club hizo un cambio</b> — solo aparece el mismo nombre de usuario para todos en los registros de auditoria.</li>
+          <li>El boton <b><code>Salir</code></b> borra las credenciales guardadas del sitio y redirige a una pagina que dice "cierra esta pestana para completar el cierre de sesion" — en algunos navegadores <b>no es instantaneo</b>; lo mas seguro es cerrar la pestana o ventana.</li>
+        </ul>
+      </div>
+      <div class="subhead">Los botones de arriba a la derecha (en todas las pantallas)</div>
+      <ul>
+        <li><code>Guardar borrador</code> y <code>Publicar configuracion</code> llaman a la misma funcion interna: guardan el estado local en el navegador. Ninguno de los dos empuja nada a Supabase ni a produccion — el nombre "Publicar" es enganoso.</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="s1">
+      <div class="sec-head"><span class="sec-num">01</span><h2>Resumen</h2><span class="badge-local">datos mixtos</span></div>
+      <p class="sec-what">Panel de inicio con metricas generales, la progresion de cinturones/katas y el orden en que se consultan las inteligencias artificiales.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li>4 tarjetas: <code>Dojos activos</code>, <code>Preguntas objetivo</code>, <code>Usuarios activos</code>, <code>Campanas activas</code>.</li>
+        <li><b>Cinturones y katas:</b> vista de solo lectura de la progresion Blanco &rarr; Negro.</li>
+        <li><b>Flujo de inteligencia artificial:</b> diagrama estatico (IA 1 &rarr; IA 2 &rarr; IA 3 &rarr; Revisor), sin controles.</li>
+      </ul>
+      <div class="subhead">Flujo tipico</div>
+      <p>Es de solo lectura: se usa para revisar de un vistazo el estado general antes de entrar a una seccion especifica.</p>
+      <div class="warn-box">
+        <ul>
+          <li>Las metricas mezclan datos reales (Campanas activas viene de Supabase) con datos locales o de ejemplo: <code>Usuarios activos</code> viene de una lista fija en el codigo (Ana Paredes, Luis Mora, Rosa Vera) — <b>no son usuarios reales</b>, no usar este numero para reportes.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s2">
+      <div class="sec-head"><span class="sec-num">02</span><h2>Dojos y progreso</h2><span class="badge-local">modo local</span></div>
+      <p class="sec-what">Editor de los dojos tematicos (los modulos de entrenamiento: phishing, contrasenas, backups, etc.) y de la regla de avance por cinturones.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Agregar dojo</code> &middot; lista de dojos (clic para seleccionar) &middot; editor con <code>Nombre del dojo</code>, <code>Tema</code>, <code>Control ISO principal</code>, <code>Estado</code> (Activo / Borrador / Pausado).</li>
+        <li><b>Regla de avance por katas:</b> lista de cinturones y porcentajes, de solo lectura.</li>
+      </ul>
+      <div class="subhead">Como agregar un dojo nuevo</div>
+      <ol>
+        <li>Clic en <code>Agregar dojo</code>.</li>
+        <li>Completar Nombre, Tema, Control ISO y Estado.</li>
+        <li>Ir a <b>Preguntas</b> con este dojo seleccionado y usar <code>Guardar preguntas</code> o <code>Generar plan 50 preguntas</code> al menos una vez — recien ahi el dojo se sincroniza a Supabase.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li>Toda la seccion esta marcada en pantalla como <code>[Modo local / Borrador]</code>: agregar o editar un dojo aqui <b>solo se guarda en el navegador</b> hasta que se guarden preguntas de ese dojo.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s3">
+      <div class="sec-head"><span class="sec-num">03</span><h2>Preguntas</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">El banco de 50 preguntas por dojo: 20 escritas a mano por el equipo + 30 generadas o auditadas por IA.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Guardar preguntas</code> y <code>Generar plan 50 preguntas</code> (arriba a la derecha).</li>
+        <li>Por pregunta: <code>Pregunta</code>, <code>Respuesta correcta</code>, <code>Explicacion</code>, <code>Dificultad</code> (1-5), <code>Kata</code>, <code>Estado</code> (aprobada / auditada / pendiente), mas una "Explicacion simple" automatica que traduce siglas tecnicas.</li>
+      </ul>
+      <div class="subhead">Como revisar preguntas de un dojo</div>
+      <ol>
+        <li>Seleccionar el dojo (en "Dojos y progreso").</li>
+        <li>Editar texto, respuesta, explicacion, dificultad, kata o estado.</li>
+        <li>Presionar <code>Guardar preguntas</code>.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li><b>"Guardar preguntas" activa la pregunta para los estudiantes de inmediato</b>, sin importar el "Estado" elegido — ese campo no bloquea nada, siempre se guarda como activa.</li>
+          <li><b>"Generar plan 50 preguntas" sobreescribe por completo</b> el banco del dojo seleccionado con textos de relleno genericos y lo guarda al instante, sin ventana de confirmacion.</li>
+          <li>Si Supabase rechaza el guardado, aparece una alerta emergente del navegador con el detalle del error — util para soporte tecnico.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s4">
+      <div class="sec-head"><span class="sec-num">04</span><h2>IA y auditoria</h2><span class="badge-local">mixto</span></div>
+      <p class="sec-what">Configura el orden de respaldo entre inteligencias artificiales y muestra las instrucciones que reciben para generar y auditar preguntas.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Probar algoritmo</code> &middot; tarjetas de la cadena (Nombre, Timeout ms, Orden, API Key con boton "Guardar" propio) &middot; <code>Agregar IA</code> &middot; dos textareas de instrucciones (generar / revisar preguntas).</li>
+      </ul>
+      <div class="subhead">Como agregar o reordenar una IA</div>
+      <ol>
+        <li><code>Agregar IA</code> &rarr; nombrarla, ajustar Timeout y Orden (numero menor = se consulta primero).</li>
+        <li>Si necesita clave, escribirla y usar el boton <code>Guardar</code> <b>de esa fila</b> (no el global).</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li>Marcada <code>[Modo local / Borrador]</code>: nombre, timeout y orden solo viven en <code>localStorage</code>.</li>
+          <li><b>Excepcion real:</b> el boton "Guardar" de la API Key de cada fila si funciona — llama a <code>save-provider-key</code> y guarda en Vault. Si el nombre coincide con un proveedor ya configurado (DeepSeek, Kimi, Claude), <b>actualiza esa clave real compartida</b>.</li>
+          <li>Las dos cajas de instrucciones nunca se guardan: se reinician a un texto fijo cada vez que se entra a la seccion.</li>
+          <li><code>Probar algoritmo</code> no consulta ninguna IA real, solo arma un texto descriptivo del orden configurado.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s5">
+      <div class="sec-head"><span class="sec-num">05</span><h2>Agente noticias</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">El agente de IA que revisa sitios de noticias de ciberseguridad y genera preguntas/katas nuevas a partir de esas noticias o de contenido pegado a mano.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Guardar configuracion</code>, <code>Probar</code>, <code>Ejecutar ahora</code> (arriba).</li>
+        <li><b>Cadena de proveedores (ejecucion automatica):</b> lista ordenable por prioridad para el job diario; <code>Agregar proveedor a la cadena</code>; cada fila con casilla Activo y <code>Quitar</code>.</li>
+        <li><b>Proveedores de IA configurados:</b> <code>Nuevo proveedor</code>, y por fila <code>Editar</code>/<code>Eliminar</code> + clave con boton <code>Guardar clave</code>. El formulario pide Identificador, Nombre visible, Tipo de API, Modelo, Base URL opcional, Timeout, Activo, Clave.</li>
+        <li><b>Configuracion:</b> casilla Agente activo, Hora de activacion, instrucciones del agente.</li>
+        <li><b>Fuentes:</b> sitios donde busca noticias (activar/desactivar, Eliminar) + <code>Agregar fuente</code>.</li>
+        <li><b>Agregar contenido manual:</b> Fuente, URL de referencia, texto pegado o archivo (.txt/.md/.pdf/.docx/.png/.jpg/.webp); <code>Probar (no guarda)</code> y <code>Generar y guardar</code>.</li>
+        <li><b>Historial de ejecuciones</b> con detalle de intentos por proveedor (latencia, errores).</li>
+        <li><b>Reporte: preguntas y katas generadas</b> con <code>Aprobar y activar</code> / <code>Rechazar</code> por item.</li>
+      </ul>
+      <div class="subhead">Como revisar preguntas generadas por IA</div>
+      <ol>
+        <li>Configurar fuentes y hora, <code>Guardar configuracion</code>.</li>
+        <li>Esperar la corrida automatica diaria o forzarla con <code>Ejecutar ahora</code> (pide confirmacion).</li>
+        <li>Revisar el Historial de ejecuciones.</li>
+        <li>En el Reporte, <code>Aprobar y activar</code> o <code>Rechazar</code> cada item pendiente.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li><code>Probar</code> y <code>Ejecutar ahora</code> corren IA <b>en el navegador</b> (Puter.js, con la sesion personal de quien esta usando el panel) — necesitan internet del navegador. "Probar" es un ensayo que no guarda nada; "Ejecutar ahora" si guarda contenido pendiente de revision (por eso pide confirmacion).</li>
+          <li>A la hora configurada corre ademas, <b>en el servidor</b>, un job independiente que sigue la Cadena de proveedores (DeepSeek/Kimi/Claude, con reintento automatico) — es el mecanismo real de produccion.</li>
+          <li>Las claves de proveedor se cifran en Vault y nunca se vuelven a mostrar; escribir encima del campo reemplaza la clave.</li>
+          <li>A diferencia del panel "Preguntas", aqui el contenido generado <b>si respeta</b> el estado pendiente/aprobado: solo se activa para usuarios con "Aprobar y activar".</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s6">
+      <div class="sec-head"><span class="sec-num">06</span><h2>Alertas IA</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">Vista de las alertas de seguridad ya publicadas junto con las preguntas de IA generadas a partir de noticias.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Forzar revision IA</code> (arriba).</li>
+        <li><b>Historial de alertas:</b> tarjetas con resumen, fecha, estado, dojo, sitios revisados y preguntas generadas con severidad.</li>
+        <li><b>Preguntas IA generadas:</b> lista plana de esas preguntas.</li>
+      </ul>
+      <div class="subhead">Flujo tipico</div>
+      <p>Revisar que se detecto recientemente; si hace falta una revision inmediata (sin esperar el horario automatico), usar <code>Forzar revision IA</code>.</p>
+      <div class="warn-box">
+        <ul>
+          <li><code>Forzar revision IA</code> ejecuta <b>exactamente la misma funcion</b> que "Ejecutar ahora" del Agente de noticias (misma confirmacion) — no es una accion mas liviana.</li>
+          <li>Es de solo lectura para aprobar/rechazar: eso se hace en <b>Agente noticias &rarr; Reporte</b>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s7">
+      <div class="sec-head"><span class="sec-num">07</span><h2>Sensei IA</h2><span class="badge-real">solo lectura</span></div>
+      <p class="sec-what">Estadisticas de uso del Sensei (el asistente de IA con el que conversan los estudiantes).</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Actualizar</code> &middot; metricas <code>Consultas</code>, <code>Fuera de alcance</code>, <code>Ayudo</code>, <code>Sentimiento positivo</code>.</li>
+        <li><b>Ultimas consultas:</b> 20 mas recientes con fecha, texto, etiqueta ciber/fuera y sentimiento.</li>
+        <li><b>Resumen diario:</b> conteos por dia.</li>
+      </ul>
+      <div class="subhead">Flujo tipico</div>
+      <p>Entrar (o presionar <code>Actualizar</code>) para revisar como responde el Sensei; usar "Fuera de alcance" y sentimiento negativo como senal de que hay que ajustarlo.</p>
+      <div class="warn-box">
+        <ul>
+          <li>Seccion 100% de solo lectura — no se puede editar ni borrar consultas desde aqui.</li>
+          <li>Si falta la tabla de estadisticas diarias en la base de datos, la lista de consultas muestra un aviso de error en vez de datos.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s8">
+      <div class="sec-head"><span class="sec-num">08</span><h2>Inteligencia de Amenazas</h2><span class="badge-local">parcial</span></div>
+      <p class="sec-what">Panel conectado a un sistema de honeypots/SIEM (T-Pot): ataques reales contra la infraestructura, con analisis asistido por IA y flujo de aprobacion antes de publicar cualquier conclusion.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li>5 pestanas: <b>Dashboard</b>, <b>Alertas</b>, <b>Analisis IA</b>, <b>Reportes</b>, <b>Configuracion</b>.</li>
+        <li><b>Dashboard:</b> KPIs clicables (criticas hoy, altas, sensores activos, IPs sospechosas, IOCs, analisis pendientes, incidentes publicados, ultima sincronizacion) + graficos de barras + tabla con <code>Ver detalle</code>.</li>
+        <li><b>Alertas:</b> filtros (fecha, sensor, severidad, IP, puerto, tipo) + <code>Limpiar filtros</code>.</li>
+        <li><b>Analisis IA:</b> mismos filtros + IOC, <code>Generar analisis IA</code>, indicador de progreso, y botones contextuales <code>Auditar</code> / <code>Aprobar</code> / <code>Rechazar</code> / <code>Publicar</code> segun el estado.</li>
+        <li><b>Reportes:</b> Reporte ejecutivo / tecnico / educativo CiberDojo + historial de analisis aprobados.</li>
+        <li><b>Configuracion:</b> bloques de solo lectura + <code>Probar conexion</code>.</li>
+      </ul>
+      <div class="subhead">Como generar y publicar un analisis</div>
+      <ol>
+        <li>En "Analisis IA", ajustar filtros si hace falta.</li>
+        <li><code>Generar analisis IA</code> &rarr; queda "En cola"/"Analizando".</li>
+        <li>En "Pendiente de auditoria" &rarr; <code>Auditar</code>.</li>
+        <li>Si pide revision humana &rarr; <code>Aprobar</code> o <code>Rechazar</code>.</li>
+        <li>Una vez "Aprobado" &rarr; <code>Publicar</code>.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li><b>"Publicar" no hace nada real todavia:</b> solo muestra un mensaje en pantalla ("la persistencia final debe quedar conectada al backend de aprobacion") — no guarda ningun estado "publicado". No asumir que un analisis "publicado" aqui quedo visible en ningun otro lugar.</li>
+          <li>Los botones de la pestana "Configuracion" (Probar agente, Restaurar recomendados, Probar auditor, Ejecutar prueba) estan deshabilitados a proposito, salvo <code>Probar conexion</code>.</li>
+          <li>Ningun resultado de IA se muestra sin pasar por auditoria y aprobacion — el propio sistema lo bloquea mientras tanto.</li>
+          <li>Si la integracion con T-Pot no esta bien configurada en el servidor, toda la pantalla muestra un aviso de "Endpoint no disponible" en vez de datos.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s9">
+      <div class="sec-head"><span class="sec-num">09</span><h2>Preguntas abiertas</h2><span class="badge-local">modo local</span></div>
+      <p class="sec-what">Explica y simula el flujo con el que la IA decide si una pregunta libre de un estudiante es de ciberseguridad, y como se responde y registra.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Simular pregunta</code>.</li>
+        <li><b>Regla de decision:</b> 5 pasos fijos, explicativos.</li>
+        <li><b>Temas detectados:</b> lista de temas con su conteo de inquietudes.</li>
+      </ul>
+      <div class="subhead">Flujo tipico</div>
+      <p>Se usa para explicarle a alguien nuevo del club como funciona el flujo. <code>Simular pregunta</code> agrega un ejemplo visual a la lista.</p>
+      <div class="warn-box">
+        <ul>
+          <li>Marcada <code>[Modo local / Borrador]</code>. <code>Simular pregunta</code> <b>no consulta ninguna IA ni estudiante real</b>: agrega un tema de ejemplo fijo y lo guarda solo en el navegador.</li>
+          <li>Los "Temas detectados" por defecto son datos de ejemplo del codigo, no estadistica real.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s10">
+      <div class="sec-head"><span class="sec-num">10</span><h2>Campeonato</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">Configura y opera el torneo 1v1 programado: reglas de participacion, combates con temporizador por pregunta, sorteo de la ronda 1 y avisos por correo.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><b>Configuracion del campeonato activo:</b> Nombre, Estado (Borrador / Inscripciones abiertas / cerradas / En curso / Finalizado), Cinturon requerido, Edad maxima, fechas de apertura/cierre de inscripcion, Preguntas por combate, tiempo por dificultad (facil/media/dificil, en segundos), texto de Reglas para estudiantes; <code>Guardar configuracion</code>.</li>
+        <li><b>Correo para avisos (Resend):</b> API Key de Resend + <code>Guardar clave</code>.</li>
+        <li><b>Sortear ronda 1:</b> Fecha y hora del combate, Ventana para completarlo (horas); <code>Sortear ronda 1 y enviar correos</code>.</li>
+        <li><b>Inscritos</b> y <b>Combates:</b> listas de solo lectura con botones <code>Actualizar</code>.</li>
+      </ul>
+      <div class="subhead">Como lanzar un campeonato nuevo</div>
+      <ol>
+        <li>Completar la configuracion (nombre, cinturon, edad, fechas, preguntas y tiempos) y <code>Guardar configuracion</code> mientras el Estado es "Borrador".</li>
+        <li>Cambiar Estado a "Inscripciones abiertas" y guardar de nuevo — los estudiantes elegibles ya pueden inscribirse.</li>
+        <li>Configurar la clave de Resend una sola vez (se reutiliza para todos los avisos).</li>
+        <li>Cuando cierren inscripciones, ir a "Sortear ronda 1", fijar fecha/hora y ventana, y presionar <code>Sortear ronda 1 y enviar correos</code>.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li>Esta seccion escribe directo en Supabase (tablas <code>championships</code>, <code>championship_registrations</code>, <code>championship_matches</code>) — <b>no es un borrador local</b>, cambiar el Estado a "Inscripciones abiertas" tiene efecto inmediato para los estudiantes.</li>
+          <li><code>Sortear ronda 1 y enviar correos</code> empareja aleatoriamente a todos los inscritos, crea los combates y <b>envia un correo real</b> a cada uno con su horario — no se puede deshacer el envio de esos correos.</li>
+          <li>El limite de tiempo por pregunta (facil/media/dificil) se aplica y verifica en el servidor, no solo en la pantalla del estudiante — cambiar estos numeros aqui cambia el reto real del combate.</li>
+          <li>La clave de Resend se comparte con el aviso de umbrales del Centro de Seguridad (siguiente seccion): es la misma cuenta de correo para ambos.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s11">
+      <div class="sec-head"><span class="sec-num">11</span><h2>Centro de Seguridad</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">Modulo de seguridad de la propia plataforma: feed de eventos, umbrales de alerta, diagnostico con IA, inventario de superficie de ataque (EASM) y conversion de incidentes en katas de entrenamiento.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><b>Metricas:</b> Eventos (7 dias), Bloqueos por rate limit, Alertas activas configuradas, Endpoints distintos atacados.</li>
+        <li><b>Eventos de seguridad:</b> filtros Severidad / Endpoint (con lista desplegable de endpoints conocidos) / Desde / Hasta; tabla paginada; <code>Exportar CSV</code>, <code>Exportar PDF</code>, <code>Actualizar</code>.</li>
+        <li><b>Top 5 endpoints atacados</b> y <b>Tendencia diaria de eventos:</b> graficos de barras.</li>
+        <li><b>Umbrales de alerta:</b> Nombre, Severidad minima, Cantidad de eventos, Ventana (minutos), Correo de aviso, Webhook opcional; <code>Guardar umbral</code>, <code>Nuevo</code>, <code>Eliminar</code>; boton global <code>Verificar alertas ahora</code>.</li>
+        <li><b>Diagnostico con IA:</b> <code>Generar diagnostico ahora</code>, lista de diagnosticos con severidad, resumen en espanol, recomendaciones y botones de feedback <code>&#128077; Correcto</code> / <code>&#128078; Incorrecto</code>.</li>
+        <li><b>Inventario EASM:</b> <code>Ejecutar inventario ahora</code>, tabla con Mes / Tipo / Objetivo / Severidad / Estado — clic en el <b>Estado</b> abre una ventana con la explicacion de por que esta resuelto o que falta hacer.</li>
+        <li><b>Convertir incidente en kata:</b> lista de borradores + editor (Titulo, Contenido en markdown) con <code>Guardar borrador</code>, <code>Enviar a revision</code>, <code>Regresar a borrador</code>, y al estar "en revision" campos para publicar (Dojo, Etiqueta de kata, Dificultad, Pregunta, Respuesta correcta, Explicacion) + <code>Publicar</code>.</li>
+      </ul>
+      <div class="subhead">Como revisar y responder a una alerta de seguridad</div>
+      <ol>
+        <li>Configurar al menos un umbral (ej. "5 eventos de severidad media en 60 minutos") con un correo de aviso.</li>
+        <li>El sistema revisa los umbrales solo automaticamente cada 15 minutos; usar <code>Verificar alertas ahora</code> para revisar al instante.</li>
+        <li>Si algo se dispara, revisar el feed de Eventos filtrando por severidad/endpoint para entender que paso.</li>
+        <li>Presionar <code>Generar diagnostico ahora</code> para una explicacion en espanol llano con recomendaciones concretas.</li>
+        <li>Si el incidente vale la pena como leccion, usar "Convertir en kata" desde el diagnostico y llevarlo por borrador &rarr; revision &rarr; publicado.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li>Solo dos flujos alimentan el feed de eventos por ahora: <code>secure-register-user</code> (registro) y <code>login</code> (inicio de sesion, incluido el codigo por correo). Otras partes de la app todavia no reportan aqui.</li>
+          <li>Un umbral no vuelve a avisar mientras la alerta siga activa (evita spam de correos) — solo notifica de nuevo despues de que el conteo baje y vuelva a subir.</li>
+          <li>El feedback &#128077;/&#128078; de un diagnostico <b>solo queda registrado</b> — nada en el sistema actua automaticamente sobre el, es para que el club revise si la IA se equivoca seguido.</li>
+          <li>El inventario de "endpoints publicos" del EASM es una lista mantenida a mano en el codigo, no una deteccion en vivo — hay que actualizarla si se agrega una funcion nueva sin sesion (revisar <code>supabase/config.toml</code>).</li>
+          <li>Publicar una kata crea una <b>pregunta real</b> en el dojo elegido, indistinguible de cualquier otra — requiere pasar primero por "en revision", nunca se publica sola.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s12">
+      <div class="sec-head"><span class="sec-num">12</span><h2>Usuarios</h2><span class="badge-local">maqueta</span></div>
+      <p class="sec-what">Tabla de usuarios con avance, preguntas respondidas, inquietud principal y estado, con opcion de dar de baja.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Dar de baja seleccionados</code>.</li>
+        <li>Tabla: casilla de seleccion, Usuario, Dojo, Avance, Preguntas, Inquietud principal, Estado.</li>
+      </ul>
+      <div class="subhead">Flujo tipico</div>
+      <p>Marcar filas y presionar <code>Dar de baja seleccionados</code> para cambiar su estado a "suspendido" en la tabla.</p>
+      <div class="warn-box">
+        <ul>
+          <li>Marcada en pantalla como <code>[Modo local / Maqueta]</code>: los tres usuarios que aparecen (Ana Paredes, Luis Mora, Rosa Vera) son <b>datos de ejemplo fijos</b>, no cuentas reales.</li>
+          <li><b>"Dar de baja seleccionados" no suspende ninguna cuenta real</b> — solo cambia el estado en el navegador local. No tratar esta pantalla como la herramienta vigente para gestionar usuarios reales.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s13">
+      <div class="sec-head"><span class="sec-num">13</span><h2>Ocupaciones</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">Administra la lista de ocupaciones/profesiones que un usuario puede elegir al registrarse ("A que te dedicas").</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Agregar ocupacion</code> &middot; lista (nombre, sector, estado) &middot; editor: Ocupacion/Profesion, Sector/Industria, Orden, Estado (Activa/Inactiva); <code>Guardar</code>, <code>Eliminar</code>.</li>
+      </ul>
+      <div class="subhead">Como agregar o desactivar una ocupacion</div>
+      <ol>
+        <li><code>Agregar ocupacion</code> &rarr; completar Ocupacion/Profesion (obligatorio), Sector, Orden, Estado &rarr; <code>Guardar</code>.</li>
+        <li>Para dejar de mostrarla sin perder el dato: seleccionarla, cambiar Estado a "Inactiva", <code>Guardar</code> — no usar "Eliminar" para esto.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li>Seccion real: guarda directo en <code>business_sectors</code> de Supabase, con efecto inmediato en el formulario de registro.</li>
+          <li><code>Eliminar</code> pide confirmacion y <b>es permanente</b> — no queda historial. Preferir "Inactiva" si solo se quiere ocultarla.</li>
+          <li>El identificador interno se genera automaticamente del nombre; dos ocupaciones que generen el mismo identificador haran fallar el guardado con un aviso de "nombre repetido".</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s14">
+      <div class="sec-head"><span class="sec-num">14</span><h2>Propaganda</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">Administra las campanas publicitarias que ven los usuarios dentro de la app, sus limites de imagen y la prioridad segun el nivel de donacion.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li><code>Agregar campana</code>.</li>
+        <li><b>Limites de imagen:</b> Peso maximo (KB), Ancho maximo (px), Alto maximo (px); <code>Guardar limites</code>.</li>
+        <li><b>Prioridad por valor de donacion:</b> Minimo/Maximo (USD) y Prioridad por nivel; <code>Guardar prioridades</code>.</li>
+        <li><b>Editor de campana:</b> Nombre, Momento (Al inicio / En cualquier momento / Al salir), Duracion (seg), Vigencia (sesiones / meses / indefinido), Estado (Activa/Suspendida/Eliminada), Enlace, Mensaje, Sectores objetivo (todos o especificos), Tipo de donacion (Unica/Continua) + Periodo si es continua, Valor de la donacion, imagen (PNG/JPEG/WEBP con vista previa); <code>Guardar campana</code>.</li>
+        <li><b>Historial de cambios (auditoria):</b> quien creo/actualizo/cambio el estado de cada campana y cuando.</li>
+      </ul>
+      <div class="subhead">Como crear una campana nueva</div>
+      <ol>
+        <li><code>Agregar campana</code> &rarr; completar Nombre y Mensaje (obligatorios), Momento, Duracion, Vigencia, Estado, Enlace.</li>
+        <li>Elegir sectores objetivo y tipo/valor de donacion.</li>
+        <li>Subir la imagen (se valida contra los limites configurados antes de aceptarla).</li>
+        <li><code>Guardar campana</code>.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li>Seccion real (tabla <code>central_admin_campaigns</code>): poner Estado en "Activa" hace que la campana se muestre de inmediato a usuarios reales, segun sector y momento configurados.</li>
+          <li>Si la imagen supera peso o dimensiones maximas, el navegador <b>rechaza la subida antes de guardar</b> — hay que achicarla y reintentar.</li>
+          <li>"Donacion continua" exige indicar el Periodo (meses); si se deja vacio, el guardado se bloquea.</li>
+          <li>Cada guardado queda en el Historial de auditoria con el usuario de Basic Auth que lo hizo.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" id="s15">
+      <div class="sec-head"><span class="sec-num">15</span><h2>Reportes</h2><span class="badge-real">en vivo</span></div>
+      <p class="sec-what">Centro de inteligencia de negocio: ingresos de usuarios por sector y desempeno de campanas, con graficos 3D interactivos que permiten bajar de nivel haciendo clic.</p>
+      <div class="subhead">Campos y controles</div>
+      <ul>
+        <li>Selector <code>Periodo</code> (Quincenal 15 dias / Mensual / Trimestral) + <code>Generar reporte</code>.</li>
+        <li>Ruta de navegacion (breadcrumb) del nivel actual, KPIs (Ingresos totales, Ingresos con sector, Sectores activos, Impresiones, Campana lider), grafico 3D + tabla sincronizada, boton <code>&larr; Volver</code>.</li>
+      </ul>
+      <div class="subhead">Como profundizar en el reporte</div>
+      <ol>
+        <li>Elegir Periodo &rarr; <code>Generar reporte</code>.</li>
+        <li><b>Nivel 1:</b> "Ingresos por sector" / "Ingresos sin sector" / "Propaganda" &mdash; clic para bajar de nivel.</li>
+        <li>Desde "Ingresos por sector": Nivel 2 (por sector) &rarr; Nivel 3 (campanas de ese sector) &rarr; Nivel 4 (detalle diario).</li>
+        <li>Desde "Propaganda": Nivel 2 (por campana) &rarr; Nivel 3 (sectores impactados) &rarr; Nivel 4 (detalle diario).</li>
+        <li>Usar el breadcrumb o <code>&larr; Volver</code> para regresar sin regenerar el reporte.</li>
+      </ol>
+      <div class="warn-box">
+        <ul>
+          <li>Datos reales de Supabase (<code>app_entry_log</code>, <code>campaign_impressions</code>, <code>central_admin_campaigns</code>), no simulados.</li>
+          <li>Cada consulta trae maximo 5000 filas por tabla — en periodos de mucho volumen el reporte podria no reflejar el 100% de los eventos.</li>
+          <li>El grafico 3D depende de librerias cargadas desde internet (<code>echarts</code>/<code>echarts-gl</code>); sin conexion, el grafico no se dibuja aunque la tabla si deberia funcionar.</li>
+          <li>"Ingresos sin sector" agrupa usuarios sin ocupacion asociada — es normal que este numero no sea cero.</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>Manual generado para el equipo del Club de Ciberseguridad ESPOL &middot; describe la version del panel Central Admin desplegada en Cloud Run.</footer>
+
+<script>
+(function(){
+  try{
+    var input = document.getElementById('tocSearch');
+    var items = Array.prototype.slice.call(document.querySelectorAll('#tocList li'));
+    input.addEventListener('input', function(){
+      var q = input.value.trim().toLowerCase();
+      items.forEach(function(li){
+        var txt = li.textContent.toLowerCase();
+        li.hidden = q.length > 0 && txt.indexOf(q) === -1;
+      });
+    });
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

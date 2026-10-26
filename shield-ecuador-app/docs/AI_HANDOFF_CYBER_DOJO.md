@@ -4,6 +4,8 @@ Fecha de elaboracion: 2026-08-27
 Repositorio local revisado: `C:\Users\aps-ecuador\Riesgo\shield-ecuador-app`  
 Objetivo: entregar una base tecnica y funcional para que una IA o un equipo pueda seguir construyendo funcionalidades en Cyber Dojo sin partir desde cero.
 
+> **Estado de este documento (actualizado 2026-09-23):** las secciones 1 a 27 describen el estado del proyecto al 27 de agosto de 2026 y no se reescribieron por completo. Desde esa fecha el proyecto crecio de forma sustancial: la base de datos paso de 22 a 72 migraciones, la consola de administracion se reconstruyo casi por completo (paso de un panel centrado en T-Pot a 15 secciones), y se agregaron el banco real de aprendizaje (`learning_items`/`learning_dojos`), el centro de seguridad, el campeonato y el sistema de campanas. La seccion **28** al final resume esos cambios y dice donde esta la fuente de verdad actual para cada tema. Las secciones 8, 10 y 17 se actualizaron puntualmente con los hechos verificados hoy (conteo de migraciones, funciones Edge y paneles admin reales); el resto del documento puede tener datos desactualizados y debe contrastarse con el codigo antes de confiar en el.
+
 ## 1. Resumen ejecutivo
 
 Cyber Dojo es una plataforma de entrenamiento en ciberseguridad para MIPYMEs ecuatorianas y usuarios no tecnicos. Usa una narrativa de dojo/karate: los usuarios aprenden conceptos de seguridad, responden preguntas, completan katas, suben de cinturon y reciben apoyo de un Sensei IA.
@@ -299,6 +301,16 @@ Catalogo desde `016_business_sectors_catalog.sql`:
 - Permite mantenimiento solo a admins mediante RLS y `save_business_sector`.
 - `save_business_sector` actualiza `business_sectors`; si cambia el codigo, tambien actualiza `users.business_type` y `alerts.target_business_types`.
 
+**Tablas agregadas entre las migraciones 017 y 072 (no estaban al elaborar este documento):**
+
+- Banco de aprendizaje real, desde `026_learning_progress.sql`: `learning_dojos`, `learning_items` (contenido de las 30 preguntas + katas por cinturon, columna `content` en JSONB con `prompt`/`options`/`correct`), `learning_progress`, `learning_attempts`.
+- Campanas y entradas, desde `020`-`030`: `campaign_impressions`, `app_entry_log`, `central_admin_campaign_settings`, `central_admin_campaign_audit`, `central_admin_campaign_tier_weights`.
+- Centro de seguridad, desde `052_security_center.sql` y siguientes: `security_events`, `security_alert_config`, `security_config_audit`, `security_diagnoses`, `security_diagnosis_feedback`, `security_easm_findings`, `security_kata_drafts`, `security_rate_limit_hits`.
+- Campeonato: `championships`, `championship_registrations`, `championship_matches`, `championship_match_attempts`.
+- Otras: `app_secrets` (secretos de la app gestionados desde el admin, ej. clave de Resend), `minigame_served` ("Desafiando al Sensei").
+
+El listado completo y exacto de tablas debe confirmarse contra `supabase/migrations/*.sql` o con `docs/SUPABASE_VERIFICATION_QUERIES.sql`; esta lista es un resumen de lo agregado, no un reemplazo de esa fuente.
+
 ## 9. RLS y autorizacion
 
 Patrones RLS observados:
@@ -349,6 +361,21 @@ Funciones disponibles pero no conectadas claramente a pantallas de usuario:
 - `analyze-email`
 - `migrate-user-pii`
 - `backfill-email-domains`
+
+**Funciones agregadas despues del 27 de agosto de 2026 (26 funciones en total hoy, sin contar `_shared`):**
+
+- `run-news-agent` / `quiz-generator`: agente de noticias y generador de preguntas/katas on-demand, comparten `_shared/news-agent-core.ts` (cadena de proveedores IA con `runProviderChain`, extraccion de texto de archivos, guardas SSRF de `_shared/url-guard.ts`).
+- `question-bank-importer` (agente en `agent_configs`, no es una Edge Function nueva) valida preguntas subidas por archivo antes de publicarlas.
+- `import-question-bank`: recibe un archivo subido desde el panel "Preguntas" de la consola admin, extrae preguntas de opcion multiple con IA y las valida (tema de ciberseguridad, lenguaje accesible, cual opcion es la correcta) antes de guardarlas como pendientes.
+- `audit-generated-questions`: audita preguntas pendientes en `public.questions` antes de activarlas; acepta un lote de hasta 20 o una lista puntual de ids (`question_ids`) para validar una sola pregunta agregada o editada a mano.
+- `fix-learning-item-balance`: correccion puntual (no recurrente) para reescribir distractores de `learning_items` cuando la opcion correcta delata la respuesta por ser mucho mas larga que las incorrectas; nunca cambia el texto ni el indice de la respuesta correcta.
+- `championship-draw-round1`: sorteo del campeonato con reclamo atomico de estado.
+- `check-security-alerts` / `security-diagnose` / `security-easm-scan`: agentes del centro de seguridad (`verify_jwt = false`, se llaman por cron con `x-cron-secret` o desde el admin con el token de service role del proxy).
+- `save-security-alert-config` / `save-app-secret` / `save-provider-key`: guardan configuracion sensible (webhooks, secretos de la app, claves de proveedores IA) con validacion server-side.
+- `security-kata-convert`: convierte un incidente investigado en una kata publicable.
+- `log-login-event` / `secure-register-user` (ya existia) / `get-private-profile` (ya existia) / `complete-kata` (ya existia).
+
+Los agentes de IA (`agent_configs`) relevantes para preguntas hoy son cuatro: `ciber-dojo-news-agent`, `incident-investigator`, `question-auditor` y `question-bank-importer`, todos con la misma regla de calidad pedagogica: la opcion correcta no puede ser mas larga/detallada que los distractores, los distractores deben ser creibles, sin "todas/ninguna de las anteriores", sin dobles negativos y sin repetir siempre la misma posicion de la correcta (esto ultimo se refuerza en codigo con `shuffleOptions` en `_shared/news-agent-core.ts`, no solo en el prompt). Ver `supabase/migrations/069_question_answer_length_parity.sql` a `072_learning_item_rebalancer_agent.sql`.
 
 ## 11. Flujo de evaluacion adaptativa
 
@@ -487,12 +514,17 @@ Condicion de seguridad:
 
 Ubicacion: `central-admin-app/`
 
+**Nota (2026-09-23): esta seccion describia la consola cuando el unico modulo grande era T-Pot. Hoy la consola tiene 15 secciones de navegacion** (verificado en `index.html`, atributo `data-panel`): `overview`, `dojos`, `questions` (banco de apoyo del Sensei/noticias), `ai` (proveedores IA), `newsAgent`, `newsAlerts`, `openQuestions`, `ads` (campanas/propaganda), `occupations` (catalogo de sectores), `users`, `championship`, `securityCenter`, `threatIntel` (T-Pot), `senseiStats`, `reports` (BI de accesos y campanas). Todas comparten el mismo `app.js` vanilla JS, sin build step, con acciones delegadas por `data-act` y un helper `supabaseRest`/`supabaseFunctionInvoke` que pasa por el proxy del servidor.
+
+**Panel "Preguntas" (reconstruido 2026-09-22):** ya no es un editor de filas de ejemplo. Muestra las preguntas reales de `public.questions` (manuales, generadas por IA desde noticias/incidentes, o subidas por archivo), permite editar las 4 opciones y marcar cual es correcta, agregar una pregunta nueva, subir un archivo (`.txt`, `.md`, `.csv`, `.json`, `.pdf`, `.docx`) que se valida con IA antes de poder publicarse, y validar una pregunta puntual con el boton "Validar con IA" (llama a `audit-generated-questions` con `question_ids`). Ninguna pregunta se activa para los usuarios sin pasar por esa validacion (tema de ciberseguridad, lenguaje accesible, cual opcion es la correcta). Ver `tests/admin/questions.spec.ts`.
+
 Componentes:
 
-- `server.js`: servidor HTTP, Basic Auth, proxy Supabase y rutas T-Pot.
-- `app.js`: UI administrativa vanilla JS.
+- `server.js`: servidor HTTP, Basic Auth, proxy Supabase (REST, Auth, Storage y Functions) y rutas T-Pot.
+- `app.js`: UI administrativa vanilla JS (unos 4300+ lineas; toda la logica de las 15 secciones vive aqui, sin framework).
 - `tpotService.js`: logica T-Pot/Elastic, sanitizacion, reportes y jobs IA en memoria.
 - `tests/tpotService.test.js`: pruebas del servicio T-Pot.
+- `tests/admin/*.spec.ts` (Playwright, corren contra un mock del upstream de Supabase via `tests/admin/start-admin.cjs`): cubren cada seccion listada arriba, mas de 800 pruebas en total entre los 7 perfiles de dispositivo configurados.
 
 Rutas backend principales:
 
@@ -847,3 +879,17 @@ Usar este contexto:
 ```text
 Estas trabajando en Cyber Dojo, una app React/TypeScript + Supabase para entrenamiento gamificado de ciberseguridad de MIPYMEs ecuatorianas. El repo tiene frontend, Supabase migrations/functions y central-admin-app. La seguridad depende de Supabase Auth, RLS y Edge Functions. No expongas service role ni secretos en React. El registro y perfil usan PII cifrada mediante secure-register-user/get-private-profile. Los puntos de gamificacion viven en users.total_points y se recalculan desde kata_completions por complete-kata; el puntaje de riesgo vive en evaluations.total_score y calculate-risk no debe pisar total_points ni belt. Para funcionalidades sensibles crea Edge Functions. Verifica tablas y politicas en supabase/migrations antes de tocar codigo. Mantener lenguaje claro para usuarios no tecnicos. Prioridades actuales: conectar recomendaciones IA y analisis de email, persistir T-Pot, endurecer admin.
 ```
+
+## 28. Cambios desde el 27 de agosto de 2026 (resumen)
+
+Esta seccion se agrego el 23 de septiembre de 2026. No reemplaza las fuentes primarias que cita; es un mapa para encontrarlas.
+
+**Auditoria y endurecimiento del front-end (fila por fila).** Entre principios y mediados de septiembre se ejecuto una auditoria completa del front-end de usuario (filas 1-20) y de la consola admin (filas A0-A15): responsive real en 375/768/1024/1440px, presentacion profesional, cobertura de pruebas por pantalla, y correccion de una serie de hallazgos OWASP Top 10 (XSS, SSRF, inyeccion de formulas CSV, acceso anonimo a funciones con PII o de pago, aprobacion de analisis sin auditar, sorteo de campeonato no atomico, entre otros). El registro fila por fila, con la evidencia y el commit de cada una, esta en `DESIGN_REVIEW_CHECKLIST.md` en la raiz del repositorio (`C:\Users\aps-ecuador\Riesgo\DESIGN_REVIEW_CHECKLIST.md`, no dentro de `shield-ecuador-app/`) — es la fuente de verdad para ese trabajo, no este documento.
+
+**Banco de aprendizaje real (`learning_items`, 1000 preguntas/casos).** El 22 de septiembre se corrigio un sesgo de redaccion en 526 de esas 1000 preguntas: la respuesta correcta era notablemente mas larga o detallada que las incorrectas, lo que le daba a quien respondia una pista para adivinarla sin saber el tema (regla de Moodle para preguntas de opcion multiple). Se corrigieron los distractores con un agente de IA dedicado (`learning-item-rebalancer`, `fix-learning-item-balance`), verificando en cada escritura que el texto y el indice de la respuesta correcta no cambiaran. Verificado hoy en la base de datos: 0 de 1000 preguntas quedan con ese sesgo. Detalle completo en `docs/BANCO_Y_APRENDIZAJE_CIBERDOJO.md`, seccion "Correccion de sesgo de longitud".
+
+**Panel "Preguntas" de la consola admin, reconstruido.** El panel que administra el banco de apoyo del Sensei/noticias (`public.questions`, distinto de `learning_items`) paso de mostrar 50 filas de ejemplo fabricadas en el navegador a edicion real conectada a la base de datos, con una opcion para subir un archivo de preguntas que una IA valida (tema, lenguaje, respuesta correcta) antes de poder publicarse. Ver seccion 17 arriba y `tests/admin/questions.spec.ts`.
+
+**Prueba de carga real y plan de capacidad.** El 22-23 de septiembre se corrio una prueba de carga real contra produccion y se documento un plan de capacidades conservador (umbral recomendado: 80 usuarios concurrentes en uso general, 8 conversaciones simultaneas con el Sensei IA). Estos quedaron como documentos Claude Docs, no como archivos en el repositorio; quien continue este trabajo deberia pedirle al dueño del proyecto los enlaces ("Capacidad de usuarios concurrentes" y "Plan de Capacidades") o rehacer la prueba si no estan disponibles.
+
+**Que sigue igual de desactualizado.** Las secciones 1-7, 11-16, 18-27 de este documento no se revisaron a fondo en esta pasada; describen el estado de agosto y pueden tener datos incorrectos sobre partes del sistema que no se tocaron en esta sesion (ej. T-Pot, recomendaciones IA, analisis de email). Confirmar contra el codigo antes de asumir que siguen vigentes.
