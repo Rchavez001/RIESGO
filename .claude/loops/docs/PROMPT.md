@@ -1,9 +1,14 @@
-# LOOP · Actualización de documentación — `shield-ecuador-app/docs`
+# LOOP · Actualización de documentación — `shield-ecuador-app/docs` y raíz
 
-Eres responsable de poner al día la documentación bajo `shield-ecuador-app/docs/` (y, cuando haga
-falta mantener el índice, archivos de nivel superior que ese índice referencie). Trabajas en
-**iteraciones cortas y verificables**. Cada ejecución de este prompt es UNA iteración: completas
-**una tarea** (un documento, o una sección de un documento), la verificas, la registras y terminas.
+Eres responsable de poner al día la documentación de `shield-ecuador-app`: todo
+`shield-ecuador-app/docs/` y los `.md` que están directamente en la raíz de `shield-ecuador-app/`
+(`ARQUITECTURA_CYBER_DOJO.md`, `BASE_DE_DATOS.md`, `DOCUMENTO_FUNCIONALIDADES.md`,
+`GUIA_LEVANTAMIENTO_PROYECTO.md`, `MANUAL_ADMINISTRADOR.md`, `MANUAL_USUARIO_CYBER_DOJO.md`,
+`README-centro-de-seguridad.md`, `SECURITY_PRIVACY.md`, `SETUP.md`, y cualquier `.md` nuevo que se
+agregue ahí — nunca en subcarpetas de la raíz). Ampliado el 2026-10-26 por decisión del usuario
+(alcance original: solo `shield-ecuador-app/docs/`). Trabajas en **iteraciones cortas y
+verificables**. Cada ejecución de este prompt es UNA iteración: completas **una tarea** (un
+documento, o una sección de un documento), la verificas, la registras y terminas.
 
 No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 
@@ -59,13 +64,19 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 ## REGLAS DURAS (su violación invalida la iteración)
 
 **Alcance de archivos**
-- Solo puedes editar archivos bajo `shield-ecuador-app/docs/` y `loop-docs/`. **Nunca** código
-  (`.ts`, `.tsx`, `.sql`, `.js`, `.cjs`, configuración, `.env*`, `supabase/migrations/`, etc.).
-  Si para cerrar una tarea hiciera falta tocar algo fuera de esos dos directorios, no lo hagas:
-  documenta la necesidad en `DECISIONS.md` y termina con `<promise>BLOQUEADO</promise>`.
-- Actualiza el índice o `README` de `docs/` (si existe, o créalo si la tarea lo exige y está en
-  `TASKS.md`) cuando una tarea cambie la estructura de archivos de `docs/` — nunca lo dejes
-  desincronizado.
+- Solo puedes editar: (1) archivos bajo `shield-ecuador-app/docs/` (incluida la subcarpeta
+  `docs/archivo/`), (2) los `.md` directamente en la raíz de `shield-ecuador-app/` (nunca en
+  subcarpetas de la raíz — eso excluye `vault/`, `scripts/`, `frontend/`, etc.), y (3) `loop-docs/`.
+  **Nunca** código (`.ts`, `.tsx`, `.sql`, `.js`, `.cjs`, `.py`, configuración, `.env*`,
+  `supabase/migrations/`, `supabase/functions/`, etc.), **nunca** `loop-consentimiento/` ni
+  `.claude/loops/consentimiento/` (son de otro loop), **nunca**
+  `shield-ecuador-app/manual-central-admin.html` (no es `.md`; alcance sin decidir, ver `DOC-04` en
+  `DECISIONS.md`) y **nunca** `shield-ecuador-app/vault/` (notas de referencia de solo lectura para
+  este loop, salvo que una decisión humana futura las incluya explícitamente).
+  Si para cerrar una tarea hiciera falta tocar algo fuera de ese alcance, no lo hagas: documenta la
+  necesidad en `DECISIONS.md` y termina con `<promise>BLOQUEADO</promise>`.
+- Actualiza el índice/`README` (el que `TASKS.md` defina como índice general) cuando una tarea
+  cambie la estructura de archivos del alcance — nunca lo dejes desincronizado.
 
 **Una tarea por iteración**
 - Una iteración cierra **un documento o una sección**, nunca varios. No mezcles una corrección de
@@ -80,10 +91,13 @@ No tienes memoria entre iteraciones. Tu memoria son estos archivos:
 
 **Documentos controlados (ISO, legales, políticas)**
 - Si un documento tiene (o debería tener) una tabla de control de versiones, una aprobación formal,
-  o está marcado como controlado en `TASKS.md`/`INVENTARIO.md`: **no se reescribe directamente**.
-  Los cambios van en una sección nueva "Propuesta de cambio — pendiente de aprobación" con su
-  propia tabla de control de versiones (fecha, autor, qué cambia, estado `pendiente de aprobación`),
-  nunca sobrescribiendo el texto ya aprobado.
+  o está marcado como controlado en `TASKS.md`/`INVENTARIO.md` (p. ej. `EVALUACION_ISO_42001_TR_24368_CIBERDOJO.*`,
+  `ISO_CIBERDOJO_INVENTARIO.csv`, los informes de auditoría/seguridad en PDF/DOCX): **nunca se
+  reescribe ni se sobrescribe directamente**, binario o no. Cualquier cambio propuesto va como un
+  documento nuevo en `loop-docs/propuestas/PROPUESTA-<doc>-<fecha>.md`, con su propia tabla de
+  control de versiones (fecha, autor, qué cambia, estado `pendiente de aprobación`) y una referencia
+  clara a qué documento controlado y qué sección propone modificar — nunca tocando el archivo
+  original.
 
 **Nada sensible**
 - Nunca incluyas claves, tokens, contraseñas, direcciones IP reales, correos reales ni URLs

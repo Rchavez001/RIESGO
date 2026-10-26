@@ -26,7 +26,15 @@ cd "$ROOT"
 WORK="$ROOT/loop-docs"
 LOGS="$WORK/logs"; mkdir -p "$LOGS"
 DOCS_DIR="shield-ecuador-app/docs"
+APP_ROOT="shield-ecuador-app"
+# Alcance ampliado 2026-10-26: shield-ecuador-app/docs/** (incluye docs/archivo/), loop-docs/**, y
+# los .md directamente en la raíz de shield-ecuador-app/ (nunca en subcarpetas: vault/, scripts/,
+# frontend/, etc. quedan fuera; manual-central-admin.html queda fuera por ser .html, no .md — ver
+# DOC-04 en loop-docs/DECISIONS.md).
 ALLOWED_PREFIXES=("$DOCS_DIR" "loop-docs")
+is_allowed_root_md() {
+  [[ "$1" =~ ^${APP_ROOT}/[^/]+\.md$ ]]
+}
 
 FAILED=()
 wanted() { [[ -z "${GATES_ONLY:-}" ]] || [[ " ${GATES_ONLY} " == *" $1 "* ]]; }
@@ -63,10 +71,11 @@ scope_guard() {
     for prefix in "${ALLOWED_PREFIXES[@]}"; do
       [[ "$f" == "$prefix"/* || "$f" == "$prefix" ]] && { ok=1; break; }
     done
+    (( ok )) || is_allowed_root_md "$f" && ok=1
     (( ok )) || out+=("$f")
   done < <(changed_files)
   if (( ${#out[@]} > 0 )); then
-    echo "Archivos modificados fuera de ${ALLOWED_PREFIXES[*]}:"
+    echo "Archivos modificados fuera de ${ALLOWED_PREFIXES[*]} y de los .md de la raíz de ${APP_ROOT}:"
     printf '  %s\n' "${out[@]}"
     return 1
   fi
@@ -154,7 +163,10 @@ if [[ "${GATES_SELFTEST:-0}" == "1" ]]; then
   echo "Autoprueba: cada puerta debe reportar FAIL con un caso inventado, y OK una vez retirado."
   selftest_file="$DOCS_DIR/_gates_selftest.md"
   selftest_outside="fuera-de-alcance-gates-selftest.md"
-  cleanup_selftest() { rm -f "$selftest_file" "$selftest_outside"; }
+  cleanup_selftest() {
+    rm -f "$selftest_file" "$selftest_outside" "$APP_ROOT/_gates_selftest_root.md" "$APP_ROOT/vault/_gates_selftest.md"
+    rmdir "$APP_ROOT/vault" 2>/dev/null || true
+  }
   trap cleanup_selftest EXIT
 
   self_rc=0
@@ -174,6 +186,17 @@ if [[ "${GATES_SELFTEST:-0}" == "1" ]]; then
   run_case "scope: archivo fuera de alcance -> FAIL" fail scope_guard
   rm -f "$selftest_outside"
   run_case "scope: árbol limpio -> OK" ok scope_guard
+
+  root_md_test="$APP_ROOT/_gates_selftest_root.md"
+  printf 'x\n' > "$root_md_test"
+  run_case "scope: .md en la raíz de $APP_ROOT -> OK" ok scope_guard
+  rm -f "$root_md_test"
+  vault_test="$APP_ROOT/vault/_gates_selftest.md"
+  mkdir -p "$(dirname "$vault_test")"
+  printf 'x\n' > "$vault_test"
+  run_case "scope: .md en vault/ (subcarpeta de la raíz) -> FAIL" fail scope_guard
+  rm -f "$vault_test"
+  rmdir "$(dirname "$vault_test")" 2>/dev/null || true
 
   printf '[roto](./no-existe-de-verdad.md)\n' > "$selftest_file"
   run_case "enlaces: enlace roto -> FAIL" fail check_links
