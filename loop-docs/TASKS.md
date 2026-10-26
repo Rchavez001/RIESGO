@@ -99,7 +99,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   - Verificar contra: `central-admin-app/app.js` (`privacyLoginForm`/`privacyEnroll`),
     `loop-consentimiento/DECISIONS.md` (D-01).
 
-- [ ] **DOCS-10 — Documento nuevo: `shield-ecuador-app/docs/MODO_INVITADO.md`**
+- [x] **DOCS-10 — Documento nuevo: `shield-ecuador-app/docs/MODO_INVITADO.md`**
   - Qué guarda un invitado (`learning_progress`), el aviso breve (`GuestNoticeModal.tsx`,
     `accept-guest-notice`), el tope de 10 preguntas (`GUEST_LIMIT_REACHED`), la caducidad de la
     sesión (`cleanup_expired_guest_sessions()`), y que `enable_anonymous_sign_ins` no está desplegado

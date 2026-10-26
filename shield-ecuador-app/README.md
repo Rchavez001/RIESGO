@@ -42,6 +42,7 @@ fuente de verdad.
 | docs/Ficha-DoggoTeka.pdf | Versión imprimible de la ficha anterior. | Mismo público |
 | docs/Ficha-DoggoTeka.png | Captura de la ficha anterior. | Mismo público |
 | [docs/MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md](docs/MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md) | Manual de seguridad de la implementación completa (frontend, Supabase, Central Admin). | Auditor de seguridad / desarrollador |
+| [docs/MODO_INVITADO.md](docs/MODO_INVITADO.md) | Modo "Probar sin cuenta": qué guarda, aviso breve, evidencia registrada, tope de 10 preguntas y caducidad de la sesión anónima. | Desarrollador/auditor de privacidad |
 | [docs/MANUAL_TECNICO_SENSOR_TPOT.md](docs/MANUAL_TECNICO_SENSOR_TPOT.md) | Manual técnico del sensor T-Pot (honeypot) y su propósito. | Desarrollador/seguridad que opere T-Pot |
 | [docs/SUPABASE_VERIFICATION_QUERIES.sql](docs/SUPABASE_VERIFICATION_QUERIES.sql) | Consultas de solo lectura para confirmar que la base de datos en Supabase coincide con el repositorio. | Desarrollador/quien verifique un despliegue |
 | [docs/TPOT_AI_AGENT.md](docs/TPOT_AI_AGENT.md) | Especificación de los dos agentes de IA de T-Pot (`TpotThreatAnalysisAgent`, `TpotAiAuditAgent`). | Desarrollador/seguridad |

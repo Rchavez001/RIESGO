@@ -381,3 +381,36 @@ persona responsable sobre el inventario y el backlog.
   las Iteraciones 3-8. Ninguna de las líneas señaladas por `rutas`/`secretos` es nueva de contenido
   no verificado: todas ya estaban en el documento antes de esta iteración o repiten el mismo patrón
   conceptual (`service_role` como nombre de rol, no un valor de secreto) ya aceptado.
+
+## Iteración 10 — 2026-10-26 — DOCS-10 (documento nuevo `docs/MODO_INVITADO.md`)
+- Cambios: `shield-ecuador-app/docs/MODO_INVITADO.md` (nuevo) — qué guarda un invitado
+  (sesión anónima real de Supabase Auth, sin fila en `public.users`, progreso en
+  `learning_progress`), el aviso breve (`GuestNoticeModal.tsx`, citado explícitamente como texto
+  PROVISIONAL `[PENDIENTE DE VALIDACIÓN LEGAL]`), la evidencia que registra `accept-guest-notice`
+  (finalidad `invitado_basico`, canal `invitado`, `storeUserId: false`), el tope de 10 preguntas en
+  dos capas (interfaz `GUEST_QUESTION_LIMIT` y servidor `learning_answer`/`learning_start_exam`,
+  migración `076`, con el código de error estable `GUEST_LIMIT_REACHED:`), la caducidad de la
+  sesión anónima a las 24 horas (`cleanup_expired_guest_sessions()`, migración `083`, agendada por
+  `pg_cron` solo si la extensión está presente) y el estado de `enable_anonymous_sign_ins` (activo
+  en el `config.toml` local de desarrollo; pendiente de despliegue en producción según `D-12` y
+  `DOC-06`). También: `shield-ecuador-app/README.md` (fila nueva para `docs/MODO_INVITADO.md` en la
+  tabla de `docs/`, en orden alfabético entre `MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md` y
+  `MANUAL_TECNICO_SENSOR_TPOT.md`); `loop-docs/TASKS.md` (`DOCS-10` → `[x]`).
+- Verificado contra: `frontend/src/components/GuestNoticeModal.tsx` (texto y comentario
+  PROVISIONAL, líneas 6-24), `frontend/src/contexts/AuthContext.tsx` líneas 212-220
+  (`continueAsGuest`), `frontend/src/screens/DojoDetailPage.tsx` línea 9 (`GUEST_QUESTION_LIMIT`),
+  `supabase/functions/accept-guest-notice/index.ts` (completo), `supabase/functions/_shared/auth-guard.ts`
+  líneas 97-119 (`requireUser` rechaza anónimos, `requireAnonymousGuest` exige lo contrario),
+  `supabase/migrations/076_learning_guest_limit.sql` (completo), `supabase/migrations/083_guest_consent_notice_and_session_expiry.sql`
+  (completo), `supabase/config.toml` líneas 168-186 (`enable_anonymous_sign_ins = true` en local),
+  `loop-consentimiento/DECISIONS.md` D-12 y D-16 (texto exacto citado en la tarea), `loop-docs/DECISIONS.md`
+  DOC-06 (estado de despliegue del módulo).
+- [VERIFICAR] añadidos: ninguno — todo lo escrito se confirmó directamente contra el código citado o
+  contra decisiones humanas ya registradas (`D-12`, `D-16`, `DOC-06`); no se dejó ninguna afirmación
+  sin poder señalar a una fuente.
+- Gates: `scope`, `enlaces`, `secretos`, `markdown` OK. `rutas` reporta FAIL sobre
+  `frontend/src/components/GuestNoticeModal.tsx` y `supabase/functions/accept-guest-notice/index.ts`
+  — mismo patrón de limitación del heurístico documentado desde la Iteración 0b (`check_code_paths`
+  resuelve rutas solo desde la raíz del repo; ambas existen de verdad bajo `shield-ecuador-app/`,
+  confirmado con `ls shield-ecuador-app/<ruta>`). No es contenido nuevo sin verificar: son las dos
+  rutas centrales que sustentan el documento, ya verificadas por lectura directa antes de escribirlas.
