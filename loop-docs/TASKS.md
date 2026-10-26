@@ -135,7 +135,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     que propone actualizar.
   - Prioridad baja — no hay plazo ni obligación de certificación en curso conocida.
 
-- [ ] **DOCS-15 — Verificar `TPOT_AI_AGENT.md` contra el código**
+- [x] **DOCS-15 — Verificar `TPOT_AI_AGENT.md` contra el código**
   - Especificación de los dos agentes de IA de T-Pot (`TpotThreatAnalysisAgent`,
     `TpotAiAuditAgent`). No se verificó línea por línea en la Fase 0 (ver `INVENTARIO.md` punto 11).
     Confirmar el JSON de salida exacto y el flujo de aprobación contra el código real de los

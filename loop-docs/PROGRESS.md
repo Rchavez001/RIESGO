@@ -547,3 +547,43 @@ persona responsable sobre el inventario y el backlog.
   `frontend/Dockerfile`, `supabase/functions/run-news-agent/index.ts`,
   `supabase/migrations/040_...sql`/`044_...sql`, `docs/GUIA_OPERACION_CLUB.md`) son las mismas ya
   documentadas como falsos positivos desde iteraciones anteriores, no nuevas de esta iteración.
+
+## Iteración 15 — 2026-10-26 — DOCS-15 (`docs/TPOT_AI_AGENT.md`, verificación línea por línea)
+
+- Cambios: `shield-ecuador-app/docs/TPOT_AI_AGENT.md` — nota nueva al inicio aclarando que
+  `TpotThreatAnalysisAgent`/`TpotAiAuditAgent` no son clases ni módulos reales del código, sino
+  nombres conceptuales para `localThreatAnalysis()`/`localAudit()` en
+  `central-admin-app/tpotService.js`, y que `callAiProvider()` es hoy un placeholder que delega
+  siempre en `localThreatAnalysis()` (ningún modelo de IA externo se invoca todavía,
+  `analysis_engine: "reglas_locales"`); corregida la sección "Sanitización previa" (tokens/API
+  keys se enmascaran como `<nombre>=***`, no literalmente `[redacted]`; añadida evidencia de que
+  "binarios completos"/"PCAP" nunca se leen porque `normalizeEvent()` solo extrae un conjunto fijo
+  de campos de texto/número, no porque exista un filtro explícito de exclusión); reemplazada la
+  frase "Si `approved_for_display=false`, la UI no muestra `raw_ai_output`" por el flujo real de
+  estados del job (`pending`→`running`→`audited`/`rejected`→`approved`, aprobación humana
+  obligatoria vía `approveAiAnalysis()` salvo que `AI_OUTPUT_REQUIRES_APPROVAL=false`); corregida la
+  última frase de "MITRE inicial" — el código de `mapMitre()` no tiene ninguna rama que produzca
+  `technique_id: null`, cada regla que calza agrega una entrada con `technique_id`/`confidence`
+  fijos y, si no calza, simplemente no agrega nada (no hay mecanismo de "incertidumbre explícita").
+  Los dos bloques JSON de salida (`TpotThreatAnalysisAgent` y `TpotAiAuditAgent`) se confirmaron
+  exactos campo por campo contra el código real y no se tocaron. `loop-docs/TASKS.md` (`DOCS-15` →
+  `[x]`).
+- Verificado contra: `shield-ecuador-app/central-admin-app/tpotService.js` completo (618 líneas:
+  `createAiAnalysisJob()`, `runAiJob()`, `callAiProvider()`, `localThreatAnalysis()`, `localAudit()`,
+  `getAiAnalysisJob()`, `approveAiAnalysis()`, `conflict()`, `getSettings()`, `sanitizeText()`,
+  `maskSecret()`, `normalizeEvent()`, `mapMitre()`); `shield-ecuador-app/central-admin-app/app.js`
+  (confirmado que no hay ninguna clase `TpotThreatAnalysisAgent`/`TpotAiAuditAgent`, solo llamadas a
+  `/api/admin/tpot/ai-analysis`); `grep` sobre `supabase/functions/` y `supabase/migrations/`
+  (confirmado que no existe ninguna Edge Function de T-Pot; toda la lógica vive en
+  `central-admin-app/tpotService.js`). No se tocó `shield-ecuador-app/release/cyberdojo-clean-repo/docs/TPOT_AI_AGENT.md`
+  (copia de exportación bajo `release/`, fuera del alcance literal del loop: no es
+  `shield-ecuador-app/docs/` ni un `.md` de la raíz de `shield-ecuador-app/`).
+- [VERIFICAR] añadidos: ninguno — todas las correcciones se confirmaron directamente contra
+  `tpotService.js`; donde el código no implementa algo que el documento afirmaba (el `technique_id:
+  null`), se corrigió para describir el comportamiento real en vez de marcarlo como pendiente de
+  verificar.
+- Gates: `scope`, `enlaces`, `secretos`, `markdown` OK. `rutas` reporta FAIL sobre
+  `central-admin-app/tpotService.js` (citado así, sin el prefijo `shield-ecuador-app/`) — mismo
+  patrón de limitación del heurístico documentado desde la Iteración 0b (`check_code_paths` resuelve
+  rutas solo desde la raíz del repo); confirmado con `ls shield-ecuador-app/central-admin-app/tpotService.js`
+  que el archivo existe de verdad.
