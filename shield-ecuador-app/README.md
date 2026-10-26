@@ -36,7 +36,6 @@ fuente de verdad.
 |---|---|---|
 | [docs/AI_HANDOFF_CYBER_DOJO.md](docs/AI_HANDOFF_CYBER_DOJO.md) | Traspaso breve para quien continúe el desarrollo: mapa de qué documento mirar para cada tema, sin repetir su contenido. | Desarrollador/IA que vaya a tocar código / capacitación club Phycom |
 | [docs/BANCO_Y_APRENDIZAJE_CIBERDOJO.md](docs/BANCO_Y_APRENDIZAJE_CIBERDOJO.md) | Acta de publicación del banco de 700 preguntas / 300 casos. | Desarrollador/equipo de contenido |
-| [docs/DIRECCION_VISUAL_REFERENCIAS.md](docs/DIRECCION_VISUAL_REFERENCIAS.md) | Propuesta de dirección de arte del rediseño cinematográfico (ya implementada). Pendiente de archivar (tarea `DOCS-12`). | Diseño/dirección de producto |
 | [docs/FICHA_DOGGOTEKA.md](docs/FICHA_DOGGOTEKA.md) | Ficha de personaje/diseño de la mascota DoggoTeka. | Diseño de contenido/narrativa |
 | docs/Ficha-DoggoTeka.pdf | Versión imprimible de la ficha anterior. | Mismo público |
 | docs/Ficha-DoggoTeka.png | Captura de la ficha anterior. | Mismo público |
@@ -77,6 +76,7 @@ en `loop-docs/DECISIONS.md`). Cada uno lleva un aviso "Documento histórico, no 
 | Documento | Propósito original | Público |
 |---|---|---|
 | [docs/archivo/APLICACION_CINEMATICA_LOCAL.md](docs/archivo/APLICACION_CINEMATICA_LOCAL.md) | Instrucciones de revisión local del rediseño cinematográfico (ya publicado en producción). | Desarrollador/QA |
+| [docs/archivo/DIRECCION_VISUAL_REFERENCIAS.md](docs/archivo/DIRECCION_VISUAL_REFERENCIAS.md) | Propuesta de dirección de arte del rediseño cinematográfico (ya implementada). | Diseño/dirección de producto |
 
 ## 3. `vault/` — notas internas del club
 

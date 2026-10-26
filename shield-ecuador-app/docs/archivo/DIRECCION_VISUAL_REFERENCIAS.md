@@ -1,3 +1,5 @@
+> **Documento histórico, no vigente desde 2026-10-26.** (Decisión `DOC-03` en `loop-docs/DECISIONS.md`.)
+
 # Dirección visual de ciberDojo a partir de los ejemplos
 
 Referencia revisada el 10 de septiembre de 2026. Esta propuesta no modifica la aplicación publicada.

@@ -113,7 +113,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     un aviso al inicio: "Documento histórico, no vigente desde 2026-10-26" (sin reescribir el resto
     del contenido). Actualizar el índice (DOCS-02) para reflejar la nueva ubicación.
 
-- [ ] **DOCS-12 — Archivar `DIRECCION_VISUAL_REFERENCIAS.md`**
+- [x] **DOCS-12 — Archivar `DIRECCION_VISUAL_REFERENCIAS.md`**
   - Decisión `DOC-03`: igual que DOCS-11 — mover a `shield-ecuador-app/docs/archivo/`, mismo aviso
     "Documento histórico, no vigente desde 2026-10-26". Actualizar el índice (DOCS-02).
 

@@ -429,3 +429,27 @@ persona responsable sobre el inventario y el backlog.
   archivo y añadir el aviso acordado, sin tocar el cuerpo.
 - [VERIFICAR] añadidos: ninguno.
 - Gates: `scope`, `enlaces`, `rutas`, `secretos`, `markdown` OK.
+
+## Iteración 12 — 2026-10-26 — DOCS-12 (archivar `DIRECCION_VISUAL_REFERENCIAS.md`)
+- Cambios: `shield-ecuador-app/docs/archivo/DIRECCION_VISUAL_REFERENCIAS.md` (nuevo, contenido
+  idéntico al original más el aviso "Documento histórico, no vigente desde 2026-10-26" al inicio,
+  según decisión `DOC-03`); `shield-ecuador-app/docs/DIRECCION_VISUAL_REFERENCIAS.md` (eliminado, el
+  mismo archivo ya vive en `docs/archivo/`); `shield-ecuador-app/README.md` (quita la fila de
+  `docs/DIRECCION_VISUAL_REFERENCIAS.md` de la tabla 2.1 "Documentos vigentes" y añade una fila
+  nueva a la tabla 2.3 "Documentos archivados"); `loop-docs/TASKS.md` (`DOCS-12` → `[x]`).
+- Verificado contra: `loop-docs/DECISIONS.md` `DOC-03` (texto exacto de la decisión: mismo
+  tratamiento que `DOC-02`, mover a `docs/archivo/` con el mismo aviso, sin reescribir el resto del
+  contenido) — no se verificó contenido técnico nuevo porque la tarea es solo mover el archivo y
+  añadir el aviso acordado.
+- [VERIFICAR] añadidos: ninguno.
+- Gates: `scope`, `enlaces`, `secretos`, `markdown` OK. `rutas` reporta FAIL por dos rutas nuevas
+  (`videos/ejemplos/hacerlo_sin_audio.mp4`, `videos/ejemplos/cyber_dojo_fichas_y_arte_completo.zip`)
+  — confirmado con `git show HEAD:shield-ecuador-app/docs/DIRECCION_VISUAL_REFERENCIAS.md` que son
+  líneas idénticas al original, no reescritas por esta iteración (la decisión `DOC-03` exige no
+  tocar el cuerpo). Son referencias a material externo de revisión de diseño que nunca estuvo
+  commiteado al repo (no son rutas de código), mismo tipo de falso positivo ya documentado en
+  iteraciones previas para rutas legítimamente ausentes del árbol (p. ej. `frontend/.env` en la
+  Iteración 7). Las otras cuatro rutas que marca el gate (`docs/iso-y-privacidad`,
+  `central-admin-app/app.js`, `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md`, `frontend/Dockerfile`
+  en `loop-docs/TASKS.md`) son preexistentes, no tocadas en esta iteración — mismo patrón registrado
+  desde la Iteración 0b.
