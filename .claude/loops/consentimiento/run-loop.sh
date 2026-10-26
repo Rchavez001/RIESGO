@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Ejecutor del loop de consentimiento informado (modo headless de Claude Code).
-# Uso:  MAX_ITER=30 bash .claude/loops/consentimiento/run-loop.sh
+# Ejecutor de loops headless de Claude Code (consentimiento informado, documentación de
+# shield-ecuador-app/docs). Sigue viviendo en .claude/loops/consentimiento/ por numeración
+# histórica: LOOP= selecciona qué loop corre, no cuál archivo hay que tocar.
+# Uso:  MAX_ITER=30 bash .claude/loops/consentimiento/run-loop.sh                  # LOOP=consentimiento (por defecto)
+#       LOOP=docs MAX_ITER=10 bash .claude/loops/consentimiento/run-loop.sh        # loop de documentación
 #       bash .claude/loops/consentimiento/classify_test.sh   # prueba classify_iteration()/
 #                                                              # decide_usage_limit() de lib-classify.sh,
 #                                                              # sin invocar `claude` ni sourcear/ejecutar
@@ -10,11 +13,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib-classify.sh"
 
-LOOP_DIR=".claude/loops/consentimiento"
-# TASKS/PROGRESS/DECISIONS/SPEC/seed/diag/logs viven en loop-consentimiento/ (fuera de .claude/): Claude
-# Code trata todo lo bajo .claude/ como "sensitive file" y el loop headless no podría editarlos ahí.
-WORK_DIR="loop-consentimiento"
-BRANCH="feature/consentimiento-lopdp"
+LOOP="${LOOP:-consentimiento}"
+case "$LOOP" in
+  consentimiento)
+    LOOP_DIR=".claude/loops/consentimiento"
+    WORK_DIR="loop-consentimiento"
+    BRANCH="feature/consentimiento-lopdp"
+    ;;
+  docs)
+    LOOP_DIR=".claude/loops/docs"
+    WORK_DIR="loop-docs"
+    BRANCH="docs/actualizacion"
+    ;;
+  *)
+    echo "LOOP desconocido: '$LOOP' (valores válidos: consentimiento, docs)"; exit 64
+    ;;
+esac
+# TASKS/PROGRESS/DECISIONS/SPEC/seed/diag/logs (o su equivalente por loop) viven fuera de .claude/:
+# Claude Code trata todo lo bajo .claude/ como "sensitive file" y el loop headless no podría editarlos ahí.
 MAX_ITER="${MAX_ITER:-30}"
 MAX_TURNS="${MAX_TURNS:-100}"
 PAUSE="${PAUSE:-5}"
