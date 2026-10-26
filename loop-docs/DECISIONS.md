@@ -80,7 +80,7 @@ general (`README.md`, DOCS-02) debe listar `manual-central-admin.html` y
 remitiendo a `MANUAL_ADMINISTRADOR.md`. No se fusionan ni se reescriben en esta ronda — la decisión
 es solo sobre cuál es la referencia vigente, no sobre eliminar los otros dos.
 
-### DOC-06 — ¿Está el módulo de consentimiento (migraciones `073`-`084`) ya aplicado en producción?  [ABIERTA]
+### DOC-06 — ¿Está el módulo de consentimiento (migraciones `073`-`084`) ya aplicado en producción?  [DECIDIDA 2026-10-26]
 Contexto: `DOCUMENTO_FUNCIONALIDADES.md` sección 2.6 cita el estado de despliegue del módulo de
 consentimiento informado. `SECURITY_PRIVACY.md` (sección "Módulo de consentimiento informado")
 afirma que, al redactarse esa sección, el módulo (entonces migraciones `073`-`081`) **no** estaba
@@ -94,7 +94,14 @@ futura de este loop debería releer ese plan y actualizar `DOCUMENTO_FUNCIONALID
 en consecuencia.
 Documentos bloqueados: ninguno (el `[VERIFICAR]` queda marcado en el propio texto, no bloquea
 ninguna tarea de `TASKS.md`).
-Decisión:
+Decisión: en producción solo está aplicada la migración `073`. Las migraciones `074`-`084`, las
+Edge Functions del módulo, el panel administrativo nuevo (sección 14 de `MANUAL_ADMINISTRADOR.md`)
+y el frontend con su rediseño **aún no están desplegados**; se aplicarán en el release (ver
+`loop-consentimiento/PLAN_RELEASE_COMPLETO.md` en la rama `feature/consentimiento-lopdp`). Los
+documentos deben describir el módulo como **"implementado, pendiente de despliegue"** — nunca como
+ya desplegado ni como ausente. Acción concreta para una iteración futura: resolver el `[VERIFICAR]`
+de `DOCUMENTO_FUNCIONALIDADES.md` línea 131 ("Estado de despliegue") con esta misma frase, y revisar
+que ninguna tarea pendiente (`DOCS-07` a `DOCS-13`) describa el módulo como ya en producción.
 
 ### DOC-07 — ¿La revision de Cloud Run que corre hoy `cyberdojo` se construyo por buildpacks o por `frontend/Dockerfile`?  [ABIERTA]
 Contexto: `GUIA_LEVANTAMIENTO_PROYECTO.md` sección 15 afirmaba (desde 2026-09-09) que `frontend/`
@@ -113,7 +120,11 @@ activa con `gcloud run revisions list --service cyberdojo --region us-central1` 
 `[VERIFICAR]` de `GUIA_LEVANTAMIENTO_PROYECTO.md` sección 15 en consecuencia. No es crítico: el
 comportamiento (build y arranque) es el mismo en ambos casos.
 Documentos bloqueados: ninguno (el `[VERIFICAR]` queda marcado en el propio texto).
-Decisión:
+Decisión: sigue ABIERTA — no se verificó el historial real de revisiones de Cloud Run
+(`gcloud run revisions list --service cyberdojo --region us-central1`) en esta sesión; esta
+sesión interactiva de Fase 0 no ejecuta comandos contra infraestructura real. Queda para quien
+tenga acceso a la consola de Cloud Run/Cloud Build confirmar la fecha y actualizar el `[VERIFICAR]`
+de `GUIA_LEVANTAMIENTO_PROYECTO.md` sección 15.
 
 ---
 
