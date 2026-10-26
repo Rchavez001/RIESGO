@@ -79,3 +79,28 @@ persona responsable sobre el inventario y el backlog.
   A partir de ahí, la primera iteración real es responsabilidad de quien decida lanzar
   `LOOP=docs bash .claude/loops/consentimiento/run-loop.sh` (headless, fuera de esta sesión
   interactiva).
+
+## Iteración 1 — 2026-10-26 — DOCS-01 (`SUPABASE_VERIFICATION_QUERIES.sql`)
+- Cambios: `shield-ecuador-app/docs/SUPABASE_VERIFICATION_QUERIES.sql` (consulta 1, "Tablas
+  esperadas en public": se añadieron 28 tablas agrupadas por módulo, con comentario de qué
+  migración(es) las crea cada grupo; fecha de cabecera actualizada a 2026-10-26).
+- Verificado contra: `supabase/migrations/026_learning_progress.sql` (learning_dojos,
+  learning_items, learning_progress, learning_attempts), `018_campaign_ads_upgrade.sql`
+  (central_admin_campaign_settings, central_admin_campaign_audit), `020_campaign_sector_targeting.sql`
+  (campaign_impressions, app_entry_log), `030_campaign_donation_priority.sql`
+  (central_admin_campaign_tier_weights — la tarea citaba 018/020/021 para este grupo, pero esta
+  tabla específica se crea en 030; 021 solo la altera, no la crea), `052_security_center.sql`
+  (security_events, security_rate_limit_hits, security_alert_config, security_config_audit,
+  security_diagnosis_feedback), `054_security_center_phase3_4.sql` (security_diagnoses,
+  security_easm_findings, security_kata_drafts), `047_championship.sql` (championships,
+  championship_registrations, championship_matches, championship_match_attempts),
+  `073_consent_module_foundation.sql` (admin_roles, privacy_settings, consent_documents,
+  consent_records, admin_audit_log, data_subject_requests), `075_privacy_settings_versioning.sql`
+  (privacy_email_verifications), `078_data_subject_requests_case_numbers_and_status_update.sql`
+  (data_subject_request_counters), `079_email_transport_and_outbox.sql` (email_transport_settings,
+  email_transport_tests, email_outbox). Las 28 tablas verificadas confirmaron existir con
+  `CREATE TABLE public.<nombre>` real en el archivo citado.
+- [VERIFICAR] añadidos: ninguno — todas las tablas añadidas se confirmaron contra una migración
+  real; no se tocaron las consultas 2-26 (fuera del alcance literal de esta tarea, que solo pedía
+  ampliar la lista de tablas de la consulta 1).
+- Gates: OK.

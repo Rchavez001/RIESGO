@@ -9,7 +9,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
 
 ---
 
-- [ ] **DOCS-01 — Actualizar `shield-ecuador-app/docs/SUPABASE_VERIFICATION_QUERIES.sql`**
+- [x] **DOCS-01 — Actualizar `shield-ecuador-app/docs/SUPABASE_VERIFICATION_QUERIES.sql`**
   - Hoy solo lista ~20 tablas (hasta la migración ~016). Añadir, verificando cada nombre contra
     `supabase/migrations/` (82 archivos, hasta `084`): tablas de aprendizaje (`learning_dojos`,
     `learning_items`, `learning_progress`, `learning_attempts`, desde `026`), campañas/entradas

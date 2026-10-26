@@ -1,5 +1,5 @@
 -- Cyber Dojo - Consultas de verificacion Supabase
--- Fecha: 2026-08-27
+-- Fecha: 2026-10-26
 -- Uso: ejecutar en Supabase SQL Editor. Son consultas de solo lectura.
 -- Objetivo: confirmar que la base viva coincide con el repositorio.
 
@@ -38,7 +38,44 @@ where table_schema = 'public'
     'tpot_integration_settings',
     'tpot_query_audit',
     'tpot_ai_analysis_jobs',
-    'tpot_iocs_cache'
+    'tpot_iocs_cache',
+    -- Aprendizaje (modo guiado/cinturones) [026]
+    'learning_dojos',
+    'learning_items',
+    'learning_progress',
+    'learning_attempts',
+    -- Campañas y registro de entradas [018, 020, 030]
+    'central_admin_campaign_settings',
+    'central_admin_campaign_audit',
+    'central_admin_campaign_tier_weights',
+    'campaign_impressions',
+    'app_entry_log',
+    -- Centro de seguridad [052, 054]
+    'security_events',
+    'security_alert_config',
+    'security_config_audit',
+    'security_diagnoses',
+    'security_diagnosis_feedback',
+    'security_easm_findings',
+    'security_kata_drafts',
+    'security_rate_limit_hits',
+    -- Campeonato [047]
+    'championships',
+    'championship_registrations',
+    'championship_matches',
+    'championship_match_attempts',
+    -- Modulo de consentimiento informado (LOPDP) [073-079], ver BASE_DE_DATOS.md seccion 12
+    'admin_roles',
+    'privacy_settings',
+    'privacy_email_verifications',
+    'consent_documents',
+    'consent_records',
+    'admin_audit_log',
+    'data_subject_requests',
+    'data_subject_request_counters',
+    'email_transport_settings',
+    'email_transport_tests',
+    'email_outbox'
   )
 order by table_name;
 
