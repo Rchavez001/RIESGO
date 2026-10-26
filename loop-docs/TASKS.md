@@ -90,7 +90,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   - Depende de que DOCS-03/04 ya estén hechas (para enlazar a contenido ya actualizado, no al
     desactualizado) — ejecutar después de esas dos.
 
-- [ ] **DOCS-09 — Actualizar `MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md`**
+- [x] **DOCS-09 — Actualizar `MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md`**
   - Añadir una sección (sin reescribir las existentes) que aclare que, desde el módulo de
     consentimiento, el panel administrativo tiene una vía de autenticación individual con TOTP
     (`D-01` en `loop-consentimiento/DECISIONS.md`), distinta de la Basic Auth compartida que el

@@ -346,3 +346,38 @@ persona responsable sobre el inventario y el backlog.
   `shield-ecuador-app/docs/GUIA_OPERACION_CLUB.md`) son documentos futuros de tareas aún no
   ejecutadas (`DOCS-10`, `DOCS-11`, `DOCS-13`), ya citados así desde que se escribió el backlog —
   no son nuevos de esta iteración.
+
+## Iteración 9 — 2026-10-26 — DOCS-09 (`docs/MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md`)
+- Cambios: `shield-ecuador-app/docs/MANUAL_CIBERSEGURIDAD_IMPLEMENTACION.md` — sección nueva 4.4
+  ("Modulo de consentimiento: identidad individual con TOTP") añadida tras la sección 4.3 (RLS),
+  sin reescribir ninguna sección existente. Explica que el panel del módulo de consentimiento
+  (`/api/privacy/*`) usa login individual con Supabase Auth + TOTP (`aal2`) en vez de la Basic Auth
+  compartida descrita en 4.2, que el token que llega a `admin-consent` es el JWT del propio admin
+  (no el `service_role` del proxy del resto del panel, 3.3), y que los permisos vienen de
+  `admin_roles` en tres roles (`privacy_editor`, `privacy_admin`, `privacy_auditor`), remitiendo a
+  `SECURITY_PRIVACY.md` para el detalle de cada rol sin duplicarlo. Documento escrito sin tildes,
+  igual que el resto del archivo (estilo preexistente, no reescrito).
+- Verificado contra: `shield-ecuador-app/central-admin-app/app.js` líneas 6455-6629
+  (`privacyLoginForm`/`privacyEnroll`/`privacyLogin`/`privacyVerify`: login con
+  `/auth/token?grant_type=password`, alta TOTP vía `/auth/factors` con QR si no hay factor
+  verificado, `/auth/factors/{id}/verify` antes de aceptar el `access_token`, llamada a
+  `/fn/admin-consent/session` con ese token), `shield-ecuador-app/SECURITY_PRIVACY.md` líneas
+  173-205 (confirma `aal2`, los tres roles `privacy_editor`/`privacy_admin`/`privacy_auditor` en
+  `admin_roles`, y que el proxy con `service_role` de `central-admin-app` no se usa en estas rutas),
+  `loop-consentimiento/DECISIONS.md` D-01 (decisión de 2026-09-28: login individual con Supabase
+  Auth + TOTP en vez de SSO/IAP institucional, JWT del admin hacia `admin-consent`, roles desde
+  `admin_roles`).
+- [VERIFICAR] añadidos: ninguno — todo lo escrito se confirmó directamente contra el código y contra
+  `SECURITY_PRIVACY.md`/`DECISIONS.md` ya verificados en iteraciones previas.
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico ya documentado desde la Iteración 0b: `check_code_paths` resuelve rutas
+  solo desde la raíz del repo, así que todas las rutas preexistentes del documento
+  (`frontend/src`, `supabase/functions`, `supabase/migrations`, `docs/TPOT_INTEGRATION.md`,
+  `central-admin-app/server.js`, `central-admin-app/app.js`, `central-admin-app/tpotService.js`,
+  `frontend/src/components/VulnScanner`, `frontend/src/data/scanChecks.ts` — todas relativas a
+  `shield-ecuador-app/`, confirmadas reales con `ls shield-ecuador-app/<ruta>`) se marcan como
+  inexistentes, y la palabra `service_role` (líneas 37, 61, 106, preexistentes, y la línea nueva de
+  4.4) coincide con el patrón de `check_secrets` sin ser un secreto real, como ya se documentó en
+  las Iteraciones 3-8. Ninguna de las líneas señaladas por `rutas`/`secretos` es nueva de contenido
+  no verificado: todas ya estaban en el documento antes de esta iteración o repiten el mismo patrón
+  conceptual (`service_role` como nombre de rol, no un valor de secreto) ya aceptado.

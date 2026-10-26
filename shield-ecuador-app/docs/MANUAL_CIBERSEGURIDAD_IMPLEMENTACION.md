@@ -105,6 +105,12 @@ Patrones principales:
 - Admins pueden gestionar contenido, agentes, dojos, campanas, preguntas y datos T-Pot.
 - El `service_role` puede insertar auditorias y operar funciones privilegiadas.
 
+### 4.4 Modulo de consentimiento: identidad individual con TOTP
+
+El panel del modulo de consentimiento (rutas `/api/privacy/*` en `central-admin-app/app.js`, formularios `privacyLoginForm`/`privacyEnroll`) no usa la Basic Auth compartida de 4.2. Cada administrador inicia sesion con su propio correo y contrasena contra Supabase Auth y despues verifica un factor TOTP (alta con codigo QR si no tiene uno enrolado todavia). El panel exige el nivel `aal2` (TOTP verificado) antes de aceptar el token para las acciones del modulo; ese token es el JWT del propio administrador, no la `service_role` que usa el proxy del resto del panel (3.3).
+
+Los permisos se leen de `admin_roles` en tres roles: `privacy_editor`, `privacy_admin` y `privacy_auditor`. El detalle de que puede hacer cada rol esta en `SECURITY_PRIVACY.md` (raiz), seccion "Modulo de consentimiento informado"; no se duplica aqui.
+
 ## 5. Proteccion contra manipulacion de perfil
 
 La migracion `005_security_hardening.sql` agrega un trigger `prevent_user_security_field_tampering` sobre `users`.
