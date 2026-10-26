@@ -414,3 +414,18 @@ persona responsable sobre el inventario y el backlog.
   resuelve rutas solo desde la raíz del repo; ambas existen de verdad bajo `shield-ecuador-app/`,
   confirmado con `ls shield-ecuador-app/<ruta>`). No es contenido nuevo sin verificar: son las dos
   rutas centrales que sustentan el documento, ya verificadas por lectura directa antes de escribirlas.
+
+## Iteración 11 — 2026-10-26 — DOCS-11 (archivar `APLICACION_CINEMATICA_LOCAL.md`)
+- Cambios: `shield-ecuador-app/docs/archivo/APLICACION_CINEMATICA_LOCAL.md` (nuevo, contenido
+  idéntico al original más el aviso "Documento histórico, no vigente desde 2026-10-26" al inicio,
+  según decisión `DOC-02`); `shield-ecuador-app/docs/APLICACION_CINEMATICA_LOCAL.md` (eliminado, el
+  mismo archivo ya vive en `docs/archivo/`); `shield-ecuador-app/README.md` (quita la fila de
+  `docs/APLICACION_CINEMATICA_LOCAL.md` de la tabla 2.1 "Documentos vigentes" y añade la sección
+  2.3 nueva "Documentos archivados (`docs/archivo/`)" con la fila correspondiente);
+  `loop-docs/TASKS.md` (`DOCS-11` → `[x]`).
+- Verificado contra: `loop-docs/DECISIONS.md` `DOC-02` (texto exacto de la decisión: mover a
+  `docs/archivo/` con aviso "Documento histórico, no vigente desde <fecha>", sin reescribir el
+  resto del contenido) — no se verificó contenido técnico nuevo porque la tarea es solo mover el
+  archivo y añadir el aviso acordado, sin tocar el cuerpo.
+- [VERIFICAR] añadidos: ninguno.
+- Gates: `scope`, `enlaces`, `rutas`, `secretos`, `markdown` OK.

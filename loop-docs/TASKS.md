@@ -108,7 +108,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     como provisional, nunca como definitivo.
   - Verificar contra: el código citado arriba y `loop-consentimiento/DECISIONS.md` (D-12, D-16).
 
-- [ ] **DOCS-11 — Archivar `APLICACION_CINEMATICA_LOCAL.md`**
+- [x] **DOCS-11 — Archivar `APLICACION_CINEMATICA_LOCAL.md`**
   - Decisión `DOC-02`: mover a `shield-ecuador-app/docs/archivo/APLICACION_CINEMATICA_LOCAL.md`, con
     un aviso al inicio: "Documento histórico, no vigente desde 2026-10-26" (sin reescribir el resto
     del contenido). Actualizar el índice (DOCS-02) para reflejar la nueva ubicación.

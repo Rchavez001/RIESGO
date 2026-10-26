@@ -1,3 +1,5 @@
+> **Documento histórico, no vigente desde 2026-10-26.** (Decisión `DOC-02` en `loop-docs/DECISIONS.md`.)
+
 # ciberDojo · Aplicación cinematográfica local
 
 La versión de revisión se sirve en `http://localhost:3001`. Utiliza la aplicación React real y conserva sus servicios de autenticación, aprendizaje, consultas, ranking, diagnóstico y desafío al sensei. No se ha desplegado este diseño en Cloud Run ni modificado la base de datos durante esta revisión.
