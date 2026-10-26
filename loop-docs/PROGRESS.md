@@ -32,3 +32,34 @@ persona responsable sobre el inventario y el backlog.
   limpio de estos archivos de infraestructura (commiteados aparte, con rutas explícitas).
 - Pendiente para la persona responsable: aprobar `INVENTARIO.md` y `TASKS.md`; decidir DOC-01 a
   DOC-03; commitear (o pedir que se commitee) el diff de `run-loop.sh`.
+
+## Iteración 0b — 2026-10-26 — Fase 0 (ampliación de alcance, sesión interactiva)
+- La persona responsable aprobó el inventario y amplió el alcance: (a) `.md` de la raíz de
+  `shield-ecuador-app/`, no solo `docs/`; (b) fusión de la rama `docs/iso-y-privacidad`; (c) decidió
+  DOC-01/02/03.
+- Cambios: fusión `git merge docs/iso-y-privacidad --no-ff` (sin conflictos); ampliación de
+  `loop-docs/INVENTARIO.md` (puntos 14-32: 8 `.md` de la raíz + 2 archivos nuevos de la fusión + 7
+  documentos controlados + vault + script fuera de alcance); `loop-docs/DECISIONS.md` (DOC-01/02/03
+  → DECIDIDA; DOC-04 y DOC-05 nuevas, ABIERTA); `.claude/loops/docs/PROMPT.md` y
+  `.claude/loops/docs/gates.sh` (alcance ampliado a los `.md` de la raíz, excluye `vault/`,
+  `manual-central-admin.html` y `scripts/`); `loop-docs/TASKS.md` reescrito completo, 15 tareas en
+  el orden que fijó la persona responsable; `loop-docs/propuestas/` (placeholder, para las
+  propuestas de documentos controlados que pida DOCS-14).
+- Verificado contra: `supabase/migrations/` (82 archivos, hasta `084`), `supabase/functions/` (33
+  carpetas), `App.tsx`, `GUIA_LEVANTAMIENTO_PROYECTO.md` (se confirmó que su propio commit T98 no
+  corrigió el conteo de migraciones/Edge Functions, a pesar de la fecha reciente).
+- [VERIFICAR] añadidos: ninguno nuevo (DOC-04/DOC-05 son decisiones de alcance, no afirmaciones
+  técnicas sin verificar).
+- Gates: `bash .claude/loops/docs/gates.sh --selftest` — los casos de la puerta `scope` para
+  `.md` de la raíz y árbol limpio reportan FAIL mientras los archivos de infraestructura de esta
+  misma iteración (PROMPT.md, gates.sh, run-loop.sh) sigan sin commitear — **esperado**, mismo caso
+  que la Iteración 0. La puerta `rutas` también reporta falsos positivos sobre `INVENTARIO.md`/
+  `DECISIONS.md` porque citan nombres de rama (`docs/iso-y-privacidad`, `wip/ux-redesign`) y rutas
+  abreviadas relativas a `shield-ecuador-app/` entre backticks, que la heurística de `check_code_paths`
+  resuelve solo desde la raíz del repo — limitación conocida y documentada en el propio `gates.sh`
+  ("heurística, no exhaustiva a propósito"), no un error introducido ahora. La puerta `secretos`
+  también se autodetecta en `gates.sh` (su propio patrón de búsqueda contiene las palabras
+  "password"/"service_role") mientras el archivo esté "cambiado"; deja de pasar por la puerta en
+  cuanto se commitea (las iteraciones normales nunca pueden editarlo, está en `headless-settings.json`).
+- Pendiente para la persona responsable: revisar `TASKS.md` final y el diff de `run-loop.sh`; decidir
+  DOC-04 y DOC-05 (no bloquean ninguna tarea todavía); dar el OK antes de ejecutar cualquier tarea.
