@@ -19,12 +19,12 @@ Componentes principales:
 
 - `frontend/`: aplicacion React + TypeScript de usuario (Cloud Run `cyberdojo`).
 - `central-admin-app/`: consola de administracion, Node.js sin dependencias de npm (Cloud Run `cyberdojo-admin`). No estaba documentada en esta guia hasta esta revision — ver seccion 10-bis mas abajo.
-- `supabase/migrations/`: estructura de base de datos, RLS, datos iniciales y hardening (21 migraciones, `001` a `021` a la fecha de esta revision — ver `BASE_DE_DATOS.md` para el detalle tabla por tabla).
-- `supabase/functions/`: 14 Edge Functions de Supabase.
+- `supabase/migrations/`: estructura de base de datos, RLS, datos iniciales y hardening (82 archivos reales a la fecha de esta revision, `001` a `084`, con huecos en `023` y `033` — ver `BASE_DE_DATOS.md` para el detalle tabla por tabla de las primeras 21 y su seccion 12 para el modulo de consentimiento).
+- `supabase/functions/`: 33 Edge Functions de Supabase (sin contar la carpeta `_shared`, que no es una funcion desplegable).
 - `SETUP.md`: guia corta previa.
 - `GUIA_LEVANTAMIENTO_PROYECTO.md`: este instructivo detallado.
 
-Las 14 funciones Supabase incluidas (ver `ARQUITECTURA_CYBER_DOJO.md` seccion 5 para saber cual app invoca a cada una):
+Las primeras 14 funciones Supabase que tuvo el proyecto (ver `ARQUITECTURA_CYBER_DOJO.md` seccion 5 para la lista completa de las 33 y saber cual app invoca a cada una):
 
 - `calculate-risk`: calcula y guarda el resultado de riesgo.
 - `complete-kata`: evalua katas en servidor, registra puntos y actualiza cinturon.
@@ -40,6 +40,16 @@ Las 14 funciones Supabase incluidas (ver `ARQUITECTURA_CYBER_DOJO.md` seccion 5 
 - `run-daily-agent-workflows`: dispatcher diario de agentes (mismo caso: sin invocacion desde las apps).
 - `migrate-user-pii`: migracion por lotes de datos personales en claro a cifrados (uso manual, ver `SECURITY_PRIVACY.md`).
 - `backfill-email-domains`: rellena `users.email_domain` para el ranking (migracion 014, uso manual/una vez).
+
+Las otras 19 funciones (anadidas despues de la primera version de esta guia, migraciones `026` en
+adelante) pertenecen a los modulos de aprendizaje, campeonato, centro de seguridad, agente de
+noticias y consentimiento informado: `accept-guest-notice`, `admin-consent`,
+`championship-draw-round1`, `check-security-alerts`, `fix-learning-item-balance`,
+`get-consent-notice`, `import-question-bank`, `log-login-event`, `quiz-generator`,
+`request-data-subject-right`, `run-news-agent`, `save-app-secret`, `save-provider-key`,
+`save-security-alert-config`, `security-diagnose`, `security-easm-scan`, `security-kata-convert`,
+`submit-consent`, `update-my-consent`. Ver `ARQUITECTURA_CYBER_DOJO.md` seccion 5 para que invoca a
+cada una.
 
 ## 2. Requisitos previos
 
@@ -208,7 +218,10 @@ Esto aplica los archivos en:
 supabase/migrations/
 ```
 
-Orden esperado (21 migraciones a la fecha de esta revision; ver `BASE_DE_DATOS.md` para el contenido detallado de cada una):
+Orden esperado (82 archivos reales a la fecha de esta revision, `001` a `084` con huecos en `023` y
+`033` — nunca se llegaron a crear esos dos numeros, no es un error de esta lista; ver
+`BASE_DE_DATOS.md` para el contenido detallado de las primeras 21 y su seccion 12 para el modulo de
+consentimiento, `073` a `084`):
 
 ```text
 001_initial_schema.sql
@@ -232,6 +245,67 @@ Orden esperado (21 migraciones a la fecha de esta revision; ver `BASE_DE_DATOS.m
 019_business_sectors_occupations.sql
 020_campaign_sector_targeting.sql
 021_campaign_impressions_sector.sql
+022_security_hardening_rls.sql
+024_content_generation_rules.sql
+025_belt_exam_kata_fifth_case.sql
+026_learning_progress.sql
+027_learning_bank_seed.sql
+028_learning_bank_option_cleanup.sql
+029_sensei_challenge_minigame.sql
+030_campaign_donation_priority.sql
+031_news_agent_sources_and_report.sql
+032_news_agent_gemini_provider.sql
+034_ai_provider_vault_keys.sql
+035_ai_provider_admin_policies.sql
+036_vault_set_provider_secret.sql
+037_try_pg_cron.sql
+038_verify_pg_cron.sql
+039_try_pg_net.sql
+040_news_agent_pg_cron_dispatcher.sql
+041_verify_cron_job.sql
+042_agent_runs_partial_status.sql
+043_set_provider_secret_self_heal.sql
+044_sync_news_questions_to_learning_items.sql
+045_fix_sync_options_array_type.sql
+046_news_agent_uploads_bucket.sql
+047_championship.sql
+048_app_secrets.sql
+049_championship_match_rpcs.sql
+050_lock_championship_internal_fns.sql
+051_fix_championship_difficulty_source.sql
+052_security_center.sql
+053_rate_limit_rpc.sql
+054_security_center_phase3_4.sql
+055_security_center_jobs.sql
+056_list_storage_buckets_rpc.sql
+057_questions_source_type_incident_kata.sql
+058_learning_state_guest_fix.sql
+059_learning_state_hide_answer_until_answered.sql
+060_sensei_consultations_column_grants.sql
+061_minigame_check_only_served_questions.sql
+062_championship_messages_guests_opponent.sql
+063_championship_clock_integrity.sql
+064_championship_start_match_total.sql
+065_admin_dojo_stats.sql
+066_admin_sensei_topics.sql
+067_admin_user_summary.sql
+068_campaign_ads_hardening.sql
+069_question_answer_length_parity.sql
+070_question_bank_importer_agent.sql
+071_question_moodle_rules.sql
+072_learning_item_rebalancer_agent.sql
+073_consent_module_foundation.sql
+074_consent_evidence_unlink_and_stable_hash.sql
+075_privacy_settings_versioning.sql
+076_learning_guest_limit.sql
+077_consent_documents_no_gap_on_retire.sql
+078_data_subject_requests_case_numbers_and_status_update.sql
+079_email_transport_and_outbox.sql
+080_publish_consent_document_atomic.sql
+081_fix_digest_schema_qualification.sql
+082_confirm_privacy_email_change_atomic.sql
+083_guest_consent_notice_and_session_expiry.sql
+084_consent_records_legacy_ip_hmac_nullable.sql
 ```
 
 Si falla una migracion:
@@ -485,6 +559,13 @@ $rng.GetBytes($bytes)
 $rng.Dispose()
 ```
 
+**Nota sobre TOTP:** el segundo factor del acceso individual al panel de consentimiento (ver
+`MANUAL_ADMINISTRADOR.md` seccion 14 y `SECURITY_PRIVACY.md`) no tiene un secret propio que
+configurar aqui — es el MFA nativo de Supabase Auth (`supabase.auth.mfa.enroll`, llamado desde
+`central-admin-app/app.js`, funcion `privacyEnroll`): cada administrador genera su propio secreto
+TOTP al enrolar su cuenta desde la pantalla de la app, y Supabase lo guarda asociado a esa cuenta.
+No hay ningun `supabase secrets set` ni variable de entorno para esto.
+
 Verifica secrets:
 
 ```bash
@@ -510,12 +591,33 @@ supabase functions deploy audit-generated-questions
 supabase functions deploy run-daily-agent-workflows
 supabase functions deploy migrate-user-pii
 supabase functions deploy backfill-email-domains
+# Las 19 funciones de aprendizaje, campeonato, centro de seguridad, agente de noticias y
+# consentimiento informado (ver seccion 1):
+supabase functions deploy accept-guest-notice
+supabase functions deploy admin-consent
+supabase functions deploy championship-draw-round1
+supabase functions deploy check-security-alerts
+supabase functions deploy fix-learning-item-balance
+supabase functions deploy get-consent-notice
+supabase functions deploy import-question-bank
+supabase functions deploy log-login-event
+supabase functions deploy quiz-generator
+supabase functions deploy request-data-subject-right
+supabase functions deploy run-news-agent
+supabase functions deploy save-app-secret
+supabase functions deploy save-provider-key
+supabase functions deploy save-security-alert-config
+supabase functions deploy security-diagnose
+supabase functions deploy security-easm-scan
+supabase functions deploy security-kata-convert
+supabase functions deploy submit-consent
+supabase functions deploy update-my-consent
 ```
 
 Tambien puedes desplegarlas todas con un script manual:
 
 ```bash
-for fn in calculate-risk complete-kata secure-register-user get-private-profile ask-sensei get-ranking vuln-scanner-ai generate-recommendations analyze-email run-incident-investigator audit-generated-questions run-daily-agent-workflows migrate-user-pii backfill-email-domains; do
+for fn in calculate-risk complete-kata secure-register-user get-private-profile ask-sensei get-ranking vuln-scanner-ai generate-recommendations analyze-email run-incident-investigator audit-generated-questions run-daily-agent-workflows migrate-user-pii backfill-email-domains accept-guest-notice admin-consent championship-draw-round1 check-security-alerts fix-learning-item-balance get-consent-notice import-question-bank log-login-event quiz-generator request-data-subject-right run-news-agent save-app-secret save-provider-key save-security-alert-config security-diagnose security-easm-scan security-kata-convert submit-consent update-my-consent; do
   supabase functions deploy "$fn"
 done
 ```
@@ -537,7 +639,26 @@ $functions = @(
   "audit-generated-questions",
   "run-daily-agent-workflows",
   "migrate-user-pii",
-  "backfill-email-domains"
+  "backfill-email-domains",
+  "accept-guest-notice",
+  "admin-consent",
+  "championship-draw-round1",
+  "check-security-alerts",
+  "fix-learning-item-balance",
+  "get-consent-notice",
+  "import-question-bank",
+  "log-login-event",
+  "quiz-generator",
+  "request-data-subject-right",
+  "run-news-agent",
+  "save-app-secret",
+  "save-provider-key",
+  "save-security-alert-config",
+  "security-diagnose",
+  "security-easm-scan",
+  "security-kata-convert",
+  "submit-consent",
+  "update-my-consent"
 )
 
 foreach ($fn in $functions) {
@@ -667,13 +788,32 @@ Puedes usar otra region si el proyecto ya tiene una definida.
 
 ## 15. Despliegue en Cloud Run
 
-**Correccion importante verificada en esta revision:** el servicio real `cyberdojo` en produccion **no usa Dockerfile ni Nginx** (no existe ningun `Dockerfile` en `frontend/`, verificado). Usa el mecanismo de buildpacks de Cloud Build al ejecutar `gcloud run deploy --source .` sin Dockerfile presente: Cloud Build detecta el script `"gcp-build": "npm run build"` de `frontend/package.json` para compilar, y luego ejecuta `"start": "node static-server.js"` como servidor de produccion — un servidor Node minimalista sin dependencias que ademas actua como proxy hacia `cyberdojo-admin` para las rutas `/admin/*` y `/api/*` (ver `ARQUITECTURA_CYBER_DOJO.md` seccion 2). Ese comando de despliegue por buildpacks es el que aparece en la seccion 22 "Comandos rapidos de referencia" de esta misma guia. La Opcion A de abajo (Dockerfile con Nginx) es una alternativa valida pero **no es la que usa la produccion actual**, y si se usa, hay que portar manualmente la logica de proxy `/admin`+`/api` a la configuracion de Nginx o se pierde el acceso al panel admin desde el mismo dominio.
+**Correccion importante verificada en esta revision (reemplaza una afirmacion desactualizada desde
+2026-09-09):** esta guia decia que `frontend/` **no tenia** `Dockerfile` y que la produccion se
+desplegaba por buildpacks de Cloud Build. Eso dejo de ser cierto el 2026-09-28 (commit `217140f`):
+hoy **si existe** `frontend/Dockerfile` (build multistage `node:20-alpine`, compila con `npm run
+build` tomando `REACT_APP_SUPABASE_URL`/`REACT_APP_SUPABASE_ANON_KEY` como build-args, y en la
+imagen final corre `node static-server.js` en el puerto `8080` — el mismo servidor minimalista que
+antes arrancaba por buildpacks, con la misma logica de proxy hacia `cyberdojo-admin` para
+`/admin/*` y `/api/*`, ver `ARQUITECTURA_CYBER_DOJO.md` seccion 2). Como Cloud Build prioriza un
+`Dockerfile` presente en el codigo fuente sobre los buildpacks, cualquier despliegue nuevo con
+`gcloud run deploy --source .` desde `frontend/` construira con este Dockerfile, no con buildpacks.
+`[VERIFICAR]`: no se pudo confirmar en esta revision si la revision de Cloud Run que esta corriendo
+hoy en produccion se desplego antes o despues del 2026-09-28 (es decir, si quedo construida por
+buildpacks o por este Dockerfile) — no cambia el comportamiento (mismo build, mismo arranque,
+mismo proxy), pero se deja marcado porque no se verifico contra el historial real de revisiones de
+Cloud Run (ver `DOC-07` en `loop-docs/DECISIONS.md`). La Opcion A de abajo (Dockerfile con Nginx)
+sigue siendo una alternativa distinta a la de arriba — no es el `Dockerfile` que hoy existe en el
+repositorio.
 
 ### Opcion A: desplegar imagen Docker con Nginx
 
-Alternativa valida, pero **no es la que usa la produccion actual** (ver nota arriba). Requiere agregar el proxy `/admin` y `/api` manualmente a la configuracion de Nginx si se quiere mantener paridad con produccion.
+Alternativa hipotetica, distinta del `Dockerfile` real que ya existe en `frontend/` (ver nota
+arriba) — este ejemplo usa Nginx, el real usa `node static-server.js`. Si se migrara a esta opcion
+Nginx, hay que agregar el proxy `/admin` y `/api` manualmente a su configuracion, porque Nginx no
+sirve `static-server.js`.
 
-En `frontend/`, crea un archivo llamado `Dockerfile` si no existe:
+Esto reemplazaria el `Dockerfile` que ya existe en `frontend/` por esta version con Nginx:
 
 ```dockerfile
 FROM node:20-alpine AS build
@@ -791,16 +931,15 @@ gcloud run deploy cyberdojo-admin \
   --allow-unauthenticated
 ```
 
-Variables de entorno requeridas en el servicio (configuralas en Cloud Run, no en archivos versionados):
+Variables de entorno requeridas en el servicio (configuralas en Cloud Run, no en archivos versionados; nombres confirmados en esta revision contra `central-admin-app/server.js` lineas 9-15 y `central-admin-app/.env.example` — la version anterior de esta guia tenia nombres distintos a los reales):
 
 ```text
 SUPABASE_URL=https://wbbcjiqzbzswxsmwjqlw.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service role key>
-ADMIN_BASIC_AUTH_USER=<usuario para HTTP Basic Auth>
-ADMIN_BASIC_AUTH_PASSWORD=<password para HTTP Basic Auth>
+SUPABASE_ANON_KEY=<anon key publica, usada solo por las rutas /api/privacy/* del modulo de consentimiento>
+CENTRAL_ADMIN_USER=<usuario para HTTP Basic Auth>
+CENTRAL_ADMIN_PASSWORD=<password para HTTP Basic Auth>
 ```
-
-(Nombres exactos de variables a confirmar contra `central-admin-app/server.js` y `.env.example` si difieren — no se transcriben aqui los valores reales de produccion por tratarse de credenciales.)
 
 El servicio `cyberdojo` (frontend) necesita saber a donde reenviar `/admin` y `/api`; por defecto usa `cyberdojo-admin-61855290194.us-central1.run.app` (hardcodeado como valor por defecto en `frontend/static-server.js`), pero se puede sobreescribir con la variable de entorno `ADMIN_UPSTREAM_HOST` en el servicio `cyberdojo` si el admin se redespliega con otra URL.
 
@@ -1061,6 +1200,25 @@ supabase functions deploy audit-generated-questions
 supabase functions deploy run-daily-agent-workflows
 supabase functions deploy migrate-user-pii
 supabase functions deploy backfill-email-domains
+supabase functions deploy accept-guest-notice
+supabase functions deploy admin-consent
+supabase functions deploy championship-draw-round1
+supabase functions deploy check-security-alerts
+supabase functions deploy fix-learning-item-balance
+supabase functions deploy get-consent-notice
+supabase functions deploy import-question-bank
+supabase functions deploy log-login-event
+supabase functions deploy quiz-generator
+supabase functions deploy request-data-subject-right
+supabase functions deploy run-news-agent
+supabase functions deploy save-app-secret
+supabase functions deploy save-provider-key
+supabase functions deploy save-security-alert-config
+supabase functions deploy security-diagnose
+supabase functions deploy security-easm-scan
+supabase functions deploy security-kata-convert
+supabase functions deploy submit-consent
+supabase functions deploy update-my-consent
 ```
 
 Desde `frontend/`:

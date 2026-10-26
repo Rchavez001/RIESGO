@@ -187,3 +187,51 @@ persona responsable sobre el inventario y el backlog.
   frase de la intro antes de este cambio; `public/sw.js` en la sección 2.3, no tocada; el nombre de
   rama `docs/iso-y-privacidad` en `DECISIONS.md`, ya documentado como falso positivo desde la
   Iteración 0b) — mismo patrón de limitación del heurístico ya registrado en las Iteraciones 0b y 3.
+
+## Iteración 5 — 2026-10-26 — DOCS-05 (`GUIA_LEVANTAMIENTO_PROYECTO.md`)
+- Cambios: `shield-ecuador-app/GUIA_LEVANTAMIENTO_PROYECTO.md` — conteo de migraciones corregido de
+  "21... `001` a `021`" al real ("82 archivos... `001` a `084`, con huecos en `023` y `033`") en la
+  sección 1 y en la lista "Orden esperado" de la sección 4.2 (reemplazada por los 82 nombres de
+  archivo reales); conteo de Edge Functions corregido de "14" a "33" en la sección 1, con nota de
+  que las primeras 14 siguen descritas una por una y las 19 nuevas (aprendizaje, campeonato, centro
+  de seguridad, agente de noticias, consentimiento) se listan por nombre con referencia a
+  `ARQUITECTURA_CYBER_DOJO.md` sección 5 para el detalle de quién invoca a cada una; las listas de
+  despliegue de funciones (bash, bucle `for`, array de PowerShell) en la sección 10 y el bloque de
+  la sección 22 ampliadas de 14 a las 33 funciones reales (si no, la guía quedaba operativamente
+  incompleta: alguien que la siguiera no desplegaría 19 funciones que el propio documento ya dice
+  que existen). Añadida una nota en la sección 9 aclarando que el TOTP del panel de consentimiento
+  no tiene secreto propio que configurar (es MFA nativo de Supabase Auth, enrolado por cada admin
+  desde la app) — las claves de cifrado/HMAC que pedía la tarea (`PII_ENCRYPTION_KEY_B64`,
+  `SECURITY_EVENTS_HMAC_KEY`, `LOOKUP_HMAC_KEY_B64`) ya estaban documentadas desde un commit previo
+  (T98.d, 2026-10-23), no se duplicaron. Corregida además, al verificar línea por línea como pide la
+  nota de la propia tarea, una afirmación de la sección 15 que ya no era cierta: la guía decía desde
+  2026-09-09 que `frontend/` no tenía `Dockerfile` y que producción usaba buildpacks; el commit
+  `217140f` (2026-09-28) añadió `frontend/Dockerfile` (build multistage que termina en
+  `node static-server.js`, no Nginx) sin que ninguna revisión posterior de esta guía lo detectara.
+  Corregidos también, en la sección 16-bis, los nombres de variables de entorno de
+  `central-admin-app` (decía `ADMIN_BASIC_AUTH_USER`/`ADMIN_BASIC_AUTH_PASSWORD`; los reales son
+  `CENTRAL_ADMIN_USER`/`CENTRAL_ADMIN_PASSWORD`) y se añadió `SUPABASE_ANON_KEY`, que faltaba por
+  completo y es obligatoria para las rutas `/api/privacy/*` del módulo de consentimiento.
+- Verificado contra: `shield-ecuador-app/supabase/migrations/` (listado real: 82 archivos, huecos en
+  `023` y `033`), `shield-ecuador-app/supabase/functions/` (listado real: 33 carpetas sin
+  `_shared`), `ARQUITECTURA_CYBER_DOJO.md` sección 5 (nombres y conteo ya corregidos en la
+  Iteración 3), `shield-ecuador-app/central-admin-app/app.js` (función `privacyEnroll`, MFA de
+  Supabase Auth, línea ~6536), `MANUAL_ADMINISTRADOR.md` sección 14 y `SECURITY_PRIVACY.md`
+  (confirmación de que el TOTP es MFA de Supabase, no un secreto de aplicación),
+  `shield-ecuador-app/frontend/Dockerfile` (existencia real, contenido literal),
+  `git log --follow -- GUIA_LEVANTAMIENTO_PROYECTO.md` y `git log --follow -- frontend/Dockerfile`
+  (commit `217140f`, 2026-09-28, posterior a la última vez que esta afirmación se escribió,
+  2026-09-09, commit `f1282be`), `shield-ecuador-app/central-admin-app/server.js` líneas 9-15
+  (`CENTRAL_ADMIN_USER`, `CENTRAL_ADMIN_PASSWORD`, `SUPABASE_ANON_KEY`),
+  `shield-ecuador-app/central-admin-app/.env.example` (mismas variables confirmadas).
+- [VERIFICAR] añadidos: 1 — si la revisión de Cloud Run activa hoy en producción para `cyberdojo` se
+  construyó antes o después del 2026-09-28 (buildpacks vs. el `Dockerfile` real), porque no se tiene
+  acceso al historial de revisiones de Cloud Run desde este loop (ver `DOC-07` en `DECISIONS.md`).
+  No afecta el comportamiento descrito (mismo build, mismo arranque).
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico ya documentado en las Iteraciones 0b/3/4 (resuelve rutas solo desde la
+  raíz del repo, así que `frontend/Dockerfile`, `central-admin-app/server.js`, etc. — todas rutas
+  relativas a `shield-ecuador-app/`, confirmadas reales con `ls shield-ecuador-app/<ruta>` — se
+  marcan como inexistentes; y la frase genérica "service_role key" en notas de seguridad coincide
+  con el patrón de `check_secrets` sin ser un secreto real). `docs/iso-y-privacidad` en
+  `DECISIONS.md` es el mismo falso positivo ya registrado desde la Iteración 0b.

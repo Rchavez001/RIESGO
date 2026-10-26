@@ -57,7 +57,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
   - Verificar contra: `supabase/migrations/`, `SECURITY_PRIVACY.md`, `MANUAL_ADMINISTRADOR.md`
     sección 14.
 
-- [ ] **DOCS-05 — Actualizar `GUIA_LEVANTAMIENTO_PROYECTO.md` (raíz)**
+- [x] **DOCS-05 — Actualizar `GUIA_LEVANTAMIENTO_PROYECTO.md` (raíz)**
   - Corrige "21 migraciones... `001` a `021`" (línea 22) y "14 Edge Functions" (línea 23), y la lista
     de "Orden esperado" (línea 211), al estado real. Añade las variables de entorno nuevas del módulo
     de consentimiento (claves de cifrado, secreto TOTP, HMAC de IP) a la sección de arranque.

@@ -96,6 +96,25 @@ Documentos bloqueados: ninguno (el `[VERIFICAR]` queda marcado en el propio text
 ninguna tarea de `TASKS.md`).
 Decisión:
 
+### DOC-07 — ¿La revision de Cloud Run que corre hoy `cyberdojo` se construyo por buildpacks o por `frontend/Dockerfile`?  [ABIERTA]
+Contexto: `GUIA_LEVANTAMIENTO_PROYECTO.md` sección 15 afirmaba (desde 2026-09-09) que `frontend/`
+no tenía `Dockerfile` y que la producción se desplegaba por buildpacks de Cloud Build. Al verificar
+en esta iteración (DOCS-05) se encontró que el commit `217140f` (2026-09-28) añadió
+`frontend/Dockerfile` — un build multistage `node:20-alpine` que termina ejecutando
+`node static-server.js`, igual que hacían los buildpacks. Cloud Build prioriza un `Dockerfile`
+presente sobre los buildpacks, así que cualquier despliegue nuevo usará ese `Dockerfile`. No se
+pudo confirmar si la revisión actualmente activa en Cloud Run (`cyberdojo`) se desplegó antes o
+después del 2026-09-28 — eso requiere revisar el historial de revisiones en la consola de Cloud Run
+o `gcloud run revisions list --service cyberdojo`, fuera del alcance de este loop de documentación
+(no se ejecutan comandos contra infraestructura real).
+Opciones: no aplica — es una pregunta de estado operativo, no una decisión de alcance.
+Recomendación: quien tenga acceso a la consola de Cloud Run puede confirmar la fecha de la revisión
+activa con `gcloud run revisions list --service cyberdojo --region us-central1` y actualizar la nota
+`[VERIFICAR]` de `GUIA_LEVANTAMIENTO_PROYECTO.md` sección 15 en consecuencia. No es crítico: el
+comportamiento (build y arranque) es el mismo en ambos casos.
+Documentos bloqueados: ninguno (el `[VERIFICAR]` queda marcado en el propio texto).
+Decisión:
+
 ---
 
 ## Formato para nuevas entradas
