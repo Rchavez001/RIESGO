@@ -159,3 +159,31 @@ persona responsable sobre el inventario y el backlog.
   los ~40 enlaces preexistentes del documento para evitar este falso positivo habría significado
   reescribir casi todo el archivo por una limitación conocida del heurístico, fuera del alcance de
   DOCS-03.
+
+## Iteración 4 — 2026-10-26 — DOCS-04 (`DOCUMENTO_FUNCIONALIDADES.md`)
+- Cambios: `shield-ecuador-app/DOCUMENTO_FUNCIONALIDADES.md` — conteo de migraciones corregido de
+  "`001` a `021`" al real ("82 archivos reales... de `001` a `084`, con huecos en `023` y `033`") en
+  la intro y en la sección 2.5; sección 2.6 ("Cumplimiento y privacidad") ampliada con cuatro puntos
+  nuevos sobre el módulo de consentimiento (migraciones `073`-`084`): re-consentimiento (REQ-09,
+  `ReconsentGate.tsx`), modo invitado (`GuestNoticeModal.tsx`, texto marcado PROVISIONAL), panel
+  admin con TOTP individual (frente a la Basic Auth compartida del resto del panel), y derechos ARCO
+  ejercibles desde `/privacidad` (`PrivacyPage.tsx`, 9 tipos de solicitud). `loop-docs/DECISIONS.md`
+  — nueva entrada `DOC-06` (ABIERTA): el estado real de despliegue en producción del módulo de
+  consentimiento no se reverificó en esta iteración (la última afirmación conocida, en
+  `SECURITY_PRIVACY.md`, es anterior a las migraciones `082`-`084`); el texto de
+  `DOCUMENTO_FUNCIONALIDADES.md` queda marcado `[VERIFICAR]` en vez de afirmarlo como hecho.
+- Verificado contra: `shield-ecuador-app/supabase/migrations/` (listado real: 82 archivos, `001` a
+  `084`, sin `023` ni `033`), `MANUAL_ADMINISTRADOR.md` sección 14 (candados de rol, acceso
+  individual con TOTP, runbook de solicitudes de derechos), `SECURITY_PRIVACY.md` (sección "Módulo de
+  consentimiento informado (LOPDP)"), `frontend/src/components/ReconsentGate.tsx` (REQ-09,
+  `requires_reconsent`), `frontend/src/components/GuestNoticeModal.tsx` (texto literal "[PENDIENTE DE
+  VALIDACIÓN LEGAL]"), `frontend/src/screens/PrivacyPage.tsx` (`REQUEST_TYPE_LABELS`, 9 valores de
+  `request_type`), `central-admin-app/app.js` (líneas 6456-6613, `privacyLoginForm`/`privacyEnroll`,
+  TOTP).
+- [VERIFICAR] añadidos: 1 — estado de despliegue en producción del módulo de consentimiento (ver
+  `DOC-06` en `DECISIONS.md`).
+- Gates: `scope`, `enlaces`, `secretos`, `markdown` OK. `rutas` reporta FAIL, pero por líneas
+  **preexistentes, no tocadas en esta iteración** (`central-admin-app/app.js` ya citado en la misma
+  frase de la intro antes de este cambio; `public/sw.js` en la sección 2.3, no tocada; el nombre de
+  rama `docs/iso-y-privacidad` en `DECISIONS.md`, ya documentado como falso positivo desde la
+  Iteración 0b) — mismo patrón de limitación del heurístico ya registrado en las Iteraciones 0b y 3.

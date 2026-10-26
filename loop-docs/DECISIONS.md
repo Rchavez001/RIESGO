@@ -80,6 +80,22 @@ general (`README.md`, DOCS-02) debe listar `manual-central-admin.html` y
 remitiendo a `MANUAL_ADMINISTRADOR.md`. No se fusionan ni se reescriben en esta ronda — la decisión
 es solo sobre cuál es la referencia vigente, no sobre eliminar los otros dos.
 
+### DOC-06 — ¿Está el módulo de consentimiento (migraciones `073`-`084`) ya aplicado en producción?  [ABIERTA]
+Contexto: `DOCUMENTO_FUNCIONALIDADES.md` sección 2.6 cita el estado de despliegue del módulo de
+consentimiento informado. `SECURITY_PRIVACY.md` (sección "Módulo de consentimiento informado")
+afirma que, al redactarse esa sección, el módulo (entonces migraciones `073`-`081`) **no** estaba
+aplicado en producción, remitiendo a `loop-consentimiento/PLAN_PRODUCCION_RELEASE.md`. No se
+verificó en esta iteración si ese plan ya se ejecutó, ni si las migraciones `082`-`084` (añadidas
+después de esa redacción) cambian la conclusión.
+Opciones: no aplica — es una pregunta de estado operativo, no una decisión de alcance.
+Recomendación: quien tenga acceso al proyecto Supabase de producción (o al estado de
+`loop-consentimiento/PLAN_PRODUCCION_RELEASE.md`) puede confirmar el estado actual; una iteración
+futura de este loop debería releer ese plan y actualizar `DOCUMENTO_FUNCIONALIDADES.md` sección 2.6
+en consecuencia.
+Documentos bloqueados: ninguno (el `[VERIFICAR]` queda marcado en el propio texto, no bloquea
+ninguna tarea de `TASKS.md`).
+Decisión:
+
 ---
 
 ## Formato para nuevas entradas

@@ -49,7 +49,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     `central-admin-app`") — el panel de consentimiento sí llama `admin-consent`.
   - Verificar contra: `supabase/functions/` (listado real), `MANUAL_ADMINISTRADOR.md` sección 14.
 
-- [ ] **DOCS-04 — Actualizar `DOCUMENTO_FUNCIONALIDADES.md` (raíz)**
+- [x] **DOCS-04 — Actualizar `DOCUMENTO_FUNCIONALIDADES.md` (raíz)**
   - Corrige "Migraciones... (`001` a `021`)" (línea 119) al conteo real (82, hasta `084`). Amplía la
     sección 2.6 ("Cumplimiento y privacidad") para reflejar el módulo de consentimiento completo
     (re-consentimiento, modo invitado, panel admin con TOTP, derechos ARCO ejercibles desde

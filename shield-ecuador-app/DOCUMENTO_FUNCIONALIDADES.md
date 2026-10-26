@@ -1,6 +1,6 @@
 # Requisitos Funcionales y No Funcionales — Ciber Dojo
 
-Actualización completa de este documento, que en su versión anterior (commit del 2026-08-27) reflejaba el estado del sistema anterior a las migraciones 016-021 de Supabase y no cubría el panel de administración en detalle. Todo lo que sigue está verificado contra el código fuente actual — migraciones `001` a `021`, `frontend/src/`, `central-admin-app/app.js` e `index.html` — con referencias cruzadas a `BASE_DE_DATOS.md`, `ARQUITECTURA_CYBER_DOJO.md`, `MANUAL_ADMINISTRADOR.md` y `MANUAL_USUARIO_CYBER_DOJO.md`, que contienen el detalle exhaustivo de cada punto.
+Actualización completa de este documento, que en su versión anterior (commit del 2026-08-27) reflejaba el estado del sistema anterior a las migraciones 016-021 de Supabase y no cubría el panel de administración en detalle. Lo descrito en las secciones 1 y 2 está verificado contra el código fuente original de esa reescritura — migraciones `001` a `021`, `frontend/src/`, `central-admin-app/app.js` e `index.html` — con referencias cruzadas a `BASE_DE_DATOS.md`, `ARQUITECTURA_CYBER_DOJO.md`, `MANUAL_ADMINISTRADOR.md` y `MANUAL_USUARIO_CYBER_DOJO.md`, que contienen el detalle exhaustivo de cada punto. El conteo de migraciones real hoy ya no es `001` a `021`: ver sección 2.5.
 
 Ciber Dojo es una PWA en español para formar a personas no informáticas de MIPYMEs ecuatorianas en ciberseguridad, mediante un juego de entrenamiento tipo dojo de karate donde contestar bien preguntas de seguridad hace subir de cinturón. El sistema combina: frontend en React + TypeScript, autenticación y base de datos en Supabase, funciones Edge para cálculo de riesgo/recomendaciones con IA/análisis de correos sospechosos, y una consola de administración independiente.
 
@@ -116,13 +116,19 @@ Esta sección no existía como tal en la documentación anterior del proyecto; s
 ### 2.5 Mantenibilidad
 
 - Separación clara de dos aplicaciones independientes (`frontend/`, `central-admin-app/`) con sus propios `package.json`, sin acoplamiento de build.
-- Migraciones de base de datos numeradas y versionadas (`001` a `021`), cada una idempotente donde corresponde (`IF NOT EXISTS`, `ON CONFLICT DO UPDATE`).
+- Migraciones de base de datos numeradas y versionadas: 82 archivos reales en `supabase/migrations/` (de `001` a `084`, con huecos en `023` y `033` — no es un rango contiguo), cada una idempotente donde corresponde (`IF NOT EXISTS`, `ON CONFLICT DO UPDATE`).
 - Código huérfano detectado y documentado (`AdminCenterScreen.tsx`, prompts de IA no funcionales en el panel admin, tabla de ranking de ejemplo sin usar) — ver `ARQUITECTURA_CYBER_DOJO.md` y `MANUAL_USUARIO_CYBER_DOJO.md` para el detalle, para que una limpieza futura tenga un punto de partida verificado.
 
 ### 2.6 Cumplimiento y privacidad
 
 - Consentimiento explícito de tratamiento de datos personales, con referencia a derechos ARCO, exigido antes de completar el registro.
 - Ver `SECURITY_PRIVACY.md` para el detalle completo del cifrado, auditoría (`security_audit_events`) y recomendaciones pendientes de seguridad.
+- **Módulo de consentimiento informado (LOPDP)** (migraciones `073` a `084`): amplía el consentimiento del registro con lo siguiente — ver `SECURITY_PRIVACY.md` sección "Módulo de consentimiento informado" y `MANUAL_ADMINISTRADOR.md` sección 14 para el detalle exhaustivo de cada punto:
+  - **Re-consentimiento (REQ-09):** si se publica una versión nueva del aviso marcada "requiere reconsentimiento de los titulares", `ReconsentGate.tsx` bloquea el acceso a la app en el siguiente inicio de sesión hasta que el usuario acepte la versión vigente.
+  - **Modo invitado:** permite practicar el primer dojo sin crear cuenta; `GuestNoticeModal.tsx` muestra un aviso breve antes de iniciar la sesión anónima (fecha e IP de la aceptación, cifradas) con enlace al aviso completo de `/privacidad`; la sesión caduca automáticamente por inactividad. El texto de este aviso sigue **PROVISIONAL** en el código ("[PENDIENTE DE VALIDACIÓN LEGAL]"), no es un texto definitivo.
+  - **Panel administrativo con TOTP:** a diferencia del resto del panel (`central-admin-app`), protegido por Basic Auth compartida, la sección de consentimiento exige una cuenta individual de Supabase Auth más un segundo factor TOTP propio por administrador (roles `privacy_editor`/`privacy_admin`/`privacy_auditor`), de modo que cada acción queda atribuida a una persona, nunca a una credencial compartida.
+  - **Derechos ARCO ejercibles desde `/privacidad`:** la pantalla `PrivacyPage.tsx` permite ver y modificar el consentimiento por finalidad, y presentar una solicitud de uno de nueve tipos de derecho (baja, acceso, rectificación, eliminación, oposición, suspensión, portabilidad, revocación, revisión de decisión automatizada); cada solicitud recibe un número de caso y un plazo de respuesta, gestionados desde el panel admin (ver runbook en `MANUAL_ADMINISTRADOR.md` sección 14).
+  - **Estado de despliegue:** `SECURITY_PRIVACY.md` documenta que, al redactar esa sección, el módulo no estaba aplicado todavía en el entorno de producción. [VERIFICAR] si esto sigue así al momento de leer este documento — no verificado de nuevo para esta iteración; ver `loop-consentimiento/PLAN_PRODUCCION_RELEASE.md` para el estado y el orden de release previstos.
 
 ---
 
