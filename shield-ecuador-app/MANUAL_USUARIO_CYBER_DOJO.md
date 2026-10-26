@@ -113,6 +113,32 @@ Lo siguiente aparecía en la versión anterior de este manual y **no se encontr�
 - Datos de contacto: correo `support@cyberdojo.ec`, teléfono `+593 2 1234567`, web `www.cyberdojo.ec`, y cuentas de Facebook/LinkedIn/Instagram — ninguno aparece en el código fuente revisado.
 - El camino de 8 cinturones con Morado y Rojo como cinturones separados (retirado desde la migración 017 de la base de datos).
 
+## 14. Aviso de privacidad actualizado al iniciar sesión (verificado en `components/ReconsentGate.tsx`)
+
+Si, desde tu último inicio de sesión, un administrador publicó una nueva versión del aviso de privacidad marcada para pedir que todos la vuelvan a aceptar, al entrar con tu cuenta (no como invitado) ves ese aviso **antes de llegar a cualquier otra pantalla** — tanto si entras al panel de administración como si entras al dojo. Mientras no respondas, no puedes usar el resto de la aplicación.
+
+- Debes marcar al menos la finalidad obligatoria para continuar; las finalidades opcionales que ya tenías activadas aparecen pre-marcadas (no se borran por el solo hecho de mostrarte el aviso de nuevo).
+- Si eliges "No acepto", la pantalla te deja solo dos salidas: **cerrar sesión**, o **solicitar la baja de tu cuenta** (genera un número de caso y una fecha límite de respuesta, igual que en la sección 16).
+- Si entraste como invitado (sección 15), este aviso no te aparece: nunca aceptaste la finalidad de aprendizaje con tu propia cuenta, así que no hay nada que reconfirmar.
+
+## 15. Modo invitado — "Probar sin cuenta" (verificado en `components/GuestNoticeModal.tsx`, `CinematicPublicShell.tsx`, `CinematicLandingPage.tsx`, migración `076`)
+
+Desde la portada o desde el enlace "Probar el dojo" del menú, puedes entrar sin registrarte. Antes de crear esa sesión de invitado, ves un aviso breve con un enlace a "Leer el aviso completo de privacidad" (la página `/privacidad`, sección 16) y dos botones: "Cancelar" y "Continuar como invitado".
+
+**El texto de este aviso breve está marcado en el propio código como "[PENDIENTE DE VALIDACIÓN LEGAL]"** — es decir, todavía no es el texto definitivo que aprobará la persona responsable; se documenta aquí tal como está hoy, no como texto final. Dice, en resumen: que registran que aceptaste el aviso (fecha e IP, cifradas), que tu sesión de invitado caduca automáticamente tras un tiempo de inactividad, y que tus datos no se envían a ningún proveedor de inteligencia artificial.
+
+Como invitado:
+- Puedes practicar el primer dojo, pero solo respondes **10 de las 30 preguntas**; al llegar al límite, la app te muestra un aviso invitándote a registrarte en vez de dejarte continuar (verificado en `DojoDetailPage.tsx`/`KataExamPage.tsx`, mensaje `GUEST_LIMIT_REACHED`, y aplicado también del lado del servidor en la migración `076_learning_guest_limit.sql`).
+- No puedes presentar el examen de ascenso de cinturón (sección 6) como invitado bajo ninguna circunstancia; la app te pide registrarte primero.
+- Si te registras más adelante, verás entonces el aviso completo de privacidad del registro (sección 2), con sus propias finalidades.
+
+## 16. Mi privacidad — ejercer tus derechos ARCO (`/privacidad`, verificado en `screens/PrivacyPage.tsx`)
+
+Página disponible para cualquier usuario con cuenta (no invitados). Tiene dos partes:
+
+- **Finalidades para las que autorizas el uso de tus datos.** Lista cada finalidad (la obligatoria de aprendizaje, de solo lectura, y las que sean opcionales) con su estado actual ("Activa"/"Inactiva"), la versión del aviso en la que decidiste eso, y la fecha. Las finalidades opcionales se activan o desactivan con un clic, sin pasos adicionales ni necesidad de justificar el cambio.
+- **Solicitar un derecho sobre tus datos.** Un formulario con 9 tipos de solicitud: baja de la cuenta, acceso a tus datos, rectificación, eliminación, oposición al tratamiento, suspensión del tratamiento, portabilidad, revocación del consentimiento, y revisión de una decisión automatizada. Al enviarla (con un detalle opcional de hasta 4000 caracteres) recibes un **número de caso** y una **fecha límite de respuesta**.
+
 ---
 
-*Documento reescrito el 2026-09-08 a partir de la lectura directa de `frontend/src/screens/LoginScreen.tsx`, `DashboardScreen.tsx`, `DojoDetailPage.tsx`, `KataExamPage.tsx`, `LeaderboardPage.tsx`, `SenseiConsultPage.tsx`, `ProfilePage.tsx`, `frontend/src/components/CyberBushido.tsx` y `frontend/src/data/ciberDojo.ts`. Reemplaza la versión anterior, que contenía funcionalidades inventadas y documentaba un sistema de cinturones ya retirado.*
+*Documento reescrito el 2026-09-08 a partir de la lectura directa de `frontend/src/screens/LoginScreen.tsx`, `DashboardScreen.tsx`, `DojoDetailPage.tsx`, `KataExamPage.tsx`, `LeaderboardPage.tsx`, `SenseiConsultPage.tsx`, `ProfilePage.tsx`, `frontend/src/components/CyberBushido.tsx` y `frontend/src/data/ciberDojo.ts`. Reemplaza la versión anterior, que contenía funcionalidades inventadas y documentaba un sistema de cinturones ya retirado. Secciones 14-16 añadidas el 2026-10-26 a partir de `components/ReconsentGate.tsx`, `components/GuestNoticeModal.tsx`, `components/CinematicPublicShell.tsx`, `screens/CinematicLandingPage.tsx`, `screens/DojoDetailPage.tsx`, `screens/KataExamPage.tsx`, `screens/PrivacyPage.tsx` y `supabase/migrations/076_learning_guest_limit.sql`.*

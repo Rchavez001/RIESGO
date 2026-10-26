@@ -65,7 +65,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     corrigió estas líneas — no asumir que un commit reciente implica que todo el archivo está
     vigente; verificar línea por línea igual.
 
-- [ ] **DOCS-06 — Actualizar `MANUAL_USUARIO_CYBER_DOJO.md` (raíz)**
+- [x] **DOCS-06 — Actualizar `MANUAL_USUARIO_CYBER_DOJO.md` (raíz)**
   - Añade, sin reescribir lo existente: el aviso de re-consentimiento al iniciar sesión
     (`T20`/REQ-09), el modo invitado (aviso de `GuestNoticeModal`, tope de 10 preguntas — recordar
     que el texto del aviso sigue PROVISIONAL en el código, citarlo como tal) y la página

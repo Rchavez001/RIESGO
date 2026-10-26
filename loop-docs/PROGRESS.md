@@ -235,3 +235,37 @@ persona responsable sobre el inventario y el backlog.
   marcan como inexistentes; y la frase genérica "service_role key" en notas de seguridad coincide
   con el patrón de `check_secrets` sin ser un secreto real). `docs/iso-y-privacidad` en
   `DECISIONS.md` es el mismo falso positivo ya registrado desde la Iteración 0b.
+
+## Iteración 6 — 2026-10-26 — DOCS-06 (`MANUAL_USUARIO_CYBER_DOJO.md`)
+- Cambios: `shield-ecuador-app/MANUAL_USUARIO_CYBER_DOJO.md` — tres secciones nuevas añadidas al
+  final (14, 15, 16), sin reescribir el resto del documento: 14) el aviso de reconsentimiento al
+  iniciar sesión (bloquea toda la app hasta aceptar la finalidad obligatoria o elegir cerrar
+  sesión/solicitar baja; los invitados lo saltan); 15) el modo invitado desde "Probar sin cuenta"
+  (aviso breve citado como `[PENDIENTE DE VALIDACIÓN LEGAL]` tal cual está en el código, tope real
+  de 10 de las 30 preguntas del primer dojo, examen de cinturón bloqueado siempre para invitados);
+  16) la página `/privacidad` desde la perspectiva del usuario (estado de cada finalidad con
+  versión y fecha, toggle de finalidades opcionales, formulario de 9 tipos de solicitud ARCO con
+  número de caso y fecha límite de respuesta). Nota final del documento ampliada para listar los
+  archivos nuevos verificados, sin tocar la nota original de 2026-09-08.
+- Verificado contra: `frontend/src/components/ReconsentGate.tsx` (lógica completa de bloqueo,
+  pre-marcado de finalidades opcionales previas, rechazo → cerrar sesión/solicitar baja, exención
+  de invitados vía `user?.is_anonymous`), `frontend/src/components/GuestNoticeModal.tsx` (texto
+  literal del aviso, marca `[PENDIENTE DE VALIDACIÓN LEGAL]`, enlace a `/privacidad`),
+  `frontend/src/components/CinematicPublicShell.tsx` y `frontend/src/screens/CinematicLandingPage.tsx`
+  (puntos de entrada reales de "Probar sin cuenta"/"Probar el dojo"), `frontend/src/screens/
+  DojoDetailPage.tsx` y `frontend/src/screens/KataExamPage.tsx` (manejo de
+  `GUEST_LIMIT_REACHED`), `supabase/migrations/076_learning_guest_limit.sql` (tope real de 10
+  preguntas sobre 30, bloqueo server-side de `learning_start_exam` para `is_anonymous`),
+  `frontend/src/screens/PrivacyPage.tsx` (finalidades con estado/versión/fecha, 9
+  `REQUEST_TYPE_LABELS`, resultado con `case_number`/`due_at`), `frontend/src/App.tsx` (ruta
+  `/privacidad`, `ReconsentGate` envolviendo tanto `AdminShell` como `DojoShell`).
+- [VERIFICAR] añadidos: ninguno — todo lo escrito se confirmó directamente contra el código citado.
+- Gates: `scope`, `enlaces`, `secretos`, `markdown` OK. `rutas` reporta FAIL, mismo patrón de
+  limitación del heurístico ya documentado en las Iteraciones 0b/3/4/5 (resuelve rutas solo desde
+  la raíz del repo, así que las citas abreviadas relativas a `shield-ecuador-app/` que ya usaba
+  este documento desde su reescritura de 2026-09-08 — p. ej. `frontend/src/screens/LoginScreen.tsx`,
+  `components/CyberBushido.tsx` — y las que añadió esta iteración con el mismo estilo
+  — `components/ReconsentGate.tsx`, `components/GuestNoticeModal.tsx`, `screens/PrivacyPage.tsx`,
+  `supabase/migrations/076_learning_guest_limit.sql`, etc. — se marcan como inexistentes. Se
+  verificó manualmente con `Read`/`Grep` que cada una de esas rutas existe de verdad bajo
+  `shield-ecuador-app/`.
