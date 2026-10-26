@@ -661,3 +661,62 @@ persona responsable sobre el inventario y el backlog.
   inexistentes; y "service_role" en la línea 106 (preexistente, sección 14, no tocada en esta
   iteración) es el mismo término de rol/arquitectura, no un secreto real, ya aceptado desde la
   Iteración 3).
+
+## Iteración 18 — 2026-10-26 — DOCS-18 (`MANUAL_ADMINISTRADOR.md`, fila "Alertas IA" y sección 6)
+
+- Cambios: `shield-ecuador-app/MANUAL_ADMINISTRADOR.md` — fila "Alertas IA" de la tabla de hallazgos
+  y sección 6 reescritas: ya no atribuyen el contenido de `alerts` al agente de noticias (código
+  antiguo) ni a `run-incident-investigator` (atribución de la propia tarea `DOCS-18`, que esta
+  iteración encontró inexacta al verificar el código línea por línea — ver más abajo). Ahora
+  documentan que quien escribe en `alerts` hoy es el auditor de preguntas
+  (`audit-generated-questions`, función `upsertIncidentAlert()`, `source_agent='question-auditor'`),
+  al aprobar una pregunta pendiente que el agente investigador vinculó antes a un incidente; que el
+  agente investigador (`run-incident-investigator`) solo **lee** `alerts` (para no repetir
+  incidentes) y nunca escribe ahí; y que no existe ningún botón "Forzar revisión IA" en el código
+  actual (el único botón del panel, "Actualizar", solo relee `alerts`). `loop-docs/TASKS.md`
+  (`DOCS-18` → `[x]`).
+- Hallazgo sobre la propia tarea: `DOCS-18` (redactada en la Iteración 17) afirmaba que
+  `run-incident-investigator` es quien escribe en `alerts`, basándose en que un
+  `grep -r "from('alerts')"` encontraba ese archivo. Al leer el código completo esta iteración se
+  confirmó que esa coincidencia es una lectura (`SELECT ... from('alerts')` en
+  `buildIncidentFeedFromAlerts()`, para armar el feed de incidentes a investigar), no una escritura
+  — el archivo no tiene ningún `.insert()`/`.update()` sobre `alerts` en todo su código (sí los
+  tiene sobre `agent_runs`, `incident_investigations` y `questions`). El verdadero escritor,
+  `audit-generated-questions`, también matchea `from('alerts')` por el mismo grep, pero el grep de
+  la Iteración 17 no distinguió cuál de los dos archivos encontrados escribía y cuál solo leía. Esta
+  iteración no escribió la corrección basada en la tarea sin verificar: releyó ambos archivos de
+  Edge Function completos antes de redactar el texto nuevo, siguiendo la regla de verificar contra
+  el código real, nunca contra otro documento (ni contra la propia tarea del backlog, que tampoco es
+  código).
+- Verificado contra: `shield-ecuador-app/supabase/functions/run-incident-investigator/index.ts`
+  completo (línea 278, único match de `alerts`, es un `SELECT` dentro de
+  `buildIncidentFeedFromAlerts()`; líneas 79-222, los únicos `.insert()`/`.update()` del archivo son
+  sobre `agent_runs`, `incident_investigations` y `questions` — ninguno sobre `alerts`),
+  `shield-ecuador-app/supabase/functions/audit-generated-questions/index.ts` líneas 186 y 270-305
+  (`upsertIncidentAlert()`: lee `incident_investigations`, y hace `.update()`/`.insert()` reales
+  sobre `alerts` con `source_agent: 'question-auditor'`), `shield-ecuador-app/supabase/migrations/001_initial_schema.sql`
+  líneas 149-163 (definición original de `alerts`, sin `source_agent`/`related_incident_id`/
+  `related_question_ids`) y `shield-ecuador-app/supabase/migrations/004_admin_center.sql` líneas
+  45-48 (`ALTER TABLE alerts ADD COLUMN ... source_agent`, confirma que la columna existe de
+  verdad), `shield-ecuador-app/central-admin-app/app.js` líneas 648-663 (`validateQuestionCard()`,
+  botón "Validar con IA" del panel "Preguntas", invoca `audit-generated-questions` con
+  `triggered_by: "questions_panel"`) y líneas 1756-1761/278-282/415 (`loadNewsAlertsFromSupabase()`
+  lee `alerts` con columna `source_agent`; único botón del panel es `#refreshNewsAlerts`, no existe
+  ningún `#forceNewsReview` ni similar), `shield-ecuador-app/central-admin-app/index.html` líneas
+  407-423 (panel `newsAlerts`: el propio HTML ya dice "Las generan el agente investigador y el
+  auditor de preguntas a partir de noticias"; un solo botón, "Actualizar"), `grep -r cron.schedule`
+  sobre `supabase/migrations/` (confirma que ni `audit-generated-questions` ni
+  `run-incident-investigator` tienen un `cron.schedule` propio — se disparan manualmente o vía
+  `run-daily-agent-workflows`, que no se verificó en detalle por quedar fuera del alcance literal de
+  esta tarea).
+- [VERIFICAR] añadidos: ninguno — toda afirmación nueva se confirmó leyendo el código completo de
+  ambas Edge Functions citadas, no solo un grep puntual.
+- Gates: `scope`, `enlaces`, `markdown` OK. `rutas` y `secretos` reportan FAIL, mismo patrón de
+  limitación del heurístico documentado desde la Iteración 0b (`check_code_paths` resuelve rutas
+  solo desde la raíz del repo, así que `central-admin-app/index.html`, `central-admin-app/app.js`,
+  `request-data-subject-right/handler.ts`, `admin-consent/handler.ts`,
+  `supabase/functions/run-news-agent/index.ts` — todas preexistentes, relativas a
+  `shield-ecuador-app/`, no tocadas por esta iteración — se marcan como inexistentes; y la línea 106
+  (preexistente, sección 14, no tocada aquí) repite el mismo término "service_role" ya aceptado
+  desde la Iteración 3). Confirmado con `git diff` que ninguna línea nueva de esta iteración está
+  entre las señaladas por ninguna de las dos puertas.

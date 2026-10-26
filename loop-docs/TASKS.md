@@ -182,7 +182,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     operativa real del manual (un administrador que confíe en la nota actual podría no revisar la
     cola de contenido pendiente, pensando que el botón no hace nada real).
 
-- [ ] **DOCS-18 — Corregir `MANUAL_ADMINISTRADOR.md`: la fila "Alertas IA" y la sección 6 atribuyen
+- [x] **DOCS-18 — Corregir `MANUAL_ADMINISTRADOR.md`: la fila "Alertas IA" y la sección 6 atribuyen
   el contenido de la tabla `alerts` al agente de noticias, pero esa tabla la llena otro agente**
   - La fila "Alertas IA" de la tabla de hallazgos dice que su contenido viene "del simulador de
     arriba" (la fila "Agente noticias"), y la sección 6 dice "Lectura de las alertas guardadas
