@@ -26,7 +26,7 @@ Hay **dos aplicaciones desplegadas de forma independiente en Google Cloud Run**,
      Cloud Run: "cyberdojo-admin"                 Supabase (proyecto wbbcjiqzbzswxsmwjqlw)
      (central-admin-app/, Node http puro,          - Postgres + RLS
       Basic Auth)                                  - Supabase Auth
-     - Sirve index.html/app.js/styles.css           - 14 Edge Functions (Deno)
+     - Sirve index.html/app.js/styles.css           - 33 Edge Functions (Deno)
      - Proxy interno /api/rest/v1 y /api/auth/v1     - Storage (bucket campaign-ads)
        hacia Supabase, agregando la service_role key
        (nunca expuesta al navegador)
@@ -79,7 +79,7 @@ Cero dependencias de npm declaradas. `"engines": { "node": "20.x" }`. Scripts: `
 
 ### 3.3 Backend (Supabase)
 
-PostgreSQL gestionado por Supabase, con Row Level Security, PostgREST (API REST automática), Supabase Auth, y 14 Edge Functions en Deno/TypeScript (ver sección 5). Proyecto real: `wbbcjiqzbzswxsmwjqlw` (`https://wbbcjiqzbzswxsmwjqlw.supabase.co`), según `GUIA_LEVANTAMIENTO_PROYECTO.md`.
+PostgreSQL gestionado por Supabase, con Row Level Security, PostgREST (API REST automática), Supabase Auth, y 33 Edge Functions en Deno/TypeScript (ver sección 5). Proyecto real: `wbbcjiqzbzswxsmwjqlw` (`https://wbbcjiqzbzswxsmwjqlw.supabase.co`), según `GUIA_LEVANTAMIENTO_PROYECTO.md`.
 
 ### 3.4 Repositorio
 
@@ -118,7 +118,7 @@ shield-ecuador-app/
 │
 └── supabase/
     ├── migrations/                    # 001 a 021, ver BASE_DE_DATOS.md
-    └── functions/                     # 14 Edge Functions, ver sección 5
+    └── functions/                     # 33 Edge Functions, ver sección 5
 ```
 
 ### 4.1 Pantallas reales y su estado de enrutamiento (`frontend/src/App.tsx`)
@@ -141,28 +141,63 @@ Cualquier otra ruta (`*`) redirige a `/`.
 
 **Código huérfano confirmado:** `frontend/src/screens/AdminCenterScreen.tsx` (ver sección 2.2) existe en el repositorio pero no está importado en ningún archivo activo del árbol de rutas.
 
-## 5. Las 14 Edge Functions y quién las llama realmente
+## 5. Las 33 Edge Functions y quién las llama realmente
 
-Se verificó, mediante búsqueda de `functions.invoke(` en todo `frontend/src/` y de los nombres de cada función en `central-admin-app/app.js` y `central-admin-app/server.js`, exactamente qué invoca a cada una. Esto corrige la documentación anterior, que asumía que varias funciones estaban conectadas al panel admin sin verificarlo.
+Se verificó, mediante búsqueda de `functions.invoke(` en todo `frontend/src/` y de los nombres de cada función como literal de cadena en `central-admin-app/app.js` y `central-admin-app/server.js`, exactamente qué invoca a cada una de las 33 carpetas reales de `supabase/functions/` (sin contar `_shared`, que no es una función sino código compartido). Esto amplía y corrige la tabla original de 14 funciones (2026-09-08): se sumaron las funciones de los módulos de consentimiento (`073`+), agente de noticias (`run-news-agent`, `quiz-generator`, `import-question-bank`), centro de seguridad (`052`+) y campeonato (`047`), y se corrigió el hallazgo de que **`central-admin-app` sí invoca Edge Functions directamente** — la afirmación anterior de que el panel admin solo usaba el proxy REST de Postgres (sección 2) ya no es cierta para los módulos añadidos después de 2026-09-08.
+
+### 5.1 Funciones de la app de usuario (`frontend/`)
 
 | Función | Invocada desde | Notas |
 |---|---|---|
 | `secure-register-user` | `frontend/src/contexts/AuthContext.tsx` | Registro de usuario; cifra PII (ver `SECURITY_PRIVACY.md`) |
 | `get-private-profile` | `frontend/src/contexts/AuthContext.tsx` | Descifra el perfil del usuario autenticado o de un admin |
+| `log-login-event` | `frontend/src/contexts/AuthContext.tsx` | Registra el evento de inicio de sesión; se invoca en segundo plano (no bloquea la navegación si falla) |
+| `accept-guest-notice` | `frontend/src/contexts/AuthContext.tsx` | Confirma el aviso del modo invitado (`GuestNoticeModal`, ver `docs/MODO_INVITADO.md`) |
 | `calculate-risk` | `frontend/src/components/AdaptiveQuestionnaire.tsx` | Cierre del cuestionario adaptativo |
 | `complete-kata` | `frontend/src/screens/KataExamPage.tsx` | Valida respuestas de kata/examen en servidor, otorga puntos y cinturón |
 | `get-ranking` | `frontend/src/screens/LeaderboardPage.tsx` | Tabla de posiciones |
 | `ask-sensei` | `frontend/src/screens/SenseiConsultPage.tsx` | Chat del Sensei IA |
 | `vuln-scanner-ai` | `frontend/src/services/senseiIA.ts` y `frontend/src/services/auditorIA.ts` (ambos usados solo dentro de `components/VulnScanner/`, vía `scanOrchestrator.ts`) | **Precisión importante:** pese al nombre de los archivos que la llaman (`senseiIA.ts`, `auditorIA.ts`), esta función **no tiene relación con el chat del Sensei** (`ask-sensei` es una función distinta) — es el backend del Escáner de Vulnerabilidades (`/escaner`), que aparentemente usa un patrón de "doble consulta IA" (un rol generador, un rol auditor) sobre la misma función Edge |
-| `run-incident-investigator` | **Ninguna de las dos apps** (no se encontró en `frontend/src/`, `central-admin-app/app.js` ni `central-admin-app/server.js`) | Diseñada para invocación externa (cron / manual con `x-cron-secret`), según `GUIA_LEVANTAMIENTO_PROYECTO.md` sección de troubleshooting |
-| `audit-generated-questions` | **Ninguna de las dos apps** | Mismo patrón: invocación externa vía `x-cron-secret` |
-| `run-daily-agent-workflows` | **Ninguna de las dos apps** | Dispatcher diario; mismo patrón de invocación externa |
+| `get-consent-notice` | `frontend/src/screens/RegisterScreen.tsx`, `frontend/src/screens/PrivacyPage.tsx`, `frontend/src/components/ReconsentGate.tsx` | Obtiene el aviso de privacidad vigente (registro, panel `/privacidad`, y el gate de re-consentimiento al iniciar sesión) |
+| `update-my-consent` | `frontend/src/screens/PrivacyPage.tsx` | Actualiza las preferencias de consentimiento del usuario desde `/privacidad` |
+| `request-data-subject-right` | `frontend/src/screens/PrivacyPage.tsx`, `frontend/src/components/ReconsentGate.tsx` | Derechos ARCO (acceso, rectificación, cancelación, oposición) ejercidos por el propio usuario |
+| `submit-consent` | `frontend/src/components/ReconsentGate.tsx` | Registra el consentimiento aceptado en el flujo de re-consentimiento (`T20`/REQ-09) |
+
+### 5.2 Funciones solo del panel admin (`central-admin-app/`)
+
+Invocadas vía el helper `supabaseFunctionInvoke(name, body)` de `central-admin-app/app.js` (línea ~1537), que llama a `fetch('/api/functions/v1/${name}', ...)` — una ruta propia de `server.js` (línea 168), distinta del proxy `/api/rest/v1` descrito en la sección 2 para las tablas de Postgres.
+
+| Función | Invocada desde (panel) | Notas |
+|---|---|---|
+| `audit-generated-questions` | Panel "Preguntas" (`app.js` línea 653, `triggered_by: "questions_panel"`) **y** invocación externa | Ver nota debajo de la tabla — es la única función con las dos vías confirmadas |
+| `import-question-bank` | Panel "Preguntas" (`app.js` línea 716) | Importa preguntas desde un archivo |
+| `save-provider-key` | Panel "IA y auditoría" (`app.js` líneas 906, 1180, 1289) | Guarda claves de proveedores de IA |
+| `run-news-agent` | Panel "Agente noticias" (`app.js` líneas 1588, 1608) | Prepara y ejecuta el agente de noticias |
+| `quiz-generator` | Panel "Agente noticias" (`app.js` línea 1718) | Genera preguntas a partir de fuentes de noticias |
+| `save-app-secret` | Panel "Agente noticias" (`app.js` línea 4013, secreto `resend_api_key`) | Guarda secretos de la app (ej. clave de Resend para correo) |
+| `championship-draw-round1` | Panel de campeonato (`app.js` línea 4054) | Sorteo de la primera ronda del campeonato |
+| `check-security-alerts` | Panel "Inteligencia de Amenazas"/centro de seguridad (`app.js` línea 4299) | Revisa alertas configuradas del centro de seguridad |
+| `save-security-alert-config` | Centro de seguridad (`app.js` líneas 4452, 4466) | Crea/edita/borra configuración de alertas |
+| `security-diagnose` | Centro de seguridad (`app.js` línea 4537) | Diagnóstico de seguridad asistido por IA |
+| `security-easm-scan` | Centro de seguridad (`app.js` línea 4614) | Escaneo EASM (superficie de ataque externa) |
+| `security-kata-convert` | Centro de seguridad (`app.js` líneas 4679-4730) | Convierte un diagnóstico de seguridad en un kata publicable |
+| `admin-consent` | Panel de consentimiento (`app.js`, decenas de llamadas desde la línea 4833 en adelante, vía el helper `privacyCall('/fn/admin-consent/...')`) | Backend completo del módulo de consentimiento LOPDP: documentos, ajustes, transporte de correo, bitácora de auditoría, solicitudes ARCO, cadenas de verificación. Exige sesión con segundo factor TOTP (`aal2`) y rol `privacy_admin`, distinto de la Basic Auth compartida del resto del panel (ver `SECURITY_PRIVACY.md` y `central-admin-app/server.js` líneas 36-53, 279) |
+
+**Nota sobre `audit-generated-questions`:** el código de la función (`supabase/functions/audit-generated-questions/index.ts`) usa `requireAdminOrScheduler`, la misma función que `run-daily-agent-workflows` y `run-incident-investigator` (abajo) usan para aceptar tanto una sesión admin como un secreto de invocación externa — pero a diferencia de esas dos, `central-admin-app` sí la invoca directamente (panel "Preguntas", revisión individual). Es la única función con ambas vías confirmadas en el código.
+
+### 5.3 Funciones sin invocación activa desde ninguna de las dos apps
+
+| Función | Estado | Notas |
+|---|---|---|
+| `run-incident-investigator` | Sin invocación desde `frontend/src/` ni `central-admin-app/` | Usa `requireAdminOrScheduler` (acepta secreto `x-cron-secret`); diseñada para invocación externa (cron/manual), según `GUIA_LEVANTAMIENTO_PROYECTO.md` sección de troubleshooting |
+| `run-daily-agent-workflows` | Sin invocación desde ninguna de las dos apps | Dispatcher diario; mismo patrón `requireAdminOrScheduler` que la anterior |
+| `fix-learning-item-balance` | Sin invocación desde ninguna de las dos apps | Corrección manual por lotes de `learning_items` (distinta de `questions`); usa `requireAdminOrScheduler`; sin un panel que la dispare hoy |
 | `generate-recommendations` | Solo `frontend/src/screens/AdminCenterScreen.tsx` (huérfano, no enrutado — sección 4.1) | Sin punto de entrada activo actualmente |
 | `analyze-email` | Solo `AdminCenterScreen.tsx` (huérfano) | Sin punto de entrada activo actualmente |
 | `migrate-user-pii` | Solo `AdminCenterScreen.tsx` (huérfano) | Según `SECURITY_PRIVACY.md`, su uso previsto es invocación manual por lotes vía HTTP con `x-cron-secret`, no una pantalla de usuario |
 | `backfill-email-domains` | Solo `AdminCenterScreen.tsx` (huérfano) | Utilidad de migración de datos (llena `users.email_domain` para el ranking, migración 014), uso previsto: manual/una vez |
 
-Ninguna de las 14 funciones se invoca desde `central-admin-app` (ni `app.js` ni `server.js`) — el panel admin gestiona el contenido (dojos, preguntas, agentes, campañas, ocupaciones) directamente contra las tablas de Postgres vía el proxy REST descrito en la sección 2, no a través de Edge Functions.
+A diferencia de lo que afirmaba la versión anterior de este documento, `central-admin-app` **sí invoca Edge Functions directamente** — en concreto, los paneles de preguntas, agente de noticias, centro de seguridad, campeonato y consentimiento (sección 5.2). Lo que sigue siendo cierto es que la gestión básica de contenido (dojos, catálogo de ocupaciones, campañas) pasa por el proxy REST de Postgres de la sección 2, no por Edge Functions.
 
 ## 6. Módulos del panel de administración (verificado en `central-admin-app/index.html`)
 
@@ -202,3 +237,5 @@ No se encontró evidencia en el repositorio de un pipeline de CI/CD (GitHub Acti
 ---
 
 *Documento reescrito el 2026-09-08 a partir de lectura directa de `frontend/package.json`, `frontend/src/App.tsx`, `frontend/static-server.js`, `central-admin-app/package.json`, `central-admin-app/Dockerfile`, `central-admin-app/index.html`, listados de archivos reales de `frontend/src/` y `supabase/functions/`, y `git remote -v`. Reemplaza la versión anterior, que contenía afirmaciones no verificadas o directamente falsas (ver introducción).*
+
+*Sección 5 (Edge Functions) actualizada el 2026-10-26: el conteo pasó de 14 a 33 carpetas reales en `supabase/functions/`, y se corrigió la afirmación de que ninguna se invoca desde `central-admin-app` — varios módulos añadidos después del 2026-09-08 (preguntas, agente de noticias, centro de seguridad, campeonato, consentimiento) sí la invocan directamente.*

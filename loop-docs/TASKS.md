@@ -41,7 +41,7 @@ Convención: `[ ]` pendiente, `[x]` hecha, `⛔ BLOQUEADA` depende de una decisi
     `manual-central-admin.html` y `vault/Manual del administrador.md` indicando explícitamente que
     no son la fuente de verdad y remitiendo a `MANUAL_ADMINISTRADOR.md`.
 
-- [ ] **DOCS-03 — Actualizar `ARQUITECTURA_CYBER_DOJO.md` (raíz)**
+- [x] **DOCS-03 — Actualizar `ARQUITECTURA_CYBER_DOJO.md` (raíz)**
   - Corrige el conteo de Edge Functions: dice "14" (líneas 29, 82, 121, 144); hoy hay 33 carpetas en
     `supabase/functions/` (sin contar `_shared`). Reescribe la sección 5 ("Las 14 Edge Functions...")
     para incluir las funciones del módulo de consentimiento, agente de noticias, centro de seguridad

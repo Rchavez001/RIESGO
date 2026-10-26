@@ -122,3 +122,40 @@ persona responsable sobre el inventario y el backlog.
 - [VERIFICAR] añadidos: ninguno — este índice solo describe la ubicación y propósito de archivos
   existentes, no afirma comportamiento de código.
 - Gates: OK.
+
+## Iteración 3 — 2026-10-26 — DOCS-03 (`ARQUITECTURA_CYBER_DOJO.md`)
+- Cambios: `shield-ecuador-app/ARQUITECTURA_CYBER_DOJO.md` — conteo de Edge Functions corregido de
+  "14" a "33" (líneas 29, 82, 121, 144); sección 5 reescrita en tres subsecciones (5.1 funciones de
+  `frontend/`, 5.2 funciones solo del panel admin, 5.3 sin invocación activa) para incorporar las 19
+  funciones nuevas (consentimiento, agente de noticias, centro de seguridad, campeonato); corregida
+  la afirmación de la línea 165 ("ninguna de las 14 se invoca desde `central-admin-app`") — ahora
+  documenta que `central-admin-app/app.js` sí invoca Edge Functions directamente (vía
+  `supabaseFunctionInvoke`/`/api/functions/v1/` para preguntas, agente de noticias, centro de
+  seguridad y campeonato; vía `privacyCall`/`/fn/admin-consent/...` para todo el módulo de
+  consentimiento); añadida una nota de actualización al pie del documento (no se tocó la nota
+  original de 2026-09-08).
+- Verificado contra: listado real de `shield-ecuador-app/supabase/functions/` (33 carpetas sin
+  `_shared`), `frontend/src/contexts/AuthContext.tsx`, `frontend/src/screens/RegisterScreen.tsx`,
+  `frontend/src/screens/PrivacyPage.tsx`, `frontend/src/components/ReconsentGate.tsx` (llamadas
+  `functions.invoke(...)` nuevas), `central-admin-app/app.js` (función `supabaseFunctionInvoke`
+  línea ~1537 y sus ~20 llamadas; función `privacyCall` y sus ~30 llamadas a `/fn/admin-consent/...`
+  desde la línea 4833), `central-admin-app/server.js` (líneas 36, 53, 168, 279, 307 — rutas
+  `/api/functions/v1/` y `/fn/admin-consent`), `supabase/functions/audit-generated-questions/index.ts`,
+  `supabase/functions/fix-learning-item-balance/index.ts`, `supabase/functions/run-daily-agent-workflows/index.ts`,
+  `supabase/functions/run-incident-investigator/index.ts` (uso de `requireAdminOrScheduler`/`x-cron-secret`),
+  `MANUAL_ADMINISTRADOR.md` sección 14 (nombre del módulo de consentimiento).
+- [VERIFICAR] añadidos: ninguno — las 33 funciones y cada "invocada desde" de la tabla se
+  confirmaron contra el código citado arriba.
+- Gates: `enlaces`, `scope`, `markdown` OK. `rutas` y `secretos` reportan FAIL, pero por líneas
+  **preexistentes, no tocadas en esta iteración** (p. ej. `frontend/src/contexts/AuthContext.tsx`,
+  `central-admin-app/app.js` citados sin el prefijo `shield-ecuador-app/` — la heurística de
+  `check_code_paths` resuelve solo desde la raíz del repo, mismo falso positivo ya documentado en la
+  Iteración 0b para `INVENTARIO.md`/`DECISIONS.md`; y la mención genérica de "service_role key" como
+  término de arquitectura en las líneas 31 y 226, que coincide con el patrón de `check_secrets` sin
+  ser un secreto real). Se verificó manualmente que las rutas nuevas que añadió esta iteración
+  (`frontend/src/services/auditorIA.ts`, `frontend/src/screens/PrivacyPage.tsx`,
+  `frontend/src/components/ReconsentGate.tsx`, `central-admin-app/app.js`, `central-admin-app/server.js`,
+  `supabase/functions/audit-generated-questions/index.ts`) existen de verdad en el repo. Reescribir
+  los ~40 enlaces preexistentes del documento para evitar este falso positivo habría significado
+  reescribir casi todo el archivo por una limitación conocida del heurístico, fuera del alcance de
+  DOCS-03.
